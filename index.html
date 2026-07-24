@@ -1,0 +1,2806 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="LSX Weather">
+<meta name="theme-color" content="#0a0e14">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Cstyle%3E.bg%7Bfill%3A%231e63c9%7D%40media(prefers-color-scheme%3Adark)%7B.bg%7Bfill%3A%231b3a66%7D%7D%3C%2Fstyle%3E%3Crect%20class%3D%22bg%22%20width%3D%22100%22%20height%3D%22100%22%20rx%3D%2222%22%2F%3E%3Cpath%20d%3D%22M57%2022%20L42%2054%20L51%2054%20L44%2080%20L63%2048%20L53%2048%20L61%2022%20Z%22%20fill%3D%22%23ffd13f%22%2F%3E%3C%2Fsvg%3E">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>LSX Weather Command — St. Louis NWS CWA</title>
+<script>(function(){try{var t=localStorage.getItem("lsxTheme")||"auto";if(t!=="light"&&t!=="dark")t=(window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches)?"light":"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"
+  integrity="sha384-c6Rcwz4e4CITMbu/NBmnNS8yN2sC3cUElMEMfP3vqqKFp7GOYaaBBCqmaWBjmkjb" crossorigin="anonymous">
+<style>
+  :root{
+    --bg:#0a0e14;--panel:#131924;--panel-2:#1a2231;--border:#243044;
+    --text:#e6edf5;--muted:#8a97a8;--accent:#4aa3ff;--good:#3ecf8e;--h24night:rgba(120,140,255,.08);
+    --warn:#ffb020;--sev:#ff7a2f;--danger:#ff4d4d;
+    --shadow:0 6px 24px rgba(0,0,0,.4);--radius:14px;
+    --inset:rgba(255,255,255,.03);--chip:rgba(255,255,255,.12);--glow:rgba(74,163,255,.08);
+    --glass1:rgba(19,25,36,.62);--glass2:rgba(26,34,49,.54);--gline:rgba(255,255,255,.09);--gspec:rgba(255,255,255,.11);
+    /* Logo mark — dark variant: deeper tile, muted rings, subtle edge so it sits in the dark UI */
+    --logo-bg1:#173251;--logo-bg2:#2b62aa;--logo-ring:#8fbdf3;--logo-bolt:#ffd23f;--logo-bolt-stroke:#c9971d;--logo-core:#eaf4ff;--logo-edge:rgba(130,175,255,.30);
+  }
+  /* Light palette — data-theme always holds the RESOLVED theme ("light"/"dark"); the "auto"
+     preference lives only in localStorage and is resolved by JS (boot script + OS-change listener) */
+  :root[data-theme="light"]{
+    --bg:#eef1f6;--panel:#ffffff;--panel-2:#f6f8fc;--border:#d6deea;
+    --text:#131924;--muted:#566072;--accent:#1e63c9;--good:#1a9e6a;--h24night:rgba(40,70,160,.07);
+    --warn:#b9791a;--sev:#d4571f;--danger:#d92d2d;
+    --shadow:0 4px 16px rgba(20,30,50,.10);
+    --inset:rgba(0,0,0,.035);--chip:rgba(0,0,0,.08);--glow:rgba(30,99,201,.08);
+    --glass1:rgba(255,255,255,.60);--glass2:rgba(246,248,252,.50);--gline:rgba(255,255,255,.70);--gspec:rgba(255,255,255,.90);
+    /* Logo mark — original bright tile for light backgrounds */
+    --logo-bg1:#1e63c9;--logo-bg2:#4aa3ff;--logo-ring:#dbeeff;--logo-bolt:#ffd23f;--logo-bolt-stroke:#d99e1a;--logo-core:#ffffff;--logo-edge:transparent;
+  }
+  /* Logo mark colors follow the --logo-* theme vars above */
+  .logo svg .lg-bg1{stop-color:var(--logo-bg1)}
+  .logo svg .lg-bg2{stop-color:var(--logo-bg2)}
+  .logo svg .lg-sweep-stop{stop-color:var(--logo-ring)}
+  .logo svg .lg-rings{stroke:var(--logo-ring)}
+  .logo svg .lg-edge{stroke:var(--logo-edge)}
+  .logo svg .lg-bolt{fill:var(--logo-bolt);stroke:var(--logo-bolt-stroke)}
+  .logo svg .lg-core{fill:var(--logo-core)}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:radial-gradient(1200px 600px at 80% -10%, var(--glow), transparent),var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    padding-top:max(18px, env(safe-area-inset-top, 0px));
+    padding-right:calc(18px + env(safe-area-inset-right, 0px));
+    padding-bottom:calc(18px + env(safe-area-inset-bottom, 0px));
+    padding-left:calc(18px + env(safe-area-inset-left, 0px));
+    min-height:100vh;transition:background .4s;
+  }
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+
+  header.top{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:16px}
+  /* In installed/standalone web-app mode iOS overlays the status bar — guarantee clearance */
+  @media (display-mode: standalone), (display-mode: fullscreen){
+    body{padding-top:max(28px, calc(env(safe-area-inset-top, 0px) + 10px))}
+    header.top{margin-top:6px}
+  }
+  .brand{display:flex;align-items:center;gap:12px}
+  .logo{width:44px;height:44px;border-radius:11px;overflow:hidden;box-shadow:var(--shadow);flex:0 0 44px}
+  .logo svg{display:block}
+  .logo .lg-sweep{transform-origin:22px 22px;animation:radarSweep 4s linear infinite}
+  @keyframes radarSweep{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion: reduce){.logo .lg-sweep{animation:none}}
+  .brand h1{font-size:19px;margin:0;line-height:1.1}
+  .brand .sub{font-size:12px;color:var(--muted);margin-top:2px}
+  .header-right{margin-left:auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .clock{text-align:right;font-variant-numeric:tabular-nums}
+  .clock .time{font-size:20px;font-weight:700;letter-spacing:.5px}
+  .clock .date{font-size:12px;color:var(--muted)}
+  select,button{background:var(--panel-2);color:var(--text);border:1px solid var(--border);
+    border-radius:10px;padding:10px 14px;font-size:14px;cursor:pointer;font-family:inherit;min-height:44px}
+  select:hover,button:hover{border-color:var(--accent)}
+  .refresh-btn{display:flex;align-items:center;gap:7px}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 8px var(--good)}
+  .dot.stale{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+
+  /* Storm banner */
+  #stormBanner{display:none;align-items:center;gap:12px;background:linear-gradient(90deg,rgba(var(--storm),.25),rgba(var(--storm),.08));
+    border:1px solid rgba(var(--storm),.5);border-radius:12px;padding:12px 16px;margin-bottom:16px;
+    animation:pulse 1.6s infinite;font-weight:700}
+  #stormBanner .bico{font-size:22px}
+  #stormBanner .btxt{font-size:15px;line-height:1.3}
+  #stormBanner .bsub{font-size:12px;color:var(--muted);font-weight:500;margin-top:2px}
+  body.storm #stormBanner{display:flex}
+  /* Event-aware storm accent (--storm = R,G,B). Default convective red; families override below. */
+  body.storm{--storm:255,45,85; background:radial-gradient(1200px 600px at 80% -10%, rgba(var(--storm),.10), transparent),var(--bg)}
+  body.storm[data-storm="winter"]{--storm:122,150,245}   /* icy blue-violet */
+  body.storm[data-storm="flood"]{--storm:38,166,154}      /* flood teal */
+  body.storm[data-storm="heat"]{--storm:255,120,40}       /* heat orange */
+  body.storm[data-storm="wind"]{--storm:140,152,176}      /* wind slate */
+  body.storm[data-storm="fire"]{--storm:255,94,30}        /* fire orange-red */
+  body.storm[data-storm="convective"]{--storm:255,45,85}  /* severe/tornado red */
+  /* Storm Mode EMPHASIZES the critical cards (glow + reorder to top): alerts → radar → the event-relevant "prime" card */
+  body.storm #alertsCard{order:-3}
+  body.storm #radarCard{order:-2}
+  body.storm .masonry{order:-1}   /* float the masonry (prime card packs to its front) up under radar during storms */
+  body.storm #alertsCard,body.storm #radarCard,body.storm .storm-prime{
+    box-shadow:0 0 0 2px rgba(var(--storm),.55),var(--shadow);
+    border-color:rgba(var(--storm),.5);
+  }
+
+  .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;align-items:start}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--border);
+    border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);min-width:0}
+  .card h2{font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin:0 0 12px;
+    font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .card h2 .link{font-size:12px;text-transform:none;letter-spacing:0}
+
+  .col-12{grid-column:span 12}.col-8{grid-column:span 8}.col-6{grid-column:span 6}
+  .col-4{grid-column:span 4}.col-5{grid-column:span 5}.col-7{grid-column:span 7}.col-3{grid-column:span 3}
+  .stack{display:flex;flex-direction:column;gap:16px;min-width:0}
+  /* JS-driven masonry: cards absolutely positioned by measured height → perfect packing, recomputed on load/resize */
+  .masonry{position:relative}
+  .masonry>.card{position:absolute;top:0;left:0;margin:0;transition:top .2s ease,left .2s ease}
+  .masonry.mready{/* height set inline by JS */}
+  /* Fallback before JS runs / if JS disabled: simple vertical flow so nothing overlaps */
+  .masonry:not(.mready){display:flex;flex-direction:column;gap:16px}
+  .masonry:not(.mready)>.card{position:static}
+  @media(max-width:1100px){.col-8,.col-7,.col-5,.col-6{grid-column:span 12}.col-4,.col-3{grid-column:span 6}}
+  @media(max-width:680px){.col-4,.col-3{grid-column:span 12}body{padding:12px}}
+
+  /* ===== Phone polish (≤480px): prevent any crowding/overflow ===== */
+  /* never let a stray wide element create a horizontal scrollbar */
+  .card,.grid,.stack{max-width:100%}
+  img,svg{max-width:100%}
+
+  /* Alerts */
+  #alerts .alert{border-radius:10px;padding:12px 14px;margin-bottom:10px;border-left:5px solid var(--muted);background:var(--inset)}
+  #alerts .alert:last-child{margin-bottom:0}
+  .alert .ev{font-weight:700;font-size:15px;display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+  .alert .area{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4}
+  .alert .exp{font-size:12px;color:var(--muted);margin-top:6px}
+  .alert.extreme{border-left-color:var(--danger);background:rgba(255,77,77,.10)}
+  .alert.severe{border-left-color:var(--sev);background:rgba(255,122,47,.10)}
+  .alert.moderate{border-left-color:var(--warn);background:rgba(255,176,32,.08)}
+  .alert.minor{border-left-color:var(--accent);background:rgba(74,163,255,.06)}
+  .alert.tornado{border-left-color:#ff2d55;background:rgba(255,45,85,.14);animation:pulse 1.6s infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,45,85,.5)}50%{box-shadow:0 0 0 6px rgba(255,45,85,0)}}
+  .badge{font-size:12px;font-weight:700;padding:3px 9px;border-radius:20px;background:var(--chip);white-space:nowrap}
+  #alerts .alert{cursor:pointer}
+  .a-hint{color:var(--accent)}
+  .a-zcnt{font-size:12px;font-weight:700;color:var(--muted);background:var(--chip);border-radius:12px;padding:1px 8px;vertical-align:middle}
+  .a-more-cnt{color:var(--accent);font-weight:700;white-space:nowrap}
+  .a-chev{display:inline-block;transition:transform .2s}
+  .alert.open .a-chev{transform:rotate(180deg)}
+  .alert-more{display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);
+    font-size:12.5px;line-height:1.55;color:var(--text);white-space:pre-wrap}
+  .alert.open .alert-more{display:block}
+  .empty{color:var(--muted);font-size:14px;padding:6px 2px;line-height:1.5}
+
+  /* The Call — plain-English verdicts derived from data already on the page */
+  #callCard{padding:13px 16px;display:none}
+  #callCard.has{display:block}
+  .callrow{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .call-lbl{font-size:11px;font-weight:800;letter-spacing:1.2px;color:var(--accent);text-transform:uppercase;flex:0 0 auto}
+  .call-pill{display:inline-flex;align-items:center;gap:7px;background:var(--inset);border:1px solid var(--border);
+    border-radius:18px;padding:7px 13px;font-size:13.5px;font-weight:600;line-height:1.35;color:var(--text)}
+  .call-pill .ce{font-size:16px;line-height:1}
+  @media(max-width:480px){.call-pill{font-size:12.5px;padding:6px 11px}}
+
+  /* Slim "all clear" state (Fix 4) */
+  #alertsCard.calm{padding:13px 16px}
+  #alertsCard.calm h2{display:none}
+  .calmrow{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--good);font-weight:600;line-height:1.3}
+  .calmrow .cdot{width:9px;height:9px;border-radius:50%;background:var(--good);box-shadow:0 0 8px var(--good);flex:0 0 auto}
+  .calmrow .cmut{color:var(--muted);font-weight:400}
+
+  /* Current */
+  .cc-main{display:flex;align-items:center;gap:16px;margin-bottom:14px}
+  .cc-temp{font-size:52px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+  .cc-icon{font-size:46px}
+  .cc-desc{font-size:14px;color:var(--muted);margin-top:4px}
+  .cc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .cc-item{background:var(--inset);border:1px solid var(--border);border-radius:10px;padding:9px 11px}
+  .cc-item .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .cc-item .v{font-size:17px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
+  .stn{font-size:12px;color:var(--muted);margin-top:10px}
+
+  
+  /* Daily */
+  .daily{display:flex;flex-direction:column;gap:8px}
+  .day-item{background:var(--inset);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .day{display:grid;grid-template-columns:minmax(0,1.25fr) 26px 40px minmax(46px,2fr) auto 14px;align-items:center;gap:8px;
+    width:100%;text-align:left;background:transparent;border:0;color:var(--text);
+    padding:11px 12px;min-height:48px;cursor:pointer;font-family:inherit}
+  .day:hover{background:var(--chip)}
+  .day .dn{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .day .di{font-size:21px;text-align:center;display:flex;align-items:center;justify-content:center}
+  .day .dp{font-size:11px;color:var(--accent);text-align:center;font-variant-numeric:tabular-nums;min-width:0}
+  .tbar{position:relative;height:7px;border-radius:4px;background:var(--chip);min-width:0}
+  .tbar .tfill{position:absolute;top:0;bottom:0;border-radius:4px;min-width:8px}
+  .day .dt{font-weight:700;font-variant-numeric:tabular-nums;font-size:14px;white-space:nowrap;text-align:right}
+  .day .dt .lo{font-weight:600;opacity:.75;margin-right:5px}
+  .day .chev{font-size:12px;color:var(--muted);text-align:center;transition:transform .2s}
+  .day-item.open .chev{transform:rotate(180deg)}
+  .day-detail{display:none;padding:0 12px 12px;border-top:1px solid var(--border)}
+  .day-item.open .day-detail{display:block}
+  .dd-text{font-size:13px;line-height:1.55;color:var(--text);margin:11px 0}
+  .dd-text b{color:var(--muted);font-weight:700;text-transform:uppercase;font-size:11px;letter-spacing:.5px;margin-right:4px}
+  .dd-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .dd-item{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:7px 10px}
+  .dd-item .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  .dd-item .v{font-size:14px;font-weight:700;margin-top:2px}
+  .cc-feels{font-size:13px;font-weight:700;color:var(--muted);margin-top:3px}
+  .cc-feels.is-hot{color:#ff9f43}
+  .cc-feels.is-cold{color:#4aa3ff}
+
+  /* Images / iframes */
+  .imgwrap{position:relative;border-radius:10px;overflow:hidden;background:#000;border:1px solid var(--border)}
+  .imgwrap img{width:100%;display:block}
+  .frame{width:100%;border:0;display:block;background:#0b0f16}
+  #radar{height:480px}
+  #lightning{height:340px}
+  @media(max-width:680px){#radar{height:340px}#lightning{height:300px}}
+  /* Leaflet map + radar overlays */
+  #radar.leaflet-container{background:#0b0f16;font-family:inherit}
+  .leaflet-control-attribution{font-size:10px}
+  .radar-time{position:absolute;top:8px;right:8px;z-index:4;pointer-events:none;
+    background:rgba(10,14,20,.82);color:#fff;border:1px solid rgba(255,255,255,.18);
+    border-radius:16px;padding:4px 11px;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+  .radar-time:empty{display:none}
+  .imgcap{font-size:12px;color:var(--muted);margin-top:8px;display:flex;justify-content:space-between;gap:8px}
+  /* Station Plot map + station-model markers */
+  .stnmap{width:100%;height:360px;border-radius:12px;overflow:hidden;background:var(--chip)}
+  .stn-divicon{background:none;border:none}
+  .stnmodel{width:46px;height:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;text-shadow:0 1px 2px var(--bg),0 0 3px var(--bg);pointer-events:none}
+  .sm-t{font-size:14px;font-weight:800}
+  .sm-d{font-size:12px;font-weight:700;color:#43d17f}
+  .sm-w{height:14px;display:flex;align-items:center;gap:1px;color:var(--text)}
+  .sm-arrow{display:inline-block;font-size:15px;font-weight:900;line-height:1}
+  .sm-spd{font-size:9px;font-weight:700;opacity:.9}
+  .sm-calm{font-size:8px;opacity:.7}
+  .stn-legend .lg-t{color:#ff9f43}.stn-legend .lg-d{color:#43d17f}
+  .imgfail{padding:22px;text-align:center;color:var(--muted);font-size:13px;line-height:1.6}
+
+  /* Tap-to-interact overlay for map iframes (Fix 1 — kills mobile scroll-trap) */
+  .maplock-wrap{position:relative}
+  .maplock{position:absolute;inset:0;z-index:3;display:flex;align-items:flex-end;justify-content:center;
+    padding-bottom:14px;cursor:pointer;background:linear-gradient(transparent 72%, rgba(10,14,20,.28))}
+  .maplock-pill{background:rgba(10,14,20,.85);border:1px solid var(--border);border-radius:22px;
+    padding:9px 16px;font-size:13px;font-weight:600;color:#fff;box-shadow:var(--shadow)}
+  .maplock-wrap.unlocked .maplock{display:none}
+  .maplock-toggle{position:absolute;top:8px;right:8px;z-index:4;display:none;min-height:0;
+    background:rgba(10,14,20,.85);border:1px solid var(--border);border-radius:22px;
+    padding:7px 13px;font-size:12px;font-weight:600;color:var(--text);cursor:pointer}
+  .maplock-wrap.unlocked .maplock-toggle{display:block}
+
+  /* Rivers */
+  .river{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:8px}
+  .rlink{display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:44px;
+    background:var(--inset);border:1px solid var(--border);border-left:5px solid var(--muted);
+    border-radius:10px;padding:11px 13px;font-size:13px;color:var(--text)}
+  .rlink:hover{border-color:var(--accent);text-decoration:none}
+  .rlink .rname{font-weight:600}
+  .rlink .rval{font-variant-numeric:tabular-nums;font-weight:700;font-size:15px}
+  .rlink .rcat{font-size:12px;padding:2px 9px;border-radius:20px;background:var(--chip);white-space:nowrap;margin-left:8px}
+  .rlink.c-none{border-left-color:var(--good)}
+  .rlink.c-action{border-left-color:#ffd23f}
+  .rlink.c-minor{border-left-color:#ff9f2f}
+  .rlink.c-moderate{border-left-color:#ff6a2f}
+  .rlink.c-major{border-left-color:#ff3b3b}
+  .rlink .rmeta{display:flex;align-items:center;gap:2px}
+
+  /* AQI */
+  .aqi-main{display:flex;align-items:center;gap:16px}
+  .aqi-num{font-size:46px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+  .aqi-cat{font-size:15px;font-weight:700;margin-top:2px}
+  .aqi-sub{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4}
+  .aqi-chip{width:14px;height:44px;border-radius:6px}
+
+  /* CPC Hazards Outlook */
+  .hz-row{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border)}
+  .hz-row:last-child{border-bottom:0}
+  .hz-when{font-size:12px;color:var(--muted);font-weight:700;flex:0 0 62px;padding-top:3px}
+  .hz-list{display:flex;flex-wrap:wrap;gap:6px}
+  .hz-chip{font-size:12px;font-weight:600;padding:4px 10px;border-radius:14px;background:var(--chip);border:1px solid var(--border)}
+  .hz-none{font-size:12.5px;color:var(--muted)}
+  .hz-clear .hz-none::before{content:"✓ ";color:#3ecf8e;font-weight:700}
+  /* Drought Monitor line */
+  .dr-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0 2px;margin-top:6px;border-top:1px solid var(--border)}
+  /* Drought Outlook card — three tiers (now / month / season) */
+  .dr-tier{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 0;border-top:1px solid var(--border)}
+  .dr-tier:first-of-type{border-top:none}
+  .dr-when{font-size:13px;font-weight:600;color:var(--muted)}
+  .dr-sub{font-weight:400;opacity:.7}
+  .dr-dim{opacity:.6}
+  .dr-label{font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+  .dr-pill{font-size:12.5px;font-weight:800;padding:5px 12px;border-radius:16px;white-space:nowrap}
+  .dr-none{font-size:13px;color:#3ecf8e;font-weight:700}
+  .dr-link{font-size:12.5px}
+  .dr-load{color:var(--muted)}
+  /* Climate vs Normal */
+  .cn-today{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+  .cn-trow{display:flex;align-items:baseline;gap:8px}
+  .cn-k{font-size:12.5px;color:var(--muted);flex:0 0 100px}
+  .cn-v{font-size:15px;font-weight:700}
+  .cn-v b{font-variant-numeric:tabular-nums}
+  .cn-n{font-size:12px;color:var(--muted);margin-left:auto;font-variant-numeric:tabular-nums}
+  .cn-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .cn-cell{display:flex;flex-direction:column;gap:3px;padding:9px 11px;background:var(--inset);border:1px solid var(--border);border-radius:11px}
+  .cn-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700}
+  .cn-cell>span:last-child{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
+  .cn-warm{color:#ff6a3d}.cn-cool{color:#4aa3ff}.cn-wet{color:#3aa0ff}.cn-dry{color:#d98a2b}.cn-flat{color:var(--muted)}.cn-na{color:var(--muted)}
+
+  /* Risk Outlook matrix (SPC storm + WPC flood) */
+  .spc-row{display:grid;grid-template-columns:52px 1fr 1fr 1fr;align-items:center;gap:6px;padding:8px 0;border-bottom:1px solid var(--border)}
+  .spc-row:last-child{border-bottom:0}
+  .spc-row.rhead{padding:2px 0 6px;border-bottom:1px solid var(--border)}
+  .spc-row .rh{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;text-align:center}
+  .spc-day{font-size:13px;color:var(--muted);font-weight:600}
+  .spc-pill{font-size:11.5px;font-weight:700;padding:5px 8px;border-radius:16px;white-space:nowrap;text-align:center}
+
+  /* CPC leanings */
+  .cpc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .cpc-item{background:var(--panel-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+  .cpc-item .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  .cpc-pill{display:inline-block;margin-top:6px;font-size:13px;font-weight:700;padding:5px 12px;border-radius:16px}
+
+  /* QPF chip in rivers header */
+  .qpfchip{font-size:11px;text-transform:none;letter-spacing:0;font-weight:600;color:var(--accent);
+    background:var(--inset);border:1px solid var(--border);border-radius:14px;padding:3px 9px;margin-left:6px}
+  .qpfchip:empty{display:none}
+
+  .quicklinks{display:flex;flex-wrap:wrap;gap:9px}
+  .quicklinks a{display:inline-flex;align-items:center;min-height:44px;background:var(--inset);
+    border:1px solid var(--border);border-radius:22px;padding:8px 15px;font-size:13px;color:var(--text)}
+  .quicklinks a:hover{border-color:var(--accent);text-decoration:none}
+
+  /* Next 24 Hours hero */
+  #hourly24 .h24-sum{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .h24-pill{background:var(--inset);border:1px solid var(--border);border-radius:20px;padding:6px 13px;font-size:12.5px;font-weight:600;color:var(--muted)}
+  .h24-pill b{color:var(--text);font-weight:800;margin-left:3px;font-variant-numeric:tabular-nums}
+  .h24-pill.h24-now{margin-left:auto;background:var(--chip)}
+  /* Integrated full-width hourly chart */
+  .h24-wrap{position:relative;width:100%}
+  .h24-svg{display:block;width:100%;height:auto}
+  .h24-svg text{font-family:inherit}
+  .h24-svg .h24-tl{font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums}
+  .h24-svg .h24-time{font-size:11px;font-weight:700;fill:var(--muted)}
+  .h24-svg .h24-time.is-now{fill:var(--accent)}
+  .h24-svg .h24-poplbl{font-size:10px;font-weight:700}
+  .h24-tip{position:absolute;top:2px;display:none;pointer-events:none;background:var(--bg);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid var(--border);
+    border-radius:10px;padding:7px 11px;font-size:12.5px;white-space:nowrap;box-shadow:var(--shadow);z-index:5}
+
+  /* Smart Slot: sun/moon */
+  .sm-sun{display:flex;align-items:center;gap:14px;margin-bottom:4px}
+  .sm-arc{flex:0 0 150px}
+  .sm-arc svg{width:150px;height:84px;display:block}
+  .sm-suntimes{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .sm-kv{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:7px 10px}
+  .sm-kv .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+  .sm-kv .v{font-size:14px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
+  .sm-moon{display:flex;align-items:center;gap:10px;margin:10px 0 12px;padding:9px 11px;
+    background:var(--panel-2);border:1px solid var(--border);border-radius:8px}
+  .sm-moon .mico{font-size:24px}
+  .sm-moon .mname{font-weight:700;font-size:13px}
+  .sm-moon .msub{font-size:12px;color:var(--muted)}
+  .sm-chart svg{width:100%;height:auto;display:block}
+  .sm-cap{font-size:11px;color:var(--muted);margin-top:6px;display:flex;justify-content:space-between}
+
+  footer{margin-top:20px;text-align:center;color:var(--muted);font-size:12px;line-height:1.7}
+  .loading{color:var(--muted);font-size:13px}
+
+  /* ===== Dynamic weather background (ambient, accessibility-safe) ===== */
+  #wxbg{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden}
+  #wxbg::before,#wxbg::after{content:"";position:absolute;inset:-40px}
+  /* condition tints (::before) — all ≤ .15 alpha so contrast is untouched */
+  body[data-wx="sun"] #wxbg::before{background:
+    radial-gradient(900px 520px at 85% -6%, rgba(255,186,60,0.21), transparent 62%),
+    radial-gradient(1100px 640px at 12% 108%, rgba(74,163,255,0.15), transparent 60%)}
+  body[data-wx="night"] #wxbg::before{background:
+    radial-gradient(1000px 600px at 82% -8%, rgba(96,112,255,0.20), transparent 62%),
+    radial-gradient(1.6px 1.6px at 14% 24%, rgba(255,255,255,0.24) 50%, transparent 55%),
+    radial-gradient(1.4px 1.4px at 33% 12%, rgba(255,255,255,0.24) 50%, transparent 55%),
+    radial-gradient(1.8px 1.8px at 56% 30%, rgba(255,255,255,0.24) 50%, transparent 55%),
+    radial-gradient(1.3px 1.3px at 72% 16%, rgba(255,255,255,0.24) 50%, transparent 55%),
+    radial-gradient(1.6px 1.6px at 88% 26%, rgba(255,255,255,0.24) 50%, transparent 55%)}
+  body[data-wx="cloud"] #wxbg::before{background:
+    radial-gradient(1000px 560px at 78% -8%, rgba(128,146,170,0.18), transparent 60%),
+    radial-gradient(900px 520px at 15% 106%, rgba(128,146,170,0.12), transparent 60%)}
+  body[data-wx="rain"] #wxbg::before{background:
+    radial-gradient(1000px 580px at 80% -8%, rgba(64,140,220,0.20), transparent 62%),
+    radial-gradient(950px 560px at 12% 108%, rgba(50,110,180,0.14), transparent 60%)}
+  body[data-wx="storm"] #wxbg::before{background:
+    radial-gradient(1000px 580px at 80% -8%, rgba(132,96,255,0.21), transparent 62%),
+    radial-gradient(950px 560px at 14% 108%, rgba(70,90,200,0.15), transparent 60%)}
+  body[data-wx="snow"] #wxbg::before{background:
+    radial-gradient(1000px 580px at 80% -8%, rgba(170,200,240,0.20), transparent 62%),
+    radial-gradient(950px 560px at 14% 108%, rgba(150,180,230,0.12), transparent 60%)}
+  body[data-wx="fog"] #wxbg::before{background:
+    linear-gradient(180deg, rgba(150,160,175,0.15), rgba(150,160,175,0.06) 45%, rgba(150,160,175,0.15)),
+    radial-gradient(1100px 620px at 60% -10%, rgba(150,160,175,0.15), transparent 65%)}
+  /* particles (::after) — gentle, GPU-cheap, never strobes */
+  body[data-wx="rain"] #wxbg::after,
+  body[data-wx="storm"] #wxbg::after{
+    background:repeating-linear-gradient(75deg, transparent 0 16px, rgba(130,175,255,.09) 16px 17.5px, transparent 17.5px 30px);
+    animation:wxRain 1.1s linear infinite}
+  body[data-wx="storm"] #wxbg::after{
+    background:repeating-linear-gradient(75deg, transparent 0 14px, rgba(160,150,255,.10) 14px 15.5px, transparent 15.5px 26px);
+    animation-duration:.85s}
+  @keyframes wxRain{to{background-position:34px 128px}}
+  body[data-wx="snow"] #wxbg::after{
+    background-image:
+      radial-gradient(2.6px 2.6px at 22% 18%, rgba(255,255,255,.40) 55%, transparent 60%),
+      radial-gradient(2px 2px at 48% 62%, rgba(255,255,255,.32) 55%, transparent 60%),
+      radial-gradient(3px 3px at 74% 34%, rgba(255,255,255,.36) 55%, transparent 60%),
+      radial-gradient(2.2px 2.2px at 88% 78%, rgba(255,255,255,.30) 55%, transparent 60%),
+      radial-gradient(2.4px 2.4px at 10% 84%, rgba(255,255,255,.34) 55%, transparent 60%);
+    background-size:260px 260px;
+    animation:wxSnow 11s linear infinite}
+  @keyframes wxSnow{to{background-position:28px 260px}}
+  /* accessibility: reduced motion → static tints only */
+  @media (prefers-reduced-motion: reduce){
+    #wxbg::after{animation:none !important;background:none !important}
+    #wxbg i{animation:none !important}
+  }
+
+  /* ===== Liquid Glass (frosted widgets over the living background) ===== */
+  @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))){
+    .card{
+      background:linear-gradient(180deg,var(--glass1),var(--glass2));
+      -webkit-backdrop-filter:blur(22px) saturate(1.55);
+      backdrop-filter:blur(22px) saturate(1.55);
+      border:1px solid var(--gline);
+      border-radius:20px;
+      box-shadow:inset 0 1px 0 var(--gspec), inset 0 -1px 0 rgba(0,0,0,.06), var(--shadow);
+    }
+    select,button,.locsearch #locSearch{
+      background:var(--glass1);
+      -webkit-backdrop-filter:blur(14px) saturate(1.4);
+      backdrop-filter:blur(14px) saturate(1.4);
+      border-color:var(--gline);
+      box-shadow:inset 0 1px 0 var(--gspec);
+    }
+    .locsug{
+      background:var(--glass1);
+      -webkit-backdrop-filter:blur(24px) saturate(1.5);
+      backdrop-filter:blur(24px) saturate(1.5);
+      border-color:var(--gline);
+    }
+    #stormBanner{
+      -webkit-backdrop-filter:blur(16px) saturate(1.4);
+      backdrop-filter:blur(16px) saturate(1.4);
+    }
+    .maplock-pill,.maplock-toggle{
+      -webkit-backdrop-filter:blur(10px);
+      backdrop-filter:blur(10px);
+    }
+  }
+  /* users who prefer opacity get solid panels back */
+  @media (prefers-reduced-transparency: reduce){
+    .card,select,button,.locsearch #locSearch,.locsug{
+      background:linear-gradient(180deg,var(--panel),var(--panel-2)) !important;
+      -webkit-backdrop-filter:none !important;
+      backdrop-filter:none !important;
+      border-color:var(--border) !important;
+    }
+  }
+
+  /* ===== Living scene blobs (soft drifting light, transform/opacity only) ===== */
+  #wxbg i{position:absolute;border-radius:50%;filter:blur(70px);opacity:0;transition:opacity 1.6s ease;will-change:transform}
+  @keyframes wxDriftA{0%{transform:translate3d(-5%,0,0)}50%{transform:translate3d(5%,3%,0)}100%{transform:translate3d(-5%,0,0)}}
+  @keyframes wxDriftB{0%{transform:translate3d(4%,2%,0)}50%{transform:translate3d(-5%,-2%,0)}100%{transform:translate3d(4%,2%,0)}}
+  @keyframes wxBreathe{0%,100%{transform:scale(1);opacity:.85}50%{transform:scale(1.07);opacity:1}}
+  body[data-wx="sun"] #wxbg i.b1{width:52vw;height:44vh;right:-8%;top:-12%;background:rgba(255,186,60,.20);opacity:1;animation:wxBreathe 12s ease-in-out infinite}
+  body[data-wx="sun"] #wxbg i.b2{width:44vw;height:36vh;left:-10%;bottom:-14%;background:rgba(74,163,255,.14);opacity:1;animation:wxDriftA 80s ease-in-out infinite}
+  body[data-wx="night"] #wxbg i.b1{width:50vw;height:42vh;right:-6%;top:-10%;background:rgba(96,112,255,.16);opacity:1;animation:wxDriftB 95s ease-in-out infinite}
+  body[data-wx="night"] #wxbg i.b2{width:38vw;height:30vh;left:-8%;bottom:-10%;background:rgba(140,90,220,.10);opacity:1;animation:wxDriftA 120s ease-in-out infinite}
+  body[data-wx="cloud"] #wxbg i.b1{width:58vw;height:40vh;left:2%;top:-10%;background:rgba(140,158,182,.17);opacity:1;animation:wxDriftA 90s ease-in-out infinite}
+  body[data-wx="cloud"] #wxbg i.b2{width:48vw;height:34vh;right:-6%;bottom:-12%;background:rgba(120,138,162,.12);opacity:1;animation:wxDriftB 110s ease-in-out infinite}
+  body[data-wx="rain"] #wxbg i.b1{width:56vw;height:40vh;left:0;top:-10%;background:rgba(64,120,190,.18);opacity:1;animation:wxDriftA 85s ease-in-out infinite}
+  body[data-wx="rain"] #wxbg i.b2{width:46vw;height:34vh;right:-8%;bottom:-12%;background:rgba(50,100,160,.13);opacity:1;animation:wxDriftB 105s ease-in-out infinite}
+  body[data-wx="storm"] #wxbg i.b1{width:58vw;height:42vh;left:-2%;top:-12%;background:rgba(120,90,230,.20);opacity:1;animation:wxDriftA 70s ease-in-out infinite}
+  body[data-wx="storm"] #wxbg i.b2{width:48vw;height:36vh;right:-8%;bottom:-12%;background:rgba(70,90,200,.14);opacity:1;animation:wxDriftB 90s ease-in-out infinite}
+  body[data-wx="snow"] #wxbg i.b1{width:54vw;height:40vh;right:-6%;top:-10%;background:rgba(180,205,240,.18);opacity:1;animation:wxDriftB 100s ease-in-out infinite}
+  body[data-wx="snow"] #wxbg i.b2{width:44vw;height:32vh;left:-8%;bottom:-12%;background:rgba(150,180,225,.12);opacity:1;animation:wxDriftA 120s ease-in-out infinite}
+  body[data-wx="fog"] #wxbg i.b1{width:70vw;height:34vh;left:8%;top:20%;border-radius:40%;background:rgba(150,160,175,.15);opacity:1;animation:wxDriftA 100s ease-in-out infinite}
+  body[data-wx="fog"] #wxbg i.b2{width:60vw;height:28vh;right:2%;bottom:8%;border-radius:40%;background:rgba(150,160,175,.11);opacity:1;animation:wxDriftB 130s ease-in-out infinite}
+
+  /* Animated weather icons (Meteocons) */
+  .wxi{display:inline-block;vertical-align:middle}
+  .cc-icon{display:flex;align-items:center}
+  .day .di .wxi{display:block;margin:0 auto}
+  .h24-pill .wxi{margin:-3px 3px -2px 0}
+  .sm-moon .mico{display:flex;align-items:center}
+  .sm-kv .wxi{margin:-3px 2px -2px 0}
+
+  /* Location bar */
+  .locbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:16px}
+  .locsearch{position:relative;flex:1 1 240px;min-width:170px;margin:0}
+  .locsearch #locSearch{width:100%;background:var(--panel-2);color:var(--text);
+    border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:14px;min-height:44px;font-family:inherit;box-sizing:border-box}
+  .locsearch #locSearch:focus{outline:none;border-color:var(--accent)}
+  .locsug{display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:50;
+    background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);
+    overflow:hidden;max-height:320px;overflow-y:auto}
+  .locsug.show{display:block}
+  .locsug .sug{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:12px 14px;min-height:44px;cursor:pointer;font-size:14px;border-bottom:1px solid var(--border)}
+  .locsug .sug:last-child{border-bottom:0}
+  .locsug .sug:hover,.locsug .sug.hot{background:var(--chip)}
+  .locsug .sug .sname{font-weight:600}
+  .locsug .sug .swhere{font-size:12px;color:var(--muted);white-space:nowrap}
+  .locsug .sug-note{padding:12px 14px;font-size:13px;color:var(--muted)}
+  .locbar .locNow{font-size:13px;color:var(--muted);font-weight:600;margin-left:auto;white-space:nowrap}
+
+  /* Forecast Discussion "pulse" */
+  #afdCard .afd-body{font-size:14.5px;line-height:1.62;color:var(--text)}
+  #afdCard .afd-body p{margin:0 0 10px}
+  #afdCard .afd-body p:last-child{margin-bottom:0}
+  .afd-list{margin:0;padding-left:20px}
+  .afd-list li{margin:0 0 8px;line-height:1.55;font-size:14.5px}
+  .afd-list li:last-child{margin-bottom:0}
+  .afd-meta{font-size:12px;color:var(--muted);margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
+  /* ===== Responsive overrides (kept last so they win over base rules) ===== */
+  @media(max-width:480px){
+    html,body{overflow-x:hidden}
+    .brand h1{font-size:17px}
+    .header-right{gap:10px}
+    .clock .time{font-size:18px}
+    .day{grid-template-columns:minmax(0,1.15fr) 24px 38px minmax(38px,1.6fr) auto 12px;gap:7px;padding:10px}
+    .day .dt{font-size:13px}
+    /* Risk matrix: stack day label above its 3 pills so nothing collides */
+    .spc-row{grid-template-columns:1fr 1fr 1fr;gap:5px 5px;padding:9px 0}
+    .spc-row .spc-day{grid-column:1 / -1;font-size:12px;margin-bottom:1px}
+    .spc-row.rhead > span:first-child{display:none}
+    .spc-row.rhead{grid-template-columns:1fr 1fr 1fr}
+    .spc-row .rh{font-size:10px}
+    .spc-pill{font-size:10.5px;padding:5px 5px;white-space:normal;line-height:1.2}
+    .cpc-grid{grid-template-columns:1fr}
+    .h24-sum{gap:6px}
+    .h24-pill{padding:5px 10px;font-size:12px}
+    .h24-pill.h24-now{margin-left:0}
+    .locbar{gap:8px}
+    .locbar .locNow{margin-left:0;flex-basis:100%;order:3}
+    .cc-temp{font-size:46px}
+    /* Sun & Moon: stack the arc above the times so nothing crowds on a phone */
+    .sm-sun{flex-direction:column;align-items:stretch;gap:12px}
+    .sm-arc{flex:none;align-self:center}
+    /* Header controls get their own full-width row, spaced out */
+    .header-right{width:100%;justify-content:space-between;gap:8px}
+    /* River rows: let long gauge names wrap instead of squeezing the value */
+    .rlink{flex-wrap:wrap}
+    .rlink .rname{min-width:0;flex:1 1 60%}
+    /* Day-detail 2-col grid → single column so wind/humidity never truncate */
+    .dd-grid{grid-template-columns:1fr}
+  }
+  footer a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+</style>
+</head>
+<body>
+<div id="wxbg" aria-hidden="true"><i class="b1"></i><i class="b2"></i></div>
+
+<header class="top">
+  <div class="brand">
+    <div class="logo" aria-label="LSX Weather">
+      <svg viewBox="0 0 44 44" width="44" height="44" role="img" aria-hidden="true">
+        <defs>
+          <linearGradient id="lgbg" x1="0" y1="0" x2="1" y2="1">
+            <stop class="lg-bg1" offset="0"/><stop class="lg-bg2" offset="1"/>
+          </linearGradient>
+          <radialGradient id="lgsweep" cx="50%" cy="50%" r="50%">
+            <stop class="lg-sweep-stop" offset="0" stop-opacity=".95"/><stop class="lg-sweep-stop" offset="1" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <rect width="44" height="44" rx="11" fill="url(#lgbg)"/>
+        <rect class="lg-edge" x="0.7" y="0.7" width="42.6" height="42.6" rx="10.4" fill="none" stroke-width="1.2"/>
+        <g class="lg-rings" fill="none" stroke-linecap="round">
+          <circle cx="22" cy="22" r="14" stroke-width="1.3" opacity=".35"/>
+          <circle cx="22" cy="22" r="9" stroke-width="1.3" opacity=".5"/>
+          <circle cx="22" cy="22" r="4" stroke-width="1.3" opacity=".65"/>
+        </g>
+        <path class="lg-sweep" d="M22 22 L22 6 A16 16 0 0 1 37 17 Z" fill="url(#lgsweep)"/>
+        <path class="lg-bolt" d="M25 8 L15.5 25 L21 25 L18 36 L29 18 L23.5 18 L28 8 Z" stroke-width="1" stroke-linejoin="round"/>
+        <circle class="lg-core" cx="22" cy="22" r="1.7"/>
+      </svg>
+    </div>
+    <div>
+      <h1>St. Louis Weather Command</h1>
+      <div class="sub">NWS LSX County Warning Area · live feed</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <button class="refresh-btn" id="refresh" title="Refresh everything now">
+      <span class="dot" id="statusDot"></span><span id="refreshLabel">Refresh</span>
+    </button>
+    <button id="themeBtn" title="Theme: auto (tap to change)" aria-label="Toggle light/dark theme">🌗</button>
+    <div class="clock">
+      <div class="time" id="clock">--:--</div>
+      <div class="date" id="cdate">&mdash;</div>
+    </div>
+  </div>
+</header>
+
+<div class="locbar">
+  <button id="geoBtn" title="Use my current location">📍 My location</button>
+  <form id="locForm" class="locsearch" autocomplete="off">
+    <input id="locSearch" type="search" placeholder="Search an LSX-area city or town…" autocomplete="off" aria-label="Search a location in the St. Louis (LSX) forecast area" enterkeyhint="search">
+    <div id="locSug" class="locsug" role="listbox"></div>
+  </form>
+  <span class="locNow" id="locNow"></span>
+</div>
+
+<div id="stormBanner">
+  <div class="bico">⚠️</div>
+  <div>
+    <div class="btxt" id="stormText">Active Warning</div>
+    <div class="bsub" id="stormSub">Storm Mode engaged — radar &amp; alerts up top. Stay weird, stay safe.</div>
+  </div>
+</div>
+
+<div class="grid">
+
+  <!-- THE CALL — plain-English verdicts computed client-side from the hourly forecast + AQI -->
+  <section class="card col-12" id="callCard">
+    <div class="callrow" id="callRow"></div>
+  </section>
+
+  <!-- FORECAST DISCUSSION SUMMARY (the pulse) -->
+  <section class="card col-12" id="afdCard">
+    <h2>The Pulse — NWS Forecast Discussion
+      <a class="link" href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener">Full discussion ↗</a>
+    </h2>
+    <div id="afd"><div class="loading">Loading discussion…</div></div>
+  </section>
+
+  <!-- ALERTS -->
+  <section class="card col-12" id="alertsCard">
+    <h2>Active Watches, Warnings &amp; Advisories — LSX
+      <a class="link" href="https://www.weather.gov/lsx/" target="_blank" rel="noopener">weather.gov/lsx ↗</a>
+    </h2>
+    <div id="alerts"><div class="loading">Loading alerts…</div></div>
+  </section>
+
+  <!-- CURRENT -->
+  <div class="stack col-4">
+    <section class="card" id="currentCard">
+      <h2>Current Conditions <span class="link" id="ccStation">&mdash;</span></h2>
+      <div id="current"><div class="loading">Loading…</div></div>
+    </section>
+    <!-- AQI (paired under Current so the column fills next to the tall radar) -->
+    <section class="card" id="aqiCard">
+      <h2>Air Quality
+        <a class="link" href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a>
+      </h2>
+      <div id="aqi"><div class="loading">Loading…</div></div>
+    </section>
+  </div>
+
+  <!-- RADAR HERO (official NWS WMS via Leaflet) -->
+  <section class="card col-8" id="radarCard">
+    <h2>Live Radar — zoomable
+      <span class="link"><a href="https://radar.weather.gov/station/KLSX/standard" target="_blank" rel="noopener">Official KLSX ↗</a></span>
+    </h2>
+    <div class="imgwrap maplock-wrap">
+      <div id="radar" class="frame"></div>
+      <div class="radar-time" id="radarTime"></div>
+      <div class="maplock"><button type="button" class="maplock-pill">👆 Tap to interact with radar</button></div>
+    </div>
+    <div class="imgcap"><span>Official NOAA/NWS radar &middot; live <b>warning polygons</b> overlaid &middot; basemap &copy; CARTO/OSM</span><span>auto-updates</span></div>
+  </section>
+
+  <!-- NEXT 24 HOURS (hero chart) -->
+  <section class="card col-12" id="hourlyCard">
+    <h2>Next 24 Hours <span class="link" id="h24loc"></span></h2>
+    <div id="hourly24"><div class="loading">Loading hourly…</div></div>
+  </section>
+
+  <!-- ── Self-packing masonry band: cards flow into the shortest column (no manual balancing, no gaps) ── -->
+  <div class="masonry col-12">
+    <section class="card" id="forecastCard">
+      <h2>7-Day Forecast</h2>
+      <div class="daily" id="daily"><div class="loading">Loading forecast…</div></div>
+    </section>
+    <section class="card" id="climateCard">
+      <h2>Climate vs Normal
+        <a class="link" href="https://xmacis.rcc-acis.org/" target="_blank" rel="noopener">ACIS ↗</a>
+      </h2>
+      <div id="cnToday" class="cn-today"><span class="cn-na">Normals loading…</span></div>
+      <div id="cnGrid" class="cn-grid"><div class="loading">Loading departures…</div></div>
+      <div class="imgcap"><span>Station: <span id="cnStation">…</span></span><span>1991–2020 normals</span></div>
+    </section>
+    <section class="card" id="satCard">
+      <h2>GOES-19 Satellite
+        <a class="link" href="https://www.star.nesdis.noaa.gov/GOES/sector.php?sat=G19&sector=umv" target="_blank" rel="noopener">Loop ↗</a>
+      </h2>
+      <div class="imgwrap">
+        <img id="sat" alt="GOES-19 Upper Mississippi Valley GeoColor" src="https://cdn.star.nesdis.noaa.gov/GOES19/ABI/SECTOR/umv/GEOCOLOR/600x600.jpg" onerror="imgFail(this,'satFail')">
+        <div class="imgfail" id="satFail" style="display:none">Satellite image didn't load. <a href="https://www.star.nesdis.noaa.gov/GOES/sector.php?sat=G19&sector=umv" target="_blank" rel="noopener">Open GOES-East ↗</a></div>
+      </div>
+      <div class="imgcap"><span>NESDIS · Upper Miss. Valley</span><span>GeoColor</span></div>
+    </section>
+    <section class="card" id="cpcCard">
+      <h2>Week Ahead Leanings
+        <a class="link" href="https://www.cpc.ncep.noaa.gov/products/predictions/610day/" target="_blank" rel="noopener">CPC ↗</a>
+      </h2>
+      <div id="cpc"><div class="loading">Loading outlooks…</div></div>
+      <div class="imgcap"><span>Climate Prediction Center</span><span>6–14 days out</span></div>
+    </section>
+    <section class="card" id="obsCard">
+      <h2>Station Plot — Live Surface Obs
+        <a class="link" href="https://www.weather.gov/wrh/timeseries?site=KSTL" target="_blank" rel="noopener">NWS ↗</a>
+      </h2>
+      <div id="stnmap" class="stnmap"></div>
+      <div class="imgcap"><span>NWS · regional ASOS/METAR</span><span class="stn-legend"><b class="lg-t">temp</b> · wind · <b class="lg-d">dew</b> (&deg;F)</span></div>
+    </section>
+    <section class="card" id="riskCard">
+      <h2>Risk Outlook
+        <a class="link" href="https://www.spc.noaa.gov/products/outlook/day1otlk.html" target="_blank" rel="noopener">Maps ↗</a>
+      </h2>
+      <div id="spc"><div class="loading">Loading outlook…</div></div>
+      <div class="imgcap"><span id="spcLoc">SPC &middot; WPC</span><span>storm &middot; flood</span></div>
+    </section>
+    <section class="card" id="hazardsCard">
+      <h2>Hazards Outlook
+        <a class="link" href="https://www.wpc.ncep.noaa.gov/threats/threats.php" target="_blank" rel="noopener">WPC ↗</a>
+      </h2>
+      <div id="hazards"><div class="loading">Loading hazards…</div></div>
+      <div class="imgcap"><span>CPC/WPC U.S. Hazards</span><span>days 3–14</span></div>
+    </section>
+    <!-- DROUGHT OUTLOOK — current (USDM) + monthly & seasonal forecast (CPC) -->
+    <section class="card" id="droughtCard">
+      <h2>Drought Outlook
+        <a class="link" href="https://www.drought.gov/" target="_blank" rel="noopener">drought.gov ↗</a>
+      </h2>
+      <div class="dr-tier"><span class="dr-when">Now</span><span id="drNow"><span class="dr-load">…</span></span></div>
+      <div class="dr-tier"><span class="dr-when">Month ahead</span><span id="drMonth"><span class="dr-load">…</span></span></div>
+      <div class="dr-tier"><span class="dr-when">Season <span class="dr-sub">(3 mo)</span></span><span id="drSeason"><span class="dr-load">…</span></span></div>
+      <div class="imgcap"><span>USDM · CPC outlooks</span><span>NIDIS / drought.gov</span></div>
+    </section>
+    <!-- QUICK LINKS (folded into masonry so it packs instead of stranding) -->
+    <section class="card" id="linksCard">
+      <h2>Deep-Dive Links</h2>
+      <div class="quicklinks">
+        <a href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener">📄 Forecast Discussion (AFD)</a>
+        <a href="https://www.spc.noaa.gov/exper/mesoanalysis/" target="_blank" rel="noopener">🌡️ SPC Mesoanalysis</a>
+        <a href="https://www.wpc.ncep.noaa.gov/qpf/qpf2.shtml" target="_blank" rel="noopener">🌧️ WPC Precip (QPF)</a>
+        <a href="https://map.blitzortung.org/#7/38.7/-90.4" target="_blank" rel="noopener">⚡ Live Lightning</a>
+        <a href="https://droughtmonitor.unl.edu/CurrentMap/StateDroughtMonitor.aspx?MO" target="_blank" rel="noopener">🏜️ Drought Monitor</a>
+        <a href="https://www.weather.gov/lsx/climate" target="_blank" rel="noopener">📊 Climate &amp; Records</a>
+        <a href="https://aviationweather.gov/gfa/#obs" target="_blank" rel="noopener">✈️ Aviation Weather</a>
+        <a href="https://www.weather.gov/lsx/winter" target="_blank" rel="noopener">❄️ Winter Weather</a>
+        <a href="https://water.noaa.gov/#@=-90.3,38.6,7" target="_blank" rel="noopener">🌊 Flood Map</a>
+      </div>
+    </section>
+    <!-- RIVERS — wide (spans 2 columns in the masonry) -->
+    <section class="card wide" id="riversCard">
+      <h2>River &amp; Flood Gauges — live levels <span class="qpfchip" id="qpf7"></span>
+        <a class="link" href="https://water.noaa.gov/" target="_blank" rel="noopener">NWPS ↗</a>
+      </h2>
+      <div class="river" id="rivers"><div class="loading">Loading gauges…</div></div>
+    </section>
+    <!-- SMART SLOT (lightning when stormy · sun/moon when calm) — goes wide ONLY in storm mode,
+         when it hosts the lightning map (updateSmartSlot toggles the class) -->
+    <section class="card" id="smartCard">
+      <h2><span id="smartTitle">Sky Conditions</span>
+        <a class="link" id="smartLink" href="https://map.blitzortung.org/#7/38.7/-90.4" target="_blank" rel="noopener" style="display:none">Fullscreen ↗</a>
+      </h2>
+      <div id="smartBody"><div class="loading">Reading the sky…</div></div>
+    </section>
+  </div>
+
+
+</div>
+
+<footer>
+  Data: NOAA / National Weather Service (public domain) — api.weather.gov, official NWS radar (NOAA nowCOAST/GeoServer), SPC &amp; WPC &amp; CPC outlooks, NESDIS/GOES satellite, NWPS river gauges, climate normals via <a href="https://www.rcc-acis.org/" target="_blank" rel="noopener">NOAA RCC-ACIS</a>.<br>
+  U.S. Drought Monitor courtesy of the National Drought Mitigation Center (NDMC), NOAA &amp; USDA · drought outlooks by <a href="https://www.drought.gov/" target="_blank" rel="noopener">NIDIS / drought.gov</a>.<br>
+  Air quality &amp; geocoding by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (CC BY 4.0) · lightning by <a href="https://www.blitzortung.org/" target="_blank" rel="noopener">Blitzortung.org</a> &amp; contributors · basemap © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> &amp; © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · weather icons by <a href="https://github.com/basmilius/weather-icons" target="_blank" rel="noopener">Meteocons</a> (Bas Milius, MIT) · maps by <a href="https://leafletjs.com/" target="_blank" rel="noopener">Leaflet</a>.<br>
+  Not an official NWS product. During severe weather, always defer to official warnings &amp; a NOAA Weather Radio.<br>
+  <span id="lastUpdate">&mdash;</span>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"
+  integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
+<script>
+/* ============ CONFIG ============ */
+var DEFAULT_LOC={name:"Lake Saint Louis, MO", lat:38.7975, lon:-90.7855, station:"KSUS"};
+var RIVERS = [
+  {name:"Mississippi at St. Louis",  id:"EADM7"},
+  {name:"Missouri at St. Charles",   id:"SCLM7"},
+  {name:"Mississippi at Alton",      id:"ALNI2"},
+  {name:"Meramec at Eureka",         id:"ERKM7"},
+  {name:"Missouri at Hermann",       id:"HRNM7"},
+  {name:"Illinois at Hardin",        id:"05587060"}
+];
+var API = "https://api.weather.gov";
+var HEADERS = {"Accept":"application/geo+json"};
+var LD = {"Accept":"application/ld+json"};
+var current = DEFAULT_LOC;
+
+/* ============ HELPERS ============ */
+function getJSON(url, headers){
+  return fetch(url,{headers:headers||{}}).then(function(r){
+    if(!r.ok) throw new Error(url+" "+r.status);
+    return r.json();
+  });
+}
+function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
+/* ============ ANIMATED WEATHER ICONS (Meteocons, MIT) ============ */
+var ICON_BASE="https://cdn.jsdelivr.net/npm/@meteocons/svg/fill/";
+function wxName(text,day){
+  if(day===undefined)day=true;
+  var t=(text||"").toLowerCase();
+  if(t.indexOf("tornado")>=0)return "tornado";
+  if(t.indexOf("thunder")>=0)return day?"thunderstorms-day":"thunderstorms-night";
+  if(t.indexOf("sleet")>=0||t.indexOf("ice")>=0||t.indexOf("freezing")>=0)return "sleet";
+  if(t.indexOf("snow")>=0||t.indexOf("flurr")>=0||t.indexOf("wintry")>=0)return "snow";
+  if(t.indexOf("hail")>=0)return "hail";
+  if(t.indexOf("drizzle")>=0)return "drizzle";
+  if(t.indexOf("rain")>=0||t.indexOf("shower")>=0)return "rain";
+  if(t.indexOf("fog")>=0)return day?"fog-day":"fog-night";
+  if(t.indexOf("haze")>=0)return day?"haze-day":"haze-night";
+  if(t.indexOf("smoke")>=0)return "smoke";
+  if(t.indexOf("wind")>=0||t.indexOf("breezy")>=0||t.indexOf("blustery")>=0)return "wind";
+  if(t.indexOf("overcast")>=0)return day?"overcast-day":"overcast-night";
+  if(t.indexOf("partly")>=0||t.indexOf("mostly sunny")>=0||t.indexOf("mostly clear")>=0)return day?"partly-cloudy-day":"partly-cloudy-night";
+  if(t.indexOf("cloudy")>=0)return "cloudy";
+  if(t.indexOf("sunny")>=0||t.indexOf("clear")>=0||t.indexOf("fair")>=0||t.indexOf("hot")>=0)return day?"clear-day":"clear-night";
+  return day?"partly-cloudy-day":"partly-cloudy-night";
+}
+function mcImg(name,em,px){
+  return '<img class="wxi" src="'+ICON_BASE+name+'.svg" width="'+px+'" height="'+px+'" alt="" data-em="'+em+'" loading="lazy" onerror="wxiFail(this)">';
+}
+function wxImg(text,day,px){ return mcImg(wxName(text,day), emoji(text,day), px); }
+function wxiFail(img){  // CDN down → graceful emoji fallback
+  var s=document.createElement("span");
+  s.textContent=img.getAttribute("data-em")||"\ud83c\udf24\ufe0f";
+  s.style.fontSize=Math.round((+img.getAttribute("width")||24)*0.85)+"px";
+  s.style.lineHeight="1";
+  img.replaceWith(s);
+}
+/* Feels-like: NOAA's own formulas. Heat index (Rothfusz) when >=80°F; wind chill when <=50°F & wind >3 mph. */
+function parseMph(s){ var m=String(s||"").match(/\d+/g); return m?Math.max.apply(null,m.map(Number)):null; }
+function heatIndexF(t,rh){
+  if(t==null||rh==null||t<80) return null;
+  var HI=-42.379+2.04901523*t+10.14333127*rh-0.22475541*t*rh-0.00683783*t*t-0.05481717*rh*rh
+        +0.00122874*t*t*rh+0.00085282*t*rh*rh-0.00000199*t*t*rh*rh;
+  if(rh<13&&t<=112) HI-=((13-rh)/4)*Math.sqrt((17-Math.abs(t-95))/17);
+  else if(rh>85&&t<=87) HI+=((rh-85)/10)*((87-t)/5);
+  return Math.round(Math.max(HI,t));   // HI is only meaningful when it exceeds the air temp
+}
+function windChillF(t,mph){
+  if(t==null||mph==null||t>50||mph<=3) return null;
+  return Math.round(35.74+0.6215*t-35.75*Math.pow(mph,0.16)+0.4275*t*Math.pow(mph,0.16));
+}
+function feelsLikeF(t,rh,mph){
+  if(t==null) return null;
+  var hi=heatIndexF(t,rh); if(hi!=null) return hi;
+  var wc=windChillF(t,mph); if(wc!=null) return wc;
+  return t;
+}
+function wxGroup(desc,day){
+  var t=(desc||"").toLowerCase();
+  if(t.indexOf("thunder")>=0||t.indexOf("tornado")>=0)return "storm";
+  if(t.indexOf("snow")>=0||t.indexOf("sleet")>=0||t.indexOf("hail")>=0||t.indexOf("flurr")>=0||t.indexOf("wintry")>=0||t.indexOf("freezing")>=0)return "snow";
+  if(t.indexOf("rain")>=0||t.indexOf("drizzle")>=0||t.indexOf("shower")>=0)return "rain";
+  if(t.indexOf("fog")>=0||t.indexOf("haze")>=0||t.indexOf("smoke")>=0||t.indexOf("mist")>=0)return "fog";
+  if(t.indexOf("overcast")>=0||t.indexOf("cloudy")>=0&&t.indexOf("partly")<0)return "cloud";
+  return day?"sun":"night";
+}
+
+function tCol(t){ // cold blue → hot red
+  var x=Math.max(0,Math.min(1,(t-15)/(95-15)));
+  return "hsl("+Math.round(225-225*x)+",78%,52%)";
+}
+/* Slim temperature sparkline that sits under the scrollable hour cards */
+/* ── Next 24 Hours: full-width integrated hourly chart ──
+   Smooth temp curve (per-hour color gradient) + day/night bands + precip bars
+   + hour icons + now marker + hover readout. Re-renders on resize. */
+function renderHourly24(hrs){
+  var el=document.getElementById("hourly24"); if(!el) return;
+  if(hrs&&hrs.length) renderHourly24._hrs=hrs;
+  hrs=renderHourly24._hrs;
+  if(!hrs||!hrs.length){ el.innerHTML='<div class="empty">Hourly forecast unavailable.</div>'; return; }
+  var n=Math.min(24,hrs.length), i;
+  var hi=-999, lo=999, peak=0, temps=[], pops=[], feels=[], maxDiv=0, feelsHi=-999;
+  for(i=0;i<n;i++){
+    var t=hrs[i].temperature; temps.push(t); if(t>hi)hi=t; if(t<lo)lo=t;
+    var pp=hrs[i].probabilityOfPrecipitation; var v=(pp&&pp.value!=null)?pp.value:0; pops.push(v); if(v>peak)peak=v;
+    var hrh=(hrs[i].relativeHumidity&&hrs[i].relativeHumidity.value!=null)?hrs[i].relativeHumidity.value:null;
+    var fl=feelsLikeF(t,hrh,parseMph(hrs[i].windSpeed)); feels.push(fl);
+    if(fl!=null){ if(Math.abs(fl-t)>maxDiv) maxDiv=Math.abs(fl-t); if(fl>feelsHi) feelsHi=fl; }
+  }
+  var showFeels = maxDiv>=3;   // ghost curve only when it meaningfully diverges
+  var sum='<div class="h24-sum">'
+    +'<span class="h24-pill">▲ High <b style="color:'+tCol(hi)+'">'+hi+'°</b></span>'
+    +'<span class="h24-pill">▼ Low <b style="color:'+tCol(lo)+'">'+lo+'°</b></span>'
+    +'<span class="h24-pill">💧 Peak rain <b style="color:var(--accent)">'+peak+'%</b></span>'
+    +(showFeels?'<span class="h24-pill">🌡️ Feels high <b style="color:'+tCol(feelsHi)+'">'+feelsHi+'°</b></span>':'')
+    +'<span class="h24-pill h24-now">'+wxImg(hrs[0].shortForecast,hrs[0].isDaytime,20)+' Now <b>'+hrs[0].temperature+'°</b></span>'
+    +'</div>';
+
+  // ---- geometry (full container width; 1200 fallback pre-layout) ----
+  var W=el.clientWidth||1200, narrow=W<=680;
+  var H=narrow?190:236, padL=16, padR=16, innerW=W-padL-padR, denom=Math.max(1,n-1), slot=innerW/denom;
+  var iconPx=narrow?22:28, iconY=6;
+  var curveTop=iconY+iconPx+(narrow?18:24), baseY=H-58, barBase=H-26, barMax=narrow?26:34, timeY=H-8;
+  var step = slot>=48?1 : slot>=30?2 : slot>=20?3 : 4;   // label density adapts to width
+  var scLo=lo, scHi=hi;
+  if(showFeels){ for(i=0;i<n;i++){ if(feels[i]!=null){ if(feels[i]<scLo)scLo=feels[i]; if(feels[i]>scHi)scHi=feels[i]; } } }
+  var tMin=scLo-2, tMax=scHi+2, rng=Math.max(4,tMax-tMin);
+  function X(i){ return padL+slot*i; }
+  function Y(t){ return curveTop+(baseY-curveTop)*(1-(t-tMin)/rng); }
+
+  // day/night shading bands (runs of !isDaytime)
+  var bands="";
+  var runStart=null;
+  for(i=0;i<=n;i++){
+    var night=(i<n)&&!hrs[i].isDaytime;
+    if(night&&runStart==null) runStart=i;
+    if(!night&&runStart!=null){
+      var x0=(runStart===0)?0:X(runStart)-slot/2, x1=(i===n)?W:X(i-1)+slot/2;
+      bands+='<rect class="h24-night" x="'+x0.toFixed(1)+'" y="0" width="'+(x1-x0).toFixed(1)+'" height="'+(barBase+2)+'" fill="var(--h24night)"/>';
+      runStart=null;
+    }
+  }
+
+  // per-hour temperature gradient
+  var grad="";
+  for(i=0;i<n;i++){ grad+='<stop offset="'+(i/denom*100).toFixed(1)+'%" stop-color="'+tCol(temps[i])+'"/>'; }
+
+  // smooth curve: Catmull-Rom → cubic Bézier
+  var pts=[]; for(i=0;i<n;i++) pts.push([X(i),Y(temps[i])]);
+  var line="M "+pts[0][0].toFixed(1)+" "+pts[0][1].toFixed(1);
+  for(i=0;i<n-1;i++){
+    var p0=pts[Math.max(0,i-1)], p1=pts[i], p2=pts[i+1], p3=pts[Math.min(n-1,i+2)];
+    var c1x=p1[0]+(p2[0]-p0[0])/6, c1y=p1[1]+(p2[1]-p0[1])/6;
+    var c2x=p2[0]-(p3[0]-p1[0])/6, c2y=p2[1]-(p3[1]-p1[1])/6;
+    line+=" C "+c1x.toFixed(1)+" "+c1y.toFixed(1)+" "+c2x.toFixed(1)+" "+c2y.toFixed(1)+" "+p2[0].toFixed(1)+" "+p2[1].toFixed(1);
+  }
+  var area=line+" L "+pts[n-1][0].toFixed(1)+" "+baseY+" L "+pts[0][0].toFixed(1)+" "+baseY+" Z";
+  var feelsPath="";
+  if(showFeels){
+    var fp=[]; for(i=0;i<n;i++) fp.push([X(i),Y(feels[i]!=null?feels[i]:temps[i])]);
+    var fl2="M "+fp[0][0].toFixed(1)+" "+fp[0][1].toFixed(1);
+    for(i=0;i<n-1;i++){var q0=fp[Math.max(0,i-1)],q1=fp[i],q2=fp[i+1],q3=fp[Math.min(n-1,i+2)];
+      fl2+=" C "+(q1[0]+(q2[0]-q0[0])/6).toFixed(1)+" "+(q1[1]+(q2[1]-q0[1])/6).toFixed(1)+" "+(q2[0]-(q3[0]-q1[0])/6).toFixed(1)+" "+(q2[1]-(q3[1]-q1[1])/6).toFixed(1)+" "+q2[0].toFixed(1)+" "+q2[1].toFixed(1);}
+    feelsPath='<path class="h24-feels" d="'+fl2+'" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="5 5" opacity=".65"/>';
+  }
+
+  // precip bars + labels
+  var bars="";
+  for(i=0;i<n;i++){
+    if(pops[i]<=0) continue;
+    var bh=Math.max(3,barMax*pops[i]/100), bw=Math.min(18,slot*0.5), bx=X(i)-bw/2;
+    bars+='<rect class="h24-bar" x="'+bx.toFixed(1)+'" y="'+(barBase-bh).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+bh.toFixed(1)+'" rx="3" fill="var(--accent)" opacity=".38"/>';
+    if(pops[i]>=15&&i%step===0) bars+='<text class="h24-poplbl" x="'+X(i).toFixed(1)+'" y="'+(barBase-bh-4).toFixed(1)+'" text-anchor="middle" fill="var(--accent)">'+pops[i]+'%</text>';
+  }
+
+  // icons, temp labels, time labels (density-stepped)
+  var icons="", tlabels="", times="";
+  for(i=0;i<n;i++){
+    if(i%step!==0 && i!==0) continue;
+    var hx=X(i), hh=hrs[i], d=new Date(hh.startTime);
+    icons+='<image class="h24-ic" href="'+ICON_BASE+wxName(hh.shortForecast,hh.isDaytime)+'.svg" x="'+(hx-iconPx/2).toFixed(1)+'" y="'+iconY+'" width="'+iconPx+'" height="'+iconPx+'"/>';
+    tlabels+='<text class="h24-tl" x="'+hx.toFixed(1)+'" y="'+(Y(temps[i])-9).toFixed(1)+'" text-anchor="middle" fill="'+tCol(temps[i])+'">'+temps[i]+'°</text>';
+    var lbl=(i===0)?"Now":d.toLocaleTimeString([], {hour:"numeric"}).replace(" ","").toLowerCase();
+    times+='<text class="h24-time'+(i===0?" is-now":"")+'" x="'+hx.toFixed(1)+'" y="'+timeY+'" text-anchor="middle">'+lbl+'</text>';
+  }
+
+  // now marker
+  var nowX=X(0), nowY=Y(temps[0]);
+  var nowMark='<line class="h24-nowline" x1="'+nowX+'" y1="'+(curveTop-14)+'" x2="'+nowX+'" y2="'+(barBase+2)+'" stroke="var(--accent)" stroke-dasharray="3 4" stroke-width="1" opacity=".55"/>'
+    +'<circle class="h24-nowdot" cx="'+nowX+'" cy="'+nowY.toFixed(1)+'" r="4.5" fill="'+tCol(temps[0])+'" stroke="var(--bg)" stroke-width="2"/>';
+
+  // hover tracker (moved by JS)
+  var tracker='<line class="h24-track" x1="-99" y1="'+(curveTop-14)+'" x2="-99" y2="'+(barBase+2)+'" stroke="var(--accent)" stroke-width="1" opacity="0"/>'
+    +'<circle class="h24-trackdot" cx="-99" cy="-99" r="4" fill="var(--accent)" opacity="0"/>';
+
+  var svg='<svg class="h24-svg" viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" role="img" aria-label="24 hour temperature and precipitation chart">'
+    +'<defs><linearGradient id="h24g" x1="0" y1="0" x2="1" y2="0">'+grad+'</linearGradient>'
+    +'<linearGradient id="h24a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+tCol(hi)+'" stop-opacity=".16"/><stop offset="1" stop-color="'+tCol(lo)+'" stop-opacity="0"/></linearGradient></defs>'
+    +bands
+    +'<line x1="0" y1="'+barBase+'" x2="'+W+'" y2="'+barBase+'" stroke="var(--border)" stroke-width="1"/>'
+    +'<path d="'+area+'" fill="url(#h24a)"/>'
+    +feelsPath
+    +'<path class="h24-line" d="'+line+'" fill="none" stroke="url(#h24g)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'
+    +bars+icons+tlabels+times+nowMark+tracker
+    +'</svg>';
+
+  el.innerHTML=sum+'<div class="h24-wrap">'+svg+'<div class="h24-tip" id="h24tip"></div></div>';
+
+  // ---- hover / touch readout ----
+  var wrap=el.querySelector(".h24-wrap"), tip=el.querySelector(".h24-tip");
+  var trk=el.querySelector(".h24-track"), tdot=el.querySelector(".h24-trackdot");
+  function showAt(clientX){
+    var r=wrap.getBoundingClientRect(); if(!r.width) return;
+    var sx=(clientX-r.left)*(W/r.width);
+    var idx=Math.max(0,Math.min(n-1,Math.round((sx-padL)/slot)));
+    var hx=X(idx), hy=Y(temps[idx]);
+    trk.setAttribute("x1",hx);trk.setAttribute("x2",hx);trk.setAttribute("opacity",".45");
+    tdot.setAttribute("cx",hx);tdot.setAttribute("cy",hy.toFixed(1));tdot.setAttribute("opacity","1");
+    var d=new Date(hrs[idx].startTime);
+    var when=(idx===0)?"Now":d.toLocaleTimeString([], {hour:"numeric"});
+    tip.innerHTML='<b>'+esc(when)+'</b> · <b style="color:'+tCol(temps[idx])+'">'+temps[idx]+'°</b>'
+      +((feels[idx]!=null&&Math.abs(feels[idx]-temps[idx])>=2)?' · <span style="color:'+tCol(feels[idx])+'">feels '+feels[idx]+'°</span>':'')
+      +(pops[idx]>0?' · <span style="color:var(--accent)">💧'+pops[idx]+'%</span>':'')
+      +' · '+esc(hrs[idx].shortForecast||"");
+    tip.style.display="block";
+    var px=(hx/W)*r.width, tw=tip.offsetWidth;
+    tip.style.left=Math.max(4,Math.min(r.width-tw-4,px-tw/2))+"px";
+  }
+  function hideTip(){ tip.style.display="none"; trk.setAttribute("opacity","0"); tdot.setAttribute("opacity","0"); }
+  wrap.addEventListener("mousemove",function(e){ showAt(e.clientX); });
+  wrap.addEventListener("mouseleave",hideTip);
+  wrap.addEventListener("touchmove",function(e){ if(e.touches[0]) showAt(e.touches[0].clientX); },{passive:true});
+  wrap.addEventListener("touchend",hideTip);
+
+  // ---- re-render on resize so the chart always fills the card ----
+  if(!renderHourly24._rsz){
+    renderHourly24._rsz=true;
+    var rt=null;
+    window.addEventListener("resize",function(){ clearTimeout(rt); rt=setTimeout(function(){ renderHourly24(); },150); });
+  }
+}
+function imgFail(img,failId){img.style.display="none";var f=document.getElementById(failId);if(f)f.style.display="block";}
+function bust(url){return url+(url.indexOf("?")>=0?"&":"?")+"_t="+Date.now();}
+function emoji(text,day){
+  if(day===undefined)day=true;
+  var t=(text||"").toLowerCase();
+  if(t.indexOf("tornado")>=0)return "🌪️";
+  if(t.indexOf("thunder")>=0)return "⛈️";
+  if(t.indexOf("snow")>=0||t.indexOf("flurr")>=0||t.indexOf("wintry")>=0||t.indexOf("sleet")>=0||t.indexOf("ice")>=0)return "🌨️";
+  if(t.indexOf("freezing")>=0)return "🧊";
+  if(t.indexOf("rain")>=0||t.indexOf("shower")>=0||t.indexOf("drizzle")>=0)return "🌧️";
+  if(t.indexOf("fog")>=0||t.indexOf("haze")>=0||t.indexOf("smoke")>=0)return "🌫️";
+  if(t.indexOf("wind")>=0)return "💨";
+  if(t.indexOf("partly")>=0||t.indexOf("mostly sunny")>=0||t.indexOf("mostly clear")>=0)return day?"⛅":"☁️";
+  if(t.indexOf("cloudy")>=0||t.indexOf("overcast")>=0)return "☁️";
+  if(t.indexOf("sunny")>=0||t.indexOf("clear")>=0||t.indexOf("fair")>=0)return day?"☀️":"🌙";
+  if(t.indexOf("hot")>=0)return "🥵";
+  return day?"🌤️":"🌙";
+}
+function alertClass(p){
+  var ev=(p.event||"").toLowerCase();
+  if(ev.indexOf("tornado")>=0&&ev.indexOf("warning")>=0)return "tornado";
+  var s=(p.severity||"").toLowerCase();
+  if(s==="extreme")return "extreme";
+  if(s==="severe")return "severe";
+  if(s==="moderate")return "moderate";
+  return "minor";
+}
+function degToCompass(d){
+  if(d==null)return "";
+  var dirs=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+  return dirs[Math.round(d/22.5)%16];
+}
+function timeAgo(ts){
+  if(!ts)return "—";
+  var m=Math.round((Date.now()-new Date(ts))/60000);
+  if(m<1)return "just now";
+  if(m<60)return m+" min ago";
+  return Math.round(m/60)+" hr ago";
+}
+
+/* ============ MAP LOCKS (Fix 1) ============ */
+function bindMapLock(w){
+  if(w.dataset.lockBound) return;
+  w.dataset.lockBound="1";
+  var lock=w.querySelector(".maplock");
+  var toggle=document.createElement("button");
+  toggle.className="maplock-toggle";toggle.type="button";toggle.textContent="🔒 Lock";
+  w.appendChild(toggle);
+  lock.addEventListener("click",function(){w.classList.add("unlocked");});
+  toggle.addEventListener("click",function(e){e.stopPropagation();w.classList.remove("unlocked");});
+}
+function initMapLocks(){
+  document.querySelectorAll(".maplock-wrap").forEach(bindMapLock);
+  var relock;
+  window.addEventListener("scroll",function(){
+    clearTimeout(relock);
+    relock=setTimeout(function(){
+      document.querySelectorAll(".maplock-wrap.unlocked").forEach(function(w){w.classList.remove("unlocked");});
+    },400);
+  },{passive:true});
+}
+
+/* ============ RADAR (Official NWS via Leaflet + warning polygons) ============ */
+var rvMap=null, rvBase=null, rvMarker=null, nwsRadar=null, warnLayer=null;
+var NWS_WMS="https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows";
+function effectiveLight(){
+  // data-theme always holds the resolved theme; the "auto" pref never reaches the DOM
+  return document.documentElement.getAttribute("data-theme")==="light";
+}
+function baseUrl(){
+  return effectiveLight()
+    ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+}
+function updateRadarBase(){ if(rvBase) rvBase.setUrl(baseUrl()); }
+function initRadarMap(){
+  var el=document.getElementById("radar");
+  if(typeof L==="undefined"||!el){
+    if(el) el.innerHTML='<div class="imgfail">Map didn\u2019t load. <a href="https://radar.weather.gov/station/KLSX/standard" target="_blank" rel="noopener">Open KLSX radar \u2197</a></div>';
+    return;
+  }
+  rvMap=L.map(el,{zoomControl:true,attributionControl:true,scrollWheelZoom:true,minZoom:4,maxZoom:12}).setView([current.lat,current.lon],7);
+  rvBase=L.tileLayer(baseUrl(),{subdomains:"abcd",maxZoom:12,
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> &middot; Radar &amp; warnings: <a href="https://www.weather.gov" target="_blank" rel="noopener">NOAA/NWS</a>'}).addTo(rvMap);
+  nwsRadar=L.tileLayer.wms(NWS_WMS,{
+    layers:"conus_bref_qcd",format:"image/png",transparent:true,opacity:0.8,version:"1.3.0",zIndex:10
+  }).addTo(rvMap);
+  rvMarker=L.circleMarker([current.lat,current.lon],{radius:5,color:"#4aa3ff",weight:2,fillColor:"#4aa3ff",fillOpacity:.9,interactive:false}).addTo(rvMap);
+  setTimeout(function(){ if(rvMap) rvMap.invalidateSize(); },250);
+  refreshRadarLayer();
+  loadWarnPolygons(undefined);  // draw from cache if alerts already arrived
+}
+function refreshRadarLayer(){
+  if(!nwsRadar) return;
+  nwsRadar.setParams({_t:Date.now()});  // pull latest official sweep
+  var lbl=document.getElementById("radarTime");
+  if(!lbl) return;
+  // Label with the radar product's REAL valid time (WMS time dimension), not the client clock —
+  // during an outage the client clock would falsely claim a stale image is "latest".
+  fetch(NWS_WMS+"?service=WMS&version=1.3.0&request=GetCapabilities")
+    .then(function(r){ if(!r.ok) throw new Error("caps "+r.status); return r.text(); })
+    .then(function(xml){
+      var m=xml.match(/<Dimension[^>]*name="time"[^>]*default="([^"]+)"/i);
+      var t=m?new Date(m[1]):null;
+      lbl.textContent=(t&&!isNaN(t))?("sweep "+t.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})):"";
+    })
+    .catch(function(){ lbl.textContent=""; });  // no honest time → show nothing rather than a guess
+}
+function warnStyle(ev){
+  ev=(ev||"").toLowerCase();
+  if(ev.indexOf("tornado")>=0)            return {color:"#ff2d55",weight:2.5,fillColor:"#ff2d55",fillOpacity:.14};
+  if(ev.indexOf("severe thunderstorm")>=0)return {color:"#ffb020",weight:2.5,fillColor:"#ffb020",fillOpacity:.12};
+  if(ev.indexOf("flash flood")>=0)        return {color:"#3ecf8e",weight:2.5,fillColor:"#3ecf8e",fillOpacity:.12};
+  if(ev.indexOf("flood")>=0)              return {color:"#2e8b57",weight:2,fillColor:"#2e8b57",fillOpacity:.10};
+  if(ev.indexOf("special marine")>=0||ev.indexOf("special weather")>=0) return {color:"#4aa3ff",weight:2,fillColor:"#4aa3ff",fillOpacity:.08};
+  return {color:"#c17bff",weight:2,fillColor:"#c17bff",fillOpacity:.10};
+}
+var lastWarnFeats=[];
+function loadWarnPolygons(feats){
+  if(feats!==undefined) lastWarnFeats=feats||[];
+  if(!rvMap) return;
+  var polys=lastWarnFeats.filter(function(f){
+    return f.geometry && (f.properties.event||"").toLowerCase().indexOf("warning")>=0;
+  });
+  if(warnLayer){ rvMap.removeLayer(warnLayer); warnLayer=null; }
+  if(!polys.length) return;
+  warnLayer=L.geoJSON({type:"FeatureCollection",features:polys},{
+    style:function(f){ return warnStyle(f.properties.event); },
+    interactive:false, pane:"overlayPane"
+  }).addTo(rvMap);
+}
+function loadRadar(){  // recenter on location change
+  if(!rvMap) return;
+  rvMap.setView([current.lat,current.lon], rvMap.getZoom()||7);
+  if(rvMarker) rvMarker.setLatLng([current.lat,current.lon]);
+}
+
+/* ============ FORECAST ============ */
+/* NWS removed relativeHumidity from the twice-daily /forecast periods (API discussion #752).
+   Recover it from the hourly forecast: map each local date → the humidity nearest midday (1pm). */
+function middayRHByDate(hrs){
+  var map={};
+  (hrs||[]).forEach(function(pp){
+    if(!pp.startTime) return;
+    var rh=(pp.relativeHumidity && pp.relativeHumidity.value!=null)?Math.round(pp.relativeHumidity.value):null;
+    if(rh==null) return;
+    var dt=new Date(pp.startTime);
+    var key=dt.getFullYear()+"-"+("0"+(dt.getMonth()+1)).slice(-2)+"-"+("0"+dt.getDate()).slice(-2);
+    var diff=Math.abs(dt.getHours()-13); // closeness to 1pm local
+    if(!map[key] || diff<map[key].diff) map[key]={rh:rh, diff:diff};
+  });
+  return map;
+}
+function loadForecast(){
+  var daily=document.getElementById("daily");
+  return getJSON(API+"/points/"+current.lat+","+current.lon,HEADERS).then(function(pt){
+    var fUrl=pt.properties.forecast, hUrl=pt.properties.forecastHourly;
+    // Hourly is only an enhancer (humidity + 24h strip). If it fails, the 7-day must still render.
+    return Promise.all([getJSON(fUrl,HEADERS), getJSON(hUrl,HEADERS).catch(function(){return null;})]).then(function(res){
+      var f=res[0], h=res[1];
+      var rhByDate=h?middayRHByDate(h.properties.periods):{};
+      var ps=f.properties.periods.slice(0,15);
+      // Pair day + night periods into single calendar days
+      var days=[], i=0;
+      while(i<ps.length && days.length<7){
+        var p=ps[i];
+        if(p.isDaytime){
+          var n=(i+1<ps.length && !ps[i+1].isDaytime)?ps[i+1]:null;
+          days.push({name:p.name.replace("This ","").replace("Afternoon","Aft."), day:p, night:n});
+          i+= n?2:1;
+        }else{
+          days.push({name:p.name, day:null, night:p});
+          i++;
+        }
+      }
+      // Week-wide temp range for bar scaling
+      var wMin=999, wMax=-999;
+      days.forEach(function(d){
+        if(d.day) { wMax=Math.max(wMax,d.day.temperature); wMin=Math.min(wMin,d.day.temperature); }
+        if(d.night){ wMax=Math.max(wMax,d.night.temperature); wMin=Math.min(wMin,d.night.temperature); }
+      });
+      var range=Math.max(1,wMax-wMin);
+      // Cache today's forecast hi/lo for the Climate-vs-Normal card
+      if(days[0]){
+        if(typeof climate!=="undefined"){
+          var fcHi=days[0].day?days[0].day.temperature:null, hiLabel="";
+          if(fcHi==null){ // evening: today's daytime high already passed → use next available daytime high
+            for(var k=1;k<days.length;k++){ if(days[k].day){ fcHi=days[k].day.temperature; hiLabel=" (tmrw)"; break; } }
+          }
+          climate.fcHi=fcHi;
+          climate.fcHiLabel=hiLabel;
+          climate.fcLo=days[0].night?days[0].night.temperature:null;
+          if(typeof renderVsNormal==="function") renderVsNormal();
+        }
+      }
+      function popOf(p){ return (p&&p.probabilityOfPrecipitation&&p.probabilityOfPrecipitation.value!=null)?p.probabilityOfPrecipitation.value:null; }
+      daily.innerHTML=days.map(function(d){
+        var hi=d.day?d.day.temperature:null, lo=d.night?d.night.temperature:null;
+        var a=(lo!=null?lo:hi), b=(hi!=null?hi:lo);
+        var left=((Math.min(a,b)-wMin)/range)*100, width=Math.max(4,(Math.abs(b-a)/range)*100);
+        var grad="linear-gradient(90deg,"+tCol(Math.min(a,b))+","+tCol(Math.max(a,b))+")";
+        var pop=Math.max(popOf(d.day)!=null?popOf(d.day):0, popOf(d.night)!=null?popOf(d.night):0);
+        var main=d.day||d.night;
+        var wind=((main.windDirection?main.windDirection+" ":"")+(main.windSpeed||"")).trim()||"—";
+        // Humidity: NWS dropped it from twice-daily periods → use the day's midday value from the hourly feed
+        var _dk=main.startTime?(function(s){var t=new Date(s);return t.getFullYear()+"-"+("0"+(t.getMonth()+1)).slice(-2)+"-"+("0"+t.getDate()).slice(-2);})(main.startTime):null;
+        var rh=(_dk && rhByDate[_dk])?rhByDate[_dk].rh:null;
+        var detail="";
+        if(d.day)   detail+='<p class="dd-text"><b>Day</b>'+esc(d.day.detailedForecast||d.day.shortForecast)+'</p>';
+        if(d.night) detail+='<p class="dd-text"><b>Night</b>'+esc(d.night.detailedForecast||d.night.shortForecast)+'</p>';
+        return '<div class="day-item">'
+          +'<button class="day" type="button" title="'+esc(main.shortForecast)+'">'
+            +'<div class="dn">'+esc(d.name)+'</div>'
+            +'<div class="di">'+wxImg(main.shortForecast,!!d.day,26)+'</div>'
+            +'<div class="dp">'+(pop>0?"💧"+pop+"%":"&nbsp;")+'</div>'
+            +'<div class="tbar"><div class="tfill" style="left:'+left.toFixed(1)+'%;width:'+width.toFixed(1)+'%;background:'+grad+'"></div></div>'
+            +'<div class="dt">'+(lo!=null?'<span class="lo" style="color:'+tCol(lo)+'">'+lo+'°</span>':'')
+              +(hi!=null?'<span style="color:'+tCol(hi)+'">'+hi+'°</span>':'')+'</div>'
+            +'<div class="chev">▾</div>'
+          +'</button>'
+          +'<div class="day-detail">'
+            +detail
+            +'<div class="dd-grid">'
+              +'<div class="dd-item"><div class="k">Precip Chance</div><div class="v">'+(pop>0?pop+"%":"0%")+'</div></div>'
+              +'<div class="dd-item"><div class="k">Wind</div><div class="v">'+esc(wind)+'</div></div>'
+              +(function(){var fl=feelsLikeF(main.temperature,rh,parseMph(main.windSpeed));
+                return '<div class="dd-item"><div class="k">Feels Like</div><div class="v">'+(fl!=null?fl+"°":"—")+'</div></div>';})()
+              +'<div class="dd-item"><div class="k">Humidity</div><div class="v">'+(rh!=null?rh+"%":"—")+'</div></div>'
+            +'</div>'
+          +'</div>'
+        +'</div>';
+      }).join("");
+      if(h){ // hourly strip + thunder detection only when the hourly feed succeeded
+        var hrs=h.properties.periods.slice(0,24);
+        smart.hourly=hrs;
+        smart.thunderSoon=hrs.slice(0,12).some(function(p){
+          return /thunder|t-?storm/i.test(p.shortForecast||"");
+        });
+        renderHourly24(hrs);
+        var hl=document.getElementById("h24loc"); if(hl) hl.textContent=current.name.replace(" (home)","");
+        updateSmartSlot(true);
+        if(typeof renderTheCall==="function") renderTheCall();
+      }
+    });
+  }).catch(function(){
+    daily.innerHTML='<div class="empty">Forecast unavailable. <a href="https://forecast.weather.gov/MapClick.php?lat='+current.lat+'&lon='+current.lon+'" target="_blank" rel="noopener">Open NWS forecast ↗</a></div>';
+  });
+}
+
+/* ============ CURRENT ============ */
+function loadCurrent(){
+  var el=document.getElementById("current"), stEl=document.getElementById("ccStation");
+  return getJSON(API+"/stations/"+current.station+"/observations/latest",HEADERS).then(function(o){
+    var p=o.properties, c2f=function(c){return c==null?null:Math.round(c*9/5+32);};
+    var temp=c2f(p.temperature&&p.temperature.value), dew=c2f(p.dewpoint&&p.dewpoint.value);
+    var rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?Math.round(p.relativeHumidity.value):null;
+    var windMph=(p.windSpeed&&p.windSpeed.value!=null)?Math.round(p.windSpeed.value*0.621371):null;
+    var windDir=degToCompass(p.windDirection&&p.windDirection.value);
+    var gust=(p.windGust&&p.windGust.value!=null)?Math.round(p.windGust.value*0.621371):null;
+    var press=(p.barometricPressure&&p.barometricPressure.value!=null)?(p.barometricPressure.value/3386.39).toFixed(2):null;
+    var vis=(p.visibility&&p.visibility.value!=null)?Math.round(p.visibility.value/1609.34):null;
+    var hiObs=c2f(p.heatIndex&&p.heatIndex.value), wcObs=c2f(p.windChill&&p.windChill.value);
+    var feels=(hiObs!=null)?hiObs:((wcObs!=null)?wcObs:feelsLikeF(temp,rh,windMph));
+    var desc=p.textDescription||"—", now=new Date();
+    // Real sunrise/sunset for the icon's day/night variant (polar-edge fallback: 7am–7pm)
+    var st=sunTimes(current.lat,current.lon,now);
+    var day=(st.rise&&st.set)?(now>=st.rise&&now<=st.set):(now.getHours()>=7&&now.getHours()<19);
+    stEl.textContent=current.station;
+    document.body.setAttribute("data-wx", wxGroup(desc,day));
+    el.innerHTML='<div class="cc-main"><div class="cc-icon">'+wxImg(desc,day,64)+'</div><div>'
+      +'<div class="cc-temp">'+(temp!=null?temp+"°":"—")+'</div><div class="cc-desc">'+esc(desc)+'</div>'
+      +(feels!=null&&temp!=null?'<div class="cc-feels'+(feels-temp>=3?" is-hot":(temp-feels>=3?" is-cold":""))+'">Feels like '+feels+'°</div>':'')
+      +'</div></div>'
+      +'<div class="cc-grid">'
+      +'<div class="cc-item"><div class="k">Dew Point</div><div class="v">'+(dew!=null?dew+"°":"—")+'</div></div>'
+      +'<div class="cc-item"><div class="k">Humidity</div><div class="v">'+(rh!=null?rh+"%":"—")+'</div></div>'
+      +'<div class="cc-item"><div class="k">Wind</div><div class="v">'+(windMph!=null?windDir+" "+windMph:"—")+'<span style="font-size:11px;color:var(--muted)">'+(windMph!=null?" mph":"")+'</span></div></div>'
+      +'<div class="cc-item"><div class="k">Gusts</div><div class="v">'+(gust!=null?gust+" mph":"—")+'</div></div>'
+      +'<div class="cc-item"><div class="k">Pressure</div><div class="v">'+(press!=null?press+'"':"—")+'</div></div>'
+      +'<div class="cc-item"><div class="k">Visibility</div><div class="v">'+(vis!=null?vis+" mi":"—")+'</div></div>'
+      +'</div><div class="stn">Observed '+timeAgo(p.timestamp)+' · '+current.station+'</div>';
+  }).catch(function(){
+    stEl.textContent="—";
+    el.innerHTML='<div class="empty">No current obs from '+current.station+'. Station may be offline.</div>';
+  });
+}
+
+/* ============ ALERTS + STORM MODE (Fix 2 + Fix 4) ============ */
+function loadAlerts(){
+  var el=document.getElementById("alerts"), card=document.getElementById("alertsCard");
+  return getJSON(API+"/alerts/active?area=MO,IL",HEADERS).then(function(data){
+    if(typeof markFresh==="function") markFresh();  // alerts are the safety-critical feed — only THEY count as "fresh"
+    loadWarnPolygons(data.features||[]);  // one fetch feeds both list and map
+    function isLSX(f){
+      var p=f.properties||{};
+      var aw=(p.parameters&&p.parameters.AWIPSidentifier&&p.parameters.AWIPSidentifier[0])||"";
+      if(String(aw).toUpperCase().indexOf("LSX")>=0) return true;   // product id ends in office code
+      var s=(p.senderName||"").toLowerCase().replace(/\./g,"");
+      return s.indexOf("st louis")>=0||s.indexOf("saint louis")>=0; // punctuation/spelling tolerant
+    }
+    var feats=data.features.filter(isLSX);
+    var rank={Extreme:0,Severe:1,Moderate:2,Minor:3,Unknown:4};
+    feats.sort(function(a,b){var ra=rank[a.properties.severity],rb=rank[b.properties.severity];return (ra==null?5:ra)-(rb==null?5:rb);});
+    var warn=null;
+    for(var i=0;i<feats.length;i++){if((feats[i].properties.event||"").toLowerCase().indexOf("warning")>=0){warn=feats[i].properties;break;}}
+    setStormMode(warn);
+    smart.warning=!!warn;
+    smart.watch=feats.some(function(f){
+      var ev=(f.properties.event||"").toLowerCase();
+      return ev.indexOf("tornado watch")>=0||ev.indexOf("severe thunderstorm watch")>=0;
+    });
+    updateSmartSlot();
+    if(feats.length===0){
+      card.classList.add("calm");
+      el.innerHTML='<div class="calmrow"><span class="cdot"></span>All clear — no active LSX alerts across the CWA. <span class="cmut">Stay smug responsibly.</span></div>';
+      return;
+    }
+    card.classList.remove("calm");
+    // Preserve which alerts the user had expanded across the 60s refresh (keyed by event type)
+    var openIds={};
+    el.querySelectorAll(".alert.open").forEach(function(a){ if(a.dataset.aid) openIds[a.dataset.aid]=1; });
+
+    // Consolidate: NWS issues the same event as separate records per zone group — group them
+    var groups={};
+    feats.forEach(function(f){
+      var ev=f.properties.event||"Alert";
+      (groups[ev]=groups[ev]||[]).push(f);
+    });
+    var glist=Object.keys(groups).map(function(ev){
+      var segs=groups[ev];
+      var best=segs[0];
+      segs.forEach(function(f){
+        var rb=rank[f.properties.severity], ra=rank[best.properties.severity];
+        if((rb==null?5:rb)<(ra==null?5:ra)) best=f;
+      });
+      var latest=0, counties=[];
+      segs.forEach(function(f){
+        var p2=f.properties, e=Date.parse(p2.ends||p2.expires||"")||0;
+        if(e>latest) latest=e;
+        (p2.areaDesc||"").split(";").forEach(function(c){ c=c.trim(); if(c&&counties.indexOf(c)<0) counties.push(c); });
+      });
+      return {ev:ev,segs:segs,sev:best.properties.severity,cls:alertClass(best.properties),latest:latest,counties:counties};
+    });
+    glist.sort(function(a,b){
+      var ra=rank[a.sev],rb=rank[b.sev];
+      return (ra==null?5:ra)-(rb==null?5:rb);
+    });
+
+    el.innerHTML=glist.map(function(g){
+      var expStr=g.latest?new Date(g.latest).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"\u2014";
+      var shown=g.counties, moreN=0;
+      if(g.counties.length>8){ shown=g.counties.slice(0,6); moreN=g.counties.length-6; }
+      var areaTxt=esc(shown.join("; "))+(moreN?' <span class="a-more-cnt">+'+moreN+' more</span>':'');
+      var badge=(g.sev&&g.sev!=="Unknown")?'<span class="badge">'+g.sev+'</span>':'';
+      var zones=g.segs.length>1?(g.segs.length+" zone groups \u00b7 "):"";
+      var more=g.segs.map(function(f){
+        var p2=f.properties, e=p2.ends||p2.expires;
+        var es=e?new Date(e).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"\u2014";
+        var t="\u25b8 Until "+es+" \u2014 "+esc(p2.areaDesc||"");
+        if(p2.description) t+="\n"+esc(p2.description);
+        if(p2.instruction) t+="\n\n"+esc(p2.instruction);
+        return t;
+      }).join("\n\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n");
+      var aid=esc(g.ev);
+      return '<div class="alert '+g.cls+(openIds[aid]?' open':'')+'" data-aid="'+aid+'" role="button" tabindex="0">'
+        +'<div class="ev"><span>'+esc(g.ev)+(g.segs.length>1?' <span class="a-zcnt">\u00d7'+g.segs.length+'</span>':'')+'</span>'+badge+'</div>'
+        +'<div class="area">'+areaTxt+'</div>'
+        +'<div class="exp">'+zones+'Through '+expStr
+          +(more?'<span class="a-hint"> \u00b7 tap for details <span class="a-chev">\u25be</span></span>':'')+'</div>'
+        +(more?'<div class="alert-more">'+more+'</div>':'')
+        +'</div>';
+    }).join("");
+  }).catch(function(){
+    card.classList.remove("calm");
+    el.innerHTML='<div class="empty">Couldn\'t load alerts. <a href="https://www.weather.gov/lsx/" target="_blank" rel="noopener">Check weather.gov/lsx ↗</a></div>';
+  });
+}
+// Classify an NWS event into a "family" so the dashboard can adapt its theme, prime card, and tone.
+var STORM_FAMILY=null, STORM_PRIME="smartCard";
+function eventFamily(ev){
+  ev=(ev||"").toLowerCase();
+  if(/tornado|thunderstorm|special marine|dust storm|squall/.test(ev)) return "convective";
+  if(/winter|snow|blizzard|ice storm|ice |sleet|freezing|frost|freeze|wind chill|cold/.test(ev)) return "winter";
+  if(/flood|flash flood|hydrologic|seiche/.test(ev)) return "flood";
+  if(/heat|hot/.test(ev)) return "heat";
+  if(/fire|red flag|smoke/.test(ev)) return "fire";
+  if(/wind|gale|storm warning|hurricane|tropical/.test(ev)) return "wind";
+  return "convective"; // default treatment (red)
+}
+// Per-family presentation: icon, the most-relevant card to float to the prime slot, and the banner sub-tone.
+var FAMILY_CFG={
+  convective:{ico:"⛈️", prime:"smartCard",  sub:"Radar & alerts up top. Seek sturdy shelter if warned."},
+  winter:    {ico:"❄️", prime:"obsCard",    sub:"Radar & regional temps up top. Bundle up, drive safe."},
+  flood:     {ico:"🌊", prime:"riversCard", sub:"River gauges up top. Turn around, don't drown."},
+  heat:      {ico:"🥵", prime:"obsCard",    sub:"Regional feels-like up top. Hydrate, find shade & AC."},
+  wind:      {ico:"💨", prime:"obsCard",    sub:"Radar & regional winds up top. Secure loose objects."},
+  fire:      {ico:"🔥", prime:"riskCard",   sub:"Fire-weather risk up top. Avoid any open flame."}
+};
+function setStormMode(warnProps){
+  var body=document.body;
+  if(warnProps){
+    var fam=eventFamily(warnProps.event);
+    var cfg=FAMILY_CFG[fam]||FAMILY_CFG.convective;
+    STORM_FAMILY=fam; STORM_PRIME=cfg.prime;
+    body.classList.add("storm");
+    body.setAttribute("data-storm", fam);
+    // mark the event-relevant card so it gets the glow (and the masonry floats it to the front)
+    [].forEach.call(document.querySelectorAll(".storm-prime"), function(e){ e.classList.remove("storm-prime"); });
+    var pc=document.getElementById(cfg.prime); if(pc) pc.classList.add("storm-prime");
+    var exp=warnProps.ends||warnProps.expires;
+    var expStr=exp?new Date(exp).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):"";
+    var bico=document.querySelector("#stormBanner .bico"); if(bico) bico.textContent=cfg.ico;
+    document.getElementById("stormText").textContent=cfg.ico+" "+warnProps.event+(expStr?" — until "+expStr:"");
+    var sub=document.getElementById("stormSub"); if(sub) sub.textContent=cfg.sub;
+  }else{
+    STORM_FAMILY=null; STORM_PRIME="smartCard";
+    body.classList.remove("storm");
+    body.removeAttribute("data-storm");
+    [].forEach.call(document.querySelectorAll(".storm-prime"), function(e){ e.classList.remove("storm-prime"); });
+  }
+  // Class/attribute changes aren't watched by the masonry observer — repack explicitly so the
+  // prime card floats up (or settles back) the moment a warning starts or clears.
+  if(typeof scheduleMasonry==="function") scheduleMasonry();
+}
+
+/* ============ RIVERS ============ */
+function catInfo(cat){
+  var c=(cat||"").toLowerCase();
+  if(c.indexOf("major")>=0)return {cls:"c-major",label:"Major Flood"};
+  if(c.indexOf("moderate")>=0)return {cls:"c-moderate",label:"Moderate Flood"};
+  if(c.indexOf("minor")>=0)return {cls:"c-minor",label:"Minor Flood"};
+  if(c.indexOf("action")>=0)return {cls:"c-action",label:"Action Stage"};
+  return {cls:"c-none",label:"No Flooding"};
+}
+function riverLinkOnly(r){
+  return '<a class="rlink c-none" href="https://water.noaa.gov/gauges/'+r.id+'" target="_blank" rel="noopener">'
+    +'<span class="rname">🌊 '+esc(r.name)+'</span><span class="rmeta"><span class="rval" style="color:var(--muted);font-size:13px">View ↗</span></span></a>';
+}
+function loadRivers(){
+  var el=document.getElementById("rivers");
+  var jobs=RIVERS.map(function(r){
+    return getJSON("https://api.water.noaa.gov/nwps/v1/gauges/"+r.id).then(function(d){
+      var ob=(d.status&&d.status.observed)||{}, val=ob.primary, unit=ob.primaryUnit||"ft", info=catInfo(ob.floodCategory);
+      if(val==null) return riverLinkOnly(r);
+      return '<a class="rlink '+info.cls+'" href="https://water.noaa.gov/gauges/'+r.id+'" target="_blank" rel="noopener">'
+        +'<span class="rname">🌊 '+esc(r.name)+'</span><span class="rmeta"><span class="rval">'+(Math.round(val*10)/10)+' '+unit+'</span>'
+        +'<span class="rcat">'+info.label+'</span></span></a>';
+    }).catch(function(){return riverLinkOnly(r);});
+  });
+  return Promise.all(jobs).then(function(rows){el.innerHTML=rows.join("");});
+}
+
+/* ============ AQI ============ */
+function aqiInfo(v){
+  if(v==null)return {c:"var(--muted)",t:"—",s:""};
+  if(v<=50)return {c:"#3ecf8e",t:"Good",s:"Air's clean. Breathe deep."};
+  if(v<=100)return {c:"#ffd23f",t:"Moderate",s:"Fine for most. Sensitive folks, ease up."};
+  if(v<=150)return {c:"#ff9f2f",t:"Unhealthy (Sensitive)",s:"Sensitive groups take it easy outdoors."};
+  if(v<=200)return {c:"#ff6a2f",t:"Unhealthy",s:"Everyone dial back outdoor exertion."};
+  if(v<=300)return {c:"#c13bff",t:"Very Unhealthy",s:"Stay inside if you can."};
+  return {c:"#ff3b3b",t:"Hazardous",s:"Don't be a hero. Indoors."};
+}
+function loadAqi(){
+  var el=document.getElementById("aqi");
+  var url="https://air-quality-api.open-meteo.com/v1/air-quality?latitude="+current.lat+"&longitude="+current.lon+"&current=us_aqi,pm2_5,pm10";
+  return getJSON(url).then(function(d){
+    var cur=d.current||{}, aqi=cur.us_aqi, info=aqiInfo(aqi);
+    var pm=(cur.pm2_5!=null)?Math.round(cur.pm2_5):null;
+    el.innerHTML='<div class="aqi-main"><div class="aqi-chip" style="background:'+info.c+'"></div><div>'
+      +'<div class="aqi-num" style="color:'+info.c+'">'+(aqi!=null?aqi:"—")+'</div>'
+      +'<div class="aqi-cat" style="color:'+info.c+'">'+info.t+'</div>'
+      +'<div class="aqi-sub">'+info.s+(pm!=null?' · PM2.5 '+pm+' µg/m³':'')+'</div></div></div>';
+    callAqi=(aqi!=null)?aqi:null;
+    if(typeof renderTheCall==="function") renderTheCall();   // AQI can add/remove a verdict pill
+  }).catch(function(){
+    el.innerHTML='<div class="empty">AQI unavailable. <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">Open AirNow ↗</a></div>';
+  });
+}
+
+/* ============ RISK OUTLOOK (SPC storm + WPC flood, via NOAA ArcGIS) ============ */
+var SPC_URL="https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/MapServer/";
+var ERO_URL="https://mapservices.weather.noaa.gov/vector/rest/services/hazards/wpc_precip_hazards/MapServer/";
+var FIRE_URL="https://mapservices.weather.noaa.gov/vector/rest/services/fire_weather/SPC_firewx/MapServer/";
+/* Layer ids drift when NOAA republishes these services — and a wrong id fails SILENTLY as
+   "no risk" (each query's catch returns 0). Resolve ids by layer NAME at startup; the
+   hardcoded values (verified against the live services, July 2026) are only the fallback. */
+var RISK_LAYERS={spc:[1,9,17], ero:[0,1,2], fireCat:[1,4], fireD3:{dry:7,wind:8}};
+function resolveRiskLayers(){
+  getJSON(SPC_URL+"?f=json").then(function(d){
+    var ids={};
+    (d.layers||[]).forEach(function(l){ var m=/^Day\s*([123])\s+Categorical/i.exec(l.name||""); if(m) ids[m[1]]=l.id; });
+    if(ids[1]!=null&&ids[2]!=null&&ids[3]!=null) RISK_LAYERS.spc=[ids[1],ids[2],ids[3]];
+  }).catch(function(){});
+  getJSON(ERO_URL+"?f=json").then(function(d){
+    var ids={};
+    (d.layers||[]).forEach(function(l){ var m=/^Excessive Rainfall Day\s*([123])/i.exec(l.name||""); if(m) ids[m[1]]=l.id; });
+    if(ids[1]!=null&&ids[2]!=null&&ids[3]!=null) RISK_LAYERS.ero=[ids[1],ids[2],ids[3]];
+  }).catch(function(){});
+  getJSON(FIRE_URL+"?f=json").then(function(d){
+    var cat={}, d3={};
+    (d.layers||[]).forEach(function(l){
+      var n=l.name||"";
+      var m=/^Day\s*([12])\s+Outlook$/i.exec(n); if(m) cat[m[1]]=l.id;
+      if(/^Day\s*3\s+Dry\s*Thunderstorm$/i.test(n)) d3.dry=l.id;
+      if(/^Day\s*3\s+Winds and Low Humidity$/i.test(n)) d3.wind=l.id;
+    });
+    if(cat[1]!=null&&cat[2]!=null) RISK_LAYERS.fireCat=[cat[1],cat[2]];
+    if(d3.dry!=null&&d3.wind!=null) RISK_LAYERS.fireD3=d3;
+  }).catch(function(){});
+}
+function fireRisk(dn){
+  var m={
+    10:{t:"Extreme",  lvl:3, bg:"#d1006c"},
+    8: {t:"Critical", lvl:2, bg:"#ff5a1f"},
+    5: {t:"Elevated", lvl:1, bg:"#ffb020"}
+  };
+  return m[dn]||{t:"No Fire Risk",lvl:0,bg:"",muted:true};
+}
+function fireQuery(layer){
+  return pointQuery(FIRE_URL,layer,"dn").then(function(d){
+    var maxdn=0;
+    (d.features||[]).forEach(function(f){var dn=f.attributes&&f.attributes.dn;if(dn&&dn>maxdn)maxdn=dn;});
+    return maxdn;
+  }).catch(function(){return 0;});   // isolate failure: one dead service ≠ blank matrix
+}
+/* Day 3 fire has NO categorical "Outlook" layer — only two probabilistic leaves whose dn is a
+   FRACTION (winds/low-RH: 0.40=Marginal, 0.70=Critical · dry t-storm: 0.10=Marginal, 0.40=Critical).
+   Convert onto the categorical 5/8 scale so the pill renderer treats all three days alike.
+   (Previously this queried layer 6 — a GROUP layer that always 400s — so day 3 showed "No Fire Risk" forever.) */
+function fireDay3Query(){
+  function probMax(layer){
+    return pointQuery(FIRE_URL,layer,"dn").then(function(d){
+      var mx=0;
+      (d.features||[]).forEach(function(f){ var dn=+(f.attributes&&f.attributes.dn)||0; if(dn>mx) mx=dn; });
+      return mx;
+    }).catch(function(){return 0;});
+  }
+  return Promise.all([probMax(RISK_LAYERS.fireD3.dry),probMax(RISK_LAYERS.fireD3.wind)]).then(function(r){
+    if(r[1]>=0.70||r[0]>=0.40) return 8;   // Critical
+    if(r[1]>=0.40||r[0]>=0.10) return 5;   // Elevated
+    return 0;
+  });
+}
+function spcRisk(dn){
+  var m={
+    8:{t:"High Risk",     lvl:5, bg:"#ee88ee"},
+    6:{t:"Moderate Risk", lvl:4, bg:"#e06666"},
+    5:{t:"Enhanced Risk", lvl:3, bg:"#ffa366"},
+    4:{t:"Slight Risk",   lvl:2, bg:"#ffd23f"},
+    3:{t:"Marginal Risk", lvl:1, bg:"#7bbf7b"},
+    2:{t:"General Storms",lvl:0, bg:"#a9dca9"}
+  };
+  return m[dn]||{t:"No Severe Risk",lvl:-1,bg:"",muted:true};
+}
+function eroRisk(rank){
+  var m={
+    4:{t:"High Risk",     bg:"#e754c8"},
+    3:{t:"Moderate Risk", bg:"#ff6a2f"},
+    2:{t:"Slight Risk",   bg:"#ffd23f"},
+    1:{t:"Marginal Risk", bg:"#66bb6a"}
+  };
+  var r=m[rank]||{t:"No Flood Risk",bg:"",muted:true};
+  r.lvl=rank||0;
+  return r;
+}
+function textOn(bg){
+  if(!bg||bg.charAt(0)!=="#") return "var(--text)";
+  var r=parseInt(bg.substr(1,2),16),g=parseInt(bg.substr(3,2),16),b=parseInt(bg.substr(5,2),16);
+  return (0.299*r+0.587*g+0.114*b)>150?"#141414":"#ffffff";
+}
+function pointQuery(base,layer,fields){
+  return getJSON(base+layer+"/query?geometry="+current.lon+","+current.lat
+    +"&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects"
+    +"&outFields="+(fields||"*")+"&returnGeometry=false&f=json");
+}
+function spcQuery(layer){
+  return pointQuery(SPC_URL,layer,"dn").then(function(d){
+    var maxdn=0;
+    (d.features||[]).forEach(function(f){var dn=f.attributes&&f.attributes.dn;if(dn&&dn>maxdn)maxdn=dn;});
+    return maxdn;
+  }).catch(function(){return 0;});
+}
+function eroQuery(layer){
+  // Field names vary across NOAA services; scan all string attributes for category keywords
+  return pointQuery(ERO_URL,layer,"*").then(function(d){
+    var rank=0;
+    (d.features||[]).forEach(function(f){
+      var at=f.attributes||{};
+      for(var k in at){
+        var v=String(at[k]||"").toLowerCase();
+        if(v.indexOf("high")>=0) rank=Math.max(rank,4);
+        else if(v.indexOf("moderate")>=0) rank=Math.max(rank,3);
+        else if(v.indexOf("slight")>=0) rank=Math.max(rank,2);
+        else if(v.indexOf("marginal")>=0) rank=Math.max(rank,1);
+      }
+    });
+    return rank;
+  }).catch(function(){return 0;});
+}
+function riskPill(info,denom){
+  var fg=info.muted?"var(--muted)":textOn(info.bg);
+  var bg=info.muted?"var(--inset)":info.bg;
+  var txt=info.t+(info.lvl>0?" \u00b7 "+info.lvl+"/"+denom:"");
+  return '<span class="spc-pill" style="background:'+bg+';color:'+fg+'">'+txt+'</span>';
+}
+function loadSpc(){
+  var el=document.getElementById("spc");
+  document.getElementById("spcLoc").textContent="For "+current.name.replace(" (home)","");
+  var jobs=[spcQuery(RISK_LAYERS.spc[0]),spcQuery(RISK_LAYERS.spc[1]),spcQuery(RISK_LAYERS.spc[2]),
+            eroQuery(RISK_LAYERS.ero[0]),eroQuery(RISK_LAYERS.ero[1]),eroQuery(RISK_LAYERS.ero[2]),
+            fireQuery(RISK_LAYERS.fireCat[0]),fireQuery(RISK_LAYERS.fireCat[1]),fireDay3Query()];
+  return Promise.all(jobs).then(function(r){
+    smart.spcRisk=r[0]||0;
+    smart.eroRisk=r[3]||0;
+    smart.fireRisk=r[6]||0;
+    updateSmartSlot();
+    var days=["Today","Tomorrow","Day 3"];
+    var html='<div class="spc-row rhead"><span></span><span class="rh">\u26c8\ufe0f Storm</span><span class="rh">\ud83c\udf0a Flood</span><span class="rh">\ud83d\udd25 Fire</span></div>';
+    for(var i=0;i<3;i++){
+      html+='<div class="spc-row"><span class="spc-day">'+days[i]+'</span>'
+        +riskPill(spcRisk(r[i]),5)
+        +riskPill(eroRisk(r[3+i]),4)
+        +riskPill(fireRisk(r[6+i]),3)
+        +'</div>';
+    }
+    el.innerHTML=html;
+  }).catch(function(){
+    el.innerHTML='<div class="empty">Risk outlooks unavailable. <a href="https://www.spc.noaa.gov/products/outlook/day1otlk.html" target="_blank" rel="noopener">Open SPC \u2197</a> \u00b7 <a href="https://www.spc.noaa.gov/products/fire_wx/" target="_blank" rel="noopener">Fire \u2197</a></div>';
+  });
+}
+
+/* ============ CPC WEEK-AHEAD LEANINGS ============ */
+var CPC_610="https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/cpc_6_10_day_outlk/MapServer/";
+var CPC_814="https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/cpc_8_14_day_outlk/MapServer/";
+function cpcParse(d){
+  var best=null;
+  (d.features||[]).forEach(function(f){
+    var at=f.attributes||{}, cat=null, prob=null;
+    for(var k in at){
+      var kl=k.toLowerCase();
+      if(kl==="cat"||kl==="category") cat=String(at[k]);
+      if(kl==="prob"||kl==="probability") prob=+at[k];
+    }
+    if(cat&&(best==null||(prob||0)>(best.prob||0))) best={cat:cat,prob:prob};
+  });
+  return best;
+}
+function cpcPill(kind,r){
+  // kind: "t" temp, "p" precip
+  if(!r||!r.cat||/normal/i.test(r.cat)){
+    return '<span class="cpc-pill" style="background:var(--inset);color:var(--muted)">Near normal / equal chances</span>';
+  }
+  var above=/above/i.test(r.cat);
+  var label, bg;
+  if(kind==="t"){ label=above?"Leaning warm":"Leaning cool"; bg=above?"#ff7a2f":"#4aa3ff"; }
+  else{ label=above?"Leaning wet":"Leaning dry"; bg=above?"#37b06f":"#c9a15a"; }
+  var pct=(r.prob!=null&&!isNaN(r.prob))?" \u00b7 "+Math.round(r.prob)+"%":"";
+  return '<span class="cpc-pill" style="background:'+bg+';color:'+textOn(bg)+'">'+label+pct+'</span>';
+}
+function loadCpc(){
+  var el=document.getElementById("cpc"); if(!el) return Promise.resolve();
+  var jobs=[pointQuery(CPC_610,0),pointQuery(CPC_610,1),pointQuery(CPC_814,0),pointQuery(CPC_814,1)];
+  return Promise.allSettled(jobs).then(function(rs){
+    function val(i){ return rs[i].status==="fulfilled"?cpcParse(rs[i].value):null; }
+    el.innerHTML='<div class="cpc-grid">'
+      +'<div class="cpc-item"><div class="k">6\u201310 Day \u00b7 Temp</div>'+cpcPill("t",val(0))+'</div>'
+      +'<div class="cpc-item"><div class="k">6\u201310 Day \u00b7 Precip</div>'+cpcPill("p",val(1))+'</div>'
+      +'<div class="cpc-item"><div class="k">8\u201314 Day \u00b7 Temp</div>'+cpcPill("t",val(2))+'</div>'
+      +'<div class="cpc-item"><div class="k">8\u201314 Day \u00b7 Precip</div>'+cpcPill("p",val(3))+'</div>'
+      +'</div>';
+  }).catch(function(){
+    el.innerHTML='<div class="empty">CPC outlooks unavailable. <a href="https://www.cpc.ncep.noaa.gov/products/predictions/610day/" target="_blank" rel="noopener">Open CPC \u2197</a></div>';
+  });
+}
+
+/* ============ CPC US HAZARDS OUTLOOK (days 3-14) ============ */
+var HZ_URL="https://mapservices.weather.noaa.gov/vector/rest/services/hazards/cpc_weather_hazards/MapServer/";
+/* U.S. Drought Monitor (NDMC/NOAA/USDA) — weekly, released Thursdays. DM field: 0=D0 … 4=D4 */
+var USDM_URL="https://services5.arcgis.com/0OTVzJS4K09zlixn/arcgis/rest/services/USDM_current/FeatureServer/";
+// CPC Monthly (layer 1) + Seasonal/3-month (layer 4) Drought Outlook — field "outlook", verified against the live service
+var DROUGHT_OUTLK_URL="https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/cpc_drought_outlk/MapServer/";
+function outlookCat(o){
+  var m={
+    "Development":{t:"Drought developing", bg:"#ffde63", fg:"#0b2a0b", ic:"⚠️"},
+    "Persistence":{t:"Drought persisting",  bg:"#9b634a", fg:"#fff",     ic:"🏜️"},
+    "Improvement":{t:"Improving (lingers)", bg:"#ded4bc", fg:"#0b2a0b", ic:"↗️"},
+    "Removal":    {t:"Drought easing",       bg:"#b2ad69", fg:"#0b2a0b", ic:"✓"}
+  };
+  return m[o]||null;   // null = "No_Drought" / outside any outlook area = none expected
+}
+function droughtCat(dm){
+  var m={
+    4:{t:"D4 · Exceptional", bg:"#730000", fg:"#fff"},
+    3:{t:"D3 · Extreme",     bg:"#e60000", fg:"#fff"},
+    2:{t:"D2 · Severe",      bg:"#ffaa00", fg:"#0b2a0b"},
+    1:{t:"D1 · Moderate",    bg:"#fcd37f", fg:"#0b2a0b"},
+    0:{t:"D0 · Abnormally Dry", bg:"#ffff00", fg:"#0b2a0b"}
+  };
+  return m[dm]||null;   // null = no drought at this point
+}
+function loadDrought(){
+  var card=document.getElementById("droughtCard"); if(!card) return Promise.resolve();
+  function outlookRow(id, rs){
+    var el=document.getElementById(id); if(!el) return;
+    if(rs.status!=="fulfilled"){ el.innerHTML='<span class="dr-none dr-dim">— unavailable</span>'; return; }
+    var o=null;
+    (rs.value.features||[]).forEach(function(f){ var v=f.attributes&&f.attributes.outlook; if(v && v!=="No_Drought") o=v; });
+    var cat=o?outlookCat(o):null;
+    if(!cat){ el.innerHTML='<span class="dr-none">✓ None expected</span>'; }
+    else{ el.innerHTML='<span class="dr-pill" style="background:'+cat.bg+';color:'+cat.fg+'">'+cat.ic+' '+esc(cat.t)+'</span>'; }
+  }
+  return Promise.allSettled([
+    pointQuery(USDM_URL,0,"DM"),
+    pointQuery(DROUGHT_OUTLK_URL,1,"outlook"),
+    pointQuery(DROUGHT_OUTLK_URL,4,"outlook")
+  ]).then(function(r){
+    // Now — U.S. Drought Monitor
+    var nowEl=document.getElementById("drNow");
+    if(nowEl){
+      if(r[0].status!=="fulfilled"){
+        nowEl.innerHTML='<a class="dr-link" href="https://droughtmonitor.unl.edu/" target="_blank" rel="noopener">Drought Monitor ↗</a>';
+      }else{
+        var maxdm=-1;
+        (r[0].value.features||[]).forEach(function(f){ var dm=f.attributes&&f.attributes.DM; if(dm!=null&&dm>maxdm) maxdm=dm; });
+        var cat=droughtCat(maxdm);
+        nowEl.innerHTML=cat?('<span class="dr-pill" style="background:'+cat.bg+';color:'+cat.fg+'">🏜️ '+cat.t+'</span>')
+                           :'<span class="dr-none">✓ No drought</span>';
+      }
+    }
+    outlookRow("drMonth",  r[1]);
+    outlookRow("drSeason", r[2]);
+  });
+}
+function hazIcon(t){
+  t=(t||"").toLowerCase();
+  if(t.indexOf("heat")>=0) return "🥵";
+  if(t.indexOf("cold")>=0||t.indexOf("freeze")>=0||t.indexOf("frost")>=0) return "🥶";
+  if(t.indexOf("snow")>=0||t.indexOf("winter")>=0||t.indexOf("ice")>=0||t.indexOf("freezing")>=0) return "❄️";
+  if(t.indexOf("flood")>=0) return "🌊";
+  if(t.indexOf("rain")>=0||t.indexOf("precip")>=0) return "🌧️";
+  if(t.indexOf("wildfire")>=0||t.indexOf("fire")>=0) return "🔥";
+  if(t.indexOf("drought")>=0) return "🏜️";
+  if(t.indexOf("wind")>=0) return "💨";
+  if(t.indexOf("wave")>=0) return "🌊";
+  if(t.indexOf("thunder")>=0||t.indexOf("severe")>=0) return "⛈️";
+  return "⚠️";
+}
+// CPC/WPC hazards return raw product codes like "Prcp_D3_7_Clip" — translate to plain English.
+function hazLabel(raw){
+  var s=String(raw||"").trim();
+  if(!s) return "";
+  // strip the day-range + geometry suffixes: _D3_7_Clip, _D8_14_Fill, _Outline, etc.
+  var core=s.replace(/_D\d+_\d+.*$/i,"").replace(/_(clip|fill|outline|line|poly|area)$/i,"").replace(/_+$/,"").trim();
+  var key=core.toLowerCase().replace(/[^a-z]/g,"");
+  var MAP={
+    prcp:"Heavy Precipitation", precip:"Heavy Precipitation", precipitation:"Heavy Precipitation",
+    rain:"Heavy Rain", hvyrain:"Heavy Rain",
+    flood:"Flooding Possible", flooding:"Flooding Possible", flooddg:"Flooding Possible",
+    maxt:"Extreme Heat", heat:"Extreme Heat", heatindex:"Extreme Heat", exheat:"Extreme Heat",
+    mint:"Extreme Cold", cold:"Extreme Cold", excold:"Extreme Cold", windchill:"Extreme Cold", freeze:"Hard Freeze", frost:"Frost/Freeze",
+    snow:"Heavy Snow", heavysnow:"Heavy Snow", hvysnow:"Heavy Snow", blizzard:"Blizzard",
+    winter:"Winter Weather", winterwx:"Winter Weather", ice:"Ice / Freezing Rain", freezingrain:"Ice / Freezing Rain", frzrain:"Ice / Freezing Rain",
+    wind:"High Wind", highwind:"High Wind", hiwind:"High Wind",
+    fire:"Fire Weather", firewx:"Fire Weather", wildfire:"Fire Weather",
+    drought:"Drought", drght:"Drought",
+    svr:"Severe Storms", severe:"Severe Storms", thunder:"Severe Storms", tstm:"Severe Storms",
+    hazard:"Hazardous Weather", hazards:"Hazardous Weather"
+  };
+  if(MAP[key]) return MAP[key];
+  // Fallback: prettify the code (underscores→spaces, Title Case) so a raw string is NEVER shown
+  var pretty=core.replace(/_/g," ").replace(/\s+/g," ").trim().replace(/\b\w/g,function(c){return c.toUpperCase();});
+  return pretty || "Hazard";
+}
+function hazScan(results){
+  var out=[];
+  results.forEach(function(rs){
+    if(rs.status!=="fulfilled"||!rs.value) return;
+    (rs.value.features||[]).forEach(function(f){
+      var at=f.attributes||{}, label="";
+      // Prefer the documented hazard-type field, translated to plain English
+      if(at.prod_type){ label=hazLabel(at.prod_type); }
+      else if(at.Prod_Type){ label=hazLabel(at.Prod_Type); }
+      else {
+        for(var k in at){
+          var v=at[k];
+          if(typeof v==="string" && v.length>2 && !/^\d+$/.test(v) && !/^(day|http|\d{4}-)/i.test(v) && v.length>label.length) label=v;
+        }
+        // if the fallback grabbed a raw-looking code (underscores / Dx_y), clean it up too
+        if(/_D\d+_\d+|_(clip|fill|outline)$/i.test(label)) label=hazLabel(label);
+      }
+      label=label.trim();
+      if(label && out.indexOf(label)<0) out.push(label);
+    });
+  });
+  return out;
+}
+function loadHazards(){
+  var el=document.getElementById("hazards"); if(!el) return Promise.resolve();
+  // Real service layout: 3-7 day → Temp(1) Precip(4) Fire/Drought(7); 8-14 day → Temp(3) Precip(6) Fire/Drought(8)
+  var q37=[pointQuery(HZ_URL,1),pointQuery(HZ_URL,4),pointQuery(HZ_URL,7)];
+  var q814=[pointQuery(HZ_URL,3),pointQuery(HZ_URL,6),pointQuery(HZ_URL,8)];
+  return Promise.allSettled(q37.concat(q814)).then(function(all){
+    var d37=hazScan(all.slice(0,3));
+    var d814=hazScan(all.slice(3,6));
+    function block(title,list){
+      if(!list.length) return '<div class="hz-row hz-clear"><span class="hz-when">'+title+'</span><span class="hz-none">No hazards flagged</span></div>';
+      return '<div class="hz-row"><span class="hz-when">'+title+'</span><span class="hz-list">'
+        +list.map(function(h){return '<span class="hz-chip">'+hazIcon(h)+' '+esc(h)+'</span>';}).join("")
+        +'</span></div>';
+    }
+    el.innerHTML=block("Days 3–7",d37)+block("Days 8–14",d814);
+  }).catch(function(){
+    el.innerHTML='<div class="empty">Hazards outlook unavailable. <a href="https://www.wpc.ncep.noaa.gov/threats/threats.php" target="_blank" rel="noopener">Open WPC Hazards ↗</a></div>';
+  });
+}
+
+/* ============ CLIMATE vs NORMAL (RCC-ACIS, 1991-2020 normals, keyless) ============ */
+var ACIS="https://data.rcc-acis.org/";
+var climate={normHi:null, normLo:null, fcHi:null, fcLo:null, station:null, stationName:""};
+var _climStationCache={};
+function acisNum(v){ // ACIS returns "M" (missing), "T" (trace), or a numeric string
+  if(v==null) return null;
+  if(v==="T") return 0;            // trace precip/snow → treat as ~0
+  if(v==="M"||v==="") return null;
+  var n=parseFloat(v);
+  return isNaN(n)?null:n;
+}
+function acisPost(call,params){
+  return fetch(ACIS+call,{
+    method:"POST",
+    headers:{"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},
+    body:"params="+encodeURIComponent(JSON.stringify(params))
+  }).then(function(r){ if(!r.ok) throw new Error("acis "+r.status); return r.json(); });
+}
+// Find the nearest station that actually reports TEMPERATURE (not a precip-only CoCoRaHS gauge).
+// Cache per rounded location; fall back to KSTL (St. Louis Lambert) if nothing suitable is found.
+function climStation(lat,lon){
+  var key=lat.toFixed(1)+","+lon.toFixed(1);
+  if(_climStationCache[key]) return Promise.resolve(_climStationCache[key]);
+  var d=0.9, bbox=[lon-d, lat-d, lon+d, lat+d];
+  // Require maxt+mint+pcpn so we only get full climate stations; valid_daterange lets us screen out inactive ones
+  return acisPost("StnMeta",{bbox:bbox, elems:["maxt","mint","pcpn"], meta:["name","sids","ll","valid_daterange"]}).then(function(r){
+    var now=new Date(), best=null, bestScore=-1;
+    (r.meta||[]).forEach(function(s){
+      if(!s.ll||!s.sids||!s.sids.length) return;
+      // must have a temperature record that is still current (ends within the last ~2 years)
+      var dr=s.valid_daterange||[];
+      var tempRange=dr[0];               // first elem requested was maxt
+      if(!tempRange||!tempRange[1]) return;
+      var endYr=parseInt(String(tempRange[1]).slice(0,4),10);
+      if(!endYr || (now.getFullYear()-endYr)>2) return;   // skip stale/discontinued temp stations
+      // score: closeness, but strongly prefer first-order (ICAO/WBAN) stations
+      var dist=Math.sqrt(Math.pow(s.ll[0]-lon,2)+Math.pow(s.ll[1]-lat,2));
+      var firstOrder=s.sids.some(function(x){var t=x.split(" ")[1];return t==="1"||t==="3";});
+      var score=(firstOrder?1000:0) - dist*100;   // airports win, then nearest
+      if(score>bestScore){ bestScore=score; best=s; }
+    });
+    if(!best) throw new Error("no temp station");
+    var sid=null;
+    best.sids.forEach(function(s){ var p=s.split(" "); if(p[1]==="3"&&!sid) sid=p[0]; }); // ICAO
+    best.sids.forEach(function(s){ var p=s.split(" "); if(p[1]==="1"&&!sid) sid=p[0]; }); // WBAN
+    best.sids.forEach(function(s){ var p=s.split(" "); if(p[1]==="2"&&!sid) sid=p[0]+" 2"; }); // COOP (needs type)
+    if(!sid) sid=best.sids[0];
+    var out={sid:sid, name:best.name||""};
+    _climStationCache[key]=out;
+    return out;
+  }).catch(function(){
+    var fb={sid:"KSTL", name:"St. Louis Lambert"};
+    _climStationCache[key]=fb;
+    return fb;
+  });
+}
+function fmtDep(v,unit){
+  if(v==null) return '<span class="cn-na">—</span>';
+  var s=(v>0?"+":"")+ (unit==="°"?v.toFixed(1):v.toFixed(2)) + unit;
+  var cls = Math.abs(v)<(unit==="°"?0.5:0.05) ? "cn-flat"
+          : (unit==="°"
+              ? (v>0?"cn-warm":"cn-cool")
+              : (v>0?"cn-wet":"cn-dry"));
+  return '<span class="'+cls+'">'+s+'</span>';
+}
+function renderVsNormal(){
+  var el=document.getElementById("cnToday"); if(!el) return;
+  if(climate.normHi==null && climate.normLo==null){ el.innerHTML='<span class="cn-na">Normals loading…</span>'; return; }
+  function dep(fc,norm){
+    if(fc==null||norm==null) return '';
+    var d=fc-norm, s=(d>0?"+":"")+Math.round(d)+"°";
+    var cls=Math.abs(d)<1?"cn-flat":(d>0?"cn-warm":"cn-cool");
+    return ' <span class="'+cls+'">('+s+')</span>';
+  }
+  var hi = climate.fcHi!=null ? '<b>'+climate.fcHi+'°</b>'+dep(climate.fcHi,climate.normHi) : '—';
+  var lo = climate.fcLo!=null ? '<b>'+climate.fcLo+'°</b>'+dep(climate.fcLo,climate.normLo) : '—';
+  var nh = climate.normHi!=null ? climate.normHi+'°' : '—';
+  var nl = climate.normLo!=null ? climate.normLo+'°' : '—';
+  var hiLbl = "Forecast high"+(climate.fcHiLabel||"");
+  el.innerHTML='<div class="cn-trow"><span class="cn-k">'+hiLbl+'</span><span class="cn-v">'+hi+'</span><span class="cn-n">normal '+nh+'</span></div>'
+    +'<div class="cn-trow"><span class="cn-k">Forecast low</span><span class="cn-v">'+lo+'</span><span class="cn-n">normal '+nl+'</span></div>';
+}
+function loadClimate(){
+  var grid=document.getElementById("cnGrid"); if(!grid) return Promise.resolve();
+  return climStation(current.lat,current.lon).then(function(st){
+    climate.station=st.sid; climate.stationName=st.name;
+    var nameEl=document.getElementById("cnStation"); if(nameEl) nameEl.textContent=st.name||st.sid;
+    var showSnow=(function(){var m=new Date().getMonth();return m>=10||m<=3;})(); // Nov–Apr
+    var elems=[
+      {name:"maxt",normal:"1"},
+      {name:"mint",normal:"1"},
+      {name:"avgt",duration:"mtd",reduce:"mean",normal:"departure"},
+      {name:"avgt",duration:"ytd",reduce:"mean",normal:"departure"},
+      {name:"pcpn",duration:"mtd",reduce:"sum",normal:"departure"},
+      {name:"pcpn",duration:"ytd",reduce:"sum",normal:"departure"}
+    ];
+    if(showSnow) elems.push({name:"snow",duration:"std",season_start:"07-01",reduce:"sum",normal:"departure"});
+    var _d=new Date();
+    var today=_d.getFullYear()+"-"+("0"+(_d.getMonth()+1)).slice(-2)+"-"+("0"+_d.getDate()).slice(-2); // LOCAL date (toISOString is UTC → wrong in the evening)
+    return acisPost("StnData",{sid:st.sid, sdate:today, edate:today, elems:elems, meta:["name"]}).then(function(r){
+      if(r&&r.error) throw new Error("acis: "+r.error);          // ACIS reports errors as {"error":...} with HTTP 200
+      if(!r||!r.data||!r.data.length) throw new Error("acis: no data");
+      var row=r.data[0];
+      // Some elems (normal:"departure") can return a [value, departure] pair; grab the departure when present.
+      function cell(x){ return Array.isArray(x) ? acisNum(x[x.length-1]) : acisNum(x); }
+      climate.normHi=cell(row[1]);
+      climate.normLo=cell(row[2]);
+      var tMTD=cell(row[3]), tYTD=cell(row[4]), pMTD=cell(row[5]), pYTD=cell(row[6]);
+      var snowSTD=showSnow?cell(row[7]):null;
+      var cells=''
+        +'<div class="cn-cell"><span class="cn-lbl">Temp · month</span>'+fmtDep(tMTD,"°")+'</div>'
+        +'<div class="cn-cell"><span class="cn-lbl">Temp · year</span>'+fmtDep(tYTD,"°")+'</div>'
+        +'<div class="cn-cell"><span class="cn-lbl">Precip · month</span>'+fmtDep(pMTD,"\u2033")+'</div>'
+        +'<div class="cn-cell"><span class="cn-lbl">Precip · year</span>'+fmtDep(pYTD,"\u2033")+'</div>';
+      if(showSnow) cells+='<div class="cn-cell"><span class="cn-lbl">Snow · season</span>'+fmtDep(snowSTD,"\u2033")+'</div>';
+      grid.innerHTML=cells;
+      renderVsNormal();
+    });
+  }).catch(function(){
+    grid.innerHTML='<div class="empty">Climate normals unavailable. <a href="https://xmacis.rcc-acis.org/" target="_blank" rel="noopener">xmACIS ↗</a></div>';
+  });
+}
+
+/* ============ WPC 7-DAY QPF (best-effort chip) ============ */
+var QPF_URL="https://mapservices.weather.noaa.gov/vector/rest/services/precip/wpc_qpf/MapServer";
+var qpfLayerId;   // undefined = not checked yet; null = service has no 7-day layer (a real answer — don't refetch)
+function loadQpf(){
+  var chip=document.getElementById("qpf7"); if(!chip) return Promise.resolve();
+  function findLayer(){
+    if(qpfLayerId!==undefined) return Promise.resolve(qpfLayerId);
+    return getJSON(QPF_URL+"?f=json").then(function(d){
+      var best=null;
+      (d.layers||[]).forEach(function(l){
+        var n=String(l.name||"");
+        if(/day\s*1\s*[-\u2013]\s*7|7[\s_-]*day|168/i.test(n)) best=l.id;
+      });
+      qpfLayerId=best;
+      return best;
+    });
+  }
+  return findLayer().then(function(id){
+    if(id==null) throw new Error("no 7-day layer");
+    return pointQuery(QPF_URL+"/",id,"*");
+  }).then(function(d){
+    var maxQ=null;
+    (d.features||[]).forEach(function(f){
+      var at=f.attributes||{};
+      for(var k in at){
+        if(k.toLowerCase().indexOf("qpf")>=0){
+          var v=+at[k];
+          if(!isNaN(v)&&(maxQ==null||v>maxQ)) maxQ=v;
+        }
+      }
+    });
+    chip.textContent=(maxQ!=null)?("\ud83c\udf27\ufe0f ~"+(Math.round(maxQ*10)/10)+"\u2033 rain next 7 days"):"";
+  }).catch(function(){ chip.textContent=""; });
+}
+
+/* ============ STATIC IMAGES ============ */
+// ===== Station Plot: live surface obs (temp/dew/wind) on a St. Louis-region Leaflet map =====
+// Curated regional ASOS/METAR stations around the LSX CWA
+var STN_LIST=[
+  {id:"KSTL",lat:38.75,lon:-90.37},{id:"KSUS",lat:38.66,lon:-90.65},{id:"KCPS",lat:38.57,lon:-90.16},
+  {id:"KALN",lat:38.89,lon:-90.05},{id:"KSET",lat:38.93,lon:-90.43},{id:"KBLV",lat:38.54,lon:-89.84},
+  {id:"KUIN",lat:39.94,lon:-91.19},{id:"KCOU",lat:38.82,lon:-92.22},{id:"KJEF",lat:38.59,lon:-92.16},
+  {id:"KFAM",lat:37.76,lon:-90.43},{id:"KVIH",lat:38.13,lon:-91.76},{id:"KSAR",lat:38.14,lon:-89.70},
+  {id:"KMDH",lat:37.78,lon:-89.25},{id:"KPPQ",lat:39.63,lon:-90.78},{id:"KSLO",lat:38.64,lon:-88.96}
+];
+var stnMap=null, stnBase=null, stnLayer=null;
+function tColor(f){ // temperature → color (blue cold → red hot)
+  if(f==null) return "var(--muted)";
+  if(f<=20) return "#4a6cff"; if(f<=32) return "#4aa3ff"; if(f<=45) return "#3ec8d8";
+  if(f<=60) return "#3ecf8e"; if(f<=75) return "#e0b93a"; if(f<=88) return "#ff9f43"; return "#ff5a5f";
+}
+function stnIconHTML(o){
+  var t=(o.tempF!=null)?o.tempF:"–", d=(o.dewF!=null)?o.dewF:"–";
+  var wind = (o.windDir!=null && o.windKt!=null && o.windKt>0)
+    ? '<span class="sm-arrow" style="transform:rotate('+((o.windDir+180)%360)+'deg)">&uarr;</span><span class="sm-spd">'+o.windKt+'</span>'
+    : '<span class="sm-calm" title="calm">&#9679;</span>';
+  return '<div class="stnmodel">'
+    + '<div class="sm-t" style="color:'+tColor(o.tempF)+'">'+t+'</div>'
+    + '<div class="sm-w">'+wind+'</div>'
+    + '<div class="sm-d">'+d+'</div></div>';
+}
+function initStationMap(){
+  var el=document.getElementById("stnmap");
+  if(typeof L==="undefined"||!el){
+    if(el) el.innerHTML='<div class="imgfail">Map didn\u2019t load. <a href="https://www.weather.gov/wrh/timeseries?site=KSTL" target="_blank" rel="noopener">Open NWS obs \u2197</a></div>';
+    return;
+  }
+  // Center on the STL station network itself (not the user's saved location, which may be far away)
+  var _cLat=0,_cLon=0; STN_LIST.forEach(function(s){_cLat+=s.lat;_cLon+=s.lon;}); _cLat/=STN_LIST.length; _cLon/=STN_LIST.length;
+  stnMap=L.map(el,{zoomControl:true,attributionControl:true,scrollWheelZoom:false,minZoom:5,maxZoom:10}).setView([_cLat,_cLon],7);
+  stnBase=L.tileLayer(baseUrl(),{subdomains:"abcd",maxZoom:12,
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> &middot; obs: <a href="https://www.weather.gov" target="_blank" rel="noopener">NOAA/NWS</a>'}).addTo(stnMap);
+  setTimeout(function(){ if(stnMap) stnMap.invalidateSize(); },250);
+  // no loadStationPlot() here — refreshAll() runs right after init and fetches the obs once
+}
+function updateStationBase(){ if(stnBase) stnBase.setUrl(baseUrl()); }
+function loadStationPlot(){
+  if(!stnMap||typeof L==="undefined") return Promise.resolve();
+  var c2f=function(c){return (c==null)?null:Math.round(c*9/5+32);};
+  var jobs=STN_LIST.map(function(s){
+    return getJSON(API+"/stations/"+s.id+"/observations/latest").then(function(d){
+      var p=(d&&d.properties)||{};
+      return {id:s.id,lat:s.lat,lon:s.lon,
+        tempF:c2f(p.temperature&&p.temperature.value),
+        dewF:c2f(p.dewpoint&&p.dewpoint.value),
+        windDir:(p.windDirection&&p.windDirection.value!=null)?Math.round(p.windDirection.value):null,
+        windKt:(p.windSpeed&&p.windSpeed.value!=null)?Math.round(p.windSpeed.value*0.539957):null};
+    }).catch(function(){return null;});
+  });
+  return Promise.all(jobs).then(function(list){
+    if(stnLayer){ stnMap.removeLayer(stnLayer); stnLayer=null; }
+    var markers=[];
+    list.forEach(function(o){
+      if(!o || o.tempF==null) return;   // skip stations with no usable obs
+      markers.push(L.marker([o.lat,o.lon],{
+        icon:L.divIcon({className:"stn-divicon",html:stnIconHTML(o),iconSize:[46,46],iconAnchor:[23,23]}),
+        interactive:false, keyboard:false
+      }));
+    });
+    stnLayer=L.layerGroup(markers).addTo(stnMap);
+  }).catch(function(){});
+}
+function refreshImages(){
+  var sat=document.getElementById("sat");
+  if(sat){ sat.style.display="block"; var sf=document.getElementById("satFail"); if(sf)sf.style.display="none";
+    sat.src=bust("https://cdn.star.nesdis.noaa.gov/GOES19/ABI/SECTOR/umv/GEOCOLOR/600x600.jpg"); }
+}
+
+/* ============ FORECAST DISCUSSION (the pulse) ============ */
+var AFD_LINK="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1";
+function extractAFD(text){
+  var wants=[["KEY MESSAGES","Key Messages","key"],["SYNOPSIS","Synopsis","para"],["SHORT TERM","Short-Term Outlook","para"]];
+  for(var i=0;i<wants.length;i++){
+    var pat=wants[i][0].replace(" ","\\s+");
+    var re=new RegExp("\\."+pat+"\\.\\.\\.([\\s\\S]*?)(?=\\n\\.[A-Z]|\\n&&|\\$\\$)","i");
+    var m=text.match(re);
+    if(m){
+      var body=m[1];
+      body=body.replace(/^\s*\([^)]*\)\s*/,"");          // drop "(Through Tonight)" style tag
+      body=body.replace(/Issued at[^\n]*\d{4}\s*/i,"");   // drop "Issued at ... 2026" stamp
+      body=body.trim();
+      if(body.length>15) return {kind:wants[i][2], label:wants[i][1], text:body};
+    }
+  }
+  return null;
+}
+function renderAFD(sec, issued){
+  var el=document.getElementById("afd");
+  if(!sec){
+    el.innerHTML='<div class="empty">Discussion unavailable right now. <a href="'+AFD_LINK+'" target="_blank" rel="noopener">Open the full AFD ↗</a></div>';
+    return;
+  }
+  var inner;
+  if(sec.kind==="key"){
+    var items=sec.text.split(/\n(?=\s*[-*]\s)/).map(function(s){
+      return esc(s.replace(/^\s*[-*]\s*/,"").replace(/\s*\n\s*/g," ").trim());
+    }).filter(Boolean);
+    inner='<ul class="afd-list">'+items.map(function(it){return '<li>'+it+'</li>';}).join("")+'</ul>';
+  }else{
+    var paras=sec.text.split(/\n\s*\n/).map(function(p){return esc(p.replace(/\s*\n\s*/g," ").trim());}).filter(Boolean);
+    inner=paras.map(function(p){return '<p>'+p+'</p>';}).join("");
+  }
+  var meta=sec.label+" · NWS St. Louis"+(issued?" · issued "+timeAgo(issued):"");
+  el.innerHTML='<div class="afd-body">'+inner+'</div><div class="afd-meta">'+meta+'</div>';
+}
+function loadAFD(){
+  return getJSON(API+"/products/types/AFD/locations/LSX",LD).then(function(list){
+    var g=list["@graph"]||[];
+    if(!g.length) throw new Error("no AFD");
+    var latest=g[0], purl=latest["@id"]||(API+"/products/"+latest.id);
+    return getJSON(purl,LD);
+  }).then(function(prod){
+    renderAFD(extractAFD(prod.productText||""), prod.issuanceTime);
+  }).catch(function(){ renderAFD(null); });
+}
+
+/* ============ LOCATION (geolocation / search / presets, persisted) ============ */
+var LOC_KEY="lsxLoc";
+function saveLoc(l){ try{ localStorage.setItem(LOC_KEY,JSON.stringify({name:l.name,lat:l.lat,lon:l.lon,station:l.station||null})); }catch(e){} }
+function readLoc(){ try{ var s=localStorage.getItem(LOC_KEY); return s?JSON.parse(s):null; }catch(e){ return null; } }
+function updateLocNow(){ var el=document.getElementById("locNow"); if(el) el.textContent="📍 "+current.name; }
+function stationFor(lat,lon){
+  return getJSON(API+"/points/"+lat.toFixed(4)+","+lon.toFixed(4),HEADERS).then(function(pt){
+    return getJSON(pt.properties.observationStations,HEADERS);
+  }).then(function(s){
+    if(s.features&&s.features.length) return s.features[0].properties.stationIdentifier;
+    if(s.observationStations&&s.observationStations.length){ var u=s.observationStations[0]; return u.substring(u.lastIndexOf("/")+1); }
+    return null;
+  });
+}
+function setLocation(loc,opts){
+  opts=opts||{};
+  current=loc;
+  updateLocNow();
+  if(opts.save) saveLoc(loc);
+  loadRadar();loadForecast();loadAqi();loadSpc();loadCpc();loadQpf();loadHazards();loadDrought();loadClimate();
+  if(loc.station){ loadCurrent(); }
+  else{
+    var cc=document.getElementById("current"); if(cc) cc.innerHTML='<div class="loading">Finding nearest station…</div>';
+    stationFor(loc.lat,loc.lon).then(function(st){ loc.station=st; if(opts.save)saveLoc(loc); loadCurrent(); }).catch(function(){ loadCurrent(); });
+  }
+}
+function useMyLocation(explicit){
+  var btn=document.getElementById("geoBtn");
+  if(!navigator.geolocation){ if(explicit) alert("Geolocation isn't available on this device/browser."); return; }
+  if(btn) btn.textContent="📍 Locating…";
+  navigator.geolocation.getCurrentPosition(function(pos){
+    if(btn) btn.textContent="📍 My location";
+    var lat=pos.coords.latitude, lon=pos.coords.longitude;
+    var useIt=function(){ setLocation({name:"My Location",lat:lat,lon:lon,station:null},{save:true}); };
+    // Only adopt the fix if it falls inside the LSX forecast area.
+    getJSON(API+"/points/"+lat.toFixed(4)+","+lon.toFixed(4),HEADERS).then(function(pt){
+      var cwa=pt&&pt.properties&&(pt.properties.cwa||pt.properties.gridId);
+      if(cwa&&cwa!=="LSX"){
+        if(explicit) alert("Your current location is outside the St. Louis (LSX) forecast area, so it isn't shown on this dashboard.");
+        return;   // keep the existing in-area location
+      }
+      useIt();
+    }).catch(function(){ useIt(); });   // can't verify → allow it
+  },function(){
+    if(btn) btn.textContent="📍 My location";
+    if(explicit) alert("Couldn't get your location. Make sure location access is allowed for this site.");
+  },{enableHighAccuracy:false,timeout:9000,maximumAge:600000});
+}
+/* Type-ahead location search (Open-Meteo geocoder, restricted to the LSX CWA) */
+var sugTimer=null, sugItems=[], sugSeq=0;
+
+/* ===== LSX County Warning Area restriction =====
+   The dashboard only searches places inside the St. Louis (LSX) forecast area.
+   The county whitelist is built once from the authoritative NWS zone data
+   (api.weather.gov) and cached; a hardcoded list is the fallback if that fails. */
+var LSX_CC_KEY="lsxCwaCounties_v2";
+var LSX_FALLBACK={
+  "MO":["audrain","bollinger","boone","callaway","cole","crawford","dent","franklin","gasconade","iron","jefferson","lewis","lincoln","madison","maries","marion","moniteau","monroe","montgomery","osage","perry","phelps","pike","ralls","reynolds","st charles","st francois","st louis","ste genevieve","shannon","shelby","warren","washington","wayne"],
+  "IL":["adams","bond","brown","calhoun","clinton","greene","jersey","macoupin","madison","monroe","montgomery","pike","randolph","st clair","washington"]
+};
+function normCounty(s){
+  s=String(s||"").toLowerCase();
+  s=s.replace(/[.’']/g,"").replace(/,/g," ");
+  s=s.replace(/\(city\)/g," ").replace(/\bcounty\b/g," ").replace(/\bcity\b/g," ").replace(/\bparish\b/g," ");
+  s=s.replace(/\bsainte\b/g,"ste").replace(/\bsaint\b/g,"st");
+  return s.replace(/\s+/g," ").trim();
+}
+var LSX_COUNTIES=null;                 // {MO:Set, IL:Set} once resolved
+function lsxSetsFrom(obj){
+  var out={}; Object.keys(obj).forEach(function(k){ out[k]=new Set((obj[k]||[]).map(normCounty)); }); return out;
+}
+function buildLsxCounties(){
+  try{ var c=localStorage.getItem(LSX_CC_KEY); if(c){ var p=JSON.parse(c); if(p&&(p.MO||p.IL)) return Promise.resolve(lsxSetsFrom(p)); } }catch(e){}
+  function zurl(st){ return API+"/zones?area="+st+"&type=county&include_geometry=false"; }
+  return Promise.all([getJSON(zurl("MO"),HEADERS),getJSON(zurl("IL"),HEADERS)]).then(function(rs){
+    var acc={MO:[],IL:[]};
+    rs.forEach(function(fc){
+      (fc.features||[]).forEach(function(f){
+        var pr=f.properties||{}, cwa=pr.cwa;
+        var isLsx=Array.isArray(cwa)?cwa.indexOf("LSX")>=0:cwa==="LSX";
+        if(isLsx&&(pr.state==="MO"||pr.state==="IL")&&pr.name) acc[pr.state].push(pr.name);
+      });
+    });
+    if(!acc.MO.length&&!acc.IL.length) throw new Error("no LSX zones");
+    try{ localStorage.setItem(LSX_CC_KEY,JSON.stringify(acc)); }catch(e){}
+    return lsxSetsFrom(acc);
+  }).catch(function(){ return lsxSetsFrom(LSX_FALLBACK); });
+}
+function ensureLsxCounties(){
+  if(LSX_COUNTIES) return Promise.resolve(LSX_COUNTIES);
+  return buildLsxCounties().then(function(m){ LSX_COUNTIES=m; return m; });
+}
+function inLsx(admin1,admin2){
+  if(!LSX_COUNTIES) return null;
+  var set=LSX_COUNTIES[abbrState(admin1)];
+  return set?set.has(normCounty(admin2)):false;
+}
+function geoScore(r){
+  var s=0;
+  if(r.country_code==="US") s+=100;
+  if(r.admin1==="Missouri"||r.admin1==="Illinois") s+=25;
+  s+=Math.min(20,Math.log10((r.population||1))*4); // mild big-city boost
+  return s;
+}
+function sugLabel(r){
+  var where=[];
+  if(r.admin1) where.push(r.admin1);
+  if(r.country_code!=="US"&&r.country) where.push(r.country);
+  return {name:r.name, where:where.join(", ")};
+}
+function hideSug(){ var b=document.getElementById("locSug"); b.classList.remove("show"); b.innerHTML=""; sugItems=[]; }
+function showSugNote(msg){
+  var b=document.getElementById("locSug");
+  b.innerHTML='<div class="sug-note">'+msg+'</div>';
+  b.classList.add("show"); sugItems=[];
+}
+/* The Open-Meteo geocoder is strict about apostrophes: "O Fallon" and "OFallon" return NOTHING
+   while "O'Fallon" matches. Search the query as typed first, then fall back through apostrophe
+   variants (curly→straight for iOS smart punctuation, "O Fallon"→"O'Fallon", "Ofallon"→"O'fallon",
+   and apostrophes stripped) until one yields an in-area result. */
+function queryVariants(q){
+  var out=[q];
+  function add(s){ s=s.trim(); if(s.length>=2 && out.indexOf(s)<0) out.push(s); }
+  add(q.replace(/[‘’]/g,"'"));
+  add(q.replace(/\b([OoDd])\s+(?=[A-Za-z]{2})/g,"$1'"));
+  add(q.replace(/\b([OD])(?=[a-z]{2})/g,"$1'"));
+  add(q.replace(/['‘’]/g,""));
+  return out;
+}
+function geoSearch(q){
+  return getJSON("https://geocoding-api.open-meteo.com/v1/search?count=100&language=en&format=json&name="+encodeURIComponent(q))
+    .then(function(d){
+      return (d.results||[]).filter(function(r){
+        return r.country_code==="US" && (r.admin1==="Missouri"||r.admin1==="Illinois") && r.admin2 && inLsx(r.admin1,r.admin2)===true;
+      });
+    });
+}
+function fetchSuggestions(q){
+  var seq=++sugSeq;   // guard against out-of-order responses (a slow reply for an old query must not clobber newer results)
+  ensureLsxCounties().then(function(){
+    var variants=queryVariants(q);
+    function tryVariant(i){
+      if(i>=variants.length) return [];
+      return geoSearch(variants[i]).then(function(res){ return res.length?res:tryVariant(i+1); });
+    }
+    return tryVariant(0);
+  })
+  .then(function(res){
+    if(seq!==sugSeq) return;
+    if(!res.length){ showSugNote('No LSX-area match for "'+esc(q)+'". This dashboard only covers the St. Louis (LSX) forecast area.'); return; }
+    res.sort(function(a,b){ return geoScore(b)-geoScore(a); });
+    // Dedupe identical labels (e.g. O'Fallon the city vs. the St. Louis neighborhood) — keep the higher-scored
+    var seenLbl={};
+    res=res.filter(function(r){ var k=(r.name+"|"+r.admin1).toLowerCase(); if(seenLbl[k]) return false; seenLbl[k]=1; return true; });
+    res=res.slice(0,6);
+    sugItems=res.map(function(r){
+      var l=sugLabel(r);
+      return {name:l.name+(r.admin1&&r.country_code==="US"?", "+abbrState(r.admin1):(l.where?", "+l.where:"")),
+              lat:r.latitude, lon:r.longitude, label:l};
+    });
+    var b=document.getElementById("locSug");
+    b.innerHTML=sugItems.map(function(s,i){
+      return '<div class="sug" role="option" data-i="'+i+'"><span class="sname">'+esc(s.label.name)+'</span><span class="swhere">'+esc(s.label.where)+'</span></div>';
+    }).join("");
+    b.classList.add("show");
+  }).catch(function(){ if(seq===sugSeq) showSugNote("Search failed — check your connection and try again."); });
+}
+var STATE_ABBR={"Alabama":"AL","Alaska":"AK","Arizona":"AZ","Arkansas":"AR","California":"CA","Colorado":"CO","Connecticut":"CT","Delaware":"DE","Florida":"FL","Georgia":"GA","Hawaii":"HI","Idaho":"ID","Illinois":"IL","Indiana":"IN","Iowa":"IA","Kansas":"KS","Kentucky":"KY","Louisiana":"LA","Maine":"ME","Maryland":"MD","Massachusetts":"MA","Michigan":"MI","Minnesota":"MN","Mississippi":"MS","Missouri":"MO","Montana":"MT","Nebraska":"NE","Nevada":"NV","New Hampshire":"NH","New Jersey":"NJ","New Mexico":"NM","New York":"NY","North Carolina":"NC","North Dakota":"ND","Ohio":"OH","Oklahoma":"OK","Oregon":"OR","Pennsylvania":"PA","Rhode Island":"RI","South Carolina":"SC","South Dakota":"SD","Tennessee":"TN","Texas":"TX","Utah":"UT","Vermont":"VT","Virginia":"VA","Washington":"WA","West Virginia":"WV","Wisconsin":"WI","Wyoming":"WY","District of Columbia":"DC"};
+function abbrState(s){ return STATE_ABBR[s]||s; }
+function cleanPlace(s){ return String(s||"").replace(/[<>]/g,"").replace(/\s+/g," ").trim().slice(0,80); }
+function pickSuggestion(i){
+  var s=sugItems[i]; if(!s) return;
+  hideSug();
+  var inp=document.getElementById("locSearch");
+  inp.value=""; inp.blur();
+  setLocation({name:cleanPlace(s.name),lat:s.lat,lon:s.lon,station:null},{save:true});
+}
+function initLocationUI(){
+  var inp=document.getElementById("locSearch"), form=document.getElementById("locForm"), box=document.getElementById("locSug");
+  ensureLsxCounties();   // warm the LSX county whitelist so the first search is instant
+  document.getElementById("geoBtn").addEventListener("click",function(){ useMyLocation(true); });
+  inp.addEventListener("input",function(){
+    clearTimeout(sugTimer);
+    var q=inp.value.trim();
+    if(q.length<2){ hideSug(); return; }
+    sugTimer=setTimeout(function(){ fetchSuggestions(q); },300);
+  });
+  form.addEventListener("submit",function(e){   // iOS "search"/"go" key lands here reliably
+    e.preventDefault();
+    if(sugItems.length){ pickSuggestion(0); }
+    else{
+      var q=inp.value.trim();
+      if(q.length>=2) fetchSuggestions(q);
+    }
+  });
+  box.addEventListener("mousedown",function(e){ // mousedown beats input blur
+    var s=e.target.closest(".sug");
+    if(s){ e.preventDefault(); pickSuggestion(+s.dataset.i); }
+  });
+  inp.addEventListener("keydown",function(e){ if(e.key==="Escape") hideSug(); });
+  inp.addEventListener("blur",function(){ setTimeout(hideSug,250); });
+}
+function initLocation(){
+  var saved=readLoc();
+  if(saved&&saved.lat!=null){ current=saved; updateLocNow(); return; }
+  updateLocNow();                 // shows the default preset while we ask
+  useMyLocation(false);           // silent attempt; falls back to default if denied
+}
+
+/* ============ SMART SLOT (lightning when stormy · sun/moon + chart when calm) ============ */
+var smart={warning:false,watch:false,thunderSoon:false,spcRisk:0,eroRisk:0,fireRisk:0,mode:"",reason:"",hourly:[]};
+function sunTimes(lat,lon,date){
+  var rad=Math.PI/180;
+  var start=Date.UTC(date.getFullYear(),0,0);
+  var doy=Math.floor((Date.UTC(date.getFullYear(),date.getMonth(),date.getDate())-start)/86400000);
+  var lngHour=lon/15;
+  function calc(rising){
+    var t=doy+((rising?6:18)-lngHour)/24;
+    var M=(0.9856*t)-3.289;
+    var Lsun=M+(1.916*Math.sin(M*rad))+(0.020*Math.sin(2*M*rad))+282.634; Lsun=(Lsun%360+360)%360;
+    var RA=Math.atan(0.91764*Math.tan(Lsun*rad))/rad; RA=(RA%360+360)%360;
+    RA+= (Math.floor(Lsun/90)*90)-(Math.floor(RA/90)*90); RA/=15;
+    var sinDec=0.39782*Math.sin(Lsun*rad), cosDec=Math.cos(Math.asin(sinDec));
+    var cosH=(Math.cos(90.833*rad)-(sinDec*Math.sin(lat*rad)))/(cosDec*Math.cos(lat*rad));
+    if(cosH>1||cosH<-1) return null;
+    var H=(rising?360-Math.acos(cosH)/rad:Math.acos(cosH)/rad)/15;
+    var T=H+RA-(0.06571*t)-6.622;
+    var UT=(T-lngHour)%24; if(UT<0)UT+=24;
+    var d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));
+    return new Date(d.getTime()+UT*3600000);
+  }
+  var r=calc(true), s=calc(false);
+  if(r&&s&&s.getTime()<r.getTime()) s=new Date(s.getTime()+86400000);
+  return {rise:r, set:s};
+}
+function moonInfo(date){
+  var synodic=29.530588853;
+  var known=Date.UTC(2000,0,6,18,14,0); // reference new moon
+  var age=(((date.getTime()-known)/86400000)%synodic+synodic)%synodic;
+  var frac=age/synodic;
+  var illum=Math.round((1-Math.cos(2*Math.PI*frac))/2*100);
+  var idx=Math.round(frac*8)%8;
+  var icons=["🌑","🌒","🌓","🌔","🌕","🌖","🌗","🌘"];
+  var svgs=["moon-new","moon-waxing-crescent","moon-first-quarter","moon-waxing-gibbous","moon-full","moon-waning-gibbous","moon-last-quarter","moon-waning-crescent"];
+  var names=["New Moon","Waxing Crescent","First Quarter","Waxing Gibbous","Full Moon","Waning Gibbous","Last Quarter","Waning Crescent"];
+  return {icon:icons[idx],svg:svgs[idx],name:names[idx],illum:illum,age:Math.round(age)};
+}
+function fmtT(d){ return d?d.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):"—"; }
+function fmtDur(ms){ var h=Math.floor(ms/3600000), m=Math.round(ms%3600000/60000); return h+"h "+m+"m"; }
+function sunArcSVG(rise,set){
+  var now=Date.now();
+  var f=Math.max(0,Math.min(1,(now-rise.getTime())/(set.getTime()-rise.getTime())));
+  var cx=75,cy=74,r=62;
+  var ang=Math.PI*(1-f);
+  var sx=cx+r*Math.cos(ang), sy=cy-r*Math.sin(ang);
+  var up=now>=rise.getTime()&&now<=set.getTime();
+  return '<svg viewBox="0 0 150 84" aria-hidden="true">'
+    +'<path d="M 13 74 A 62 62 0 0 1 137 74" fill="none" stroke="var(--border)" stroke-width="2" stroke-dasharray="4 5"/>'
+    +'<line x1="6" y1="74" x2="144" y2="74" stroke="var(--border)" stroke-width="2"/>'
+    +(up?'<circle cx="'+sx.toFixed(1)+'" cy="'+sy.toFixed(1)+'" r="7" fill="#ffb020"/><circle cx="'+sx.toFixed(1)+'" cy="'+sy.toFixed(1)+'" r="11" fill="#ffb020" opacity=".25"/>':'')
+    +'<text x="13" y="82" font-size="9" fill="var(--muted)" text-anchor="middle">↑</text>'
+    +'<text x="137" y="82" font-size="9" fill="var(--muted)" text-anchor="middle">↓</text>'
+    +'</svg>';
+}
+function stormy(){ return smart.warning||smart.watch||smart.thunderSoon||smart.spcRisk>=4||smart.eroRisk>=2; }
+function smartReason(){
+  if(smart.warning) return "active warning";
+  if(smart.watch) return "convective watch";
+  if(smart.thunderSoon) return "storms in the hourly forecast";
+  if(smart.spcRisk>=4) return "elevated SPC risk";
+  if(smart.eroRisk>=2) return "elevated flood risk";
+  return "";
+}
+function updateSmartSlot(force){
+  var body=document.getElementById("smartBody"), title=document.getElementById("smartTitle"), link=document.getElementById("smartLink");
+  if(!body) return;
+  var mode=stormy()?"storm":"calm";
+  // The lightning map earns a 2-column slot; Sun & Moon looks silly stretched that wide.
+  // (Class flip is caught by the masonry's MutationObserver → automatic repack.)
+  var smartCard=document.getElementById("smartCard");
+  if(smartCard) smartCard.classList.toggle("wide", mode==="storm");
+  if(mode==="storm"){
+    var reason=smartReason();
+    if(smart.mode!=="storm"){
+      title.textContent="⚡ Live Lightning — Storm Watch";
+      link.style.display="";
+      body.innerHTML='<div class="imgwrap maplock-wrap">'
+        +'<iframe id="lightning" class="frame" title="Live lightning map" loading="lazy" '
+        +'src="https://map.blitzortung.org/index.php?interactive=1&NavigationControl=1&FullScreenControl=0&Cookies=0&MenuButtonDiv=0&InfoDiv=0&Advertisment=0&MapStyle=2&MapStyleRangeValue=8&LightningRangeValue=12&CirclesCheckboxChecked=1#7/'+current.lat.toFixed(2)+'/'+current.lon.toFixed(2)+'"></iframe>'
+        +'<div class="maplock"><button type="button" class="maplock-pill">👆 Tap to interact with lightning map</button></div></div>'
+        +'<div class="imgcap"><span>Lightning by Blitzortung.org &amp; contributors · shown because: <span id="smReason">'+reason+'</span></span><span>live</span></div>';
+      bindMapLock(body.querySelector(".maplock-wrap"));
+    }else if(smart.reason!==reason){
+      var r=document.getElementById("smReason");
+      if(r) r.textContent=reason;   // escalation/de-escalation updates caption without reloading the map
+    }
+    smart.reason=reason;
+  }else{
+    if(smart.mode==="calm" && !force){ smart.mode=mode; return; }
+    title.textContent="Sun & Moon";
+    link.style.display="none";
+    var now=new Date(), st=sunTimes(current.lat,current.lon,now), mi=moonInfo(now);
+    var dayLen=(st.rise&&st.set)?fmtDur(st.set-st.rise):"—";
+    body.innerHTML=
+      '<div class="sm-sun"><div class="sm-arc">'+((st.rise&&st.set)?sunArcSVG(st.rise,st.set):'')+'</div>'
+      +'<div class="sm-suntimes">'
+        +'<div class="sm-kv"><div class="k">Sunrise</div><div class="v">'+mcImg("sunrise","🌅",22)+' '+fmtT(st.rise)+'</div></div>'
+        +'<div class="sm-kv"><div class="k">Sunset</div><div class="v">'+mcImg("sunset","🌇",22)+' '+fmtT(st.set)+'</div></div>'
+        +'<div class="sm-kv"><div class="k">Daylight</div><div class="v">'+dayLen+'</div></div>'
+        +'<div class="sm-kv"><div class="k">Moon</div><div class="v">'+mi.illum+'% lit</div></div>'
+      +'</div></div>'
+      +'<div class="sm-moon"><div class="mico">'+mcImg(mi.svg,mi.icon,40)+'</div><div><div class="mname">'+mi.name+'</div><div class="msub">Day '+mi.age+' of the lunar cycle</div></div></div>';
+  }
+  smart.mode=mode;
+}
+
+/* ============ THE CALL (plain-English verdicts from data already on hand) ============
+   Rules fire off the next ~18 hourly periods (smart.hourly) + the latest AQI. Each verdict
+   has a priority; the top 4 render. The rain/umbrella call always exists, so the strip is
+   never empty once the hourly feed has loaded. */
+var callAqi=null;
+function hrWord(d){ return d.toLocaleTimeString([], {hour:"numeric"}).replace(/\s/g,"").toLowerCase(); }
+function dewF(tF,rh){ // Magnus approximation, good to ~±1° in this range
+  if(tF==null||rh==null||rh<=0) return null;
+  var tC=(tF-32)/1.8, g=Math.log(rh/100)+17.625*tC/(243.04+tC);
+  return Math.round((243.04*g/(17.625-g))*1.8+32);
+}
+function renderTheCall(){
+  var card=document.getElementById("callCard"), row=document.getElementById("callRow");
+  if(!card||!row) return;
+  var hrs=smart.hourly;
+  if(!hrs||hrs.length<6){ card.classList.remove("has"); return; }
+  var n=Math.min(18,hrs.length), i, pills=[];
+  function push(pri,ico,txt){ pills.push({pri:pri,ico:ico,txt:txt}); }
+  var H=[];
+  for(i=0;i<n;i++){
+    var p=hrs[i], d=new Date(p.startTime);
+    var rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?p.relativeHumidity.value:null;
+    var pop=(p.probabilityOfPrecipitation&&p.probabilityOfPrecipitation.value!=null)?p.probabilityOfPrecipitation.value:0;
+    var mph=parseMph(p.windSpeed), sf=p.shortForecast||"";
+    H.push({t:p.temperature,d:d,hr:d.getHours(),pop:pop,rh:rh,mph:mph,
+            dew:dewF(p.temperature,rh), fl:feelsLikeF(p.temperature,rh,mph),
+            thund:/thunder|t-?storm/i.test(sf), fog:/fog/i.test(sf), day:p.isDaytime});
+  }
+  // — rain / storm window (the #1 question; always produces a pill) —
+  var wet0=-1, wetEnd=-1, hasThunder=false, maxPop=0;
+  for(i=0;i<n;i++){
+    if(H[i].pop>maxPop) maxPop=H[i].pop;
+    if(wet0<0 && H[i].pop>=40) wet0=i;
+    if(wet0>=0 && wetEnd<0 && i>wet0 && H[i].pop<30) wetEnd=i;
+    if(H[i].pop>=30 && H[i].thund) hasThunder=true;
+  }
+  if(wet0<0){
+    var endLbl=(H[n-1].d.getDate()!==new Date().getDate())?"into tomorrow":("through "+hrWord(H[n-1].d));
+    push(40,"☂️","Dry "+endLbl+" — no umbrella needed"+(maxPop>=25?" (peak chance "+maxPop+"%)":""));
+  }else{
+    var span=(wet0===0?"now":"~"+hrWord(H[wet0].d))+(wetEnd>wet0?"–"+hrWord(H[wetEnd].d):" on");
+    // a second round after the first block clears?
+    var wet2=-1;
+    if(wetEnd>0){ for(i=wetEnd;i<n;i++){ if(H[i].pop>=40){ wet2=i; break; } } }
+    var more=(wet2>0)?" · another round ~"+hrWord(H[wet2].d):"";
+    if(hasThunder) push(95,"⛈️","Storms likely "+span+" — plan around them"+more);
+    else push(60,"🌧️","Rain likely "+span+more);
+  }
+  // — heat (dangerous ≈ local heat-advisory territory; "hot" tier below that) —
+  var maxFl=-999, flAt=null;
+  for(i=0;i<n;i++){ if(H[i].fl!=null&&H[i].fl>maxFl){ maxFl=H[i].fl; flAt=H[i].d; } }
+  if(maxFl>=105) push(100,"🥵","Dangerous heat — feels like "+maxFl+"° near "+hrWord(flAt)+"; limit midday time outside");
+  else if(maxFl>=99) push(72,"🥵","Feels like "+maxFl+"° near "+hrWord(flAt)+" — pace outdoor plans");
+  // — cold morning (freezing gets its own tier) —
+  var mMin=999, mAt=null;
+  for(i=0;i<n;i++){ if(H[i].hr>=6&&H[i].hr<=9&&H[i].t<mMin){ mMin=H[i].t; mAt=H[i].d; } }
+  if(mAt&&mMin<=32) push(85,"🥶","Freezing early — "+mMin+"° near "+hrWord(mAt));
+  else if(mAt&&mMin<=45) push(70,"🧥",mMin+"° near "+hrWord(mAt)+" — jacket weather");
+  // — fog around the morning drive —
+  for(i=0;i<n;i++){ if(H[i].fog&&H[i].hr>=4&&H[i].hr<=9){ push(68,"🌫️","Fog early — allow extra drive time"); break; } }
+  // — wind (sustained; NWS strings undersell gusts, so thresholds are conservative) —
+  var wMax=0, wAt=null;
+  for(i=0;i<n;i++){ if(H[i].mph!=null&&H[i].mph>wMax){ wMax=H[i].mph; wAt=H[i].d; } }
+  if(wMax>=35) push(78,"💨","Very windy — "+wMax+" mph near "+hrWord(wAt)+"; bring in anything loose");
+  else if(wMax>=25) push(65,"💨","Windy — sustained to "+wMax+" mph near "+hrWord(wAt));
+  // — air quality (fed by loadAqi) —
+  if(callAqi!=null&&callAqi>100) push(75,"😮‍💨","Poor air (AQI "+callAqi+") — go easy outside if sensitive");
+  // — windows-open vs. AC night (dew point is the honest comfort test) —
+  var night=H.filter(function(h){ return h.hr>=21||h.hr<=6; });
+  if(night.length>=4){
+    var ok=true, muggy=false, lo=999;
+    night.forEach(function(h){
+      if(h.t<lo) lo=h.t;
+      if(h.t<50||h.t>72||h.pop>=25||(h.mph!=null&&h.mph>14)||(h.dew!=null&&h.dew>64)) ok=false;
+      if(h.dew!=null&&h.dew>=67&&h.t>=70) muggy=true;
+    });
+    if(ok&&!muggy) push(50,"🪟","Windows-open night — "+lo+"° and dry overnight");
+    else if(muggy) push(30,"💤","AC night — muggy through morning (low "+lo+"°)");
+  }
+  // — a legitimately good day (only worth saying before evening) —
+  var dayH=H.filter(function(h){ return h.day; });
+  if(dayH.length>=4 && new Date().getHours()<17){
+    var dhi=-999, nice=true;
+    dayH.forEach(function(h){
+      if(h.t>dhi) dhi=h.t;
+      if(h.pop>=20||h.t<58||h.t>88||(h.fl!=null&&h.fl>=95)||(h.mph!=null&&h.mph>15)||(h.dew!=null&&h.dew>66)) nice=false;
+    });
+    if(nice) push(55,"😎",dhi+"° and dry all day — about as good as it gets");
+  }
+  pills.sort(function(a,b){ return b.pri-a.pri; });
+  pills=pills.slice(0,4);
+  row.innerHTML='<span class="call-lbl">The Call</span>'+pills.map(function(pl){
+    return '<span class="call-pill"><span class="ce">'+pl.ico+'</span><span>'+esc(pl.txt)+'</span></span>';
+  }).join("");
+  card.classList.add("has");
+}
+
+/* ============ CLOCK ============ */
+function tick(){
+  var d=new Date();
+  document.getElementById("clock").textContent=d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
+  document.getElementById("cdate").textContent=d.toLocaleDateString([], {weekday:"long",month:"short",day:"numeric"});
+}
+
+/* ============ ORCHESTRATION ============ */
+function refreshAll(){
+  var dot=document.getElementById("statusDot"), label=document.getElementById("refreshLabel");
+  dot.classList.remove("stale");label.textContent="Refreshing…";
+  Promise.allSettled([loadAFD(),loadAlerts(),loadCurrent(),loadForecast(),loadRivers(),loadAqi(),loadSpc(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),loadClimate(),loadStationPlot()]).then(function(){
+    refreshImages();
+    label.textContent="Refresh";
+    document.getElementById("lastUpdate").textContent="Last updated "+new Date().toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"});
+  });
+}
+
+
+/* ============ THEME TOGGLE (auto → light → dark) ============
+   The PREFERENCE (incl. "auto") lives in themePref/localStorage; the DOM's data-theme
+   only ever holds the resolved "light"/"dark", so CSS needs no duplicate auto block
+   and meta theme-color always matches what's actually on screen. */
+var themePref="auto";
+function resolvedTheme(pref){
+  if(pref==="light"||pref==="dark") return pref;
+  return (window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches)?"light":"dark";
+}
+function applyTheme(pref){
+  themePref=pref;
+  var t=resolvedTheme(pref);
+  document.documentElement.setAttribute("data-theme",t);
+  var b=document.getElementById("themeBtn");
+  if(b){
+    b.textContent = pref==="auto"?"🌗":(pref==="light"?"☀️":"🌙");
+    b.title = "Theme: "+pref+" (tap to change)";
+  }
+  var meta=document.querySelector('meta[name="theme-color"]');
+  if(meta) meta.setAttribute("content", t==="light"?"#eef1f6":"#0a0e14");
+  if(typeof updateRadarBase==="function") updateRadarBase();
+  if(typeof updateStationBase==="function") updateStationBase();
+}
+function initTheme(){
+  var t="auto";
+  try{ t=localStorage.getItem("lsxTheme")||"auto"; }catch(e){}
+  applyTheme(t);
+  document.getElementById("themeBtn").addEventListener("click",function(){
+    var next = themePref==="auto"?"light":(themePref==="light"?"dark":"auto");
+    try{ localStorage.setItem("lsxTheme",next); }catch(e){}
+    applyTheme(next);
+  });
+  // Track live OS scheme changes while in auto (updates palette, theme-color, and map basemaps)
+  if(window.matchMedia){
+    var mq=window.matchMedia("(prefers-color-scheme: light)");
+    var onOsTheme=function(){ if(themePref==="auto") applyTheme("auto"); };
+    if(mq.addEventListener) mq.addEventListener("change",onOsTheme);
+    else if(mq.addListener) mq.addListener(onOsTheme);
+  }
+}
+
+/* ============ INIT ============ */
+initTheme();
+initLocationUI();
+initLocation();
+initMapLocks();
+resolveRiskLayers();   // async; first loadSpc may still use the fallback ids — later refreshes use resolved ones
+document.getElementById("daily").addEventListener("click",function(e){
+  var row=e.target.closest(".day");
+  if(row&&row.parentNode) row.parentNode.classList.toggle("open");
+});
+document.getElementById("alerts").addEventListener("click",function(e){
+  var a=e.target.closest(".alert");
+  if(a&&a.querySelector(".alert-more")) a.classList.toggle("open");
+});
+document.getElementById("alerts").addEventListener("keydown",function(e){
+  if(e.key==="Enter"||e.key===" "){
+    var a=e.target.closest(".alert");
+    if(a&&a.querySelector(".alert-more")){ e.preventDefault(); a.classList.toggle("open"); }
+  }
+});
+initRadarMap();
+initStationMap();
+tick();
+refreshAll();
+
+/* ---- Unified scheduler: one ticker, pauses when backgrounded, tracks real freshness ---- */
+var SCHED=[
+  {fn:loadAFD,      every:30*60000},
+  {fn:loadAlerts,   every:60000},
+  {fn:loadCurrent,  every:10*60000},
+  {fn:loadForecast, every:30*60000},
+  {fn:loadRivers,   every:15*60000},
+  {fn:loadAqi,      every:20*60000},
+  {fn:loadSpc,      every:30*60000},
+  {fn:loadCpc,      every:60*60000},
+  {fn:loadQpf,      every:60*60000},
+  {fn:loadHazards,  every:60*60000},
+  {fn:loadDrought,  every:6*60*60000},
+  {fn:loadClimate,  every:6*60*60000},
+  {fn:refreshImages,every:5*60000},
+  {fn:loadStationPlot,every:12*60000},
+  {fn:refreshRadarLayer, every:4*60000},
+  {fn:function(){updateSmartSlot(true);}, every:10*60000}
+];
+var lastGood=Date.now(), schedTimer=null, clockTimer=null;
+function markFresh(){ lastGood=Date.now(); var d=document.getElementById("statusDot"); if(d) d.classList.remove("stale"); }
+function freshnessCheck(){ var d=document.getElementById("statusDot"); if(d) d.classList.toggle("stale", Date.now()-lastGood > 12*60000); }
+function runDue(){
+  var now=Date.now();
+  SCHED.forEach(function(t){
+    if(now - (t.last||0) >= t.every){
+      t.last=now;
+      try{ t.fn(); }catch(e){}   // freshness is marked inside loadAlerts, not by any task completing
+    }
+  });
+}
+function startSchedule(){
+  stopSchedule();
+  // Stamp only on the FIRST start (initial refreshAll already covered them). On later restarts
+  // (returning from background) keep each task's real last-run time so runDue() can catch up.
+  SCHED.forEach(function(t){ if(!t.last) t.last=Date.now(); });
+  schedTimer=setInterval(function(){ runDue(); freshnessCheck(); }, 30000);
+  clockTimer=setInterval(tick,1000);
+}
+function stopSchedule(){
+  if(schedTimer){clearInterval(schedTimer);schedTimer=null;}
+  if(clockTimer){clearInterval(clockTimer);clockTimer=null;}
+}
+document.addEventListener("visibilitychange",function(){
+  if(document.hidden){ stopSchedule(); }                 // no battery/network drain while backgrounded
+  else { tick(); startSchedule(); runDue(); freshnessCheck(); } // catch up on return
+});
+startSchedule();
+document.getElementById("refresh").addEventListener("click",function(){ refreshAll(); });
+
+/* ---- JavaScript masonry: pack band cards by their REAL measured height ---- */
+function layoutMasonry(){
+  var m=document.querySelector(".masonry"); if(!m) return;
+  var GAP=16, w=m.clientWidth;
+  var cols = w<=680 ? 1 : (w<=1100 ? 2 : 3);
+  var colW = Math.floor((w-GAP*(cols-1))/cols);
+  var cards=[].slice.call(m.children).filter(function(c){return c.classList.contains("card");});
+  if(!cards.length) return;
+  m.classList.add("mready");
+  var storm=document.body.classList.contains("storm");
+  // Pass 1a: set every card's width (all WRITES together)…
+  var data=cards.map(function(c){
+    var span=c.classList.contains("wide")?Math.min(2,cols):1;
+    c.style.width=(span*colW+(span-1)*GAP)+"px";
+    return {c:c, span:span, h:0};
+  });
+  // Pass 1b: …then measure all heights (all READS together) — interleaving write/read per card
+  // would force a synchronous reflow for every card instead of one for the whole batch
+  data.forEach(function(d){ d.h=d.c.offsetHeight; });
+  // Pass 2: order for packing.
+  //  Importance tiers come FIRST (so critical outlooks stay high and Deep-Dive Links stays at the bottom),
+  //  then within a tier we pack tallest-first (desktop/tablet) for an even bottom, or natural order (mobile).
+  // Explicit widget hierarchy: lower rank = more important = packed higher.
+  //  (Alerts/Pulse/Current/Radar/Hourly are fixed heroes above this masonry.)
+  function tier(id){
+    if(storm && id===(window.STORM_PRIME||"smartCard")) return 0;   // storms: the event-relevant card jumps to the very top
+    var RANK={
+      forecastCard:1,   // 7-day forecast — most-checked product
+      riskCard:2,       // severe storm/flood/fire risk
+      hazardsCard:3,    // hazards outlook (days 3–14)
+      obsCard:4,        // station plot — current regional obs
+      riversCard:5,     // river/flood gauges
+      satCard:6,        // satellite imagery
+      droughtCard:7,    // drought outlook
+      climateCard:8,    // climate vs normal
+      cpcCard:9,        // week-ahead leanings
+      smartCard:10,     // sky conditions (sun/moon or lightning)
+      linksCard:11      // deep-dive links — reference, lowest
+    };
+    return (RANK[id]!=null) ? RANK[id] : 50;
+  }
+  data.forEach(function(d,i){ d.idx=i; });
+  data.sort(function(a,b){
+    var ta=tier(a.c.id), tb=tier(b.c.id);
+    if(ta!==tb) return ta-tb;
+    if(cols>1) return b.h-a.h;   // within a tier: tallest-first for tight packing
+    return a.idx-b.idx;           // single column (mobile): keep natural reading order
+  });
+  // Pass 3: place cards. Base rule: each card drops into the spanned column-window with the
+  // lowest top (ties → leftmost). A WIDE card must clear the tallest spanned column, which would
+  // permanently strand the height difference in the shorter column as a hole — so before
+  // committing a wide card, BACKFILL: pull forward later single-width cards that fit inside that
+  // hole. A card only jumps the importance ranking to occupy space that would otherwise stay empty.
+  var colH=[]; for(var i=0;i<cols;i++) colH.push(0);
+  function bestWindow(span){
+    var bs=0, bt=Infinity;
+    for(var s=0; s+span<=cols; s++){
+      var top=0; for(var k=s;k<s+span;k++){ if(colH[k]>top) top=colH[k]; }
+      if(top < bt-0.5){ bt=top; bs=s; }
+    }
+    return {start:bs, top:bt};
+  }
+  function setPos(d,col,top){
+    d.c.style.left=(col*(colW+GAP))+"px";
+    d.c.style.top=top+"px";
+  }
+  var queue=data.slice();
+  while(queue.length){
+    var d=queue.shift();
+    var w=bestWindow(d.span);
+    if(d.span>1){
+      var safety=queue.length+4;
+      while(safety-->0){
+        // deepest hole a spanned column would strand under the wide card's start line
+        var gapCol=-1, gapH=40;                    // sub-40px slivers aren't worth reordering for
+        for(var k=w.start;k<w.start+d.span;k++){
+          var g=w.top-colH[k];
+          if(g>gapH){ gapH=g; gapCol=k; }
+        }
+        if(gapCol<0) break;
+        // tallest later single-width card that fits WITHOUT pushing the wide card down
+        // (strict fit keeps w valid, so no recompute needed; tallest-first = best space use)
+        var pick=-1;
+        for(var q=0;q<queue.length;q++){
+          if(queue[q].span===1 && queue[q].h+GAP<=gapH && (pick<0||queue[q].h>queue[pick].h)) pick=q;
+        }
+        if(pick<0){
+          // No card fits INSIDE the hole. Fallback: a slightly-too-tall filler that pushes the
+          // wide card down by `push` px converts a gapH-px hole into a push-px one — accept the
+          // smallest such push when it's a clear win (leaves at least 24px less empty space).
+          var alt=-1, altPush=Infinity;
+          for(var q2=0;q2<queue.length;q2++){
+            var c2=queue[q2]; if(c2.span!==1) continue;
+            var push=(colH[gapCol]+c2.h+GAP)-w.top;
+            if(push>0 && push<gapH-24 && push<altPush){ altPush=push; alt=q2; }
+          }
+          if(alt<0) break;
+          var fill2=queue.splice(alt,1)[0];
+          setPos(fill2,gapCol,colH[gapCol]);
+          colH[gapCol]+=fill2.h+GAP;
+          w=bestWindow(d.span);   // the wide card's start line moved — recompute before continuing
+          continue;
+        }
+        var fill=queue.splice(pick,1)[0];
+        setPos(fill,gapCol,colH[gapCol]);
+        colH[gapCol]+=fill.h+GAP;
+      }
+    }
+    setPos(d,w.start,w.top);
+    var nb=w.top+d.h+GAP;
+    for(var k2=w.start;k2<w.start+d.span;k2++) colH[k2]=nb;
+  }
+  m.style.height=Math.max.apply(null,colH)+"px";
+}
+var _masonryRAF=null;
+function scheduleMasonry(){ if(_masonryRAF) cancelAnimationFrame(_masonryRAF); _masonryRAF=requestAnimationFrame(layoutMasonry); }
+// Recompute on load, resize, image loads, and after any data refresh repaints a card
+window.addEventListener("resize", scheduleMasonry);
+window.addEventListener("load", function(){ scheduleMasonry(); setTimeout(scheduleMasonry,500); setTimeout(scheduleMasonry,1500); });
+(function(){
+  var m=document.querySelector(".masonry");
+  if(m){
+    // re-pack whenever a child image finishes loading
+    [].slice.call(m.querySelectorAll("img")).forEach(function(img){ img.addEventListener("load",scheduleMasonry); img.addEventListener("error",scheduleMasonry); });
+    // re-pack when card contents change (data loads in)
+    if(window.MutationObserver){ new MutationObserver(scheduleMasonry).observe(m,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:["class"]}); } // class only: catches expand/collapse + storm-prime height changes; the engine's own style writes are filtered out (no loop)
+  }
+})();
+scheduleMasonry();
+</script>
+</body>
+</html>
