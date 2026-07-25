@@ -7,8 +7,8 @@ Not an official NWS product. During severe weather, defer to official warnings a
 
 ## What it is
 
-One file. [`index.html`](index.html) is the entire application: ~730 lines of CSS, ~270 lines of
-markup, and ~3,400 lines of JavaScript, all inline.
+One file. [`index.html`](index.html) is the entire application: ~800 lines of CSS, ~260 lines of
+markup, and ~3,600 lines of JavaScript, all inline.
 
 - **No build step.** No bundler, no transpiler, no `package.json`. Edit the file, reload the page.
 - **No API keys.** Every feed was chosen because it is keyless and CORS-open, so the whole thing
@@ -69,6 +69,16 @@ The script is sectioned by `/* ==== BANNER ==== */` comments and reads top to bo
 helpers → ~15 per-card loaders → derived renderers → orchestration → scheduler → layout engine.
 
 A few things are load-bearing and worth understanding before changing anything:
+
+**The page is ordered by what a visitor came for.** Alerts first (in calm weather that card
+collapses to a single all-clear line), then the hero band — Current Conditions beside the radar —
+then The Call, the 24-hour chart, the forecast discussion, and finally the masonry. The hero card
+carries the reading, today's high/low with "now" marked inside the range, sun times, and the next
+six hours, which is both the information a first-time visitor needs and what keeps the left column
+level with the radar instead of stranding a gap beside it. `.railhead` labels name each band; Storm
+Mode reorders the grid for urgency, so those labels hide when it engages. The hero row is a pair —
+`#radarCard` carries its own breakpoint overrides so the generic `col-8`/`col-4` rules can't drop
+the radar to full width while Current Conditions stays at half.
 
 **Location generations.** Every fetch that describes *a place* captures the generation it was
 issued under via `locGuard()`, and checks `fresh()` before writing to the DOM. `setLocation()`

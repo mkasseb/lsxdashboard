@@ -38,12 +38,15 @@
   /* Light palette — data-theme always holds the RESOLVED theme ("light"/"dark"); the "auto"
      preference lives only in localStorage and is resolved by JS (boot script + OS-change listener) */
   :root[data-theme="light"]{
-    --bg:#eef1f6;--panel:#ffffff;--panel-2:#f6f8fc;--border:#d6deea;
-    --text:#131924;--muted:#566072;--accent:#1e63c9;--good:#1a9e6a;--h24night:rgba(40,70,160,.07);
-    --warn:#b9791a;--sev:#d4571f;--danger:#d92d2d;
-    --shadow:0 4px 16px rgba(20,30,50,.10);
-    --inset:rgba(0,0,0,.035);--chip:rgba(0,0,0,.08);--glow:rgba(30,99,201,.08);
-    --glass1:rgba(255,255,255,.60);--glass2:rgba(246,248,252,.50);--gline:rgba(255,255,255,.70);--gspec:rgba(255,255,255,.90);
+    /* Panels must read as objects sitting ON the page. At .60 alpha over a near-white --bg the
+       glass cards washed out to within a few percent of the background and the page lost all
+       structure, so light mode runs opaque-ish glass with a real (dark, not white) hairline. */
+    --bg:#e4e9f2;--panel:#ffffff;--panel-2:#f6f8fc;--border:#ccd6e6;
+    --text:#101725;--muted:#4f5a6e;--accent:#1257bd;--good:#12885c;--h24night:rgba(40,70,160,.07);
+    --warn:#a86a12;--sev:#c74a16;--danger:#cf2222;
+    --shadow:0 6px 20px rgba(20,32,58,.10),0 1px 3px rgba(20,32,58,.06);
+    --inset:rgba(16,23,37,.045);--chip:rgba(16,23,37,.075);--glow:rgba(30,99,201,.10);
+    --glass1:rgba(255,255,255,.88);--glass2:rgba(247,250,254,.82);--gline:rgba(16,23,37,.10);--gspec:rgba(255,255,255,.95);
     /* Logo mark — original bright tile for light backgrounds */
     --logo-bg1:#1e63c9;--logo-bg2:#4aa3ff;--logo-ring:#dbeeff;--logo-bolt:#ffd23f;--logo-bolt-stroke:#d99e1a;--logo-core:#ffffff;--logo-edge:transparent;
   }
@@ -130,11 +133,48 @@
   }
 
   .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;align-items:start}
+  /* First-paint entrance. Deliberately shallow and short — the point is that the page assembles
+     itself rather than snapping into being, not that anyone waits for it. Masonry children are
+     left out: they're positioned from measured heights and shouldn't move twice. */
+  @media (prefers-reduced-motion: no-preference){
+    @keyframes cardIn{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+    .grid>.card,.grid>.stack,.grid>.railhead,.grid>.masonry{animation:cardIn .45s cubic-bezier(.2,.7,.3,1) both}
+    .grid>*:nth-child(2){animation-delay:.04s}
+    .grid>*:nth-child(3){animation-delay:.08s}
+    .grid>*:nth-child(4){animation-delay:.10s}
+    .grid>*:nth-child(5){animation-delay:.13s}
+    .grid>*:nth-child(6){animation-delay:.16s}
+    .grid>*:nth-child(n+7){animation-delay:.19s}
+  }
   .card{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--border);
     border-radius:var(--radius);padding:16px;box-shadow:var(--shadow);min-width:0}
   .card h2{font-size:12px;text-transform:uppercase;letter-spacing:1.2px;color:var(--muted);margin:0 0 12px;
     font-weight:700;display:flex;align-items:center;justify-content:space-between;gap:8px}
   .card h2 .link{font-size:12px;text-transform:none;letter-spacing:0}
+
+  /* ===== Band rails =====
+     Twenty-odd cards at identical visual weight read as a data dump. Naming the bands gives the
+     scroll a spine — "Right now", "Next 24 hours", "The week ahead" — so a first-time visitor can
+     tell what they're looking at without reading every card title. Storm Mode reorders the grid
+     for urgency, at which point band labels would lie about what follows them, so they hide. */
+  .railhead{display:flex;align-items:baseline;gap:12px;margin:10px 2px 0;flex-wrap:wrap}
+  .railhead:first-child{margin-top:0}
+  .rail-t{font-size:13px;font-weight:800;letter-spacing:.4px;color:var(--text)}
+  .rail-s{font-size:12px;color:var(--muted);font-weight:500}
+  .rail-s:empty{display:none}
+  .railhead::after{content:"";flex:1 1 40px;height:1px;background:linear-gradient(90deg,var(--border),transparent)}
+  body.storm .railhead{display:none}
+  /* Let a long subtitle wrap on its own, but don't force the short ones (a place name) onto a
+     second line — on a phone that costs a row of height for nothing. */
+  @media(max-width:480px){.railhead{gap:4px 10px}.railhead::after{display:none}}
+
+  /* Hero cards carry the answer; everything else is supporting evidence. A hairline of accent
+     along the top edge is enough to say so without a second border treatment. */
+  /* Inset rather than clipped to the card edge: overflow:hidden here would add a second clipping
+     context around the radar's Leaflet panes and tooltips for no visual gain. */
+  .card.hero{position:relative}
+  .card.hero::before{content:"";position:absolute;top:0;left:18px;right:18px;height:2px;border-radius:0 0 2px 2px;
+    background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:.6}
 
   .col-12{grid-column:span 12}.col-8{grid-column:span 8}.col-6{grid-column:span 6}
   .col-4{grid-column:span 4}.col-5{grid-column:span 5}.col-7{grid-column:span 7}.col-3{grid-column:span 3}
@@ -148,6 +188,11 @@
   .masonry:not(.mready)>.card{position:static}
   @media(max-width:1100px){.col-8,.col-7,.col-5,.col-6{grid-column:span 12}.col-4,.col-3{grid-column:span 6}}
   @media(max-width:680px){.col-4,.col-3{grid-column:span 12}body{padding:12px}}
+  /* The hero row is a PAIR. The generic rules above drop a col-8 to full width while a col-4 stays
+     at half, which for Current Conditions + Radar meant a half-width hero with an empty half-row
+     beside it. Keep the two together until the single-column breakpoint takes them both. */
+  @media(max-width:1100px){#radarCard{grid-column:span 6}}
+  @media(max-width:680px){#radarCard{grid-column:span 12}}
 
   /* ===== Phone polish (≤480px): prevent any crowding/overflow ===== */
   /* never let a stray wide element create a horizontal scrollbar */
@@ -155,7 +200,7 @@
   img,svg{max-width:100%}
 
   /* Alerts */
-  #alerts .alert{border-radius:12px;padding:13px 15px;margin-bottom:10px;border-left:5px solid var(--muted);
+  #alerts .alert{border-radius:12px;padding:11px 14px;margin-bottom:8px;border-left:5px solid var(--muted);
     background:var(--inset);border-top:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid var(--border)}
   #alerts .alert:last-child{margin-bottom:0}
   .alert .ev{font-weight:700;font-size:15px;display:flex;justify-content:space-between;gap:10px;align-items:baseline}
@@ -187,7 +232,7 @@
   .a2-sumchip.mine{color:var(--text);background:var(--chip);border-color:var(--muted)}
   .a2-cd{margin-left:auto;font-size:13px;font-weight:800}
   /* elapsed-vs-remaining window */
-  .a2-time{margin-top:10px}
+  .a2-time{margin-top:8px}
   .a2-prog{height:4px;border-radius:2px;background:var(--chip);overflow:hidden}
   .a2-prog i{display:block;height:100%;border-radius:2px;background:var(--muted);opacity:.85}
   .alert.t-warning .a2-prog i{background:var(--danger)}
@@ -198,14 +243,14 @@
   /* a window that hasn't opened yet: hatched track, so an empty bar reads as "not started" not "no data" */
   .a2-time.pending .a2-prog{background:repeating-linear-gradient(45deg,var(--chip) 0 5px,transparent 5px 10px)}
   /* county chips, with in-place overflow */
-  .a2-areas{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}
+  .a2-areas{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
   .a2-chip{font-size:11.5px;padding:3px 9px;border-radius:12px;background:var(--chip);color:var(--text);white-space:nowrap}
   .a2-xtra{display:none}
   .alert.areas-all .a2-xtra{display:inline-block}
   .alert.areas-all .a2-more{display:none}
   .a2-more{font-size:11.5px;padding:3px 10px;border-radius:12px;background:transparent;border:1px dashed var(--border);
     color:var(--accent);cursor:pointer;min-height:0;font-family:inherit;font-weight:700}
-  .a2-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+  .a2-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px}
   .a2-hint{font-size:12px;color:var(--accent);font-weight:700}
   .a2-radar{font-size:11.5px;font-weight:700;padding:4px 11px;border-radius:12px;background:transparent;
     border:1px dashed var(--border);color:var(--accent);cursor:pointer;min-height:0;font-family:inherit;margin-left:auto}
@@ -290,16 +335,43 @@
   .calmrow .cdot{width:9px;height:9px;border-radius:50%;background:var(--good);box-shadow:0 0 8px var(--good);flex:0 0 auto}
   .calmrow .cmut{color:var(--muted);font-weight:400}
 
-  /* Current */
-  .cc-main{display:flex;align-items:center;gap:16px;margin-bottom:14px}
-  .cc-temp{font-size:52px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
-  .cc-icon{font-size:46px}
-  .cc-desc{font-size:14px;color:var(--muted);margin-top:4px}
+  /* Current — the hero. This is the number the page exists to show, so it gets the type scale to
+     match instead of sitting at card-body size inside a quarter-width box. */
+  .cc-main{display:flex;align-items:center;gap:14px;margin-bottom:14px}
+  .cc-temp{font-size:clamp(56px,7.2vw,76px);font-weight:800;line-height:.92;letter-spacing:-.035em;
+    font-variant-numeric:tabular-nums}
+  .cc-icon{font-size:46px;flex:0 0 auto}
+  .cc-desc{font-size:15px;color:var(--text);margin-top:6px;font-weight:600;line-height:1.25}
   .cc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .cc-item{background:var(--inset);border:1px solid var(--border);border-radius:10px;padding:9px 11px}
   .cc-item .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
   .cc-item .v{font-size:17px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
   .stn{font-size:12px;color:var(--muted);margin-top:10px}
+
+  /* Today strip — high/low with "now" placed inside the day's range, plus sun times. Answers
+     "is it still getting hotter?" and "how much daylight is left?" without a scroll, and gives the
+     hero column the height it needs to sit level with the radar instead of stranding a gap. */
+  .cc-today{margin:0 0 13px}
+  .cc-range{display:flex;align-items:center;gap:10px;font-variant-numeric:tabular-nums}
+  .cc-range .cr-lo,.cc-range .cr-hi{font-size:13px;font-weight:800;flex:0 0 auto}
+  .cc-track{position:relative;flex:1 1 auto;height:8px;border-radius:5px;background:var(--chip);min-width:0}
+  .cc-track i{position:absolute;top:0;bottom:0;border-radius:5px;
+    background:linear-gradient(90deg,#4aa3ff,#3ecf8e,#ffd23f,#ff6a3d)}
+  .cc-track b{position:absolute;top:-4px;width:4px;height:16px;border-radius:3px;background:var(--text);
+    box-shadow:0 0 0 2px var(--panel),0 1px 4px rgba(0,0,0,.35);margin-left:-2px}
+  .cc-sun{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:9px;font-size:12.5px;color:var(--muted)}
+  .cc-sun span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+  .cc-sun b{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}
+  .cc-sun .cs-sep{opacity:.45}
+  .cc-today:empty{display:none}
+  /* Next few hours — compact enough to sit inside the hero without competing with the reading */
+  .cc-next{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:12px;
+    padding-top:12px;border-top:1px solid var(--border)}
+  .cn-h{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0}
+  .cnh-t{font-size:10.5px;font-weight:700;color:var(--muted);letter-spacing:.2px;white-space:nowrap}
+  .cnh-i{line-height:1;display:flex;align-items:center;justify-content:center;height:26px}
+  .cnh-v{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
+  .cnh-p{font-size:9.5px;color:var(--accent);font-weight:700;white-space:nowrap}
 
   
   /* Daily */
@@ -736,8 +808,16 @@
     .h24-sum{gap:6px}
     .h24-pill{padding:5px 10px;font-size:12px}
     .h24-pill.h24-now{margin-left:0}
+    /* Phone header economy: four stacked full-width rows of chrome pushed the temperature most of
+       a screen down. The geolocate button drops to its icon, the search shares its row, and the
+       location readout goes away entirely — the "Right now" rail already names the place. */
     .locbar{gap:8px}
-    .locbar .locNow{margin-left:0;flex-basis:100%;order:3}
+    .locbar .locNow{display:none}
+    #geoBtn .g-txt{display:none}
+    #geoBtn{flex:0 0 auto;padding:10px 13px;font-size:17px;line-height:1}
+    .locsearch{flex:1 1 120px;min-width:0}
+    header.top{gap:10px;margin-bottom:12px}
+    .locbar{margin-bottom:13px}
     .cc-temp{font-size:46px}
     /* Sun & Moon: stack the arc above the times so nothing crowds on a phone */
     .sm-sun{flex-direction:column;align-items:stretch;gap:12px}
@@ -798,7 +878,7 @@
 </header>
 
 <div class="locbar">
-  <button id="geoBtn" title="Use my current location">📍 My location</button>
+  <button id="geoBtn" title="Use my current location" aria-label="Use my current location">📍<span class="g-txt"> My location</span></button>
   <form id="locForm" class="locsearch" autocomplete="off">
     <input id="locSearch" type="search" placeholder="Search an LSX-area city or town…" autocomplete="off" aria-label="Search a location in the St. Louis (LSX) forecast area" enterkeyhint="search">
     <div id="locSug" class="locsug" role="listbox"></div>
@@ -819,20 +899,7 @@
 
 <div class="grid">
 
-  <!-- THE CALL — plain-English verdicts computed client-side from the hourly forecast + AQI -->
-  <section class="card col-12" id="callCard">
-    <div class="callrow" id="callRow"></div>
-  </section>
-
-  <!-- FORECAST DISCUSSION SUMMARY (the pulse) -->
-  <section class="card col-12" id="afdCard">
-    <h2>The Pulse — NWS Forecast Discussion
-      <a class="link" href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener">Full discussion ↗</a>
-    </h2>
-    <div id="afd"><div class="loading">Loading discussion…</div></div>
-  </section>
-
-  <!-- ALERTS -->
+  <!-- ALERTS — safety first, and in calm weather this collapses to a single reassurance line -->
   <section class="card col-12" id="alertsCard">
     <h2>Active Watches, Warnings &amp; Advisories — LSX
       <a class="link" href="https://www.weather.gov/lsx/" target="_blank" rel="noopener">weather.gov/lsx ↗</a>
@@ -840,9 +907,16 @@
     <div id="alerts"><div class="loading">Loading alerts…</div></div>
   </section>
 
+  <!-- ── RIGHT NOW: the hero band. Everything a visitor opens this page to learn is in the
+       first screen — conditions on the left, radar on the right, the verdicts underneath. ── -->
+  <div class="railhead col-12">
+    <span class="rail-t">Right now</span>
+    <span class="rail-s" id="railNowSub"></span>
+  </div>
+
   <!-- CURRENT -->
   <div class="stack col-4">
-    <section class="card" id="currentCard">
+    <section class="card hero" id="currentCard">
       <h2>Current Conditions <span class="link" id="ccStation">&mdash;</span></h2>
       <div id="current"><div class="loading">Loading…</div></div>
     </section>
@@ -857,7 +931,7 @@
   </div>
 
   <!-- RADAR HERO (official NWS WMS via Leaflet) -->
-  <section class="card col-8" id="radarCard">
+  <section class="card hero col-8" id="radarCard">
     <h2>Live Radar — zoomable
       <span class="link"><a href="https://radar.weather.gov/station/KLSX/standard" target="_blank" rel="noopener">Official KLSX ↗</a></span>
     </h2>
@@ -874,10 +948,37 @@
     <div class="imgcap"><span>Official NOAA/NWS radar &middot; tap a <b>warning polygon</b> to jump to its alert &middot; basemap &copy; CARTO/OSM</span><span>auto-updates</span></div>
   </section>
 
+  <!-- THE CALL — plain-English verdicts computed client-side from the hourly forecast + AQI.
+       Sits directly under the hero: it is the page answering "so what do I do about it?" -->
+  <section class="card col-12" id="callCard">
+    <div class="callrow" id="callRow"></div>
+  </section>
+
+  <!-- ── NEXT 24 HOURS ── -->
+  <div class="railhead col-12">
+    <span class="rail-t">Next 24 hours</span>
+    <span class="rail-s">hour-by-hour temperature &amp; rain chance</span>
+  </div>
+
   <!-- NEXT 24 HOURS (hero chart) -->
   <section class="card col-12" id="hourlyCard">
     <h2>Next 24 Hours <span class="link" id="h24loc"></span></h2>
     <div id="hourly24"><div class="loading">Loading hourly…</div></div>
+  </section>
+
+  <!-- ── THE WEEK AHEAD & DEEPER CONTEXT ── -->
+  <div class="railhead col-12">
+    <span class="rail-t">The week ahead &amp; deeper context</span>
+    <span class="rail-s">forecaster reasoning, outlooks, rivers, climate</span>
+  </div>
+
+  <!-- FORECAST DISCUSSION SUMMARY (the pulse) — the forecaster's own reasoning. Rich, but prose:
+       it belongs after the numbers a visitor came for, not in front of them. -->
+  <section class="card col-12" id="afdCard">
+    <h2>The Pulse — NWS Forecast Discussion
+      <a class="link" href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener">Full discussion ↗</a>
+    </h2>
+    <div id="afd"><div class="loading">Loading discussion…</div></div>
   </section>
 
   <!-- ── Self-packing masonry band: cards flow into the shortest column (no manual balancing, no gaps) ── -->
@@ -1719,6 +1820,7 @@ function loadForecast(){
         }
       }
       smart.days=days;   // seasonal slot scans the 7-day for freezes, snow, and the coldest night
+      renderHeroToday(); // today's high/low is now known — fill the hero's range bar
       // Week-wide temp range for bar scaling
       var wMin=999, wMax=-999;
       days.forEach(function(d){
@@ -1837,10 +1939,12 @@ function loadCurrent(){
     var day=(st.rise&&st.set)?(now>=st.rise&&now<=st.set):(now.getHours()>=7&&now.getHours()<19);
     stEl.textContent=current.station;
     document.body.setAttribute("data-wx", wxGroup(desc,day));
+    heroNow.temp=temp;   // where "now" sits inside today's range, once the 7-day has landed
     el.innerHTML='<div class="cc-main"><div class="cc-icon">'+wxImg(desc,day,64)+'</div><div>'
       +'<div class="cc-temp">'+(temp!=null?temp+"°":"—")+'</div><div class="cc-desc">'+esc(desc)+'</div>'
       +(feels!=null&&temp!=null?'<div class="cc-feels'+(feels-temp>=3?" is-hot":(temp-feels>=3?" is-cold":""))+'">Feels like '+feels+'°</div>':'')
       +'</div></div>'
+      +'<div class="cc-today" id="ccToday"></div>'
       +'<div class="cc-grid">'
       +'<div class="cc-item"><div class="k">Dew Point</div><div class="v">'+(dew!=null?dew+"°":"—")+'</div></div>'
       +'<div class="cc-item"><div class="k">Humidity</div><div class="v">'+(rh!=null?rh+"%":"—")+'</div></div>'
@@ -1850,6 +1954,7 @@ function loadCurrent(){
       +'<div class="cc-item"><div class="k">Visibility</div><div class="v">'+(vis!=null?vis+" mi":"—")+'</div></div>'
       +'</div><div class="aqi-mini" id="aqiMini"></div><div class="cc-ctx" id="ccCtx"></div>'
       +'<div class="stn">Observed '+timeAgo(p.timestamp)+' · '+current.station+'</div>';
+    renderHeroToday();    // today's range + sun times, once the 7-day has landed
     renderCurrentCtx();   // normals + today's records, once climate context has landed
     if(typeof renderAqiMini==="function") renderAqiMini();   // re-fill the AQI line after the re-render
   }).catch(function(){
@@ -3146,6 +3251,65 @@ function renderContext(){
   if(typeof renderTheCall==="function") renderTheCall();
   if(typeof scheduleMasonry==="function") scheduleMasonry();
 }
+/* Today's range + sun times, painted into the hero.
+   Two feeds have to agree before this can say anything: the observation supplies "now" and the
+   7-day supplies today's high/low. Either can land first, so both call this and it renders
+   whatever is currently known — the same idempotent-repaint contract renderCurrentCtx uses. */
+var heroNow={temp:null};
+function renderHeroToday(){
+  var el=document.getElementById("ccToday");
+  if(!el) return;
+  var d=(smart.days&&smart.days.length)?smart.days[0]:null;
+  var hi=d&&d.day?d.day.temperature:null, lo=d&&d.night?d.night.temperature:null;
+  var out="";
+  // A range needs both ends and a positive span; a "high" that is really tonight's low is not one.
+  if(hi!=null&&lo!=null&&hi>lo){
+    var t=heroNow.temp, mark="";
+    if(t!=null){
+      var f=Math.max(0,Math.min(1,(t-lo)/(hi-lo)));
+      mark='<b style="left:'+(f*100).toFixed(1)+'%"></b>';
+    }
+    out+='<div class="cc-range">'
+      +'<span class="cr-lo" style="color:'+tCol(lo)+'">'+lo+'°</span>'
+      +'<span class="cc-track"><i style="left:0;right:0"></i>'+mark+'</span>'
+      +'<span class="cr-hi" style="color:'+tCol(hi)+'">'+hi+'°</span>'
+      +'</div>';
+  }
+  // Sun line: lead with whichever event is still ahead — that's the one worth planning around.
+  var st=sunTimes(current.lat,current.lon,new Date()), now=Date.now();
+  if(st.rise&&st.set){
+    var bits;
+    if(now<st.rise.getTime()){
+      bits=['<span>'+mcImg("sunrise","🌅",18)+'Sunrise <b>'+fmtT(st.rise)+'</b></span>'];
+    }else if(now<st.set.getTime()){
+      bits=['<span>'+mcImg("sunset","🌇",18)+'Sunset <b>'+fmtT(st.set)+'</b></span>',
+            '<span class="cs-sep">·</span>',
+            '<span><b>'+fmtDur(st.set.getTime()-now)+'</b> of daylight left</span>'];
+    }else{
+      var tm=sunTimes(current.lat,current.lon,new Date(now+86400000));
+      bits=['<span>'+mcImg("sunset","🌇",18)+'Sun set <b>'+fmtT(st.set)+'</b></span>'];
+      if(tm.rise) bits.push('<span class="cs-sep">·</span>',
+                            '<span>'+mcImg("sunrise","🌅",18)+'Sunrise <b>'+fmtT(tm.rise)+'</b></span>');
+    }
+    out+='<div class="cc-sun">'+bits.join("")+'</div>';
+  }
+  // Next few hours, in the hero. The full 24-hour chart is further down the page; this is the
+  // part you check on the way out the door, so it belongs next to the current reading.
+  var hrs=(smart.hourly||[]).slice(0,6);
+  if(hrs.length>=3){
+    out+='<div class="cc-next">'+hrs.map(function(p){
+      var pop=(p.probabilityOfPrecipitation&&p.probabilityOfPrecipitation.value)||0;
+      var t=new Date(p.startTime);
+      return '<div class="cn-h">'
+        +'<div class="cnh-t">'+t.toLocaleTimeString([],{hour:"numeric"}).replace(" ","")+'</div>'
+        +'<div class="cnh-i">'+wxImg(p.shortForecast,p.isDaytime,26)+'</div>'
+        +'<div class="cnh-v" style="color:'+tCol(p.temperature)+'">'+p.temperature+'°</div>'
+        +'<div class="cnh-p">'+(pop>=20?"💧"+pop+"%":"&nbsp;")+'</div>'
+        +'</div>';
+    }).join("")+'</div>';
+  }
+  el.innerHTML=out;
+}
 function renderCurrentCtx(){
   var el=document.getElementById("ccCtx");
   if(!el) return;
@@ -3431,7 +3595,12 @@ function loadAFD(){
 var LOC_KEY="lsxLoc";
 function saveLoc(l){ try{ localStorage.setItem(LOC_KEY,JSON.stringify({name:l.name,lat:l.lat,lon:l.lon,station:l.station||null})); }catch(e){} }
 function readLoc(){ try{ var s=localStorage.getItem(LOC_KEY); return s?JSON.parse(s):null; }catch(e){ return null; } }
-function updateLocNow(){ var el=document.getElementById("locNow"); if(el) el.textContent="📍 "+current.name; }
+function updateLocNow(){
+  var el=document.getElementById("locNow"); if(el) el.textContent="📍 "+current.name;
+  // The hero band names the place too: a shared link should say whose weather this is without
+  // the visitor having to find the location bar.
+  var r=document.getElementById("railNowSub"); if(r) r.textContent=current.name.replace(" (home)","");
+}
 function stationFor(lat,lon){
   return pointsFor(lat,lon).then(function(pt){
     return getJSON(pt.properties.observationStations,HEADERS,locSignal());
@@ -3478,6 +3647,7 @@ function resetLocationState(){
        dry:null, hist:null, normWeek:{}, recStation:""};
   season.uv=null; season.frz=null;
   smart.hourly=[]; smart.days=[];
+  heroNow.temp=null;   // the old city's reading must not mark the new city's range
   aqiState={val:null, pm:null, err:false}; callAqi=null;
   userZones={county:"",forecast:"",fire:""};
   renderHourly24._hrs=null; loadForecast._paint=null;
@@ -3527,10 +3697,13 @@ function setLocation(loc,opts){
 }
 function useMyLocation(explicit){
   var btn=document.getElementById("geoBtn");
+  // Write the label into .g-txt, never over the button: the phone layout hides that span to get
+  // the geolocate control down to its icon, and a textContent assignment would delete it.
+  function label(t){ var s=btn&&btn.querySelector(".g-txt"); if(s) s.textContent=t; }
   if(!navigator.geolocation){ if(explicit) alert("Geolocation isn't available on this device/browser."); return; }
-  if(btn) btn.textContent="📍 Locating…";
+  label(" Locating…");
   navigator.geolocation.getCurrentPosition(function(pos){
-    if(btn) btn.textContent="📍 My location";
+    label(" My location");
     var lat=pos.coords.latitude, lon=pos.coords.longitude;
     var useIt=function(){ setLocation({name:"My Location",lat:lat,lon:lon,station:null},{save:true}); };
     // Only adopt the fix if it falls inside the LSX forecast area.
@@ -3543,7 +3716,7 @@ function useMyLocation(explicit){
       useIt();
     }).catch(function(){ useIt(); });   // can't verify → allow it
   },function(){
-    if(btn) btn.textContent="📍 My location";
+    label(" My location");
     if(explicit) alert("Couldn't get your location. Make sure location access is allowed for this site.");
   },{enableHighAccuracy:false,timeout:9000,maximumAge:600000});
 }
