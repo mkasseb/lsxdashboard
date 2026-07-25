@@ -41,6 +41,10 @@ Cloudflare Pages, connected to this repo. Every push to `main` deploys.
 
 There is nothing to build — Pages serves the repo root as-is.
 
+[`_headers`](_headers) supplies the response headers, including a Content-Security-Policy whose
+`connect-src` enumerates every origin the app fetches. Adding a feed means adding its origin there
+too, or the fetch is blocked.
+
 ## Data sources
 
 All public-domain or openly licensed, all keyless.
@@ -99,4 +103,3 @@ and rewrites the banner.
 - The masonry positions cards absolutely after sorting by importance and height, so visual order
   diverges from DOM order — which is what keyboard and screen-reader order follow.
 - `saveSnapshot()` serialises synchronously on `visibilitychange`.
-- No Content-Security-Policy yet; a Pages `_headers` file would supply one.
