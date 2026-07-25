@@ -994,7 +994,12 @@
   <span id="lastUpdate">&mdash;</span>
 </footer>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"
+<!-- DEFERRED on purpose: as a blocking tag this had to be downloaded and executed before the
+     browser would even start parsing the script below — which meant the instant-paint snapshot
+     restore, the whole point of which is to run before any network I/O, was itself waiting on a
+     cdnjs round trip. Deferred scripts still execute before DOMContentLoaded, so the map inits
+     hang off that event instead. -->
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"
   integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
 <script>
 /* ============ CONFIG ============ */
@@ -1021,6 +1026,22 @@ function getJSON(url, headers){
   });
 }
 function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
+/* ===== /points, fetched once per place =====
+   One response carries everything four different callers used to ask for separately: the forecast
+   and hourly URLs, the county/forecast/fire zone ids, and the observation-station list. Memoised on
+   the rounded coordinate — the whole payload is stable metadata about a grid cell, not weather —
+   so a location revisited later reuses it instead of paying for another round trip. */
+var _pointsCache={};
+function pointsFor(lat,lon){
+  var key=(+lat).toFixed(4)+","+(+lon).toFixed(4);
+  if(_pointsCache[key]) return _pointsCache[key];
+  var p=getJSON(API+"/points/"+key,HEADERS).catch(function(e){
+    delete _pointsCache[key];   // a transient failure must not poison the session — retry next cycle
+    throw e;
+  });
+  _pointsCache[key]=p;
+  return p;
+}
 /* ============ ANIMATED WEATHER ICONS (Meteocons, MIT) ============ */
 var ICON_BASE="https://cdn.jsdelivr.net/npm/@meteocons/svg/fill/";
 function wxName(text,day){
@@ -1298,21 +1319,16 @@ function ptInGeometry(lon,lat,geom){
   }
   return false;
 }
-var userZones={county:"",forecast:"",fire:""}, _zonesCache={};
+var userZones={county:"",forecast:"",fire:""};
 function ensureUserZones(){
-  var key=current.lat.toFixed(3)+","+current.lon.toFixed(3);
-  if(_zonesCache[key]) return Promise.resolve(_zonesCache[key]).then(function(z){ userZones=z; return z; });
-  var p=getJSON(API+"/points/"+current.lat.toFixed(4)+","+current.lon.toFixed(4),HEADERS).then(function(pt){
+  return pointsFor(current.lat,current.lon).then(function(pt){
     var pr=pt.properties||{};
-    var z={county:pr.county||"", forecast:pr.forecastZone||"", fire:pr.fireWeatherZone||""};
-    _zonesCache[key]=z; userZones=z; return z;
+    userZones={county:pr.county||"", forecast:pr.forecastZone||"", fire:pr.fireWeatherZone||""};
+    return userZones;
   }).catch(function(){
-    delete _zonesCache[key];   // transient /points failure must NOT poison the session — retry next cycle
-    var z={county:"",forecast:"",fire:""};
-    userZones=z; return z;     // this round: no zones → simply no badge, never a wrong one
+    userZones={county:"",forecast:"",fire:""};   // this round: no zones → simply no badge, never a wrong one
+    return userZones;
   });
-  _zonesCache[key]=p;
-  return p;
 }
 /* Returns WHICH kind of match it was, so the badge can state exactly what the evidence supports.
    NWS issues watches/advisories against forecast zones (MOZ###), not counties (MOC###) — claiming
@@ -1663,7 +1679,7 @@ function middayRHByDate(hrs){
 function loadForecast(){
   var _lg=locSeq;
   var daily=document.getElementById("daily");
-  return getJSON(API+"/points/"+current.lat+","+current.lon,HEADERS).then(function(pt){
+  return pointsFor(current.lat,current.lon).then(function(pt){
     var fUrl=pt.properties.forecast, hUrl=pt.properties.forecastHourly;
     // Hourly is only an enhancer (humidity + 24h strip). If it fails, the 7-day must still render.
     return Promise.all([getJSON(fUrl,HEADERS), getJSON(hUrl,HEADERS).catch(function(){return null;})]).then(function(res){
@@ -2226,17 +2242,23 @@ var FIRE_URL="https://mapservices.weather.noaa.gov/vector/rest/services/fire_wea
    "no risk" (each query's catch returns 0). Resolve ids by layer NAME at startup; the
    hardcoded values (verified against the live services, July 2026) are only the fallback. */
 var RISK_LAYERS={spc:[1,9,17], ero:[0,1,2], fireCat:[1,4], fireD3:{dry:7,wind:8}};
+/* Memoised and awaitable: loadSpc has to be able to WAIT for this. Each branch swallows its own
+   failure, so the returned promise always fulfils — an unresolvable service just keeps its
+   fallback ids. */
+var _riskLayersP=null;
 function resolveRiskLayers(){
+  if(_riskLayersP) return _riskLayersP;
+  _riskLayersP=Promise.all([
   getJSON(SPC_URL+"?f=json").then(function(d){
     var ids={};
     (d.layers||[]).forEach(function(l){ var m=/^Day\s*([123])\s+Categorical/i.exec(l.name||""); if(m) ids[m[1]]=l.id; });
     if(ids[1]!=null&&ids[2]!=null&&ids[3]!=null) RISK_LAYERS.spc=[ids[1],ids[2],ids[3]];
-  }).catch(function(){});
+  }).catch(function(){}),
   getJSON(ERO_URL+"?f=json").then(function(d){
     var ids={};
     (d.layers||[]).forEach(function(l){ var m=/^Excessive Rainfall Day\s*([123])/i.exec(l.name||""); if(m) ids[m[1]]=l.id; });
     if(ids[1]!=null&&ids[2]!=null&&ids[3]!=null) RISK_LAYERS.ero=[ids[1],ids[2],ids[3]];
-  }).catch(function(){});
+  }).catch(function(){}),
   getJSON(FIRE_URL+"?f=json").then(function(d){
     var cat={}, d3={};
     (d.layers||[]).forEach(function(l){
@@ -2247,7 +2269,9 @@ function resolveRiskLayers(){
     });
     if(cat[1]!=null&&cat[2]!=null) RISK_LAYERS.fireCat=[cat[1],cat[2]];
     if(d3.dry!=null&&d3.wind!=null) RISK_LAYERS.fireD3=d3;
-  }).catch(function(){});
+  }).catch(function(){})
+  ]);
+  return _riskLayersP;
 }
 function fireRisk(dn){
   var m={
@@ -2348,10 +2372,16 @@ function loadSpc(){
   var _lg=locSeq;
   var el=document.getElementById("spc");
   document.getElementById("spcLoc").textContent="For "+current.name.replace(" (home)","");
-  var jobs=[spcQuery(RISK_LAYERS.spc[0]),spcQuery(RISK_LAYERS.spc[1]),spcQuery(RISK_LAYERS.spc[2]),
+  // Wait for the layer ids to resolve by NAME before querying. A wrong id returns zero features,
+  // which renders as "No Severe Risk" — a silent false negative on a severe-weather card is far
+  // worse than a slower first paint, so the card holds its loading state until the ids are known.
+  return resolveRiskLayers().then(function(){
+    if(_lg!==locSeq) return null;
+    return Promise.all([spcQuery(RISK_LAYERS.spc[0]),spcQuery(RISK_LAYERS.spc[1]),spcQuery(RISK_LAYERS.spc[2]),
             eroQuery(RISK_LAYERS.ero[0]),eroQuery(RISK_LAYERS.ero[1]),eroQuery(RISK_LAYERS.ero[2]),
-            fireQuery(RISK_LAYERS.fireCat[0]),fireQuery(RISK_LAYERS.fireCat[1]),fireDay3Query()];
-  return Promise.all(jobs).then(function(r){
+            fireQuery(RISK_LAYERS.fireCat[0]),fireQuery(RISK_LAYERS.fireCat[1]),fireDay3Query()]);
+  }).then(function(r){
+    if(!r) return;             // stale generation — nothing to paint
     if(_lg!==locSeq) return;   // user moved while this was in flight
     smart.spcRisk=r[0]||0;
     smart.eroRisk=r[3]||0;
@@ -3369,7 +3399,7 @@ function saveLoc(l){ try{ localStorage.setItem(LOC_KEY,JSON.stringify({name:l.na
 function readLoc(){ try{ var s=localStorage.getItem(LOC_KEY); return s?JSON.parse(s):null; }catch(e){ return null; } }
 function updateLocNow(){ var el=document.getElementById("locNow"); if(el) el.textContent="📍 "+current.name; }
 function stationFor(lat,lon){
-  return getJSON(API+"/points/"+lat.toFixed(4)+","+lon.toFixed(4),HEADERS).then(function(pt){
+  return pointsFor(lat,lon).then(function(pt){
     return getJSON(pt.properties.observationStations,HEADERS);
   }).then(function(s){
     if(s.features&&s.features.length) return s.features[0].properties.stationIdentifier;
@@ -3446,7 +3476,7 @@ function useMyLocation(explicit){
     var lat=pos.coords.latitude, lon=pos.coords.longitude;
     var useIt=function(){ setLocation({name:"My Location",lat:lat,lon:lon,station:null},{save:true}); };
     // Only adopt the fix if it falls inside the LSX forecast area.
-    getJSON(API+"/points/"+lat.toFixed(4)+","+lon.toFixed(4),HEADERS).then(function(pt){
+    pointsFor(lat,lon).then(function(pt){
       var cwa=pt&&pt.properties&&(pt.properties.cwa||pt.properties.gridId);
       if(cwa&&cwa!=="LSX"){
         if(explicit) alert("Your current location is outside the St. Louis (LSX) forecast area, so it isn't shown on this dashboard.");
@@ -4207,7 +4237,7 @@ initLocationUI();
 initLocation();
 restoreSnapshot();   // paint the last good view NOW — before a single fetch (needs `current` from initLocation)
 initMapLocks();
-resolveRiskLayers();   // async; first loadSpc may still use the fallback ids — later refreshes use resolved ones
+resolveRiskLayers();   // warm the layer-id lookup; loadSpc awaits this same memoised promise
 document.getElementById("daily").addEventListener("click",function(e){
   var row=e.target.closest(".day");
   if(row&&row.parentNode) row.parentNode.classList.toggle("open");
@@ -4234,10 +4264,17 @@ document.getElementById("alerts").addEventListener("keydown",function(e){
     if(a&&a.querySelector(".alert-more")){ e.preventDefault(); a.classList.toggle("open"); }
   }
 });
-initRadarMap();
-initStationMap();
 tick();
 refreshAll();
+
+/* Maps wait for the deferred Leaflet; everything above has already painted and started fetching.
+   If cdnjs is unreachable this still fires with L undefined, and both inits render their own
+   "open the official map" fallback exactly as before. */
+document.addEventListener("DOMContentLoaded",function(){
+  initRadarMap();     // draws warning polygons from loadAlerts' cache on its own
+  initStationMap();
+  loadStationPlot();  // refreshAll's call above bailed out early: stnMap didn't exist yet
+});
 
 /* ---- Unified scheduler: one ticker, pauses when backgrounded, tracks real freshness ---- */
 var SCHED=[
