@@ -487,6 +487,13 @@
   .rlink .rname{display:flex;flex-direction:column;gap:2px;min-width:0}
   .rsub{font-size:11px;color:var(--muted);font-weight:500;font-variant-numeric:tabular-nums}
   .rsub .rup{color:#ff9f43}.rsub .rdn{color:#3ecf8e}
+  /* the category a forecast crest would reach — the part that actually matters during a flood */
+  .rfcat{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.4px;
+    padding:1px 6px;border-radius:8px;background:var(--chip);color:var(--muted);white-space:nowrap}
+  .rfcat.c-action{background:rgba(255,210,63,.18);color:#ffd23f}
+  .rfcat.c-minor{background:rgba(255,159,47,.18);color:#ff9f2f}
+  .rfcat.c-moderate{background:rgba(255,106,47,.20);color:#ff6a2f}
+  .rfcat.c-major{background:rgba(255,59,59,.22);color:#ff3b3b}
 
   /* Risk Outlook matrix (SPC storm + WPC flood) */
   /* label track must FIT "Tomorrow" — at 52px the word overflowed the track and painted
@@ -2058,6 +2065,54 @@ function catInfo(cat){
   if(c.indexOf("action")>=0)return {cls:"c-action",label:"Action Stage"};
   return {cls:"c-none",label:"No Flooding"};
 }
+/* ===== Crest forecasts (NWPS /stageflow/forecast) =====
+   The gauge payload carries a single forecast point, which is not a crest. The stageflow endpoint
+   returns the whole series (5–14 days depending on the gauge), so we can say what the river is
+   actually going to DO. The honest distinction that matters: a true crest rises and then falls
+   inside the window, whereas a river still climbing when the window ends has NOT crested —
+   calling that a crest would promise a peak the model never forecast. */
+function stageCategory(stage,cats){
+  if(stage==null||!cats) return null;
+  var order=[["major","major flood"],["moderate","moderate flood"],["minor","minor flood"],["action","action stage"]];
+  for(var i=0;i<order.length;i++){
+    var c=cats[order[i][0]];
+    if(c&&typeof c.stage==="number"&&c.stage>0&&stage>=c.stage) return {key:order[i][0], label:order[i][1]};
+  }
+  return null;
+}
+function crestWhen(iso){
+  var d=new Date(iso), days=(d.getTime()-Date.now())/86400000;
+  // Beyond ~5 days a bare weekday is ambiguous (today is Saturday; so is next Saturday) and an
+  // hour is false precision on long-range guidance — give the date instead.
+  return (days>5)
+    ? d.toLocaleDateString([], {weekday:"short",month:"short",day:"numeric"})
+    : d.toLocaleString([], {weekday:"short",hour:"numeric"});
+}
+function crestInfo(fcJson,now){
+  if(!fcJson) return null;
+  // Series are issued hours before we read them, so drop points that have already elapsed —
+  // otherwise a peak from earlier this morning gets announced as an upcoming crest.
+  var cutoff=Date.now()-30*60000;
+  var pts=(fcJson.data||[]).filter(function(p){
+    return p&&typeof p.primary==="number"&&p.primary>-500&&p.validTime   // -9999 is the NWPS sentinel
+      && new Date(p.validTime).getTime()>cutoff;
+  });
+  if(pts.length<2) return null;
+  var base=(typeof now==="number")?now:pts[0].primary;
+  var maxI=0, i;
+  for(i=1;i<pts.length;i++){ if(pts[i].primary>pts[maxI].primary) maxI=i; }
+  var peak=pts[maxI], last=pts[pts.length-1];
+  if(peak.primary>=base+0.5){
+    // fell back by the end of the window → a real crest; still climbing → say so instead
+    if(maxI<pts.length-1 && peak.primary>last.primary+0.05) return {kind:"crest", stage:peak.primary, when:peak.validTime};
+    return {kind:"rising", stage:peak.primary, when:peak.validTime};
+  }
+  // Recession: quote a point within a week rather than the tail of 14-day long-range guidance
+  var horizon=Date.now()+7*86400000, end=pts[0];
+  for(i=0;i<pts.length;i++){ if(new Date(pts[i].validTime).getTime()<=horizon) end=pts[i]; }
+  if(base-end.primary>=0.5) return {kind:"falling", stage:end.primary, when:end.validTime};
+  return null;
+}
 function riverLinkOnly(r){
   return '<a class="rlink c-none" href="https://water.noaa.gov/gauges/'+r.id+'" target="_blank" rel="noopener">'
     +'<span class="rname">🌊 '+esc(r.name)+'</span><span class="rmeta"><span class="rval" style="color:var(--muted);font-size:13px">View ↗</span></span></a>';
@@ -2065,7 +2120,12 @@ function riverLinkOnly(r){
 function loadRivers(){
   var el=document.getElementById("rivers");
   var jobs=RIVERS.map(function(r){
-    return getJSON("https://api.water.noaa.gov/nwps/v1/gauges/"+r.id).then(function(d){
+    var base="https://api.water.noaa.gov/nwps/v1/gauges/"+r.id;
+    // the forecast series is a separate endpoint; a gauge without one (Eureka today) just loses
+    // the crest clause rather than the whole row
+    return Promise.all([getJSON(base), getJSON(base+"/stageflow/forecast").catch(function(){return null;})])
+    .then(function(res){
+      var d=res[0], fcSeries=res[1];
       var ob=(d.status&&d.status.observed)||{}, val=ob.primary, unit=ob.primaryUnit||"ft", info=catInfo(ob.floodCategory);
       if(val==null) return riverLinkOnly(r);
       // Context: how much headroom is left before action stage, and which way it's heading
@@ -2079,12 +2139,16 @@ function loadRivers(){
         sub.push(gap>0?(Math.round(gap*10)/10)+" ft below "+ref.n
                       :(Math.round(-gap*10)/10)+" ft over "+ref.n);
       }
-      var fc=(d.status&&d.status.forecast)||{};
-      // NWPS uses -9999/-999 as "no data" sentinels — never let one become a 1000-ft trend
-      if(typeof fc.primary==="number" && fc.primary>-100 && Math.abs(fc.primary-val)<60){
-        var dv=fc.primary-val;
-        if(Math.abs(dv)>=0.1) sub.push('<span class="'+(dv>0?"rup":"rdn")+'">'+(dv>0?"▲ rising ":"▼ falling ")
-          +(Math.round(Math.abs(dv)*10)/10)+" ft</span>");
+      // What the river is forecast to DO — crest, keep climbing, or recede
+      var cr=crestInfo(fcSeries,val);
+      var crestCat=null;
+      if(cr){
+        var st1=Math.round(cr.stage*10)/10;
+        crestCat=stageCategory(cr.stage,cats);
+        var word=(cr.kind==="crest")?"▲ cresting ":(cr.kind==="rising")?"▲ rising to ":"▼ falling to ";
+        var join=(cr.kind==="crest")?" ":" by ";
+        sub.push('<span class="'+(cr.kind==="falling"?"rdn":"rup")+'">'+word+st1+" ft"+join+esc(crestWhen(cr.when))+'</span>'
+          +(crestCat?' <span class="rfcat c-'+crestCat.key+'">'+esc(crestCat.label)+'</span>':''));
       }
       return '<a class="rlink '+info.cls+'" href="https://water.noaa.gov/gauges/'+r.id+'" target="_blank" rel="noopener">'
         +'<span class="rname">🌊 '+esc(r.name)
