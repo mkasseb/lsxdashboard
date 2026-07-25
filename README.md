@@ -79,12 +79,15 @@ band; Storm Mode reorders the grid for urgency, so those labels hide when it eng
 marked inside it, sun times) and `#hourly24` (the 24-hour chart) are *siblings* inside
 `#currentCard`, never nested. `loadCurrent()` rebuilds `#current` wholesale — including on failure
 — so nesting the chart inside it would let a dead observation feed take the forecast chart down
-with it, breaking the rule below. The chart measures its own container and thins its labels, so it
-survives the narrower column; it shows ~6 hour labels there against ~24 at full width, with
-per-hour detail still available on hover.
+with it, breaking the rule below. The chart measures its own container and thins its labels to fit,
+so column width buys label density rather than legibility: roughly 12 hour labels at 1600px, 8 at
+1440, 6 at 1000. Per-hour detail is on hover at any width.
 
-**The hero row is a pair, and it stretches.** `#radarCard` carries its own breakpoint overrides so
-the generic `col-8`/`col-4` rules can't drop the radar to full width while the hero stays at half.
+**The hero row is an even pair, and it stretches.** The two sides are `col-6`/`col-6` — the chart
+lives in the left column, and at a third of the width its renderer thinned to ~6 labels, so the
+even split is worth more there than extra radar width. `.grid>.stack` and `#radarCard` carry their
+own breakpoint overrides, because the generic `col-6` rule sends both to full width at 1100px and
+would leave one half-width card with an empty half-row beside it.
 Above 680px both sides are `align-self:stretch` and the radar map flexes, so the left column's
 content — which has no fixed height — sets the row height and the map absorbs the slack rather than
 stranding a gap. A `ResizeObserver` on `#radar` calls `invalidateSize()`, because that height moves
