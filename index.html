@@ -197,7 +197,21 @@
   .alert.areas-all .a2-more{display:none}
   .a2-more{font-size:11.5px;padding:3px 10px;border-radius:12px;background:transparent;border:1px dashed var(--border);
     color:var(--accent);cursor:pointer;min-height:0;font-family:inherit;font-weight:700}
-  .a2-hint{font-size:12px;color:var(--accent);margin-top:10px;font-weight:700}
+  .a2-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+  .a2-hint{font-size:12px;color:var(--accent);font-weight:700}
+  .a2-radar{font-size:11.5px;font-weight:700;padding:4px 11px;border-radius:12px;background:transparent;
+    border:1px dashed var(--border);color:var(--accent);cursor:pointer;min-height:0;font-family:inherit;margin-left:auto}
+  .a2-radar:hover{border-color:var(--accent);border-style:solid}
+  /* a polygon tap lands here — make it obvious which card just answered */
+  .alert.flash{animation:alertFlash 2.1s ease-out}
+  @keyframes alertFlash{
+    0%{box-shadow:0 0 0 0 rgba(74,163,255,.55)}
+    25%{box-shadow:0 0 0 6px rgba(74,163,255,.26)}
+    100%{box-shadow:0 0 0 0 rgba(74,163,255,0)}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .alert.flash{animation:none;outline:2px solid var(--accent);outline-offset:2px}
+  }
   /* structured detail */
   .a2-kv{display:grid;grid-template-columns:66px 1fr;gap:7px 11px;font-size:13px;line-height:1.55}
   .a2-kv .k{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);padding-top:3px}
@@ -824,7 +838,7 @@
       <input type="range" id="radarSlider" min="0" max="0" value="0" step="1" aria-label="Scrub radar time">
       <span class="rc-t" id="radarFrameTime"></span>
     </div>
-    <div class="imgcap"><span>Official NOAA/NWS radar &middot; live <b>warning polygons</b> overlaid &middot; basemap &copy; CARTO/OSM</span><span>auto-updates</span></div>
+    <div class="imgcap"><span>Official NOAA/NWS radar &middot; tap a <b>warning polygon</b> to jump to its alert &middot; basemap &copy; CARTO/OSM</span><span>auto-updates</span></div>
   </section>
 
   <!-- NEXT 24 HOURS (hero chart) -->
@@ -1515,22 +1529,32 @@ function warnStyle(ev){
   return {color:"#c17bff",weight:2,fillColor:"#c17bff",fillOpacity:.10};
 }
 var lastWarnFeats=[];
+/* One predicate for "this alert is drawn on the radar", shared by the map and by the card's
+   "Show on radar" button — so the button can never point at something that isn't there. */
+function isMappedAlert(f){
+  return !!(f && f.geometry && ((f.properties&&f.properties.event)||"").toLowerCase().indexOf("warning")>=0);
+}
+function normFeature(f){ return {type:"Feature", geometry:f.geometry, properties:f.properties||{}}; }
 function loadWarnPolygons(feats){
   if(feats!==undefined) lastWarnFeats=feats||[];
   if(!rvMap) return;
-  var polys=lastWarnFeats.filter(function(f){
-    return f.geometry && (f.properties.event||"").toLowerCase().indexOf("warning")>=0;
-  });
+  var polys=lastWarnFeats.filter(isMappedAlert);
   if(warnLayer){ rvMap.removeLayer(warnLayer); warnLayer=null; }
   if(!polys.length) return;
   // Drawing is best-effort: this runs before the alert LIST renders, so a single malformed
   // geometry must not be able to take down the safety-critical list with it.
   try{
-    warnLayer=L.geoJSON({type:"FeatureCollection",features:polys.map(function(f){
-      return {type:"Feature", geometry:f.geometry, properties:f.properties||{}};
-    })},{
+    warnLayer=L.geoJSON({type:"FeatureCollection",features:polys.map(normFeature)},{
       style:function(f){ return warnStyle(f.properties.event); },
-      interactive:false, pane:"overlayPane"
+      pane:"overlayPane",
+      onEachFeature:function(f,layer){
+        var ev=(f.properties&&f.properties.event)||"";
+        layer.bindTooltip(esc(ev)+" — tap for details",{className:"stn-tip",direction:"top",sticky:true});
+        layer.on("click",function(e){
+          if(e.originalEvent) e.originalEvent.stopPropagation();
+          focusAlertCard(ev);
+        });
+      }
     }).addTo(rvMap);
   }catch(e){ warnLayer=null; }
 }
@@ -1538,6 +1562,51 @@ function loadRadar(){  // recenter on location change
   if(!rvMap) return;
   rvMap.setView([current.lat,current.lon], rvMap.getZoom()||7);
   if(rvMarker) rvMarker.setLatLng([current.lat,current.lon]);
+}
+
+/* ===== Two-way linking between the radar polygons and the alert cards =====
+   The list groups by event TYPE (all "Severe Thunderstorm Warning" segments share one card),
+   while the map draws one polygon per segment — so a card maps to N polygons and every polygon
+   maps back to exactly one card. Both directions resolve through the event name. */
+function findAlertCard(ev){
+  var cards=document.querySelectorAll("#alerts .alert");
+  for(var i=0;i<cards.length;i++){
+    // data-aid was written HTML-escaped; getAttribute hands it back decoded, so compare raw
+    if(cards[i].getAttribute("data-aid")===ev) return cards[i];
+  }
+  return null;
+}
+function focusAlertCard(ev){
+  var card=findAlertCard(ev);
+  if(!card) return;
+  card.classList.add("open");                       // expand the details they're asking about
+  if(card.querySelector(".a2-more")) card.classList.add("areas-all");
+  card.classList.remove("flash");
+  void card.offsetWidth;                            // restart the animation if it's already running
+  card.classList.add("flash");
+  try{ card.scrollIntoView({behavior:"smooth", block:"center"}); }catch(e){ card.scrollIntoView(); }
+  if(typeof scheduleMasonry==="function") scheduleMasonry();
+  setTimeout(function(){ card.classList.remove("flash"); },2200);
+}
+var flashLayer=null, flashTimer=null;
+function showAlertOnRadar(ev){
+  if(!rvMap) return;
+  var feats=lastWarnFeats.filter(function(f){ return isMappedAlert(f) && ((f.properties&&f.properties.event)||"")===ev; });
+  if(!feats.length) return;
+  if(flashTimer){ clearTimeout(flashTimer); flashTimer=null; }
+  if(flashLayer){ rvMap.removeLayer(flashLayer); flashLayer=null; }
+  try{
+    flashLayer=L.geoJSON({type:"FeatureCollection",features:feats.map(normFeature)},{
+      style:{color:"#ffffff",weight:4,opacity:.95,fill:false,dashArray:"7 5"},
+      interactive:false, pane:"overlayPane"
+    }).addTo(rvMap);
+    rvMap.fitBounds(flashLayer.getBounds(),{padding:[34,34],maxZoom:10});
+  }catch(e){ flashLayer=null; }
+  var rc=document.getElementById("radarCard");
+  if(rc){ try{ rc.scrollIntoView({behavior:"smooth",block:"center"}); }catch(e2){ rc.scrollIntoView(); } }
+  flashTimer=setTimeout(function(){
+    if(flashLayer&&rvMap){ rvMap.removeLayer(flashLayer); flashLayer=null; }
+  },2800);
 }
 
 /* ============ FORECAST ============ */
@@ -1780,7 +1849,8 @@ function loadAlerts(){
         if(h&&(!hit||HIT_RANK[h]<HIT_RANK[hit])) hit=h;
       });
       return {ev:ev,segs:segs,best:best,sev:best.properties.severity,cls:alertClass(best.properties),
-              latest:latest,earliest:earliest,counties:counties,hit:hit};
+              latest:latest,earliest:earliest,counties:counties,hit:hit,
+              mapped:segs.some(isMappedAlert)};   // only offer "show on radar" if it IS on the radar
     });
     glist.sort(function(a,b){
       var ta=alertTier(a.ev).rank, tb=alertTier(b.ev).rank;
@@ -1860,7 +1930,10 @@ function loadAlerts(){
           +'<div class="a2-times"><span>'+(pending?"begins ":"")+esc(startStr||"in effect")+'</span><span>ends '+esc(endStr)+'</span></div></div>'
           :'<div class="a2-times"><span>Through '+esc(endStr)+'</span></div>')
         +'<div class="a2-areas">'+chips+moreBtn+'</div>'
-        +(detail?'<div class="a2-hint">Details <span class="a-chev">\u25be</span></div>':'')
+        +((detail||g.mapped)?'<div class="a2-foot">'
+          +(detail?'<span class="a2-hint">Details <span class="a-chev">\u25be</span></span>':'')
+          +(g.mapped?'<button type="button" class="a2-radar">\ud83c\udfaf Show on radar</button>':'')
+          +'</div>':'')
         +(detail?'<div class="alert-more">'+detail+'</div>':'')
         +'</div>';
     }).join("");
@@ -3731,6 +3804,12 @@ document.getElementById("daily").addEventListener("click",function(e){
   if(row&&row.parentNode) row.parentNode.classList.toggle("open");
 });
 document.getElementById("alerts").addEventListener("click",function(e){
+  if(e.target.closest(".a2-radar")){       // jump to this alert's polygons on the radar
+    var rc=e.target.closest(".alert");
+    e.stopPropagation();
+    if(rc) showAlertOnRadar(rc.getAttribute("data-aid"));
+    return;
+  }
   if(e.target.closest(".a2-more")){        // "+N more" reveals counties in place, doesn't open details
     var ac=e.target.closest(".alert");
     if(ac){ ac.classList.add("areas-all"); e.stopPropagation(); if(typeof scheduleMasonry==="function") scheduleMasonry(); }
@@ -3741,6 +3820,7 @@ document.getElementById("alerts").addEventListener("click",function(e){
 });
 document.getElementById("alerts").addEventListener("keydown",function(e){
   if(e.key==="Enter"||e.key===" "){
+    if(e.target.closest("button")) return;          // let the inner buttons handle their own keys
     var a=e.target.closest(".alert");
     if(a&&a.querySelector(".alert-more")){ e.preventDefault(); a.classList.toggle("open"); }
   }
