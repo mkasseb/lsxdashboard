@@ -1273,8 +1273,9 @@ function ensureUserZones(){
     var z={county:pr.county||"", forecast:pr.forecastZone||"", fire:pr.fireWeatherZone||""};
     _zonesCache[key]=z; userZones=z; return z;
   }).catch(function(){
+    delete _zonesCache[key];   // transient /points failure must NOT poison the session — retry next cycle
     var z={county:"",forecast:"",fire:""};
-    _zonesCache[key]=z; userZones=z; return z;     // no zones → simply no badge, never a wrong one
+    userZones=z; return z;     // this round: no zones → simply no badge, never a wrong one
   });
   _zonesCache[key]=p;
   return p;
@@ -1804,7 +1805,11 @@ function loadAlerts(){
     var warn=null;
     for(var i=0;i<feats.length;i++){if((feats[i].properties.event||"").toLowerCase().indexOf("warning")>=0){warn=feats[i].properties;break;}}
     setStormMode(warn);
-    smart.warning=!!warn;
+    // The smart slot's lightning face is only relevant content when the threat is convective or
+    // flood-driven — a Winter Storm or Excessive Heat Warning shouldn't put a lightning map in a
+    // double-wide slot (the family's prime card already floats up; sun/moon + seasonal stay).
+    var warnFam=warn?eventFamily(warn.event):null;
+    smart.warning=!!warn&&(warnFam==="convective"||warnFam==="flood");
     smart.watch=feats.some(function(f){
       var ev=(f.properties.event||"").toLowerCase();
       return ev.indexOf("tornado watch")>=0||ev.indexOf("severe thunderstorm watch")>=0;
@@ -1885,7 +1890,7 @@ function loadAlerts(){
         prog=Math.max(0,Math.min(100,(Date.now()-g.earliest)/(g.latest-g.earliest)*100));
       }
       // counties as chips; the overflow reveals in place instead of hiding behind a details panel
-      var shown=g.counties.slice(0,8), moreN=Math.max(0,g.counties.length-8);
+      var moreN=Math.max(0,g.counties.length-8);
       var chips=g.counties.map(function(c,i){
         return '<span class="a2-chip'+(i>=8?" a2-xtra":"")+'">'+esc(c)+'</span>';
       }).join("");
@@ -1976,23 +1981,33 @@ function setStormMode(warnProps){
     var pc=document.getElementById(cfg.prime); if(pc) pc.classList.add("storm-prime");
     var exp=warnProps.ends||warnProps.expires;
     var expStr=exp?new Date(exp).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):"";
+    // Warnings issued ahead of their window (routine for winter storms) must count down to the
+    // START — the old code showed "17h left" for the END of something that hadn't begun.
+    var onsetMs=Date.parse(warnProps.onset||warnProps.effective||"")||0;
+    var pending=!!(onsetMs&&Date.now()<onsetMs);
+    var startStr=pending?new Date(onsetMs).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"";
     var bIco=alertIcon(warnProps.event,cfg.ico);
     var bico=document.querySelector("#stormBanner .bico"); if(bico) bico.textContent=bIco;
-    document.getElementById("stormText").textContent=bIco+" "+warnProps.event+(expStr?" — until "+expStr:"");
+    document.getElementById("stormText").textContent=bIco+" "+warnProps.event
+      +(pending?(startStr?" — from "+startStr:""):(expStr?" — until "+expStr:""));
     var scd=document.getElementById("stormCd");
     if(scd){
-      var expMs=exp?Date.parse(exp):0;
-      if(expMs) scd.setAttribute("data-exp",expMs); else scd.removeAttribute("data-exp");
-      scd.textContent="";
+      var target=pending?onsetMs:(exp?Date.parse(exp):0);
+      if(target) scd.setAttribute("data-exp",target); else scd.removeAttribute("data-exp");
+      if(pending) scd.setAttribute("data-pre","1"); else scd.removeAttribute("data-pre");
+      scd.textContent=""; scd.classList.remove("urgent","expired");
     }
     if(typeof tickCountdowns==="function") tickCountdowns();
     var sub=document.getElementById("stormSub"); if(sub) sub.textContent=cfg.sub;
+    // Start the radar loop NOW — its autoplay gate only ran on tile-load / the 4-min refresh,
+    // which could leave the loop parked for minutes right after a warning popped.
+    if(typeof updateRadarCtl==="function") updateRadarCtl();
   }else{
     STORM_FAMILY=null; STORM_PRIME="smartCard";
     body.classList.remove("storm");
     body.removeAttribute("data-storm");
     var scd0=document.getElementById("stormCd");
-    if(scd0){ scd0.removeAttribute("data-exp"); scd0.textContent=""; scd0.classList.remove("urgent","expired"); }
+    if(scd0){ scd0.removeAttribute("data-exp"); scd0.removeAttribute("data-pre"); scd0.textContent=""; scd0.classList.remove("urgent","expired"); }
     [].forEach.call(document.querySelectorAll(".storm-prime"), function(e){ e.classList.remove("storm-prime"); });
   }
   // Class/attribute changes aren't watched by the masonry observer — repack explicitly so the
@@ -3040,6 +3055,8 @@ function setLocation(loc,opts){
   updateLocNow();
   if(opts.save) saveLoc(loc);
   loadRadar();loadForecast();loadAqi();loadSpc();loadCpc();loadQpf();loadHazards();loadDrought();loadClimate();
+  // location-sensitive too: covers-me badges, station records/rankings, seasonal freeze normals
+  loadAlerts();loadClimateContext();loadSeasonal();
   if(loc.station){ loadCurrent(); }
   else{
     var cc=document.getElementById("current"); if(cc) cc.innerHTML='<div class="loading">Finding nearest station…</div>';
