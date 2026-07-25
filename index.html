@@ -343,6 +343,28 @@
   .cn-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700}
   .cn-cell>span:last-child{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
   .cn-warm{color:#ff6a3d}.cn-cool{color:#4aa3ff}.cn-wet{color:#3aa0ff}.cn-dry{color:#d98a2b}.cn-flat{color:var(--muted)}.cn-na{color:var(--muted)}
+  /* Context lines — records, rankings, streaks (never shown unless verified) */
+  .cn-ctx{display:flex;flex-direction:column;gap:7px;margin-top:11px;padding-top:10px;border-top:1px solid var(--border)}
+  .cn-ctx:empty{display:none}
+  .cx{font-size:12.5px;line-height:1.45;color:var(--muted);display:flex;gap:7px;align-items:baseline}
+  .cx .cxi{flex:0 0 auto;font-size:13px}
+  .cx b{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}
+  .cx .cx-rec{color:#ff6a3d;font-weight:700}
+  .cx .cx-cold{color:#4aa3ff;font-weight:700}
+  .cx .cx-dry{color:#d98a2b;font-weight:700}
+  .cx .cx-wet{color:#3aa0ff;font-weight:700}
+  /* Rank bar — where today sits in the station's whole record for this date */
+  .cx-rank{flex-direction:column;gap:6px;align-items:stretch}
+  .cx-rank .cx-row{display:flex;gap:7px;align-items:baseline}
+  .cx-bar{position:relative;height:6px;border-radius:3px;background:linear-gradient(90deg,#4aa3ff,#3ecf8e,#ffd23f,#ff6a3d);opacity:.55}
+  .cx-bar i{position:absolute;top:-3px;width:3px;height:12px;border-radius:2px;background:var(--text);box-shadow:0 0 0 2px var(--panel)}
+  /* Current-conditions context footer */
+  .cc-ctx{font-size:12px;color:var(--muted);margin-top:9px;line-height:1.5}
+  .cc-ctx b{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}
+  /* River sub-line: distance to flood stage + trend */
+  .rlink .rname{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .rsub{font-size:11px;color:var(--muted);font-weight:500;font-variant-numeric:tabular-nums}
+  .rsub .rup{color:#ff9f43}.rsub .rdn{color:#3ecf8e}
 
   /* Risk Outlook matrix (SPC storm + WPC flood) */
   .spc-row{display:grid;grid-template-columns:52px 1fr 1fr 1fr;align-items:center;gap:6px;padding:8px 0;border-bottom:1px solid var(--border)}
@@ -727,6 +749,7 @@
       </h2>
       <div id="cnToday" class="cn-today"><span class="cn-na">Normals loading…</span></div>
       <div id="cnGrid" class="cn-grid"><div class="loading">Loading departures…</div></div>
+      <div id="cnCtx" class="cn-ctx"></div>
       <div class="imgcap"><span>Station: <span id="cnStation">…</span></span><span>1991–2020 normals</span></div>
     </section>
     <section class="card" id="satCard">
@@ -1378,7 +1401,16 @@ function loadForecast(){
         }
       }
       function popOf(p){ return (p&&p.probabilityOfPrecipitation&&p.probabilityOfPrecipitation.value!=null)?p.probabilityOfPrecipitation.value:null; }
-      daily.innerHTML=days.map(function(d){
+      // Stored as a repaintable closure: climate context (per-day normals) usually lands AFTER the
+      // forecast, and renderContext calls this again so the "vs Normal" cell can appear.
+      loadForecast._paint=function(){
+        var open=[];
+        [].slice.call(daily.querySelectorAll(".day-item")).forEach(function(it,i){ if(it.classList.contains("open")) open.push(i); });
+        daily.innerHTML=paintDays();
+        var items=daily.querySelectorAll(".day-item");
+        open.forEach(function(i){ if(items[i]) items[i].classList.add("open"); });   // keep expanded rows expanded
+      };
+      function paintDays(){ return days.map(function(d){
         var hi=d.day?d.day.temperature:null, lo=d.night?d.night.temperature:null;
         var a=(lo!=null?lo:hi), b=(hi!=null?hi:lo);
         var left=((Math.min(a,b)-wMin)/range)*100, width=Math.max(4,(Math.abs(b-a)/range)*100);
@@ -1410,10 +1442,22 @@ function loadForecast(){
               +(function(){var fl=feelsLikeF(main.temperature,rh,parseMph(main.windSpeed));
                 return '<div class="dd-item"><div class="k">Feels Like</div><div class="v">'+(fl!=null?fl+"°":"—")+'</div></div>';})()
               +'<div class="dd-item"><div class="k">Humidity</div><div class="v">'+(rh!=null?rh+"%":"—")+'</div></div>'
+              +(function(){   // how this day sits against the 1991–2020 normal for that date
+                var nw=_dk&&ctx.normWeek?ctx.normWeek[_dk]:null;
+                if(!nw||(nw.hi==null&&nw.lo==null)) return "";
+                function dp(v,n){
+                  if(v==null||n==null) return '<span class="cn-na">—</span>';
+                  var d=Math.round(v-n), s=(d>0?"+":"")+d+"°";
+                  return '<span class="'+(Math.abs(d)<1?"cn-flat":(d>0?"cn-warm":"cn-cool"))+'">'+s+'</span>';
+                }
+                return '<div class="dd-item"><div class="k">vs Normal ('+Math.round(nw.hi)+"°/"+Math.round(nw.lo)+'°)</div>'
+                  +'<div class="v">'+dp(hi,nw.hi)+" / "+dp(lo,nw.lo)+'</div></div>';
+              })()
             +'</div>'
           +'</div>'
         +'</div>';
-      }).join("");
+      }).join(""); }
+      loadForecast._paint();
       if(h){ // hourly strip + thunder detection only when the hourly feed succeeded
         var hrs=h.properties.periods.slice(0,24);
         smart.hourly=hrs;
@@ -1462,7 +1506,9 @@ function loadCurrent(){
       +'<div class="cc-item"><div class="k">Gusts</div><div class="v">'+(gust!=null?gust+" mph":"—")+'</div></div>'
       +'<div class="cc-item"><div class="k">Pressure</div><div class="v">'+(press!=null?press+'"':"—")+'</div></div>'
       +'<div class="cc-item"><div class="k">Visibility</div><div class="v">'+(vis!=null?vis+" mi":"—")+'</div></div>'
-      +'</div><div class="stn">Observed '+timeAgo(p.timestamp)+' · '+current.station+'</div>';
+      +'</div><div class="cc-ctx" id="ccCtx"></div>'
+      +'<div class="stn">Observed '+timeAgo(p.timestamp)+' · '+current.station+'</div>';
+    renderCurrentCtx();   // normals + today's records, once climate context has landed
   }).catch(function(){
     stEl.textContent="—";
     el.innerHTML='<div class="empty">No current obs from '+current.station+'. Station may be offline.</div>';
@@ -1626,8 +1672,28 @@ function loadRivers(){
     return getJSON("https://api.water.noaa.gov/nwps/v1/gauges/"+r.id).then(function(d){
       var ob=(d.status&&d.status.observed)||{}, val=ob.primary, unit=ob.primaryUnit||"ft", info=catInfo(ob.floodCategory);
       if(val==null) return riverLinkOnly(r);
+      // Context: how much headroom is left before action stage, and which way it's heading
+      var sub=[];
+      var cats=(d.flood&&d.flood.categories)||{};
+      var act=cats.action&&cats.action.stage, minor=cats.minor&&cats.minor.stage;
+      var ref=(typeof act==="number"&&act>0)?{v:act,n:"action stage"}
+             :((typeof minor==="number"&&minor>0)?{v:minor,n:"flood stage"}:null);
+      if(ref){
+        var gap=ref.v-val;
+        sub.push(gap>0?(Math.round(gap*10)/10)+" ft below "+ref.n
+                      :(Math.round(-gap*10)/10)+" ft over "+ref.n);
+      }
+      var fc=(d.status&&d.status.forecast)||{};
+      // NWPS uses -9999/-999 as "no data" sentinels — never let one become a 1000-ft trend
+      if(typeof fc.primary==="number" && fc.primary>-100 && Math.abs(fc.primary-val)<60){
+        var dv=fc.primary-val;
+        if(Math.abs(dv)>=0.1) sub.push('<span class="'+(dv>0?"rup":"rdn")+'">'+(dv>0?"▲ rising ":"▼ falling ")
+          +(Math.round(Math.abs(dv)*10)/10)+" ft</span>");
+      }
       return '<a class="rlink '+info.cls+'" href="https://water.noaa.gov/gauges/'+r.id+'" target="_blank" rel="noopener">'
-        +'<span class="rname">🌊 '+esc(r.name)+'</span><span class="rmeta"><span class="rval">'+(Math.round(val*10)/10)+' '+unit+'</span>'
+        +'<span class="rname">🌊 '+esc(r.name)
+          +(sub.length?'<span class="rsub">'+sub.join(" · ")+'</span>':'')
+        +'</span><span class="rmeta"><span class="rval">'+(Math.round(val*10)/10)+' '+unit+'</span>'
         +'<span class="rcat">'+info.label+'</span></span></a>';
     }).catch(function(){return riverLinkOnly(r);});
   });
@@ -2023,7 +2089,7 @@ function climStation(lat,lon){
   if(_climStationCache[key]) return Promise.resolve(_climStationCache[key]);
   var d=0.9, bbox=[lon-d, lat-d, lon+d, lat+d];
   // Require maxt+mint+pcpn so we only get full climate stations; valid_daterange lets us screen out inactive ones
-  return acisPost("StnMeta",{bbox:bbox, elems:["maxt","mint","pcpn"], meta:["name","sids","ll","valid_daterange"]}).then(function(r){
+  var p=acisPost("StnMeta",{bbox:bbox, elems:["maxt","mint","pcpn"], meta:["name","sids","ll","valid_daterange"]}).then(function(r){
     var now=new Date(), best=null, bestScore=-1;
     (r.meta||[]).forEach(function(s){
       if(!s.ll||!s.sids||!s.sids.length) return;
@@ -2053,6 +2119,10 @@ function climStation(lat,lon){
     _climStationCache[key]=fb;
     return fb;
   });
+  // Cache the in-flight promise too: loadClimate and loadClimateContext both ask at once,
+  // and without this each page load fires a duplicate StnMeta lookup.
+  _climStationCache[key]=p;
+  return p;
 }
 function fmtDep(v,unit){
   if(v==null) return '<span class="cn-na">—</span>';
@@ -2115,10 +2185,220 @@ function loadClimate(){
       if(showSnow) cells+='<div class="cn-cell"><span class="cn-lbl">Snow · season</span>'+fmtDep(snowSTD,"\u2033")+'</div>';
       grid.innerHTML=cells;
       renderVsNormal();
+      renderCurrentCtx();
+      renderContext();
     });
   }).catch(function(){
     grid.innerHTML='<div class="empty">Climate normals unavailable. <a href="https://xmacis.rcc-acis.org/" target="_blank" rel="noopener">xmACIS ↗</a></div>';
   });
+}
+
+/* ============ CLIMATE CONTEXT — records, rankings, streaks ============
+   Four keyless ACIS queries, fetched once per day and cached as small DERIVED facts (~10 KB)
+   rather than raw history:
+     1. the same calendar day across every year of record → true daily records + a percentile
+     2. monthly totals across every year          → "already wetter than N of M Julys"
+     3. the last two years of dailies             → dry streaks, "warmest since"
+     4. normals for the week ahead                → per-day departures in the 7-day detail
+   A pre-POR start date (1850) is fine — ACIS pads with "M", which we filter. Everything here
+   degrades to silence: a number we can't verify is never shown. */
+var CTX_KEY="lsxCtx_v1";
+var ctx={ready:false, recHi:null, recLo:null, recPcp:null, doyHi:[], doyLo:[],
+         monWet:[], monWarm:[], monMtd:null, monMean:null, monName:"", years:0,
+         dry:null, hist:null, normWeek:{}};
+var MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+function ctxTodayKey(){ var d=new Date(); return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2); }
+function ctxNumPairs(rows,col,pickMax){
+  // → {best:{v,y}, sorted:[v...]} over one column, ignoring M/T padding
+  var vals=[], best=null;
+  (rows||[]).forEach(function(r){
+    var v=acisNum(r[col]);
+    if(v==null||r[col]==="M") return;
+    var y=String(r[0]).slice(0,4);
+    vals.push(v);
+    if(!best || (pickMax?v>best.v:v<best.v)) best={v:v,y:y};   // strict: ties keep the year the record was SET
+  });
+  vals.sort(function(a,b){return a-b;});
+  return {best:best, sorted:vals};
+}
+function loadClimateContext(){
+  return climStation(current.lat,current.lon).then(function(st){
+    var key=st.sid+"|"+ctxTodayKey();
+    try{
+      var c=JSON.parse(localStorage.getItem(CTX_KEY)||"null");
+      if(c&&c.key===key&&c.ctx){ ctx=c.ctx; ctx.ready=true; renderContext(); return null; }
+    }catch(e){}
+    var now=new Date(), y=now.getFullYear();
+    var mm=("0"+(now.getMonth()+1)).slice(-2), dd=("0"+now.getDate()).slice(-2);
+    var today=y+"-"+mm+"-"+dd;
+    var wkEnd=new Date(now.getTime()+6*86400000);
+    var wkEndStr=wkEnd.getFullYear()+"-"+("0"+(wkEnd.getMonth()+1)).slice(-2)+"-"+("0"+wkEnd.getDate()).slice(-2);
+    var histStart=(y-2)+"-"+mm+"-"+dd;
+    return Promise.allSettled([
+      acisPost("StnData",{sid:st.sid,sdate:"1850-"+mm+"-"+dd,edate:today,
+        elems:[{name:"maxt",interval:[1,0,0],duration:1,reduce:"max"},
+               {name:"mint",interval:[1,0,0],duration:1,reduce:"min"},
+               {name:"pcpn",interval:[1,0,0],duration:1,reduce:"sum"}]}),
+      acisPost("StnData",{sid:st.sid,sdate:"por",edate:"por",
+        elems:[{name:"pcpn",interval:"mly",duration:"mly",reduce:"sum"},
+               {name:"avgt",interval:"mly",duration:"mly",reduce:"mean"}]}),
+      acisPost("StnData",{sid:st.sid,sdate:histStart,edate:today,
+        elems:[{name:"maxt"},{name:"mint"},{name:"pcpn"}]}),
+      acisPost("StnData",{sid:st.sid,sdate:today,edate:wkEndStr,
+        elems:[{name:"maxt",normal:"1"},{name:"mint",normal:"1"}]})
+    ]).then(function(rs){
+      function data(i){
+        if(rs[i].status!=="fulfilled") return null;
+        var v=rs[i].value;
+        if(!v||v.error||!v.data) return null;
+        return v.data;
+      }
+      var nctx={ready:false, recHi:null, recLo:null, recPcp:null, doyHi:[], doyLo:[],
+                monWet:[], monWarm:[], monMtd:null, monMean:null, monName:MONTHS[now.getMonth()],
+                years:0, dry:null, hist:null, normWeek:{}};
+      // 1 — this calendar day, every year
+      var doy=data(0);
+      if(doy){
+        var hi=ctxNumPairs(doy,1,true), lo=ctxNumPairs(doy,2,false), pc=ctxNumPairs(doy,3,true);
+        nctx.recHi=hi.best; nctx.doyHi=hi.sorted;
+        nctx.recLo=lo.best; nctx.doyLo=lo.sorted;
+        nctx.recPcp=pc.best;
+        nctx.years=hi.sorted.length;
+      }
+      // 2 — monthly totals, every year (current partial month kept separately)
+      var mon=data(1);
+      if(mon){
+        var curPrefix=y+"-"+mm;
+        mon.forEach(function(r){
+          var ym=String(r[0]), p=acisNum(r[1]), t=acisNum(r[2]);
+          if(ym.slice(5,7)!==mm) return;                       // same month-of-year only
+          if(ym===curPrefix){ nctx.monMtd=p; nctx.monMean=t; return; }   // this year = partial
+          if(p!=null) nctx.monWet.push(p);
+          if(t!=null) nctx.monWarm.push(t);
+        });
+        nctx.monWet.sort(function(a,b){return a-b;});
+        nctx.monWarm.sort(function(a,b){return a-b;});
+      }
+      // 3 — last two years of dailies → dry streak + compact series for "warmest since"
+      var dly=data(2);
+      if(dly&&dly.length){
+        var maxt=[], mint=[], start=dly[0][0];
+        dly.forEach(function(r){ maxt.push(acisNum(r[1])); mint.push(acisNum(r[2])); });
+        nctx.hist={start:start, maxt:maxt, mint:mint};
+        var days=0, lastRain=null;
+        for(var i=dly.length-1;i>=0;i--){
+          var p=acisNum(dly[i][3]);
+          if(p==null) { if(i===dly.length-1) continue; else break; }   // today often still "M"
+          if(p>=0.01){ lastRain={date:dly[i][0], amt:p}; break; }
+          days++;
+        }
+        if(lastRain) nctx.dry={days:days, date:lastRain.date, amt:lastRain.amt};
+      }
+      // 4 — normals for the week ahead
+      var nw=data(3);
+      if(nw) nw.forEach(function(r){
+        var h=acisNum(r[1]), l=acisNum(r[2]);
+        if(h!=null||l!=null) nctx.normWeek[r[0]]={hi:h, lo:l};
+      });
+      nctx.ready=!!(nctx.recHi||nctx.monWet.length||nctx.hist);
+      ctx=nctx;
+      if(ctx.ready){ try{ localStorage.setItem(CTX_KEY,JSON.stringify({key:key,ctx:ctx})); }catch(e){} }
+      renderContext();
+      return null;
+    });
+  }).catch(function(){ /* context is a bonus layer — silence on failure */ });
+}
+/* ---- derived lookups (cheap, recomputed as the forecast changes) ---- */
+function ctxRankBelow(sorted,v){
+  if(v==null||!sorted||!sorted.length) return null;
+  var n=0; for(var i=0;i<sorted.length;i++){ if(sorted[i]<v) n++; }
+  return {below:n, total:sorted.length, pct:Math.round(n/sorted.length*100)};
+}
+function ctxDateAt(i){
+  if(!ctx.hist) return null;
+  var p=String(ctx.hist.start).split("-");
+  var d=new Date(+p[0],+p[1]-1,+p[2]);
+  d.setDate(d.getDate()+i);
+  return d;
+}
+function ctxSince(kind,v){
+  // most recent earlier day that reached v (hot) / dropped to v (cold); null = not in the window
+  if(v==null||!ctx.hist) return null;
+  var arr=(kind==="hot")?ctx.hist.maxt:ctx.hist.mint;
+  for(var i=arr.length-2;i>=0;i--){        // skip today (often incomplete)
+    var x=arr[i];
+    if(x==null) continue;
+    if(kind==="hot"?x>=v:x<=v){
+      var d=ctxDateAt(i);
+      return {date:d, days:Math.round((Date.now()-d.getTime())/86400000)};
+    }
+  }
+  return {date:null, days:null, beyond:true};
+}
+function fmtMD(d){ return d?d.toLocaleDateString([], {month:"short", day:"numeric"}):""; }
+function renderContext(){
+  var el=document.getElementById("cnCtx");
+  if(!el) return;
+  if(!ctx.ready){ el.innerHTML=""; return; }
+  var L=[];
+  function line(ico,html,cls){ L.push('<div class="cx'+(cls?" "+cls:"")+'"><span class="cxi">'+ico+'</span><span>'+html+'</span></div>'); }
+  var md=fmtMD(new Date());
+  // records for today
+  if(ctx.recHi&&ctx.recLo){
+    line("🏆","Record for "+md+": high <b class=\"cx-rec\">"+Math.round(ctx.recHi.v)+"°</b> ("+ctx.recHi.y+")"
+      +" · low <b class=\"cx-cold\">"+Math.round(ctx.recLo.v)+"°</b> ("+ctx.recLo.y+")"
+      +(ctx.years?' <span style="opacity:.7">· '+ctx.years+" years of record</span>":""));
+  }
+  // where today's forecast high would land among all same-dates
+  var r=ctxRankBelow(ctx.doyHi,climate.fcHi);
+  if(r&&climate.fcHi!=null){
+    var pos=Math.max(0,Math.min(100,r.pct));
+    L.push('<div class="cx cx-rank">'
+      +'<div class="cx-row"><span class="cxi">📊</span>'
+      +'<span>Forecast <b>'+climate.fcHi+'°</b> would rank warmer than <b>'+r.below+'</b> of '+r.total+' '+md+'s on record</span></div>'
+      +'<div class="cx-bar"><i style="left:calc('+pos+'% - 1.5px)"></i></div>'
+      +'</div>');
+  }
+  // month-to-date precipitation in the context of every past same-month
+  if(ctx.monMtd!=null&&ctx.monWet.length){
+    var rw=ctxRankBelow(ctx.monWet,ctx.monMtd);
+    line("🌧️",ctx.monName+" rain <b class=\"cx-wet\">"+ctx.monMtd.toFixed(2)+"″</b> so far — already wetter than <b>"+rw.below+"</b> of "+rw.total+" full "+ctx.monName+"s");
+  }
+  // month-to-date mean temperature ranking (means compare honestly, unlike partial sums)
+  if(ctx.monMean!=null&&ctx.monWarm.length){
+    var rt=ctxRankBelow(ctx.monWarm,ctx.monMean);
+    line("🌡️",ctx.monName+" averaging <b>"+ctx.monMean.toFixed(1)+"°</b> — warmer than <b>"+rt.below+"</b> of "+rt.total+" "+ctx.monName+"s");
+  }
+  // dry streak
+  if(ctx.dry&&ctx.dry.days>=3){
+    line("🏜️","<b class=\"cx-dry\">"+ctx.dry.days+" days</b> since measurable rain (last "+ctx.dry.amt.toFixed(2)+"″ on "+fmtMD(new Date(ctx.dry.date+"T12:00:00"))+")");
+  }
+  // "warmest since" / "coldest since", only when the gap is actually interesting
+  if(climate.fcHi!=null){
+    var s=ctxSince("hot",climate.fcHi);
+    if(s&&s.beyond) line("🔥","<b>"+climate.fcHi+"°</b> would be the warmest in at least 2 years");
+    else if(s&&s.days>=21) line("🔥","<b>"+climate.fcHi+"°</b> would be the warmest since "+fmtMD(s.date));
+  }
+  if(climate.fcLo!=null){
+    var sc=ctxSince("cold",climate.fcLo);
+    if(sc&&sc.beyond) line("❄️","<b>"+climate.fcLo+"°</b> would be the coolest in at least 2 years");
+    else if(sc&&sc.days>=21) line("❄️","<b>"+climate.fcLo+"°</b> would be the coolest since "+fmtMD(sc.date));
+  }
+  el.innerHTML=L.join("");
+  renderCurrentCtx();
+  // per-day normals arrive after the 7-day is already on screen → repaint it once
+  if(Object.keys(ctx.normWeek||{}).length && typeof loadForecast==="function" && loadForecast._paint) loadForecast._paint();
+  if(typeof renderTheCall==="function") renderTheCall();
+  if(typeof scheduleMasonry==="function") scheduleMasonry();
+}
+function renderCurrentCtx(){
+  var el=document.getElementById("ccCtx");
+  if(!el) return;
+  var bits=[];
+  if(climate.normHi!=null&&climate.normLo!=null) bits.push("Normal <b>"+Math.round(climate.normHi)+"°/"+Math.round(climate.normLo)+"°</b>");
+  if(ctx.recHi) bits.push("record high <b>"+Math.round(ctx.recHi.v)+"°</b> ("+ctx.recHi.y+")");
+  if(ctx.recLo) bits.push("low <b>"+Math.round(ctx.recLo.v)+"°</b> ("+ctx.recLo.y+")");
+  el.innerHTML=bits.length?bits.join(" · "):"";
 }
 
 /* ============ WPC 7-DAY QPF (best-effort chip) ============ */
@@ -2682,6 +2962,19 @@ function renderTheCall(){
     });
     if(nice) push(55,"😎",dhi+"° and dry all day — about as good as it gets");
   }
+  // — climate context: only genuinely notable framings earn a pill —
+  if(ctx.ready&&climate.fcHi!=null&&ctx.recHi){
+    var gap=ctx.recHi.v-climate.fcHi;
+    if(gap<=0) push(92,"🏆","Could reach the "+fmtMD(new Date())+" record of "+Math.round(ctx.recHi.v)+"° ("+ctx.recHi.y+")");
+    else if(gap<=4) push(88,"🏆","Within "+Math.round(gap)+"° of the "+fmtMD(new Date())+" record ("+Math.round(ctx.recHi.v)+"°, "+ctx.recHi.y+")");
+    else{
+      var rk=ctxRankBelow(ctx.doyHi,climate.fcHi);
+      if(rk&&rk.pct>=90) push(74,"📊","Warmer than "+rk.below+" of "+rk.total+" "+fmtMD(new Date())+"s on record");
+      else if(rk&&rk.pct<=10) push(74,"📊","Cooler than "+(rk.total-rk.below)+" of "+rk.total+" "+fmtMD(new Date())+"s on record");
+    }
+  }
+  if(ctx.ready&&ctx.dry&&ctx.dry.days>=10) push(45,"🏜️","Day "+ctx.dry.days+" with no measurable rain");
+
   pills.sort(function(a,b){ return b.pri-a.pri; });
   pills=pills.slice(0,4);
   row.innerHTML='<span class="call-lbl">The Call</span>'+pills.map(function(pl){
@@ -2718,6 +3011,7 @@ var SNAP_PARTS=[
   {id:"cnToday",  ttl:12*3600000},
   {id:"cnGrid",   ttl:12*3600000},
   {id:"cnStation",ttl:12*3600000},
+  {id:"cnCtx",    ttl:12*3600000},
   {id:"qpf7",     ttl:12*3600000},
   {id:"drNow",    ttl:48*3600000},
   {id:"drMonth",  ttl:48*3600000},
@@ -2794,7 +3088,7 @@ function tick(){
 function refreshAll(){
   var dot=document.getElementById("statusDot"), label=document.getElementById("refreshLabel");
   dot.classList.remove("stale");label.textContent="Refreshing…";
-  Promise.allSettled([loadAFD(),loadAlerts(),loadCurrent(),loadForecast(),loadRivers(),loadAqi(),loadSpc(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),loadClimate(),loadStationPlot()]).then(function(){
+  Promise.allSettled([loadAFD(),loadAlerts(),loadCurrent(),loadForecast(),loadRivers(),loadAqi(),loadSpc(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),loadClimate(),loadClimateContext(),loadStationPlot()]).then(function(){
     refreshImages();
     label.textContent="Refresh";
     document.getElementById("lastUpdate").textContent="Last updated "+new Date().toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"});
@@ -2885,6 +3179,7 @@ var SCHED=[
   {fn:loadHazards,  every:60*60000},
   {fn:loadDrought,  every:6*60*60000},
   {fn:loadClimate,  every:6*60*60000},
+  {fn:loadClimateContext, every:6*60*60000},
   {fn:refreshImages,every:5*60000},
   {fn:loadStationPlot,every:12*60000},
   {fn:refreshRadarLayer, every:4*60000},
