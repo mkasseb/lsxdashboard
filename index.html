@@ -1105,10 +1105,15 @@ function wxGroup(desc,day){
   return day?"sun":"night";
 }
 
-function tCol(t){ // cold blue → hot red
-  var x=Math.max(0,Math.min(1,(t-15)/(95-15)));
-  return "hsl("+Math.round(225-225*x)+",78%,52%)";
-}
+/* ONE temperature→hue ramp (cold blue → hot red), shared by everything that colours a temperature,
+   so a given reading reads the same on every card. Only the LIGHTNESS is per-context: thin strokes
+   and text sit on the dark panel and want 52%, while the station-plot chips are filled blocks
+   carrying dark text and need 62% to stay above 4.5:1 at the blue and red ends of the ramp. The
+   HUE — the part that actually encodes the value — is identical, which is what the station plot
+   used to get wrong by keeping its own 7-bucket scale. */
+function tHue(t){ return Math.round(225-225*Math.max(0,Math.min(1,(t-15)/(95-15)))); }
+function tCol(t){ return "hsl("+tHue(t)+",78%,52%)"; }    // strokes, labels, gradients
+function tChip(t){ return "hsl("+tHue(t)+",78%,62%)"; }   // filled chips that carry dark text
 /* Slim temperature sparkline that sits under the scrollable hour cards */
 /* ── Next 24 Hours: full-width integrated hourly chart ──
    Smooth temp curve (per-hour color gradient) + day/night bands + precip bars
@@ -1677,13 +1682,13 @@ function middayRHByDate(hrs){
   return map;
 }
 function loadForecast(){
-  var _lg=locSeq;
+  var fresh=locGuard();
   var daily=document.getElementById("daily");
   return pointsFor(current.lat,current.lon).then(function(pt){
     var fUrl=pt.properties.forecast, hUrl=pt.properties.forecastHourly;
     // Hourly is only an enhancer (humidity + 24h strip). If it fails, the 7-day must still render.
     return Promise.all([getJSON(fUrl,HEADERS), getJSON(hUrl,HEADERS).catch(function(){return null;})]).then(function(res){
-      if(_lg!==locSeq) return;   // user moved while this was in flight
+      if(!fresh()) return;   // user moved while this was in flight
       var f=res[0], h=res[1];
       var rhByDate=h?middayRHByDate(h.properties.periods):{};
       var ps=f.properties.periods.slice(0,15);
@@ -1798,10 +1803,10 @@ function loadForecast(){
 
 /* ============ CURRENT ============ */
 function loadCurrent(){
-  var _lg=locSeq;
+  var fresh=locGuard();
   var el=document.getElementById("current"), stEl=document.getElementById("ccStation");
   return getJSON(API+"/stations/"+current.station+"/observations/latest",HEADERS).then(function(o){
-    if(_lg!==locSeq) return;   // user moved while this was in flight
+    if(!fresh()) return;   // user moved while this was in flight
     var p=o.properties, c2f=function(c){return c==null?null:Math.round(c*9/5+32);};
     var temp=c2f(p.temperature&&p.temperature.value), dew=c2f(p.dewpoint&&p.dewpoint.value);
     var rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?Math.round(p.relativeHumidity.value):null;
@@ -1841,12 +1846,12 @@ function loadCurrent(){
 
 /* ============ ALERTS + STORM MODE (Fix 2 + Fix 4) ============ */
 function loadAlerts(){
-  var _lg=locSeq;
+  var fresh=locGuard();
   var el=document.getElementById("alerts"), card=document.getElementById("alertsCard");
   // zones resolve alongside the alerts (memoised per location) so "covers me" is known at render time
   return Promise.all([getJSON(API+"/alerts/active?area=MO,IL",HEADERS), ensureUserZones()]).then(function(res){
     var data=res[0];
-    if(_lg!==locSeq) return;   // user moved while this was in flight
+    if(!fresh()) return;   // user moved while this was in flight
     if(typeof markFresh==="function") markFresh();  // alerts are the safety-critical feed — only THEY count as "fresh"
     loadWarnPolygons(data.features||[]);  // one fetch feeds both list and map
     function isLSX(f){
@@ -2203,11 +2208,11 @@ function renderAqiMini(){
     +' <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a>';
 }
 function loadAqi(){
-  var _lg=locSeq;
+  var fresh=locGuard();
   var el=document.getElementById("aqi"), card=document.getElementById("aqiCard");
   var url="https://air-quality-api.open-meteo.com/v1/air-quality?latitude="+current.lat+"&longitude="+current.lon+"&current=us_aqi,pm2_5,pm10";
   return getJSON(url).then(function(d){
-    if(_lg!==locSeq) return;   // user moved while this was in flight
+    if(!fresh()) return;   // user moved while this was in flight
     var cur=d.current||{}, aqi=cur.us_aqi, info=aqiInfo(aqi);
     aqiState={val:(aqi!=null)?aqi:null, pm:(cur.pm2_5!=null)?Math.round(cur.pm2_5):null, err:false};
     // The dedicated card only appears when air quality is a story: AQI > 100 ("Unhealthy for
@@ -2369,20 +2374,20 @@ function riskPill(info,denom){
   return '<span class="spc-pill" style="background:'+bg+';color:'+fg+'">'+txt+'</span>';
 }
 function loadSpc(){
-  var _lg=locSeq;
+  var fresh=locGuard();
   var el=document.getElementById("spc");
   document.getElementById("spcLoc").textContent="For "+current.name.replace(" (home)","");
   // Wait for the layer ids to resolve by NAME before querying. A wrong id returns zero features,
   // which renders as "No Severe Risk" — a silent false negative on a severe-weather card is far
   // worse than a slower first paint, so the card holds its loading state until the ids are known.
   return resolveRiskLayers().then(function(){
-    if(_lg!==locSeq) return null;
+    if(!fresh()) return null;
     return Promise.all([spcQuery(RISK_LAYERS.spc[0]),spcQuery(RISK_LAYERS.spc[1]),spcQuery(RISK_LAYERS.spc[2]),
             eroQuery(RISK_LAYERS.ero[0]),eroQuery(RISK_LAYERS.ero[1]),eroQuery(RISK_LAYERS.ero[2]),
             fireQuery(RISK_LAYERS.fireCat[0]),fireQuery(RISK_LAYERS.fireCat[1]),fireDay3Query()]);
   }).then(function(r){
     if(!r) return;             // stale generation — nothing to paint
-    if(_lg!==locSeq) return;   // user moved while this was in flight
+    if(!fresh()) return;   // user moved while this was in flight
     smart.spcRisk=r[0]||0;
     smart.eroRisk=r[3]||0;
     smart.fireRisk=r[6]||0;
@@ -2431,11 +2436,11 @@ function cpcPill(kind,r){
   return '<span class="cpc-pill" style="background:'+bg+';color:'+textOn(bg)+'">'+label+pct+'</span>';
 }
 function loadCpc(){
-  var _lg=locSeq;
+  var fresh=locGuard();
   var el=document.getElementById("cpc"); if(!el) return Promise.resolve();
   var jobs=[pointQuery(CPC_610,0),pointQuery(CPC_610,1),pointQuery(CPC_814,0),pointQuery(CPC_814,1)];
   return Promise.allSettled(jobs).then(function(rs){
-    if(_lg!==locSeq) return;   // user moved while this was in flight
+    if(!fresh()) return;   // user moved while this was in flight
     function val(i){ return rs[i].status==="fulfilled"?cpcParse(rs[i].value):null; }
     el.innerHTML='<div class="cpc-grid">'
       +'<div class="cpc-item"><div class="k">6\u201310 Day \u00b7 Temp</div>'+cpcPill("t",val(0))+'</div>'
@@ -2474,7 +2479,7 @@ function droughtCat(dm){
   return m[dm]||null;   // null = no drought at this point
 }
 function loadDrought(){
-  var _lg=locSeq;
+  var fresh=locGuard();
   var card=document.getElementById("droughtCard"); if(!card) return Promise.resolve();
   function outlookRow(id, rs){
     var el=document.getElementById(id); if(!el) return;
@@ -2490,7 +2495,7 @@ function loadDrought(){
     pointQuery(DROUGHT_OUTLK_URL,1,"outlook"),
     pointQuery(DROUGHT_OUTLK_URL,4,"outlook")
   ]).then(function(r){
-    if(_lg!==locSeq) return;   // user moved while this was in flight
+    if(!fresh()) return;   // user moved while this was in flight
     // Now — U.S. Drought Monitor
     var nowEl=document.getElementById("drNow");
     if(nowEl){
@@ -2622,13 +2627,13 @@ function hazForecastNote(h){
   return mode==="hi"?("peaks "+best.v+"° "+best.n+" in the 7-day"):("down to "+best.v+"° "+best.n+" in the 7-day");
 }
 function loadHazards(){
-  var _lg=locSeq;
+  var fresh=locGuard();
   var el=document.getElementById("hazards"); if(!el) return Promise.resolve();
   // Real service layout: 3-7 day → Temp(1) Precip(4) Fire/Drought(7); 8-14 day → Temp(3) Precip(6) Fire/Drought(8)
   var q37=[pointQuery(HZ_URL,1),pointQuery(HZ_URL,4),pointQuery(HZ_URL,7)];
   var q814=[pointQuery(HZ_URL,3),pointQuery(HZ_URL,6),pointQuery(HZ_URL,8)];
   return Promise.allSettled(q37.concat(q814)).then(function(all){
-    if(_lg!==locSeq) return;   // user moved while this was in flight
+    if(!fresh()) return;   // user moved while this was in flight
     var d37=hazScan(all.slice(0,3));
     var d814=hazScan(all.slice(3,6));
     function block(title,list){
@@ -2780,9 +2785,13 @@ function climAllOK(c,showSnow){
   return c.t1.ok&&c.t2.ok&&c.p1.ok&&c.p2.ok&&(!showSnow||c.sn.ok);
 }
 function loadClimate(){
-  var _lg=locSeq;
+  var fresh=locGuard();
   var grid=document.getElementById("cnGrid"); if(!grid) return Promise.resolve();
   return Promise.all([climStation(current.lat,current.lon), deepStation(current.lat,current.lon)]).then(function(sts){
+    // Guard HERE, not just at the ask() below: the station lookup is itself async, so a resolved
+    // station from a place the user has already left was being written straight into climate state
+    // and the card's footer. That's how "VICHY ROLLA" ended up labelling Quincy's departures.
+    if(!fresh()) return;
     var st=sts[0], deep=sts[1];
     climate.station=st.sid; climate.stationName=st.name;
     var nameEl=document.getElementById("cnStation"); if(nameEl) nameEl.textContent=st.name||st.sid;
@@ -2833,7 +2842,7 @@ function loadClimate(){
       renderContext();
     }
     return ask(st.sid).then(function(local){
-      if(_lg!==locSeq) return;   // user moved while this was in flight
+      if(!fresh()) return;   // user moved while this was in flight
       climate.normHi=local.normHi; climate.normLo=local.normLo;   // normals are gap-free \u2014 always local
       if(climAllOK(local,showSnow) || !deep || !deep.sid || deep.sid===st.sid){ paint(local,""); return; }
       // Local station is too gappy for the running totals. Month/year anomalies are broad-scale,
@@ -2918,16 +2927,18 @@ function ctxNumPairs(rows,col,pickMax){
   return {best:best, sorted:vals};
 }
 function loadClimateContext(){
-  var _lg=locSeq;
+  var fresh=locGuard();
   try{ localStorage.removeItem("lsxCtx_v1"); }catch(e){}   // pre-split cache format
   return climStation(current.lat,current.lon).then(function(st){
    return deepStation(current.lat,current.lon).then(function(deep){
     // Depth vs locality: daily records/rankings come from the deep legacy station; monthly,
     // recent dailies, and normals stay on the NEAREST station, because those need locality.
     var rec=(deep&&deep.sid)?deep:st;
+    if(!fresh()) return null;   // both station lookups are async — same trap as loadClimate
     var key=st.sid+"|"+rec.sid+"|"+ctxTodayKey();
     try{
       var c=JSON.parse(localStorage.getItem(CTX_KEY)||"null");
+      // a cache HIT paints synchronously, so it needs the guard just as much as a fetch does
       if(c&&c.key===key&&c.ctx){ ctx=c.ctx; ctx.ready=true; renderContext(); return null; }
     }catch(e){}
     var now=new Date(), y=now.getFullYear();
@@ -2949,7 +2960,7 @@ function loadClimateContext(){
       acisPost("StnData",{sid:st.sid,sdate:today,edate:wkEndStr,
         elems:[{name:"maxt",normal:"1"},{name:"mint",normal:"1"}]})
     ]).then(function(rs){
-      if(_lg!==locSeq) return;   // user moved while this was in flight
+      if(!fresh()) return;   // user moved while this was in flight
       function data(i){
         if(rs[i].status!=="fulfilled") return null;
         var v=rs[i].value;
@@ -3124,7 +3135,7 @@ function renderCurrentCtx(){
 var QPF_URL="https://mapservices.weather.noaa.gov/vector/rest/services/precip/wpc_qpf/MapServer";
 var qpfLayerId;   // undefined = not checked yet; null = service has no 7-day layer (a real answer — don't refetch)
 function loadQpf(){
-  var _lg=locSeq;
+  var fresh=locGuard();
   var chip=document.getElementById("qpf7"); if(!chip) return Promise.resolve();
   function findLayer(){
     if(qpfLayerId!==undefined) return Promise.resolve(qpfLayerId);
@@ -3143,7 +3154,7 @@ function loadQpf(){
     return pointQuery(QPF_URL+"/",id,"*");
   }).then(function(d){
     var maxQ=null;
-    if(_lg!==locSeq) return;   // user moved while this was in flight
+    if(!fresh()) return;   // user moved while this was in flight
     (d.features||[]).forEach(function(f){
       var at=f.attributes||{};
       for(var k in at){
@@ -3168,11 +3179,6 @@ var STN_LIST=[
   {id:"KMDH",lat:37.78,lon:-89.25},{id:"KPPQ",lat:39.63,lon:-90.78},{id:"KSLO",lat:38.64,lon:-88.96}
 ];
 var stnMap=null, stnBase=null, stnLayer=null;
-function tColor(f){ // temperature → color (blue cold → red hot)
-  if(f==null) return "var(--muted)";
-  if(f<=20) return "#4a6cff"; if(f<=32) return "#4aa3ff"; if(f<=45) return "#3ec8d8";
-  if(f<=60) return "#3ecf8e"; if(f<=75) return "#e0b93a"; if(f<=88) return "#ff9f43"; return "#ff5a5f";
-}
 var stnObs=[], stnMode="temp";
 function rhFromTd(tF,tdF){   // Magnus — lets us derive feels-like from what METAR actually reports
   if(tF==null||tdF==null) return null;
@@ -3203,9 +3209,9 @@ function stnValue(o,mode){
   return o.tempF;
 }
 function stnColor(v,mode){
-  if(mode==="dew") return dewColor(v);
-  if(mode==="wind") return windColor(v);
-  return tColor(v);
+  if(mode==="dew") return dewColor(v);      // dew point and wind are different quantities —
+  if(mode==="wind") return windColor(v);    // their own palettes are correct, not duplication
+  return tChip(v);                          // temp & feels-like: the shared ramp
 }
 function stnMarkerHTML(o,mode,isExtreme){
   var v=stnValue(o,mode);
@@ -3412,6 +3418,20 @@ function stationFor(lat,lon){
    before it lands, the response is DISCARDED rather than painted: a slow forecast for the old
    town was otherwise overwriting the new one and sitting there under the new town's label. */
 var locSeq=0, snapSafeSeq=0;
+/* Packages the capture half of that guard. Call it once at the top of a location-scoped loader,
+   then call the returned fresh() immediately before any DOM write:
+
+     function loadThing(){
+       var fresh=locGuard();
+       return getJSON(url).then(function(d){ if(!fresh()) return; paint(d); });
+     }
+
+   This is deliberately not a full wrapper. Loaders paint from inside their own promise chains —
+   several from two or three different branches — so there is no single return value a wrapper
+   could gate on, and converting them all to hand a paint closure back would be a large rewrite of
+   safety-critical code. What it does remove is the half that was quietly easy to get wrong:
+   capturing locSeq at the wrong moment, or comparing against the wrong variable. */
+function locGuard(){ var g=locSeq; return function(){ return g===locSeq; }; }
 /* Derived state is cleared on every change so a render can never MIX two places -- e.g. the new
    town's forecast high ranked against the old town's 96-year record. */
 function resetLocationState(){
@@ -3849,13 +3869,13 @@ function seasonHTML(){
     +'</div>';
 }
 function loadSeasonal(){
-  var _lg=locSeq;
+  var fresh=locGuard();
   var k=seasonOf();
   season.kind=k;
   var jobs=[];
   if(k==="summer") jobs.push(loadUvPeak());
   if(k==="fall"||k==="spring") jobs.push(loadFreezeNormals(k));
-  return Promise.all(jobs).then(function(){ if(_lg!==locSeq) return; updateSmartSlot(true); }, function(){ if(_lg!==locSeq) return; updateSmartSlot(true); });
+  return Promise.all(jobs).then(function(){ if(!fresh()) return; updateSmartSlot(true); }, function(){ if(!fresh()) return; updateSmartSlot(true); });
 }
 function stormy(){ return smart.warning||smart.watch||smart.thunderSoon||smart.spcRisk>=4||smart.eroRisk>=2; }
 function smartReason(){
