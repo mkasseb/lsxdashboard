@@ -429,9 +429,11 @@
   /* CPC Hazards Outlook */
   .hz-row{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--border)}
   .hz-row:last-child{border-bottom:0}
-  .hz-when{font-size:12px;color:var(--muted);font-weight:700;flex:0 0 62px;padding-top:3px}
+  .hz-when{font-size:12px;color:var(--muted);font-weight:700;flex:0 0 72px;padding-top:3px;white-space:nowrap}   /* fits "Days 8–14" — 62px wrapped it */
   .hz-list{display:flex;flex-wrap:wrap;gap:6px}
   .hz-chip{font-size:12px;font-weight:600;padding:4px 10px;border-radius:14px;background:var(--chip);border:1px solid var(--border)}
+  .hz-chip .hz-dates{color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums}
+  .hz-fc{flex-basis:100%;font-size:11.5px;color:var(--muted);line-height:1.4}
   .hz-none{font-size:12.5px;color:var(--muted)}
   .hz-clear .hz-none::before{content:"✓ ";color:#3ecf8e;font-weight:700}
   /* Drought Monitor line */
@@ -483,11 +485,13 @@
   .rsub .rup{color:#ff9f43}.rsub .rdn{color:#3ecf8e}
 
   /* Risk Outlook matrix (SPC storm + WPC flood) */
-  .spc-row{display:grid;grid-template-columns:52px 1fr 1fr 1fr;align-items:center;gap:6px;padding:8px 0;border-bottom:1px solid var(--border)}
+  /* label track must FIT "Tomorrow" — at 52px the word overflowed the track and painted
+     underneath the first pill (single word, so it can't wrap) */
+  .spc-row{display:grid;grid-template-columns:74px 1fr 1fr 1fr;align-items:center;gap:6px;padding:8px 0;border-bottom:1px solid var(--border)}
   .spc-row:last-child{border-bottom:0}
   .spc-row.rhead{padding:2px 0 6px;border-bottom:1px solid var(--border)}
   .spc-row .rh{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;text-align:center}
-  .spc-day{font-size:13px;color:var(--muted);font-weight:600}
+  .spc-day{font-size:13px;color:var(--muted);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   /* wrap rather than nowrap: at masonry column widths the three pills overflowed the card and
      gave the whole page a horizontal scrollbar */
   .spc-row>*{min-width:0}
@@ -923,7 +927,7 @@
         <a class="link" href="https://www.wpc.ncep.noaa.gov/threats/threats.php" target="_blank" rel="noopener">WPC ↗</a>
       </h2>
       <div id="hazards"><div class="loading">Loading hazards…</div></div>
-      <div class="imgcap"><span>CPC/WPC U.S. Hazards</span><span>days 3–14</span></div>
+      <div class="imgcap"><span>CPC/WPC U.S. Hazards</span><span id="hazIssued">days 3–14</span></div>
     </section>
     <!-- DROUGHT OUTLOOK — current (USDM) + monthly & seasonal forecast (CPC) -->
     <section class="card" id="droughtCard">
@@ -2431,14 +2435,18 @@ function hazLabel(raw){
   var pretty=core.replace(/_/g," ").replace(/\s+/g," ").trim().replace(/\b\w/g,function(c){return c.toUpperCase();});
   return pretty || "Hazard";
 }
+/* Each hazard polygon carries far more than a name: the service's own display label, the
+   REAL valid window (start_date/end_date, UTC-midnight day boundaries), an optional second
+   period for split windows, and the issuance timestamp. Return structured records, merging
+   same-label polygons into one date envelope. Missing fields degrade to a plain chip. */
 function hazScan(results){
-  var out=[];
+  var out=[];   // [{label, start, end}]
   results.forEach(function(rs){
     if(rs.status!=="fulfilled"||!rs.value) return;
     (rs.value.features||[]).forEach(function(f){
       var at=f.attributes||{}, label="";
-      // Prefer the documented hazard-type field, translated to plain English
-      if(at.prod_type){ label=hazLabel(at.prod_type); }
+      if(typeof at.label==="string"&&at.label.trim()){ label=at.label.trim(); }   // the service names it — use that
+      else if(at.prod_type){ label=hazLabel(at.prod_type); }
       else if(at.Prod_Type){ label=hazLabel(at.Prod_Type); }
       else {
         for(var k in at){
@@ -2447,12 +2455,58 @@ function hazScan(results){
         }
         // if the fallback grabbed a raw-looking code (underscores / Dx_y), clean it up too
         if(/_D\d+_\d+|_(clip|fill|outline)$/i.test(label)) label=hazLabel(label);
+        label=label.trim();
       }
-      label=label.trim();
-      if(label && out.indexOf(label)<0) out.push(label);
+      if(!label) return;
+      var rec=null;
+      for(var i=0;i<out.length;i++){ if(out[i].label===label){ rec=out[i]; break; } }
+      if(!rec){ rec={label:label, start:null, end:null}; out.push(rec); }
+      [at.start_date, at.start_dt2].forEach(function(s){
+        if(typeof s==="number"&&s>0&&(rec.start==null||s<rec.start)) rec.start=s;
+      });
+      [at.end_date, at.end_dt2].forEach(function(e){
+        if(typeof e==="number"&&e>0&&(rec.end==null||e>rec.end)) rec.end=e;
+      });
     });
   });
   return out;
+}
+/* Hazard dates are UTC-midnight day boundaries — format in UTC or the calendar day shifts back
+   one when rendered in Chicago time. */
+function hazD(ms,withMonth){
+  // assembled by hand — locale part-ordering turned "Wed 29" into "29 Wed" and added commas
+  var d=new Date(ms);
+  var wd=d.toLocaleDateString([], {weekday:"short",timeZone:"UTC"});
+  var mo=d.toLocaleDateString([], {month:"short",timeZone:"UTC"});
+  return wd+" "+(withMonth?mo+" ":"")+d.getUTCDate();
+}
+function hazRange(s,e){
+  if(s==null&&e==null) return "";
+  if(s!=null&&e!=null){
+    if(s===e) return hazD(s,true);
+    return hazD(s,true)+" – "+hazD(e, new Date(e).getUTCMonth()!==new Date(s).getUTCMonth());
+  }
+  return hazD(s!=null?s:e,true);
+}
+/* Corroborate temperature hazards against the 7-day already on the page:
+   "Hazardous Heat · Sun–Tue" + forecast 94/98/95 that stretch → "peaks 98° Monday in the 7-day" */
+function hazForecastNote(h){
+  if(!smart.days||!smart.days.length||h.start==null||h.end==null) return "";
+  var l=h.label.toLowerCase();
+  var mode=/heat|hot/.test(l)?"hi":(/cold|freeze|frost|chill/.test(l)?"lo":"");
+  if(!mode) return "";
+  function utcKey(ms){ var d=new Date(ms); return d.getUTCFullYear()*10000+(d.getUTCMonth()+1)*100+d.getUTCDate(); }
+  function locKey(iso){ var d=new Date(iso); return d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate(); }
+  var ks=utcKey(h.start), ke=utcKey(h.end), best=null;
+  smart.days.forEach(function(d){
+    var p=d.day||d.night; if(!p||!p.startTime) return;
+    var k=locKey(p.startTime);
+    if(k<ks||k>ke) return;
+    if(mode==="hi"&&d.day&&d.day.temperature!=null&&(!best||d.day.temperature>best.v)) best={v:d.day.temperature,n:d.name};
+    if(mode==="lo"&&d.night&&d.night.temperature!=null&&(!best||d.night.temperature<best.v)) best={v:d.night.temperature,n:d.name};
+  });
+  if(!best) return "";
+  return mode==="hi"?("peaks "+best.v+"° "+best.n+" in the 7-day"):("down to "+best.v+"° "+best.n+" in the 7-day");
 }
 function loadHazards(){
   var el=document.getElementById("hazards"); if(!el) return Promise.resolve();
@@ -2464,11 +2518,31 @@ function loadHazards(){
     var d814=hazScan(all.slice(3,6));
     function block(title,list){
       if(!list.length) return '<div class="hz-row hz-clear"><span class="hz-when">'+title+'</span><span class="hz-none">No hazards flagged</span></div>';
-      return '<div class="hz-row"><span class="hz-when">'+title+'</span><span class="hz-list">'
-        +list.map(function(h){return '<span class="hz-chip">'+hazIcon(h)+' '+esc(h)+'</span>';}).join("")
+      var notes=[];
+      var chips=list.map(function(h){
+        var r=hazRange(h.start,h.end);
+        var n=hazForecastNote(h); if(n&&notes.indexOf(n)<0) notes.push(n);
+        return '<span class="hz-chip">'+hazIcon(h.label)+' '+esc(h.label)
+          +(r?' <span class="hz-dates">· '+esc(r)+'</span>':'')+'</span>';
+      }).join("");
+      return '<div class="hz-row"><span class="hz-when">'+title+'</span><span class="hz-list">'+chips
+        +(notes.length?'<span class="hz-fc">'+esc(notes.join(" · "))+'</span>':'')
         +'</span></div>';
     }
     el.innerHTML=block("Days 3–7",d37)+block("Days 8–14",d814);
+    // issuance freshness: the newest file date across whatever layers answered
+    var issued=0;
+    all.forEach(function(rs){
+      if(rs.status!=="fulfilled"||!rs.value) return;
+      (rs.value.features||[]).forEach(function(f){
+        var t=(f.attributes||{}).idp_filedate;
+        if(typeof t==="number"&&t>issued) issued=t;
+      });
+    });
+    var cap=document.getElementById("hazIssued");
+    if(cap) cap.textContent=issued
+      ?("issued "+new Date(issued).toLocaleDateString([], {weekday:"short"})+" · days 3–14")
+      :"days 3–14";
   }).catch(function(){
     el.innerHTML='<div class="empty">Hazards outlook unavailable. <a href="https://www.wpc.ncep.noaa.gov/threats/threats.php" target="_blank" rel="noopener">Open WPC Hazards ↗</a></div>';
   });
