@@ -2640,15 +2640,18 @@ function loadClimate(){
     climate.station=st.sid; climate.stationName=st.name;
     var nameEl=document.getElementById("cnStation"); if(nameEl) nameEl.textContent=st.name||st.sid;
     var showSnow=(function(){var m=new Date().getMonth();return m>=10||m<=3;})(); // Nov–Apr
+    // add:"mcnt" makes each running departure come back as [departure, missing-day-count] so a
+    // gappy station can't pass off a hole-riddled sum as a real anomaly (Mount Vernon: "-19.99""
+    // year precip departure with 79 of the days simply missing)
     var elems=[
       {name:"maxt",normal:"1"},
       {name:"mint",normal:"1"},
-      {name:"avgt",duration:"mtd",reduce:"mean",normal:"departure"},
-      {name:"avgt",duration:"ytd",reduce:"mean",normal:"departure"},
-      {name:"pcpn",duration:"mtd",reduce:"sum",normal:"departure"},
-      {name:"pcpn",duration:"ytd",reduce:"sum",normal:"departure"}
+      {name:"avgt",duration:"mtd",reduce:{reduce:"mean",add:"mcnt"},normal:"departure"},
+      {name:"avgt",duration:"ytd",reduce:{reduce:"mean",add:"mcnt"},normal:"departure"},
+      {name:"pcpn",duration:"mtd",reduce:{reduce:"sum",add:"mcnt"},normal:"departure"},
+      {name:"pcpn",duration:"ytd",reduce:{reduce:"sum",add:"mcnt"},normal:"departure"}
     ];
-    if(showSnow) elems.push({name:"snow",duration:"std",season_start:"07-01",reduce:"sum",normal:"departure"});
+    if(showSnow) elems.push({name:"snow",duration:"std",season_start:"07-01",reduce:{reduce:"sum",add:"mcnt"},normal:"departure"});
     var _d=new Date();
     var today=_d.getFullYear()+"-"+("0"+(_d.getMonth()+1)).slice(-2)+"-"+("0"+_d.getDate()).slice(-2); // LOCAL date (toISOString is UTC → wrong in the evening)
     return acisPost("StnData",{sid:st.sid, sdate:today, edate:today, elems:elems, meta:["name"]}).then(function(r){
@@ -2657,10 +2660,16 @@ function loadClimate(){
       var row=r.data[0];
       // Some elems (normal:"departure") can return a [value, departure] pair; grab the departure when present.
       function cell(x){ return Array.isArray(x) ? acisNum(x[x.length-1]) : acisNum(x); }
+      // departure cells are [departure, missing-days]; too many holes → null (renders as "—")
+      function dep(x,maxMiss){
+        if(!Array.isArray(x)) return acisNum(x);
+        var miss=(x.length>1)?(+x[1]||0):0;
+        return (miss>maxMiss)?null:acisNum(x[0]);
+      }
       climate.normHi=cell(row[1]);
       climate.normLo=cell(row[2]);
-      var tMTD=cell(row[3]), tYTD=cell(row[4]), pMTD=cell(row[5]), pYTD=cell(row[6]);
-      var snowSTD=showSnow?cell(row[7]):null;
+      var tMTD=dep(row[3],5), tYTD=dep(row[4],14), pMTD=dep(row[5],5), pYTD=dep(row[6],14);
+      var snowSTD=showSnow?dep(row[7],21):null;
       climate.snowSTD=snowSTD;   // winter slot reports season snow vs normal
       var cells=''
         +'<div class="cn-cell"><span class="cn-lbl">Temp · month</span>'+fmtDep(tMTD,"°")+'</div>'
@@ -2687,10 +2696,50 @@ function loadClimate(){
      4. normals for the week ahead                → per-day departures in the 7-day detail
    A pre-POR start date (1850) is fine — ACIS pads with "M", which we filter. Everything here
    degrades to silence: a number we can't verify is never shown. */
-var CTX_KEY="lsxCtx_v1";
+var CTX_KEY="lsxCtx_v2";
 var ctx={ready:false, recHi:null, recLo:null, recPcp:null, doyHi:[], doyLo:[],
          monWet:[], monWarm:[], monMtd:null, monMean:null, monName:"", years:0,
-         dry:null, hist:null, normWeek:{}};
+         dry:null, hist:null, normWeek:{}, recStation:""};
+/* Minimum samples before a statistic is worth printing. "Warmer than 0 of 11 Jul 24s" carries
+   the same visual confidence as "12 of 96" — suppression beats false precision. */
+var CTX_MIN_YEARS=30, CTX_MIN_MONTHS=25;
+/* ---- deep-record station for daily records & rankings ----
+   The nearest station is right for normals and recent stats, but records need DEPTH. A station
+   qualifies as deep when its temperature POR starts by 1965 — a legacy record, not a modern
+   ASOS whose daterange merely LOOKS long (Mount Vernon spans 1976–2026 with 11 usable years).
+   Search wider than the local pick (±1.8°) since legacy stations are sparse. */
+var _deepCache={};
+function deepStation(lat,lon){
+  var key=lat.toFixed(1)+","+lon.toFixed(1);
+  if(_deepCache[key]!==undefined) return Promise.resolve(_deepCache[key]);
+  var d=1.8, bbox=[lon-d, lat-d, lon+d, lat+d];
+  var p=acisPost("StnMeta",{bbox:bbox, elems:["maxt"], meta:["name","sids","ll","valid_daterange"]}).then(function(r){
+    var now=new Date(), best=null, bestDist=1e9;
+    (r.meta||[]).forEach(function(s){
+      if(!s.ll||!s.sids||!s.sids.length) return;
+      var dr=(s.valid_daterange||[])[0];
+      if(!dr||!dr[0]||!dr[1]) return;
+      var startYr=parseInt(String(dr[0]).slice(0,4),10), endYr=parseInt(String(dr[1]).slice(0,4),10);
+      if(!startYr||!endYr) return;
+      if(startYr>1965) return;                          // no legacy depth
+      if((now.getFullYear()-endYr)>2) return;           // discontinued
+      var firstOrder=s.sids.some(function(x){ var t=x.split(" ")[1]; return t==="1"||t==="3"; });
+      if(!firstOrder) return;                           // airports: continuous, quality-controlled
+      var dist=Math.sqrt(Math.pow(s.ll[0]-lon,2)+Math.pow(s.ll[1]-lat,2));
+      if(dist<bestDist){ bestDist=dist; best=s; }
+    });
+    if(!best){ _deepCache[key]=null; return null; }
+    var sid=null;
+    best.sids.forEach(function(s){ var q=s.split(" "); if(q[1]==="3"&&!sid) sid=q[0]; });
+    best.sids.forEach(function(s){ var q=s.split(" "); if(q[1]==="1"&&!sid) sid=q[0]; });
+    if(!sid) sid=best.sids[0].split(" ")[0];
+    var out={sid:sid, name:best.name||sid};
+    _deepCache[key]=out;
+    return out;
+  }).catch(function(){ delete _deepCache[key]; return null; });   // transient failure → retry next cycle
+  _deepCache[key]=p;
+  return p;
+}
 var MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
 function ctxTodayKey(){ var d=new Date(); return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2); }
 function ctxNumPairs(rows,col,pickMax){
@@ -2707,8 +2756,13 @@ function ctxNumPairs(rows,col,pickMax){
   return {best:best, sorted:vals};
 }
 function loadClimateContext(){
+  try{ localStorage.removeItem("lsxCtx_v1"); }catch(e){}   // pre-split cache format
   return climStation(current.lat,current.lon).then(function(st){
-    var key=st.sid+"|"+ctxTodayKey();
+   return deepStation(current.lat,current.lon).then(function(deep){
+    // Depth vs locality: daily records/rankings come from the deep legacy station; monthly,
+    // recent dailies, and normals stay on the NEAREST station, because those need locality.
+    var rec=(deep&&deep.sid)?deep:st;
+    var key=st.sid+"|"+rec.sid+"|"+ctxTodayKey();
     try{
       var c=JSON.parse(localStorage.getItem(CTX_KEY)||"null");
       if(c&&c.key===key&&c.ctx){ ctx=c.ctx; ctx.ready=true; renderContext(); return null; }
@@ -2720,7 +2774,7 @@ function loadClimateContext(){
     var wkEndStr=wkEnd.getFullYear()+"-"+("0"+(wkEnd.getMonth()+1)).slice(-2)+"-"+("0"+wkEnd.getDate()).slice(-2);
     var histStart=(y-2)+"-"+mm+"-"+dd;
     return Promise.allSettled([
-      acisPost("StnData",{sid:st.sid,sdate:"1850-"+mm+"-"+dd,edate:today,
+      acisPost("StnData",{sid:rec.sid,sdate:"1850-"+mm+"-"+dd,edate:today,
         elems:[{name:"maxt",interval:[1,0,0],duration:1,reduce:"max"},
                {name:"mint",interval:[1,0,0],duration:1,reduce:"min"},
                {name:"pcpn",interval:[1,0,0],duration:1,reduce:"sum"}]}),
@@ -2740,7 +2794,8 @@ function loadClimateContext(){
       }
       var nctx={ready:false, recHi:null, recLo:null, recPcp:null, doyHi:[], doyLo:[],
                 monWet:[], monWarm:[], monMtd:null, monMean:null, monName:MONTHS[now.getMonth()],
-                years:0, dry:null, hist:null, normWeek:{}};
+                years:0, dry:null, hist:null, normWeek:{},
+                recStation:(rec.sid!==st.sid)?(rec.name||rec.sid):""};
       // 1 — this calendar day, every year
       var doy=data(0);
       if(doy){
@@ -2791,6 +2846,7 @@ function loadClimateContext(){
       renderContext();
       return null;
     });
+   });
   }).catch(function(){ /* context is a bonus layer — silence on failure */ });
 }
 /* ---- derived lookups (cheap, recomputed as the forecast changes) ---- */
@@ -2821,6 +2877,12 @@ function ctxSince(kind,v){
   return {date:null, days:null, beyond:true};
 }
 function fmtMD(d){ return d?d.toLocaleDateString([], {month:"short", day:"numeric"}):""; }
+function shortStn(n){   // "ST LOUIS LAMBERT INTL AIRPORT" → "St Louis Lambert"
+  var w=String(n||"").split(/\s+/).filter(function(x){
+    return !/^(INTL|INTERNATIONAL|AIRPORT|ARPT|AP|FIELD|FLD|MUNICIPAL|MUNI|RGNL|REGIONAL|OUTLAND|AFB)$/i.test(x);
+  });
+  return w.slice(0,3).join(" ").replace(/\w\S*/g,function(t){ return t.charAt(0)+t.slice(1).toLowerCase(); });
+}
 function renderContext(){
   var el=document.getElementById("cnCtx");
   if(!el) return;
@@ -2828,14 +2890,19 @@ function renderContext(){
   var L=[];
   function line(ico,html,cls){ L.push('<div class="cx'+(cls?" "+cls:"")+'"><span class="cxi">'+ico+'</span><span>'+html+'</span></div>'); }
   var md=fmtMD(new Date());
-  // records for today
-  if(ctx.recHi&&ctx.recLo){
+  // records for today — only from a sample that can support the claim; attribute the deep
+  // station when it isn't the local one
+  var deepOK=ctx.years>=CTX_MIN_YEARS;
+  if(deepOK&&ctx.recHi&&ctx.recLo){
     line("🏆","Record for "+md+": high <b class=\"cx-rec\">"+Math.round(ctx.recHi.v)+"°</b> ("+ctx.recHi.y+")"
       +" · low <b class=\"cx-cold\">"+Math.round(ctx.recLo.v)+"°</b> ("+ctx.recLo.y+")"
-      +(ctx.years?' <span style="opacity:.7">· '+ctx.years+" years of record</span>":""));
+      +' <span style="opacity:.7">· '+ctx.years+" years"
+      +(ctx.recStation?" · "+esc(shortStn(ctx.recStation)):"")+'</span>');
+  }else if(ctx.years>0&&!deepOK){
+    line("ℹ️","Stations near here have short records ("+ctx.years+" yrs) — daily records omitted");
   }
   // where today's forecast high would land among all same-dates
-  var r=ctxRankBelow(ctx.doyHi,climate.fcHi);
+  var r=deepOK?ctxRankBelow(ctx.doyHi,climate.fcHi):null;
   if(r&&climate.fcHi!=null){
     var pos=Math.max(0,Math.min(100,r.pct));
     L.push('<div class="cx cx-rank">'
@@ -2844,13 +2911,13 @@ function renderContext(){
       +'<div class="cx-bar"><i style="left:calc('+pos+'% - 1.5px)"></i></div>'
       +'</div>');
   }
-  // month-to-date precipitation in the context of every past same-month
-  if(ctx.monMtd!=null&&ctx.monWet.length){
+  // month-to-date rankings stay LOCAL, so they need the local station to have enough history —
+  // "wetter than 4 of 17 full Julys" is noise dressed as signal
+  if(ctx.monMtd!=null&&ctx.monWet.length>=CTX_MIN_MONTHS){
     var rw=ctxRankBelow(ctx.monWet,ctx.monMtd);
     line("🌧️",ctx.monName+" rain <b class=\"cx-wet\">"+ctx.monMtd.toFixed(2)+"″</b> so far — already wetter than <b>"+rw.below+"</b> of "+rw.total+" full "+ctx.monName+"s");
   }
-  // month-to-date mean temperature ranking (means compare honestly, unlike partial sums)
-  if(ctx.monMean!=null&&ctx.monWarm.length){
+  if(ctx.monMean!=null&&ctx.monWarm.length>=CTX_MIN_MONTHS){
     var rt=ctxRankBelow(ctx.monWarm,ctx.monMean);
     line("🌡️",ctx.monName+" averaging <b>"+ctx.monMean.toFixed(1)+"°</b> — warmer than <b>"+rt.below+"</b> of "+rt.total+" "+ctx.monName+"s");
   }
@@ -2881,8 +2948,11 @@ function renderCurrentCtx(){
   if(!el) return;
   var bits=[];
   if(climate.normHi!=null&&climate.normLo!=null) bits.push("Normal <b>"+Math.round(climate.normHi)+"°/"+Math.round(climate.normLo)+"°</b>");
-  if(ctx.recHi) bits.push("record high <b>"+Math.round(ctx.recHi.v)+"°</b> ("+ctx.recHi.y+")");
-  if(ctx.recLo) bits.push("low <b>"+Math.round(ctx.recLo.v)+"°</b> ("+ctx.recLo.y+")");
+  if(ctx.years>=CTX_MIN_YEARS){   // records only when the sample can support them
+    if(ctx.recHi) bits.push("record high <b>"+Math.round(ctx.recHi.v)+"°</b> ("+ctx.recHi.y+")");
+    if(ctx.recLo) bits.push("low <b>"+Math.round(ctx.recLo.v)+"°</b> ("+ctx.recLo.y+")");
+    if(ctx.recStation&&(ctx.recHi||ctx.recLo)) bits.push('<span style="opacity:.75">'+esc(shortStn(ctx.recStation))+" records</span>");
+  }
   el.innerHTML=bits.length?bits.join(" · "):"";
 }
 
@@ -3716,8 +3786,9 @@ function renderTheCall(){
     });
     if(nice) push(55,"😎",dhi+"° and dry all day — about as good as it gets");
   }
-  // — climate context: only genuinely notable framings earn a pill —
-  if(ctx.ready&&climate.fcHi!=null&&ctx.recHi){
+  // — climate context: only genuinely notable framings earn a pill (and only from a record
+  //    deep enough to mean anything) —
+  if(ctx.ready&&ctx.years>=CTX_MIN_YEARS&&climate.fcHi!=null&&ctx.recHi){
     var gap=ctx.recHi.v-climate.fcHi;
     if(gap<=0) push(92,"🏆","Could reach the "+fmtMD(new Date())+" record of "+Math.round(ctx.recHi.v)+"° ("+ctx.recHi.y+")");
     else if(gap<=4) push(88,"🏆","Within "+Math.round(gap)+"° of the "+fmtMD(new Date())+" record ("+Math.round(ctx.recHi.v)+"°, "+ctx.recHi.y+")");
