@@ -71,14 +71,24 @@ helpers → ~15 per-card loaders → derived renderers → orchestration → sch
 A few things are load-bearing and worth understanding before changing anything:
 
 **The page is ordered by what a visitor came for.** Alerts first (in calm weather that card
-collapses to a single all-clear line), then the hero band — Current Conditions beside the radar —
-then The Call, the 24-hour chart, the forecast discussion, and finally the masonry. The hero card
-carries the reading, today's high/low with "now" marked inside the range, sun times, and the next
-six hours, which is both the information a first-time visitor needs and what keeps the left column
-level with the radar instead of stranding a gap beside it. `.railhead` labels name each band; Storm
-Mode reorders the grid for urgency, so those labels hide when it engages. The hero row is a pair —
-`#radarCard` carries its own breakpoint overrides so the generic `col-8`/`col-4` rules can't drop
-the radar to full width while Current Conditions stays at half.
+collapses to a single all-clear line), then the hero band — "Now & Next 24 Hours" beside the radar
+— then The Call, the forecast discussion, and finally the masonry. `.railhead` labels name each
+band; Storm Mode reorders the grid for urgency, so those labels hide when it engages.
+
+**The hero card is two loaders in one card.** `#current` (the reading, today's range with "now"
+marked inside it, sun times) and `#hourly24` (the 24-hour chart) are *siblings* inside
+`#currentCard`, never nested. `loadCurrent()` rebuilds `#current` wholesale — including on failure
+— so nesting the chart inside it would let a dead observation feed take the forecast chart down
+with it, breaking the rule below. The chart measures its own container and thins its labels, so it
+survives the narrower column; it shows ~6 hour labels there against ~24 at full width, with
+per-hour detail still available on hover.
+
+**The hero row is a pair, and it stretches.** `#radarCard` carries its own breakpoint overrides so
+the generic `col-8`/`col-4` rules can't drop the radar to full width while the hero stays at half.
+Above 680px both sides are `align-self:stretch` and the radar map flexes, so the left column's
+content — which has no fixed height — sets the row height and the map absorbs the slack rather than
+stranding a gap. A `ResizeObserver` on `#radar` calls `invalidateSize()`, because that height moves
+as feeds land and Leaflet only watches the window.
 
 **Location generations.** Every fetch that describes *a place* captures the generation it was
 issued under via `locGuard()`, and checks `fresh()` before writing to the DOM. `setLocation()`

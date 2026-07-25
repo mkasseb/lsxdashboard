@@ -119,11 +119,12 @@
      order here — hoisting only alerts/radar/masonry shoved Current Conditions and the 24-hour
      chart below the entire masonry band, and left a 4-col gutter beside the radar (its row
      partner, the Current stack, wasn't lifted with it). Storm order: alerts → current+radar →
-     next-24h → The Call → The Pulse → masonry with the event's prime card packed first. */
+     The Call → The Pulse → masonry with the event's prime card packed first.
+     The 24h chart no longer needs its own hoist — timing is THE storm question, and the chart now
+     rides up with the Current stack it lives inside. */
   body.storm #alertsCard{order:-7}
-  body.storm .stack{order:-6}      /* Current Conditions + AQI — stays beside radar, above the fold */
+  body.storm .stack{order:-6}      /* Now & Next 24 Hours + AQI — stays beside radar, above the fold */
   body.storm #radarCard{order:-5}
-  body.storm #hourlyCard{order:-4} /* timing is THE storm question — the 24h chart stays high */
   body.storm #callCard{order:-3}
   body.storm #afdCard{order:-2}
   body.storm .masonry{order:-1}    /* prime card packs to its front */
@@ -193,6 +194,15 @@
      beside it. Keep the two together until the single-column breakpoint takes them both. */
   @media(max-width:1100px){#radarCard{grid-column:span 6}}
   @media(max-width:680px){#radarCard{grid-column:span 12}}
+  /* Hero row heights are driven by the left column's content, which no longer has a fixed size now
+     that the 24-hour chart lives there. Rather than let the radar strand whatever difference is
+     left over, stretch it and let the map absorb the slack — a taller radar is strictly better. */
+  @media(min-width:681px){
+    .grid>.stack.col-4,.grid>#radarCard{align-self:stretch}
+    #radarCard{display:flex;flex-direction:column}
+    #radarCard .imgwrap{flex:1 1 auto;display:flex;min-height:420px}
+    #radarCard #radar{height:auto;flex:1 1 auto;min-height:420px}
+  }
 
   /* ===== Phone polish (≤480px): prevent any crowding/overflow ===== */
   /* never let a stray wide element create a horizontal scrollbar */
@@ -364,14 +374,20 @@
   .cc-sun b{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}
   .cc-sun .cs-sep{opacity:.45}
   .cc-today:empty{display:none}
-  /* Next few hours — compact enough to sit inside the hero without competing with the reading */
-  .cc-next{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:12px;
-    padding-top:12px;border-top:1px solid var(--border)}
-  .cn-h{display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0}
-  .cnh-t{font-size:10.5px;font-weight:700;color:var(--muted);letter-spacing:.2px;white-space:nowrap}
-  .cnh-i{line-height:1;display:flex;align-items:center;justify-content:center;height:26px}
-  .cnh-v{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums}
-  .cnh-p{font-size:9.5px;color:var(--accent);font-weight:700;white-space:nowrap}
+
+  /* The 24-hour chart, folded into the hero. It used to be its own full-width card below The Call;
+     merging removes a card's worth of chrome and puts "what's coming" against "what it is now".
+     The chart already measures its own container and thins its labels, so a narrower column costs
+     label density, not legibility. */
+  .cc-h24{margin-top:13px;padding-top:12px;border-top:1px solid var(--border)}
+  .cc-h24-lbl{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.9px;
+    color:var(--muted);margin-bottom:9px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+  /* The band rail two inches above already names the place; repeating it here is noise. Kept in
+     the DOM (hidden) so the snapshot and clearLocationUI wiring for #h24loc stays untouched. */
+  .cc-h24-lbl #h24loc{display:none}
+  /* In a full-width card the "Now" pill is pushed to the far right as an anchor. In this column
+     that just strands it on a second row with a hole beside it — let it flow with the others. */
+  .cc-h24 .h24-pill.h24-now{margin-left:0}
 
   
   /* Daily */
@@ -916,9 +932,16 @@
 
   <!-- CURRENT -->
   <div class="stack col-4">
+    <!-- Now + next 24h in one card. #current and #hourly24 stay SIBLINGS rather than nesting the
+         chart inside #current: loadCurrent() rebuilds #current wholesale (including on failure),
+         which would take the chart down with it and break "every loader owns its failure". -->
     <section class="card hero" id="currentCard">
-      <h2>Current Conditions <span class="link" id="ccStation">&mdash;</span></h2>
+      <h2>Now &amp; Next 24 Hours <span class="link" id="ccStation">&mdash;</span></h2>
       <div id="current"><div class="loading">Loading…</div></div>
+      <div class="cc-h24">
+        <div class="cc-h24-lbl">Next 24 hours <span id="h24loc"></span></div>
+        <div id="hourly24"><div class="loading">Loading hourly…</div></div>
+      </div>
     </section>
     <!-- AQI — hidden unless air quality is actually notable (AQI > 100); the everyday reading
          lives as a one-line summary inside Current Conditions -->
@@ -952,18 +975,6 @@
        Sits directly under the hero: it is the page answering "so what do I do about it?" -->
   <section class="card col-12" id="callCard">
     <div class="callrow" id="callRow"></div>
-  </section>
-
-  <!-- ── NEXT 24 HOURS ── -->
-  <div class="railhead col-12">
-    <span class="rail-t">Next 24 hours</span>
-    <span class="rail-s">hour-by-hour temperature &amp; rain chance</span>
-  </div>
-
-  <!-- NEXT 24 HOURS (hero chart) -->
-  <section class="card col-12" id="hourlyCard">
-    <h2>Next 24 Hours <span class="link" id="h24loc"></span></h2>
-    <div id="hourly24"><div class="loading">Loading hourly…</div></div>
   </section>
 
   <!-- ── THE WEEK AHEAD & DEEPER CONTEXT ── -->
@@ -1556,6 +1567,13 @@ function initRadarMap(){
   }).addTo(rvMap);
   rvMarker=L.circleMarker([current.lat,current.lon],{radius:5,color:"#4aa3ff",weight:2,fillColor:"#4aa3ff",fillOpacity:.9,interactive:false}).addTo(rvMap);
   setTimeout(function(){ if(rvMap) rvMap.invalidateSize(); },250);
+  /* The radar now stretches to whatever height the hero column ends up at, and that height moves
+     as feeds land — not only on window resize, which is the only thing Leaflet watches by itself.
+     Without this the map keeps its first-measured size and renders into a stale viewport. */
+  if(window.ResizeObserver){
+    var rvRO=new ResizeObserver(function(){ if(rvMap) rvMap.invalidateSize(false); });
+    rvRO.observe(el);
+  }
   initRadarCtl();
   refreshRadarLayer();
   loadWarnPolygons(undefined);  // draw from cache if alerts already arrived
@@ -3293,21 +3311,8 @@ function renderHeroToday(){
     }
     out+='<div class="cc-sun">'+bits.join("")+'</div>';
   }
-  // Next few hours, in the hero. The full 24-hour chart is further down the page; this is the
-  // part you check on the way out the door, so it belongs next to the current reading.
-  var hrs=(smart.hourly||[]).slice(0,6);
-  if(hrs.length>=3){
-    out+='<div class="cc-next">'+hrs.map(function(p){
-      var pop=(p.probabilityOfPrecipitation&&p.probabilityOfPrecipitation.value)||0;
-      var t=new Date(p.startTime);
-      return '<div class="cn-h">'
-        +'<div class="cnh-t">'+t.toLocaleTimeString([],{hour:"numeric"}).replace(" ","")+'</div>'
-        +'<div class="cnh-i">'+wxImg(p.shortForecast,p.isDaytime,26)+'</div>'
-        +'<div class="cnh-v" style="color:'+tCol(p.temperature)+'">'+p.temperature+'°</div>'
-        +'<div class="cnh-p">'+(pop>=20?"💧"+pop+"%":"&nbsp;")+'</div>'
-        +'</div>';
-    }).join("")+'</div>';
-  }
+  // No next-few-hours strip here: the full 24-hour chart now sits in this same card, and two
+  // renderings of the same forecast an inch apart is worse than either alone.
   el.innerHTML=out;
 }
 function renderCurrentCtx(){
