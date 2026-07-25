@@ -1018,13 +1018,16 @@ var LD = {"Accept":"application/ld+json"};
 var current = DEFAULT_LOC;
 
 /* ============ HELPERS ============ */
-function getJSON(url, headers){
-  return fetch(url,{headers:headers||{}}).then(function(r){
+function getJSON(url, headers, signal){
+  var opt={headers:headers||{}};
+  if(signal) opt.signal=signal;   // pass locSignal() to make a fetch cancellable on location change
+  return fetch(url,opt).then(function(r){
     if(!r.ok) throw new Error(url+" "+r.status);
     NET_OK=true;              // at least one feed answered → we're genuinely online
     return r.json();
   });
 }
+function isAbort(e){ return !!e && e.name==="AbortError"; }
 function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
 /* ===== /points, fetched once per place =====
    One response carries everything four different callers used to ask for separately: the forecast
@@ -1035,7 +1038,7 @@ var _pointsCache={};
 function pointsFor(lat,lon){
   var key=(+lat).toFixed(4)+","+(+lon).toFixed(4);
   if(_pointsCache[key]) return _pointsCache[key];
-  var p=getJSON(API+"/points/"+key,HEADERS).catch(function(e){
+  var p=getJSON(API+"/points/"+key,HEADERS,locSignal()).catch(function(e){
     delete _pointsCache[key];   // a transient failure must not poison the session — retry next cycle
     throw e;
   });
@@ -1687,7 +1690,7 @@ function loadForecast(){
   return pointsFor(current.lat,current.lon).then(function(pt){
     var fUrl=pt.properties.forecast, hUrl=pt.properties.forecastHourly;
     // Hourly is only an enhancer (humidity + 24h strip). If it fails, the 7-day must still render.
-    return Promise.all([getJSON(fUrl,HEADERS), getJSON(hUrl,HEADERS).catch(function(){return null;})]).then(function(res){
+    return Promise.all([getJSON(fUrl,HEADERS,locSignal()), getJSON(hUrl,HEADERS,locSignal()).catch(function(){return null;})]).then(function(res){
       if(!fresh()) return;   // user moved while this was in flight
       var f=res[0], h=res[1];
       var rhByDate=h?middayRHByDate(h.properties.periods):{};
@@ -1797,6 +1800,7 @@ function loadForecast(){
       }
     });
   }).catch(function(){
+    if(!fresh()) return;   // a superseded request must not paint an error over the new place
     daily.innerHTML='<div class="empty">Forecast unavailable. <a href="https://forecast.weather.gov/MapClick.php?lat='+current.lat+'&lon='+current.lon+'" target="_blank" rel="noopener">Open NWS forecast ↗</a></div>';
   });
 }
@@ -1805,7 +1809,7 @@ function loadForecast(){
 function loadCurrent(){
   var fresh=locGuard();
   var el=document.getElementById("current"), stEl=document.getElementById("ccStation");
-  return getJSON(API+"/stations/"+current.station+"/observations/latest",HEADERS).then(function(o){
+  return getJSON(API+"/stations/"+current.station+"/observations/latest",HEADERS,locSignal()).then(function(o){
     if(!fresh()) return;   // user moved while this was in flight
     var p=o.properties, c2f=function(c){return c==null?null:Math.round(c*9/5+32);};
     var temp=c2f(p.temperature&&p.temperature.value), dew=c2f(p.dewpoint&&p.dewpoint.value);
@@ -1839,6 +1843,7 @@ function loadCurrent(){
     renderCurrentCtx();   // normals + today's records, once climate context has landed
     if(typeof renderAqiMini==="function") renderAqiMini();   // re-fill the AQI line after the re-render
   }).catch(function(){
+    if(!fresh()) return;   // a superseded request must not paint an error over the new place
     stEl.textContent="—";
     el.innerHTML='<div class="empty">No current obs from '+current.station+'. Station may be offline.</div>';
   });
@@ -2211,7 +2216,7 @@ function loadAqi(){
   var fresh=locGuard();
   var el=document.getElementById("aqi"), card=document.getElementById("aqiCard");
   var url="https://air-quality-api.open-meteo.com/v1/air-quality?latitude="+current.lat+"&longitude="+current.lon+"&current=us_aqi,pm2_5,pm10";
-  return getJSON(url).then(function(d){
+  return getJSON(url,null,locSignal()).then(function(d){
     if(!fresh()) return;   // user moved while this was in flight
     var cur=d.current||{}, aqi=cur.us_aqi, info=aqiInfo(aqi);
     aqiState={val:(aqi!=null)?aqi:null, pm:(cur.pm2_5!=null)?Math.round(cur.pm2_5):null, err:false};
@@ -2230,6 +2235,7 @@ function loadAqi(){
     callAqi=aqiState.val;
     if(typeof renderTheCall==="function") renderTheCall();   // AQI can add/remove a verdict pill
   }).catch(function(){
+    if(!fresh()) return;   // a superseded request must not paint an error over the new place
     aqiState={val:null, pm:null, err:true};
     if(card) card.classList.remove("show");
     if(el) el.innerHTML="";
@@ -2339,9 +2345,10 @@ function textOn(bg){
   return (0.299*r+0.587*g+0.114*b)>150?"#141414":"#ffffff";
 }
 function pointQuery(base,layer,fields){
+  // every one of these is a point query against `current` — cancellable by definition
   return getJSON(base+layer+"/query?geometry="+current.lon+","+current.lat
     +"&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects"
-    +"&outFields="+(fields||"*")+"&returnGeometry=false&f=json");
+    +"&outFields="+(fields||"*")+"&returnGeometry=false&f=json", null, locSignal());
 }
 function spcQuery(layer){
   return pointQuery(SPC_URL,layer,"dn").then(function(d){
@@ -2403,6 +2410,7 @@ function loadSpc(){
     }
     el.innerHTML=html;
   }).catch(function(){
+    if(!fresh()) return;   // a superseded request must not paint an error over the new place
     el.innerHTML='<div class="empty">Risk outlooks unavailable. <a href="https://www.spc.noaa.gov/products/outlook/day1otlk.html" target="_blank" rel="noopener">Open SPC \u2197</a> \u00b7 <a href="https://www.spc.noaa.gov/products/fire_wx/" target="_blank" rel="noopener">Fire \u2197</a></div>';
   });
 }
@@ -2449,6 +2457,7 @@ function loadCpc(){
       +'<div class="cpc-item"><div class="k">8\u201314 Day \u00b7 Precip</div>'+cpcPill("p",val(3))+'</div>'
       +'</div>';
   }).catch(function(){
+    if(!fresh()) return;   // a superseded request must not paint an error over the new place
     el.innerHTML='<div class="empty">CPC outlooks unavailable. <a href="https://www.cpc.ncep.noaa.gov/products/predictions/610day/" target="_blank" rel="noopener">Open CPC \u2197</a></div>';
   });
 }
@@ -2664,6 +2673,7 @@ function loadHazards(){
       ?("issued "+new Date(issued).toLocaleDateString([], {weekday:"short"})+" · days 3–14")
       :"days 3–14";
   }).catch(function(){
+    if(!fresh()) return;   // a superseded request must not paint an error over the new place
     el.innerHTML='<div class="empty">Hazards outlook unavailable. <a href="https://www.wpc.ncep.noaa.gov/threats/threats.php" target="_blank" rel="noopener">Open WPC Hazards ↗</a></div>';
   });
 }
@@ -2680,10 +2690,12 @@ function acisNum(v){ // ACIS returns "M" (missing), "T" (trace), or a numeric st
   return isNaN(n)?null:n;
 }
 function acisPost(call,params){
+  // every ACIS call is scoped to a station or bbox derived from `current` — cancellable by definition
   return fetch(ACIS+call,{
     method:"POST",
     headers:{"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},
-    body:"params="+encodeURIComponent(JSON.stringify(params))
+    body:"params="+encodeURIComponent(JSON.stringify(params)),
+    signal:locSignal()
   }).then(function(r){ if(!r.ok) throw new Error("acis "+r.status); return r.json(); });
 }
 // Find the nearest station that actually reports TEMPERATURE (not a precip-only CoCoRaHS gauge).
@@ -2718,7 +2730,10 @@ function climStation(lat,lon){
     var out={sid:sid, name:best.name||""};
     _climStationCache[key]=out;
     return out;
-  }).catch(function(){
+  }).catch(function(e){
+    // An ABORT means the user moved, not that this place has no usable station — caching the KSTL
+    // fallback under the abandoned key would make it permanently wrong if they came back.
+    if(isAbort(e)){ delete _climStationCache[key]; throw e; }
     var fb={sid:"KSTL", name:"St. Louis Lambert"};
     _climStationCache[key]=fb;
     return fb;
@@ -2854,6 +2869,7 @@ function loadClimate(){
       }).catch(function(){ paint(local,""); });
     });
   }).catch(function(){
+    if(!fresh()) return;   // a superseded request must not paint an error over the new place
     grid.innerHTML='<div class="empty">Climate normals unavailable. <a href="https://xmacis.rcc-acis.org/" target="_blank" rel="noopener">xmACIS ↗</a></div>';
   });
 }
@@ -3165,7 +3181,7 @@ function loadQpf(){
       }
     });
     chip.textContent=(maxQ!=null)?("\ud83c\udf27\ufe0f ~"+(Math.round(maxQ*10)/10)+"\u2033 rain next 7 days"):"";
-  }).catch(function(){ chip.textContent=""; });
+  }).catch(function(){ if(fresh()) chip.textContent=""; });
 }
 
 /* ============ STATIC IMAGES ============ */
@@ -3406,7 +3422,7 @@ function readLoc(){ try{ var s=localStorage.getItem(LOC_KEY); return s?JSON.pars
 function updateLocNow(){ var el=document.getElementById("locNow"); if(el) el.textContent="📍 "+current.name; }
 function stationFor(lat,lon){
   return pointsFor(lat,lon).then(function(pt){
-    return getJSON(pt.properties.observationStations,HEADERS);
+    return getJSON(pt.properties.observationStations,HEADERS,locSignal());
   }).then(function(s){
     if(s.features&&s.features.length) return s.features[0].properties.stationIdentifier;
     if(s.observationStations&&s.observationStations.length){ var u=s.observationStations[0]; return u.substring(u.lastIndexOf("/")+1); }
@@ -3432,6 +3448,14 @@ var locSeq=0, snapSafeSeq=0;
    safety-critical code. What it does remove is the half that was quietly easy to get wrong:
    capturing locSeq at the wrong moment, or comparing against the wrong variable. */
 function locGuard(){ var g=locSeq; return function(){ return g===locSeq; }; }
+/* The guard above discards a stale RESULT; this cancels the stale REQUEST. Without it, switching
+   towns a few times leaves every superseded fetch running to completion, competing for the browser's
+   handful of per-host connections with the ones the user is actually waiting on.
+   Only feeds that describe A PLACE carry this signal. The CWA-wide alert list, the fixed river
+   gauges, the AFD, the regional station plot and the one-shot service-metadata lookups deliberately
+   do not — aborting those would paint their error states every time the user moved. */
+var locAbort=null;
+function locSignal(){ if(!locAbort) locAbort=new AbortController(); return locAbort.signal; }
 /* Derived state is cleared on every change so a render can never MIX two places -- e.g. the new
    town's forecast high ranked against the old town's 96-year record. */
 function resetLocationState(){
@@ -3467,6 +3491,8 @@ function clearLocationUI(){
 function setLocation(loc,opts){
   opts=opts||{};
   var g=++locSeq;              // anything already in flight for the old place is now stale
+  if(locAbort) locAbort.abort();          // …so stop paying for it
+  locAbort=new AbortController();         // this generation's fetches hang off a fresh signal
   current=loc;
   resetLocationState();
   clearLocationUI();
@@ -3750,7 +3776,7 @@ function uvLevel(v){
 function shortT(t){ return new Date(t).toLocaleTimeString([], {hour:"numeric"}).replace(/\s/g,"").toLowerCase(); }
 function loadUvPeak(){
   return getJSON("https://api.open-meteo.com/v1/forecast?latitude="+current.lat+"&longitude="+current.lon
-    +"&hourly=uv_index&forecast_days=2&timezone=auto").then(function(d){
+    +"&hourly=uv_index&forecast_days=2&timezone=auto", null, locSignal()).then(function(d){
     var h=d.hourly||{}, ts=h.time||[], vs=h.uv_index||[], now=Date.now(), best=null;
     for(var i=0;i<ts.length;i++){
       var t=new Date(ts[i]).getTime();
