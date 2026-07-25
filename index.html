@@ -147,11 +147,65 @@
   img,svg{max-width:100%}
 
   /* Alerts */
-  #alerts .alert{border-radius:10px;padding:12px 14px;margin-bottom:10px;border-left:5px solid var(--muted);background:var(--inset)}
+  #alerts .alert{border-radius:12px;padding:13px 15px;margin-bottom:10px;border-left:5px solid var(--muted);
+    background:var(--inset);border-top:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid var(--border)}
   #alerts .alert:last-child{margin-bottom:0}
   .alert .ev{font-weight:700;font-size:15px;display:flex;justify-content:space-between;gap:10px;align-items:baseline}
   .alert .area{font-size:12px;color:var(--muted);margin-top:4px;line-height:1.4}
   .alert .exp{font-size:12px;color:var(--muted);margin-top:6px}
+
+  /* ===== Alerts v2: tiered cards ===== */
+  .a2-sum{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px}
+  .a2-sumchip{font-size:12px;font-weight:800;padding:5px 12px;border-radius:14px;border:1px solid var(--border);
+    background:var(--inset);color:var(--muted)}
+  .a2-sumchip.warning{color:var(--danger);background:rgba(255,77,77,.13);border-color:rgba(255,77,77,.45)}
+  .a2-sumchip.watch{color:var(--warn);background:rgba(255,176,32,.13);border-color:rgba(255,176,32,.42)}
+  .a2-sumchip.advisory{color:var(--accent);background:rgba(74,163,255,.11);border-color:rgba(74,163,255,.38)}
+  .a2-top{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+  .a2-ico{font-size:19px;line-height:1;flex:0 0 auto}
+  .a2-name{font-weight:800;font-size:15.5px;line-height:1.25}
+  .a2-tier{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;padding:3px 8px;
+    border-radius:10px;background:var(--chip);color:var(--muted)}
+  .alert.t-warning .a2-tier{background:rgba(255,77,77,.18);color:var(--danger)}
+  .alert.t-watch .a2-tier{background:rgba(255,176,32,.18);color:var(--warn)}
+  .alert.t-advisory .a2-tier{background:rgba(74,163,255,.15);color:var(--accent)}
+  .a2-zc{font-size:11px;font-weight:700;color:var(--muted);background:var(--chip);border-radius:10px;padding:2px 8px}
+  .a2-cd{margin-left:auto;font-size:13px;font-weight:800}
+  /* elapsed-vs-remaining window */
+  .a2-time{margin-top:10px}
+  .a2-prog{height:4px;border-radius:2px;background:var(--chip);overflow:hidden}
+  .a2-prog i{display:block;height:100%;border-radius:2px;background:var(--muted);opacity:.85}
+  .alert.t-warning .a2-prog i{background:var(--danger)}
+  .alert.t-watch .a2-prog i{background:var(--warn)}
+  .alert.t-advisory .a2-prog i{background:var(--accent)}
+  .a2-times{display:flex;justify-content:space-between;gap:10px;font-size:11px;color:var(--muted);margin-top:5px;
+    font-variant-numeric:tabular-nums}
+  /* a window that hasn't opened yet: hatched track, so an empty bar reads as "not started" not "no data" */
+  .a2-time.pending .a2-prog{background:repeating-linear-gradient(45deg,var(--chip) 0 5px,transparent 5px 10px)}
+  /* county chips, with in-place overflow */
+  .a2-areas{display:flex;flex-wrap:wrap;gap:5px;margin-top:10px}
+  .a2-chip{font-size:11.5px;padding:3px 9px;border-radius:12px;background:var(--chip);color:var(--text);white-space:nowrap}
+  .a2-xtra{display:none}
+  .alert.areas-all .a2-xtra{display:inline-block}
+  .alert.areas-all .a2-more{display:none}
+  .a2-more{font-size:11.5px;padding:3px 10px;border-radius:12px;background:transparent;border:1px dashed var(--border);
+    color:var(--accent);cursor:pointer;min-height:0;font-family:inherit;font-weight:700}
+  .a2-hint{font-size:12px;color:var(--accent);margin-top:10px;font-weight:700}
+  /* structured detail */
+  .a2-kv{display:grid;grid-template-columns:66px 1fr;gap:7px 11px;font-size:13px;line-height:1.55}
+  .a2-kv .k{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);padding-top:3px}
+  .a2-do{margin-top:11px;padding:10px 12px;border-radius:10px;background:rgba(255,176,32,.09);
+    border:1px solid rgba(255,176,32,.28);font-size:13px;line-height:1.55}
+  .a2-do b{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--warn);margin-bottom:5px}
+  .a2-do p{margin:0 0 7px}.a2-do p:last-child{margin-bottom:0}
+  .a2-seg{font-size:11.5px;color:var(--muted);margin-top:10px;line-height:1.5}
+  .a2-seg b{color:var(--text)}
+  @media(max-width:480px){
+    .a2-name{font-size:14.5px}
+    .a2-cd{margin-left:0;flex-basis:100%}
+    .a2-kv{grid-template-columns:1fr;gap:2px 0}
+    .a2-kv .k{padding-top:7px}
+  }
   .alert.extreme{border-left-color:var(--danger);background:rgba(255,77,77,.10)}
   .alert.severe{border-left-color:var(--sev);background:rgba(255,122,47,.10)}
   .alert.moderate{border-left-color:var(--warn);background:rgba(255,176,32,.08)}
@@ -163,10 +217,19 @@
   .a-hint{color:var(--accent)}
   .a-zcnt{font-size:12px;font-weight:700;color:var(--muted);background:var(--chip);border-radius:12px;padding:1px 8px;vertical-align:middle}
   .a-more-cnt{color:var(--accent);font-weight:700;white-space:nowrap}
+  /* Live expiry countdown on alerts + the storm banner */
+  .a-cd{font-weight:700;color:var(--accent);white-space:nowrap}
+  .a-cd:empty{display:none}
+  .a-cd.urgent{color:var(--danger)}
+  .a-cd.expired{color:var(--muted);font-weight:600}
+  #stormBanner .bcd{display:block;font-size:13px;margin-top:3px;color:#fff;opacity:.95}
+  #stormBanner .bcd.urgent{color:#fff}
   .a-chev{display:inline-block;transition:transform .2s}
   .alert.open .a-chev{transform:rotate(180deg)}
-  .alert-more{display:none;margin-top:10px;padding-top:10px;border-top:1px solid var(--border);
-    font-size:12.5px;line-height:1.55;color:var(--text);white-space:pre-wrap}
+  .alert-more{display:none;margin-top:11px;padding-top:11px;border-top:1px solid var(--border);
+    font-size:12.5px;line-height:1.55;color:var(--text)}
+  .alert-more p{margin:0 0 8px}
+  .alert-more p:last-child{margin-bottom:0}
   .alert.open .alert-more{display:block}
   .empty{color:var(--muted);font-size:14px;padding:6px 2px;line-height:1.5}
 
@@ -265,14 +328,29 @@
   /* Station Plot map + station-model markers */
   .stnmap{width:100%;height:360px;border-radius:12px;overflow:hidden;background:var(--chip)}
   .stn-divicon{background:none;border:none}
-  .stnmodel{width:46px;height:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1;text-shadow:0 1px 2px var(--bg),0 0 3px var(--bg);pointer-events:none}
-  .sm-t{font-size:14px;font-weight:800}
-  .sm-d{font-size:12px;font-weight:700;color:#43d17f}
-  .sm-w{height:14px;display:flex;align-items:center;gap:1px;color:var(--text)}
-  .sm-arrow{display:inline-block;font-size:15px;font-weight:900;line-height:1}
-  .sm-spd{font-size:9px;font-weight:700;opacity:.9}
-  .sm-calm{font-size:8px;opacity:.7}
-  .stn-legend .lg-t{color:#ff9f43}.stn-legend .lg-d{color:#43d17f}
+  /* One metric at a time: a colour-coded value chip with the station's identity under it.
+     Three stacked numbers per site was unreadable the moment two stations sat close together. */
+  .stn2{display:flex;flex-direction:column;align-items:center;line-height:1;width:54px;margin-left:-27px;margin-top:-14px}
+  .stn2-v{font-size:12.5px;font-weight:800;color:#0b0f16;background:var(--c);border-radius:9px;padding:3px 7px;
+    box-shadow:0 1px 5px rgba(0,0,0,.5);white-space:nowrap;font-variant-numeric:tabular-nums}
+  .stn2-id{font-size:9px;font-weight:800;color:var(--text);margin-top:2px;letter-spacing:.4px;
+    text-shadow:0 1px 3px var(--bg),0 0 5px var(--bg),0 0 8px var(--bg)}
+  .stn2-w{display:inline-flex;align-items:center;gap:2px}
+  .stn2-arrow{display:inline-block;font-weight:900;font-size:12px}
+  .stn2.is-hi .stn2-v{box-shadow:0 0 0 2px var(--text),0 1px 5px rgba(0,0,0,.5)}
+  /* metric switcher */
+  .stn-tools{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px}
+  .stn-tools button{min-height:34px;padding:6px 10px;font-size:12px;font-weight:700;border-radius:16px;flex:1 1 auto}
+  .stn-tools button.on{border-color:var(--accent);color:var(--accent);background:var(--glow)}
+  /* regional extremes — the "what's notable" line the old plot never had */
+  .stn-ex{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
+  .stn-ex .sx{font-size:11.5px;color:var(--muted);background:var(--inset);border:1px solid var(--border);
+    border-radius:12px;padding:4px 10px;white-space:nowrap}
+  .stn-ex .sx b{color:var(--text);font-weight:800;margin-right:4px}
+  .stn-ex .sx-n{opacity:.75}
+  .leaflet-tooltip.stn-tip{font-size:12px;font-weight:600;background:var(--panel);color:var(--text);
+    border:1px solid var(--border);box-shadow:var(--shadow);border-radius:9px;padding:6px 10px}
+  .leaflet-tooltip.stn-tip:before{display:none}
   .imgfail{padding:22px;text-align:center;color:var(--muted);font-size:13px;line-height:1.6}
 
   /* Tap-to-interact overlay for map iframes (Fix 1 — kills mobile scroll-trap) */
@@ -372,7 +450,11 @@
   .spc-row.rhead{padding:2px 0 6px;border-bottom:1px solid var(--border)}
   .spc-row .rh{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;text-align:center}
   .spc-day{font-size:13px;color:var(--muted);font-weight:600}
-  .spc-pill{font-size:11.5px;font-weight:700;padding:5px 8px;border-radius:16px;white-space:nowrap;text-align:center}
+  /* wrap rather than nowrap: at masonry column widths the three pills overflowed the card and
+     gave the whole page a horizontal scrollbar */
+  .spc-row>*{min-width:0}
+  .spc-pill{font-size:11.5px;font-weight:700;padding:5px 8px;border-radius:16px;text-align:center;
+    white-space:normal;line-height:1.25;overflow-wrap:anywhere}
 
   /* CPC leanings */
   .cpc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -419,6 +501,12 @@
   .sm-moon .mico{font-size:24px}
   .sm-moon .mname{font-weight:700;font-size:13px}
   .sm-moon .msub{font-size:12px;color:var(--muted)}
+  /* Seasonal block inside the smart slot */
+  .sm-season{margin-top:12px;padding-top:11px;border-top:1px solid var(--border)}
+  .ss-head{font-size:11px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;color:var(--muted);
+    margin-bottom:9px;display:flex;align-items:center;gap:6px}
+  .ss-items{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:8px}
+  .ss-note{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.45}
   .sm-chart svg{width:100%;height:auto;display:block}
   .sm-cap{font-size:11px;color:var(--muted);margin-top:6px;display:flex;justify-content:space-between}
 
@@ -671,6 +759,7 @@
   <div class="bico">⚠️</div>
   <div>
     <div class="btxt" id="stormText">Active Warning</div>
+    <span class="a-cd bcd" id="stormCd"></span>
     <div class="bsub" id="stormSub">Storm Mode engaged — radar &amp; alerts up top. Stay weird, stay safe.</div>
   </div>
 </div>
@@ -773,8 +862,15 @@
       <h2>Station Plot — Live Surface Obs
         <a class="link" href="https://www.weather.gov/wrh/timeseries?site=KSTL" target="_blank" rel="noopener">NWS ↗</a>
       </h2>
+      <div class="stn-tools" id="stnTools">
+        <button type="button" data-m="temp" class="on">🌡️ Temp</button>
+        <button type="button" data-m="feels">🥵 Feels</button>
+        <button type="button" data-m="dew">💧 Dew</button>
+        <button type="button" data-m="wind">💨 Wind</button>
+      </div>
       <div id="stnmap" class="stnmap"></div>
-      <div class="imgcap"><span>NWS · regional ASOS/METAR</span><span class="stn-legend"><b class="lg-t">temp</b> · wind · <b class="lg-d">dew</b> (&deg;F)</span></div>
+      <div class="stn-ex" id="stnEx"></div>
+      <div class="imgcap"><span>NWS · regional ASOS/METAR</span><span id="stnAge">tap a station for detail</span></div>
     </section>
     <section class="card" id="riskCard">
       <h2>Risk Outlook
@@ -1118,6 +1214,35 @@ function alertClass(p){
   if(s==="moderate")return "moderate";
   return "minor";
 }
+/* A tornado gets its own mark — the family icon (⛈️) undersells the one event that matters most */
+function alertIcon(ev,famIco){
+  var e=(ev||"").toLowerCase();
+  if(e.indexOf("tornado")>=0) return "🌪️";
+  if(e.indexOf("flash flood")>=0) return "🌊";
+  return famIco;
+}
+/* Warning > Watch > Advisory/Statement — the single most useful sort for a glance during weather */
+function alertTier(ev){
+  var e=(ev||"").toLowerCase();
+  if(e.indexOf("warning")>=0)  return {k:"warning",  label:"Warning",  rank:0};
+  if(e.indexOf("watch")>=0)    return {k:"watch",    label:"Watch",    rank:1};
+  if(e.indexOf("advisory")>=0) return {k:"advisory", label:"Advisory", rank:2};
+  return {k:"statement", label:"Statement", rank:3};
+}
+/* NWS descriptions are structured as "* WHAT...x  * WHERE...y  * WHEN...z  * IMPACTS...w".
+   Parsing that into labelled rows turns a wall of caps into something readable at a glance. */
+function parseAlertBullets(desc){
+  var out=[], txt=String(desc||"").replace(/\r/g,""), m;
+  var re=/\*\s*([A-Z][A-Z \-\/]{1,24}?)\s*\.\.\.\s*([\s\S]*?)(?=\n\s*\*\s*[A-Z]|$)/g;
+  while((m=re.exec(txt))){
+    var k=m[1].trim().toLowerCase(), v=m[2].replace(/\s*\n\s*/g," ").trim();
+    if(v) out.push({k:k.charAt(0).toUpperCase()+k.slice(1), v:v});
+  }
+  return out;
+}
+function alertParas(txt){
+  return String(txt||"").split(/\n\s*\n/).map(function(p){ return p.replace(/\s*\n\s*/g," ").trim(); }).filter(Boolean);
+}
 function degToCompass(d){
   if(d==null)return "";
   var dirs=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
@@ -1380,6 +1505,7 @@ function loadForecast(){
           i++;
         }
       }
+      smart.days=days;   // seasonal slot scans the 7-day for freezes, snow, and the coldest night
       // Week-wide temp range for bar scaling
       var wMin=999, wMax=-999;
       days.forEach(function(d){
@@ -1540,6 +1666,7 @@ function loadAlerts(){
       return ev.indexOf("tornado watch")>=0||ev.indexOf("severe thunderstorm watch")>=0;
     });
     updateSmartSlot();
+    if(typeof tickCountdowns==="function") setTimeout(tickCountdowns,0);   // fill the new countdowns immediately
     if(feats.length===0){
       card.classList.add("calm");
       el.innerHTML='<div class="calmrow"><span class="cdot"></span>All clear — no active LSX alerts across the CWA. <span class="cmut">Stay smug responsibly.</span></div>';
@@ -1563,41 +1690,88 @@ function loadAlerts(){
         var rb=rank[f.properties.severity], ra=rank[best.properties.severity];
         if((rb==null?5:rb)<(ra==null?5:ra)) best=f;
       });
-      var latest=0, counties=[];
+      var latest=0, earliest=0, counties=[];
       segs.forEach(function(f){
         var p2=f.properties, e=Date.parse(p2.ends||p2.expires||"")||0;
+        var s=Date.parse(p2.onset||p2.effective||p2.sent||"")||0;   // when the window actually opened
         if(e>latest) latest=e;
+        if(s&&(!earliest||s<earliest)) earliest=s;
         (p2.areaDesc||"").split(";").forEach(function(c){ c=c.trim(); if(c&&counties.indexOf(c)<0) counties.push(c); });
       });
-      return {ev:ev,segs:segs,sev:best.properties.severity,cls:alertClass(best.properties),latest:latest,counties:counties};
+      return {ev:ev,segs:segs,best:best,sev:best.properties.severity,cls:alertClass(best.properties),
+              latest:latest,earliest:earliest,counties:counties};
     });
     glist.sort(function(a,b){
+      var ta=alertTier(a.ev).rank, tb=alertTier(b.ev).rank;
+      if(ta!==tb) return ta-tb;                     // warnings above watches above advisories
       var ra=rank[a.sev],rb=rank[b.sev];
-      return (ra==null?5:ra)-(rb==null?5:rb);
+      return (ra==null?5:ra)-(rb==null?5:rb);       // then by severity within the tier
     });
 
-    el.innerHTML=glist.map(function(g){
-      var expStr=g.latest?new Date(g.latest).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"\u2014";
-      var shown=g.counties, moreN=0;
-      if(g.counties.length>8){ shown=g.counties.slice(0,6); moreN=g.counties.length-6; }
-      var areaTxt=esc(shown.join("; "))+(moreN?' <span class="a-more-cnt">+'+moreN+' more</span>':'');
-      var badge=(g.sev&&g.sev!=="Unknown")?'<span class="badge">'+g.sev+'</span>':'';
-      var zones=g.segs.length>1?(g.segs.length+" zone groups \u00b7 "):"";
-      var more=g.segs.map(function(f){
-        var p2=f.properties, e=p2.ends||p2.expires;
-        var es=e?new Date(e).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"\u2014";
-        var t="\u25b8 Until "+es+" \u2014 "+esc(p2.areaDesc||"");
-        if(p2.description) t+="\n"+esc(p2.description);
-        if(p2.instruction) t+="\n\n"+esc(p2.instruction);
-        return t;
-      }).join("\n\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\n");
+    // ---- summary chips: what's active, by tier, before you read a single alert ----
+    var tierCount={};
+    glist.forEach(function(g){ var t=alertTier(g.ev); tierCount[t.k]=(tierCount[t.k]||0)+1; });
+    var sumOrder=[["warning","Warning"],["watch","Watch"],["advisory","Advisory"],["statement","Statement"]];
+    var sumHTML='<div class="a2-sum">'+sumOrder.filter(function(o){return tierCount[o[0]];}).map(function(o){
+      var n=tierCount[o[0]];
+      return '<span class="a2-sumchip '+o[0]+'">'+n+' '+o[1]+(n>1?"s":"")+'</span>';
+    }).join("")+'</div>';
+
+    el.innerHTML=sumHTML+glist.map(function(g){
+      var tier=alertTier(g.ev);
+      var fam=eventFamily(g.ev), fcfg=FAMILY_CFG[fam]||FAMILY_CFG.convective;
+      var bp=(g.best&&g.best.properties)||{};
+      var endStr=g.latest?new Date(g.latest).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"\u2014";
+      var startStr=g.earliest?new Date(g.earliest).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"";
+      // elapsed-vs-remaining bar for the alert window; a window that hasn't opened yet is "pending"
+      var prog=null, pending=!!(g.earliest&&Date.now()<g.earliest);
+      if(g.earliest&&g.latest&&g.latest>g.earliest){
+        prog=Math.max(0,Math.min(100,(Date.now()-g.earliest)/(g.latest-g.earliest)*100));
+      }
+      // counties as chips; the overflow reveals in place instead of hiding behind a details panel
+      var shown=g.counties.slice(0,8), moreN=Math.max(0,g.counties.length-8);
+      var chips=g.counties.map(function(c,i){
+        return '<span class="a2-chip'+(i>=8?" a2-xtra":"")+'">'+esc(c)+'</span>';
+      }).join("");
+      var moreBtn=moreN?'<button type="button" class="a2-more">+'+moreN+' more</button>':'';
+      // structured detail: NWS bullets \u2192 labelled rows, instruction \u2192 its own "what to do" block
+      var bullets=parseAlertBullets(bp.description);
+      var detail="";
+      if(bullets.length){
+        detail+='<div class="a2-kv">'+bullets.map(function(b){
+          return '<span class="k">'+esc(b.k)+'</span><span class="v">'+esc(b.v)+'</span>';
+        }).join("")+'</div>';
+      }else if(bp.description){
+        detail+=alertParas(bp.description).map(function(p){return '<p>'+esc(p)+'</p>';}).join("");
+      }
+      if(bp.instruction){
+        detail+='<div class="a2-do"><b>What to do</b>'+alertParas(bp.instruction).map(function(p){
+          return '<p>'+esc(p)+'</p>';}).join("")+'</div>';
+      }
+      if(g.segs.length>1){
+        detail+='<div class="a2-seg"><b>'+g.segs.length+' zone groups:</b> '+g.segs.map(function(f){
+          var p2=f.properties, e=p2.ends||p2.expires;
+          var es=e?new Date(e).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"\u2014";
+          var ar=(p2.areaDesc||"").split(";").length;
+          return esc(String(ar))+" counties until "+esc(es);
+        }).join(" \u00b7 ")+'</div>';
+      }
       var aid=esc(g.ev);
-      return '<div class="alert '+g.cls+(openIds[aid]?' open':'')+'" data-aid="'+aid+'" role="button" tabindex="0">'
-        +'<div class="ev"><span>'+esc(g.ev)+(g.segs.length>1?' <span class="a-zcnt">\u00d7'+g.segs.length+'</span>':'')+'</span>'+badge+'</div>'
-        +'<div class="area">'+areaTxt+'</div>'
-        +'<div class="exp">'+zones+'Through '+expStr
-          +(more?'<span class="a-hint"> \u00b7 tap for details <span class="a-chev">\u25be</span></span>':'')+'</div>'
-        +(more?'<div class="alert-more">'+more+'</div>':'')
+      return '<div class="alert '+g.cls+' t-'+tier.k+(openIds[aid]?' open':'')+'" data-aid="'+aid+'" role="button" tabindex="0">'
+        +'<div class="a2-top">'
+          +'<span class="a2-ico">'+alertIcon(g.ev,fcfg.ico)+'</span>'
+          +'<span class="a2-name">'+esc(g.ev)+'</span>'
+          +'<span class="a2-tier">'+tier.label+'</span>'
+          +(g.segs.length>1?'<span class="a2-zc">\u00d7'+g.segs.length+'</span>':'')
+          +(pending?'<span class="a2-cd a-cd" data-exp="'+g.earliest+'" data-pre="1"></span>'
+                   :(g.latest?'<span class="a2-cd a-cd" data-exp="'+g.latest+'"></span>':''))
+        +'</div>'
+        +(prog!=null?'<div class="a2-time'+(pending?' pending':'')+'"><div class="a2-prog"><i style="width:'+prog.toFixed(1)+'%"></i></div>'
+          +'<div class="a2-times"><span>'+(pending?"begins ":"")+esc(startStr||"in effect")+'</span><span>ends '+esc(endStr)+'</span></div></div>'
+          :'<div class="a2-times"><span>Through '+esc(endStr)+'</span></div>')
+        +'<div class="a2-areas">'+chips+moreBtn+'</div>'
+        +(detail?'<div class="a2-hint">Details <span class="a-chev">\u25be</span></div>':'')
+        +(detail?'<div class="alert-more">'+detail+'</div>':'')
         +'</div>';
     }).join("");
   }).catch(function(){
@@ -1639,13 +1813,23 @@ function setStormMode(warnProps){
     var pc=document.getElementById(cfg.prime); if(pc) pc.classList.add("storm-prime");
     var exp=warnProps.ends||warnProps.expires;
     var expStr=exp?new Date(exp).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):"";
-    var bico=document.querySelector("#stormBanner .bico"); if(bico) bico.textContent=cfg.ico;
-    document.getElementById("stormText").textContent=cfg.ico+" "+warnProps.event+(expStr?" — until "+expStr:"");
+    var bIco=alertIcon(warnProps.event,cfg.ico);
+    var bico=document.querySelector("#stormBanner .bico"); if(bico) bico.textContent=bIco;
+    document.getElementById("stormText").textContent=bIco+" "+warnProps.event+(expStr?" — until "+expStr:"");
+    var scd=document.getElementById("stormCd");
+    if(scd){
+      var expMs=exp?Date.parse(exp):0;
+      if(expMs) scd.setAttribute("data-exp",expMs); else scd.removeAttribute("data-exp");
+      scd.textContent="";
+    }
+    if(typeof tickCountdowns==="function") tickCountdowns();
     var sub=document.getElementById("stormSub"); if(sub) sub.textContent=cfg.sub;
   }else{
     STORM_FAMILY=null; STORM_PRIME="smartCard";
     body.classList.remove("storm");
     body.removeAttribute("data-storm");
+    var scd0=document.getElementById("stormCd");
+    if(scd0){ scd0.removeAttribute("data-exp"); scd0.textContent=""; scd0.classList.remove("urgent","expired"); }
     [].forEach.call(document.querySelectorAll(".storm-prime"), function(e){ e.classList.remove("storm-prime"); });
   }
   // Class/attribute changes aren't watched by the masonry observer — repack explicitly so the
@@ -2177,6 +2361,7 @@ function loadClimate(){
       climate.normLo=cell(row[2]);
       var tMTD=cell(row[3]), tYTD=cell(row[4]), pMTD=cell(row[5]), pYTD=cell(row[6]);
       var snowSTD=showSnow?cell(row[7]):null;
+      climate.snowSTD=snowSTD;   // winter slot reports season snow vs normal
       var cells=''
         +'<div class="cn-cell"><span class="cn-lbl">Temp · month</span>'+fmtDep(tMTD,"°")+'</div>'
         +'<div class="cn-cell"><span class="cn-lbl">Temp · year</span>'+fmtDep(tYTD,"°")+'</div>'
@@ -2452,15 +2637,120 @@ function tColor(f){ // temperature → color (blue cold → red hot)
   if(f<=20) return "#4a6cff"; if(f<=32) return "#4aa3ff"; if(f<=45) return "#3ec8d8";
   if(f<=60) return "#3ecf8e"; if(f<=75) return "#e0b93a"; if(f<=88) return "#ff9f43"; return "#ff5a5f";
 }
-function stnIconHTML(o){
-  var t=(o.tempF!=null)?o.tempF:"–", d=(o.dewF!=null)?o.dewF:"–";
-  var wind = (o.windDir!=null && o.windKt!=null && o.windKt>0)
-    ? '<span class="sm-arrow" style="transform:rotate('+((o.windDir+180)%360)+'deg)">&uarr;</span><span class="sm-spd">'+o.windKt+'</span>'
-    : '<span class="sm-calm" title="calm">&#9679;</span>';
-  return '<div class="stnmodel">'
-    + '<div class="sm-t" style="color:'+tColor(o.tempF)+'">'+t+'</div>'
-    + '<div class="sm-w">'+wind+'</div>'
-    + '<div class="sm-d">'+d+'</div></div>';
+var stnObs=[], stnMode="temp";
+function rhFromTd(tF,tdF){   // Magnus — lets us derive feels-like from what METAR actually reports
+  if(tF==null||tdF==null) return null;
+  var tC=(tF-32)/1.8, dC=(tdF-32)/1.8;
+  var e=Math.exp((17.625*dC)/(243.04+dC)), es=Math.exp((17.625*tC)/(243.04+tC));
+  return Math.max(1,Math.min(100,Math.round(100*e/es)));
+}
+function dewColor(d){
+  if(d==null) return "#8a97a8";
+  if(d<50) return "#7ec8ff";      // dry
+  if(d<60) return "#3ecf8e";      // comfortable
+  if(d<65) return "#e0b93a";      // sticky
+  if(d<70) return "#ff9f43";      // humid
+  return "#ff5a5f";               // oppressive
+}
+function windColor(m){
+  if(m==null) return "#8a97a8";
+  if(m<5) return "#8a97a8";
+  if(m<12) return "#3ecf8e";
+  if(m<20) return "#e0b93a";
+  if(m<30) return "#ff9f43";
+  return "#ff5a5f";
+}
+function stnValue(o,mode){
+  if(mode==="dew") return o.dewF;
+  if(mode==="feels") return o.feelsF;
+  if(mode==="wind") return o.windMph;
+  return o.tempF;
+}
+function stnColor(v,mode){
+  if(mode==="dew") return dewColor(v);
+  if(mode==="wind") return windColor(v);
+  return tColor(v);
+}
+function stnMarkerHTML(o,mode,isExtreme){
+  var v=stnValue(o,mode);
+  if(v==null) return null;
+  var id=o.id.replace(/^K/,""), col=stnColor(v,mode), inner;
+  if(mode==="wind"){
+    inner=(v>0&&o.windDir!=null)
+      ? '<span class="stn2-w"><span class="stn2-arrow" style="transform:rotate('+((o.windDir+180)%360)+'deg)">↑</span>'+v+'</span>'
+      : "calm";
+  }else{
+    inner=v+"°";
+  }
+  return '<div class="stn2'+(isExtreme?" is-hi":"")+'" style="--c:'+col+'">'
+    +'<div class="stn2-v">'+inner+'</div><div class="stn2-id">'+esc(id)+'</div></div>';
+}
+function stnTip(o){
+  var b=['<b>'+esc(o.id)+'</b>'];
+  if(o.tempF!=null) b.push(o.tempF+"° temp");
+  if(o.feelsF!=null&&o.tempF!=null&&Math.abs(o.feelsF-o.tempF)>=2) b.push("feels "+o.feelsF+"°");
+  if(o.dewF!=null) b.push(o.dewF+"° dew");
+  if(o.rh!=null) b.push(o.rh+"% RH");
+  if(o.windMph!=null) b.push(o.windMph>0?(degToCompass(o.windDir)+" "+o.windMph+" mph"):"calm");
+  if(o.gustMph!=null&&o.gustMph>0) b.push("gusts "+o.gustMph);
+  return b.join(" · ");
+}
+function renderStnExtremes(){
+  var el=document.getElementById("stnEx"); if(!el) return;
+  var list=stnObs.filter(function(o){ return o&&stnValue(o,stnMode)!=null; });
+  if(!list.length){ el.innerHTML=""; return; }
+  function best(dir){
+    var b=null;
+    list.forEach(function(o){
+      var v=stnValue(o,stnMode);
+      if(!b||(dir>0?v>stnValue(b,stnMode):v<stnValue(b,stnMode))) b=o;
+    });
+    return b;
+  }
+  var hi=best(1), lo=best(-1), chips=[], unit=(stnMode==="wind")?" mph":"°";
+  function chip(lbl,o){ if(o) chips.push('<span class="sx"><b>'+lbl+'</b> '+esc(o.id.replace(/^K/,""))+" "+stnValue(o,stnMode)+unit+'</span>'); }
+  if(stnMode==="wind"){
+    chip("Windiest",hi);
+    var g=null; stnObs.forEach(function(o){ if(o&&o.gustMph!=null&&(!g||o.gustMph>g.gustMph)) g=o; });
+    if(g&&g.gustMph>0) chips.push('<span class="sx"><b>Top gust</b> '+esc(g.id.replace(/^K/,""))+" "+g.gustMph+' mph</span>');
+  }else if(stnMode==="dew"){
+    chip("Muggiest",hi); chip("Driest",lo);
+  }else{
+    chip("Warmest",hi); chip("Coolest",lo);
+    var spread=stnValue(hi,stnMode)-stnValue(lo,stnMode);
+    if(spread>0) chips.push('<span class="sx"><b>Spread</b> '+spread+'°</span>');
+  }
+  chips.push('<span class="sx sx-n">'+list.length+' stations</span>');
+  el.innerHTML=chips.join("");
+  stnExtremeIds=[hi&&hi.id, lo&&lo.id];
+}
+var stnExtremeIds=[];
+function renderStationLayer(){
+  if(!stnMap||typeof L==="undefined") return;
+  renderStnExtremes();                                  // sets stnExtremeIds, so markers can highlight them
+  if(stnLayer){ stnMap.removeLayer(stnLayer); stnLayer=null; }
+  var markers=[];
+  stnObs.forEach(function(o){
+    if(!o) return;
+    var html=stnMarkerHTML(o,stnMode,stnExtremeIds.indexOf(o.id)>=0);
+    if(!html) return;
+    var m=L.marker([o.lat,o.lon],{
+      icon:L.divIcon({className:"stn-divicon",html:html,iconSize:[0,0],iconAnchor:[0,0]}),
+      keyboard:false, riseOnHover:true
+    });
+    m.bindTooltip(stnTip(o),{className:"stn-tip",direction:"top",offset:[0,-16],sticky:false});
+    markers.push(m);
+  });
+  stnLayer=L.layerGroup(markers).addTo(stnMap);
+}
+function initStnTools(){
+  var t=document.getElementById("stnTools"); if(!t) return;
+  t.addEventListener("click",function(e){
+    var b=e.target.closest("button[data-m]"); if(!b) return;
+    stnMode=b.getAttribute("data-m");
+    [].forEach.call(t.querySelectorAll("button"),function(x){ x.classList.toggle("on",x===b); });
+    renderStationLayer();
+  });
 }
 function initStationMap(){
   var el=document.getElementById("stnmap");
@@ -2468,12 +2758,19 @@ function initStationMap(){
     if(el) el.innerHTML='<div class="imgfail">Map didn\u2019t load. <a href="https://www.weather.gov/wrh/timeseries?site=KSTL" target="_blank" rel="noopener">Open NWS obs \u2197</a></div>';
     return;
   }
-  // Center on the STL station network itself (not the user's saved location, which may be far away)
+  // Frame the station network itself (not the user's saved location, which may be far away).
+  // fitBounds rather than a fixed zoom: the card's width changes with the masonry, and a fixed
+  // zoom clipped the outer stations off the edges.
   var _cLat=0,_cLon=0; STN_LIST.forEach(function(s){_cLat+=s.lat;_cLon+=s.lon;}); _cLat/=STN_LIST.length; _cLon/=STN_LIST.length;
   stnMap=L.map(el,{zoomControl:true,attributionControl:true,scrollWheelZoom:false,minZoom:5,maxZoom:10}).setView([_cLat,_cLon],7);
+  var stnBounds=L.latLngBounds(STN_LIST.map(function(s){ return [s.lat,s.lon]; }));
+  function fitStations(){ if(stnMap) stnMap.fitBounds(stnBounds,{padding:[30,26]}); }
+  fitStations();
   stnBase=L.tileLayer(baseUrl(),{subdomains:"abcd",maxZoom:12,
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> &middot; obs: <a href="https://www.weather.gov" target="_blank" rel="noopener">NOAA/NWS</a>'}).addTo(stnMap);
-  setTimeout(function(){ if(stnMap) stnMap.invalidateSize(); },250);
+  setTimeout(function(){ if(stnMap){ stnMap.invalidateSize(); fitStations(); } },250);
+  setTimeout(function(){ if(stnMap){ stnMap.invalidateSize(); fitStations(); } },1200);  // after masonry settles the card width
+  initStnTools();
   // no loadStationPlot() here — refreshAll() runs right after init and fetches the obs once
 }
 function updateStationBase(){ if(stnBase) stnBase.setUrl(baseUrl()); }
@@ -2483,24 +2780,27 @@ function loadStationPlot(){
   var jobs=STN_LIST.map(function(s){
     return getJSON(API+"/stations/"+s.id+"/observations/latest").then(function(d){
       var p=(d&&d.properties)||{};
+      var tempF=c2f(p.temperature&&p.temperature.value), dewF=c2f(p.dewpoint&&p.dewpoint.value);
+      var mph=(p.windSpeed&&p.windSpeed.value!=null)?Math.round(p.windSpeed.value*0.621371):null;
+      var rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?Math.round(p.relativeHumidity.value):rhFromTd(tempF,dewF);
       return {id:s.id,lat:s.lat,lon:s.lon,
-        tempF:c2f(p.temperature&&p.temperature.value),
-        dewF:c2f(p.dewpoint&&p.dewpoint.value),
+        tempF:tempF, dewF:dewF, rh:rh,
+        feelsF:feelsLikeF(tempF,rh,mph),
         windDir:(p.windDirection&&p.windDirection.value!=null)?Math.round(p.windDirection.value):null,
-        windKt:(p.windSpeed&&p.windSpeed.value!=null)?Math.round(p.windSpeed.value*0.539957):null};
+        windMph:mph,
+        gustMph:(p.windGust&&p.windGust.value!=null)?Math.round(p.windGust.value*0.621371):null,
+        ts:p.timestamp||null};
     }).catch(function(){return null;});
   });
   return Promise.all(jobs).then(function(list){
-    if(stnLayer){ stnMap.removeLayer(stnLayer); stnLayer=null; }
-    var markers=[];
-    list.forEach(function(o){
-      if(!o || o.tempF==null) return;   // skip stations with no usable obs
-      markers.push(L.marker([o.lat,o.lon],{
-        icon:L.divIcon({className:"stn-divicon",html:stnIconHTML(o),iconSize:[46,46],iconAnchor:[23,23]}),
-        interactive:false, keyboard:false
-      }));
-    });
-    stnLayer=L.layerGroup(markers).addTo(stnMap);
+    stnObs=list;
+    renderStationLayer();
+    var age=document.getElementById("stnAge");
+    if(age){
+      var newest=0;
+      list.forEach(function(o){ if(o&&o.ts){ var t=Date.parse(o.ts)||0; if(t>newest) newest=t; } });
+      age.textContent=newest?("obs "+timeAgo(new Date(newest).toISOString())):"tap a station for detail";
+    }
   }).catch(function(){});
 }
 function refreshImages(){
@@ -2821,6 +3121,157 @@ function sunArcSVG(rise,set){
     +'<text x="137" y="82" font-size="9" fill="var(--muted)" text-anchor="middle">↓</text>'
     +'</svg>';
 }
+/* ============ SEASONAL SLOT ============
+   The smart slot already swaps lightning-for-sun-and-moon; this adds a seasonal panel below it so
+   the card tracks the year: UV and heat in summer, freeze watch in fall, snow watch in winter,
+   late-freeze risk in spring (Open-Meteo's pollen fields are Europe-only, so a Missouri spring
+   gets the thing that actually matters here — whether the garden survives the night).
+   Every row is optional: if its data didn't arrive, the row simply isn't drawn. */
+var season={kind:"", uv:null, frz:null};
+function seasonOf(d){
+  var m=(d||new Date()).getMonth();
+  if(m===11||m<=1) return "winter";
+  if(m<=4) return "spring";
+  if(m<=7) return "summer";
+  return "fall";
+}
+function uvLevel(v){
+  if(v==null) return null;
+  if(v<3)  return {t:"Low",c:"#3ecf8e"};
+  if(v<6)  return {t:"Moderate",c:"#e0b93a"};
+  if(v<8)  return {t:"High",c:"#ff9f2f"};
+  if(v<11) return {t:"Very High",c:"#ff6a2f"};
+  return {t:"Extreme",c:"#c13bff"};
+}
+function shortT(t){ return new Date(t).toLocaleTimeString([], {hour:"numeric"}).replace(/\s/g,"").toLowerCase(); }
+function loadUvPeak(){
+  return getJSON("https://api.open-meteo.com/v1/forecast?latitude="+current.lat+"&longitude="+current.lon
+    +"&hourly=uv_index&forecast_days=2&timezone=auto").then(function(d){
+    var h=d.hourly||{}, ts=h.time||[], vs=h.uv_index||[], now=Date.now(), best=null;
+    for(var i=0;i<ts.length;i++){
+      var t=new Date(ts[i]).getTime();
+      if(t<now-1800000||t>now+24*3600000) continue;    // peak across the next 24 h (useful in the evening too)
+      if(vs[i]==null) continue;
+      if(!best||vs[i]>best.v) best={v:vs[i],t:t};
+    }
+    season.uv=best;
+  }).catch(function(){ season.uv=null; });
+}
+var FRZ_KEY="lsxFrz_v1";
+function loadFreezeNormals(kind){
+  return climStation(current.lat,current.lon).then(function(st){
+    var yr=new Date().getFullYear(), key=st.sid+"|"+kind+"|"+yr;
+    try{ var c=JSON.parse(localStorage.getItem(FRZ_KEY)||"null"); if(c&&c.key===key&&c.v){ season.frz=c.v; return null; } }catch(e){}
+    var sd=(kind==="fall")?(yr+"-09-01"):(yr+"-02-01"), ed=(kind==="fall")?(yr+"-12-31"):(yr+"-05-31");
+    return acisPost("StnData",{sid:st.sid, sdate:sd, edate:ed, elems:[{name:"mint",normal:"1"}]}).then(function(r){
+      if(!r||r.error||!r.data) throw new Error("frz");
+      var rows=r.data.filter(function(x){ return acisNum(x[1])!=null; });
+      var t32=null, t36=null, i, v;
+      if(kind==="fall"){                       // first crossing of the season: frost (36°) then freeze (32°)
+        for(i=0;i<rows.length;i++){ v=acisNum(rows[i][1]);
+          if(t36==null&&v<=36) t36=rows[i][0];
+          if(v<=32){ t32=rows[i][0]; break; } }
+      }else{                                   // spring: scan backwards → the LAST dates at each threshold
+        for(i=rows.length-1;i>=0;i--){ v=acisNum(rows[i][1]);
+          if(t36==null&&v<=36) t36=rows[i][0];
+          if(v<=32){ t32=rows[i][0]; break; } }
+      }
+      season.frz={t32:t32,t36:t36};
+      try{ localStorage.setItem(FRZ_KEY,JSON.stringify({key:key,v:season.frz})); }catch(e){}
+      return null;
+    });
+  }).catch(function(){ season.frz=null; });
+}
+/* ---- forecast scans for the seasonal rows ---- */
+function fcFirstNightAtOrBelow(th){
+  var ds=smart.days||[];
+  for(var i=0;i<ds.length;i++){
+    var n=ds[i].night;
+    if(n&&n.temperature!=null&&n.temperature<=th) return {name:ds[i].name, t:n.temperature};
+  }
+  return null;
+}
+function fcWintryDay(){
+  var ds=smart.days||[];
+  for(var i=0;i<ds.length;i++){
+    var dtxt=(ds[i].day&&ds[i].day.shortForecast)||"", ntxt=(ds[i].night&&ds[i].night.shortForecast)||"";
+    if(/snow|sleet|wintry|flurr|freezing/i.test(dtxt+" "+ntxt)) return {name:ds[i].name, txt:dtxt||ntxt};
+  }
+  return null;
+}
+function fcPeakFeels(){
+  var hrs=smart.hourly||[], best=null;
+  for(var i=0;i<Math.min(24,hrs.length);i++){
+    var p=hrs[i], rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?p.relativeHumidity.value:null;
+    var fl=feelsLikeF(p.temperature,rh,parseMph(p.windSpeed));
+    if(fl==null) continue;
+    if(!best||fl>best.v) best={v:fl,t:new Date(p.startTime).getTime()};
+  }
+  return best;
+}
+function fcColdestNight(){
+  var ds=smart.days||[], best=null;
+  ds.forEach(function(d){
+    if(d.night&&d.night.temperature!=null&&(!best||d.night.temperature<best.t)) best={t:d.night.temperature,name:d.name};
+  });
+  return best;
+}
+function frzDate(s){ return s?fmtMD(new Date(s+"T12:00:00")):null; }
+function seasonHTML(){
+  var k=seasonOf(), items=[], notes=[], head="", ico="";
+  function kv(a,b){ return '<div class="sm-kv"><div class="k">'+a+'</div><div class="v">'+b+'</div></div>'; }
+  if(k==="summer"){
+    ico="☀️"; head="Summer · Sun &amp; Heat";
+    // classify the ROUNDED value so the number and its label can never disagree (7.8 → "8 Very High")
+    var u=season.uv, uvR=u?Math.round(u.v):null, lv=(uvR!=null)?uvLevel(uvR):null;
+    if(u&&lv){
+      items.push(kv("UV peak (24h)",'<span style="color:'+lv.c+'">'+uvR+" "+lv.t+'</span>'));
+      items.push(kv("Peak UV at",shortT(u.t)));
+      if(uvR>=3) items.push(kv("Unprotected burn","~"+Math.max(5,Math.round(200/uvR))+" min"));
+      if(uvR>=8) notes.push("Very high UV around midday — shade between 10am and 4pm.");
+    }
+    var pf=fcPeakFeels();
+    if(pf) items.push(kv("Feels-like peak",pf.v+"° at "+shortT(pf.t)));
+  }else if(k==="fall"){
+    ico="🍂"; head="Fall · Freeze Watch";
+    var ff=fcFirstNightAtOrBelow(32), fr=fcFirstNightAtOrBelow(36);
+    items.push(kv("Freeze in 7-day", ff?(ff.name+" · "+ff.t+"°"):"none forecast"));
+    if(!ff&&fr) items.push(kv("Frost risk", fr.name+" · "+fr.t+"°"));
+    if(season.frz&&frzDate(season.frz.t36)) items.push(kv("Normal first frost","~"+frzDate(season.frz.t36)));
+    if(season.frz&&frzDate(season.frz.t32)) items.push(kv("Normal first freeze","~"+frzDate(season.frz.t32)));
+    if(ff) notes.push("Bring in tender plants and disconnect hoses before "+esc(ff.name)+".");   // never lowercase a day name
+  }else if(k==="winter"){
+    ico="❄️"; head="Winter · Snow Watch";
+    if(climate.snowSTD!=null) items.push(kv("Season snow vs normal",fmtDep(climate.snowSTD,"″")));
+    var sn=fcWintryDay();
+    items.push(kv("Wintry in 7-day", sn?(sn.name+" · "+esc(sn.txt)):"none forecast"));
+    var cn=fcColdestNight();
+    if(cn) items.push(kv("Coldest night ahead",cn.t+"° "+esc(cn.name)));
+    var wcn=fcFirstNightAtOrBelow(10);
+    if(wcn) notes.push("Single digits "+esc(wcn.name)+" — watch pipes on exterior walls.");
+  }else{
+    ico="🌱"; head="Spring · Freeze Risk";
+    var sf=fcFirstNightAtOrBelow(32), sfr=fcFirstNightAtOrBelow(36);
+    items.push(kv("Freeze in 7-day", sf?(sf.name+" · "+sf.t+"°"):"none forecast"));
+    if(!sf&&sfr) items.push(kv("Frost risk", sfr.name+" · "+sfr.t+"°"));
+    if(season.frz&&frzDate(season.frz.t32)) items.push(kv("Normal last freeze","~"+frzDate(season.frz.t32)));
+    if(season.frz&&frzDate(season.frz.t36)) items.push(kv("Frost possible to","~"+frzDate(season.frz.t36)));
+    if(sf) notes.push("Cover anything tender — "+sf.t+"° will burn new growth.");
+  }
+  if(!items.length) return "";
+  return '<div class="sm-season"><div class="ss-head">'+ico+" "+head+'</div>'
+    +'<div class="ss-items">'+items.join("")+'</div>'
+    +(notes.length?'<div class="ss-note">'+notes.join(" ")+'</div>':'')
+    +'</div>';
+}
+function loadSeasonal(){
+  var k=seasonOf();
+  season.kind=k;
+  var jobs=[];
+  if(k==="summer") jobs.push(loadUvPeak());
+  if(k==="fall"||k==="spring") jobs.push(loadFreezeNormals(k));
+  return Promise.all(jobs).then(function(){ updateSmartSlot(true); }, function(){ updateSmartSlot(true); });
+}
 function stormy(){ return smart.warning||smart.watch||smart.thunderSoon||smart.spcRisk>=4||smart.eroRisk>=2; }
 function smartReason(){
   if(smart.warning) return "active warning";
@@ -2868,7 +3319,8 @@ function updateSmartSlot(force){
         +'<div class="sm-kv"><div class="k">Daylight</div><div class="v">'+dayLen+'</div></div>'
         +'<div class="sm-kv"><div class="k">Moon</div><div class="v">'+mi.illum+'% lit</div></div>'
       +'</div></div>'
-      +'<div class="sm-moon"><div class="mico">'+mcImg(mi.svg,mi.icon,40)+'</div><div><div class="mname">'+mi.name+'</div><div class="msub">Day '+mi.age+' of the lunar cycle</div></div></div>';
+      +'<div class="sm-moon"><div class="mico">'+mcImg(mi.svg,mi.icon,40)+'</div><div><div class="mname">'+mi.name+'</div><div class="msub">Day '+mi.age+' of the lunar cycle</div></div></div>'
+      +seasonHTML();
   }
   smart.mode=mode;
 }
@@ -3077,18 +3529,56 @@ function restoreSnapshot(){
   return true;
 }
 
+/* ============ LIVE EXPIRY COUNTDOWNS ============
+   "Through Mon 9:00 PM" is a fact you have to do arithmetic on; "24 min left" is the thing you
+   actually want during a warning. Any element carrying data-exp (ms epoch) is filled in here,
+   so restored snapshots tick correctly too — and an expired alert says so rather than lingering. */
+function fmtSpan(ms){   // bare duration, no framing
+  var m=Math.floor(ms/60000);
+  if(m>=1440){ var dys=Math.floor(m/1440); return dys+(dys===1?" day":" days"); }
+  if(m>=60){ var h=Math.floor(m/60), r=m%60; return h+"h"+(r?" "+r+"m":""); }
+  if(m>=1) return m+" min";
+  return "under a minute";
+}
+function fmtLeft(ms){ return ms<=0?null:(fmtSpan(ms)+(ms<60000?"":" left")); }
+function tickCountdowns(){
+  var now=Date.now();
+  [].forEach.call(document.querySelectorAll("[data-exp]"),function(el){
+    var t=+el.getAttribute("data-exp");
+    if(!t){ el.textContent=""; return; }
+    var left=t-now;
+    // data-pre marks an alert whose window hasn't opened yet — "starts in 17h" beats "3 days left",
+    // which would describe the end of something that isn't happening
+    if(el.hasAttribute("data-pre")){
+      if(left>0){ el.textContent="starts in "+fmtSpan(left); el.classList.remove("expired","urgent"); }
+      else { el.textContent="starting now"; el.classList.add("urgent"); }
+      return;
+    }
+    var s=fmtLeft(left);
+    if(s==null){
+      el.textContent="expired";
+      el.classList.remove("urgent"); el.classList.add("expired");
+      return;
+    }
+    el.textContent=s;
+    el.classList.remove("expired");
+    el.classList.toggle("urgent", left<=15*60000);   // final quarter hour reads red
+  });
+}
+
 /* ============ CLOCK ============ */
 function tick(){
   var d=new Date();
   document.getElementById("clock").textContent=d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
   document.getElementById("cdate").textContent=d.toLocaleDateString([], {weekday:"long",month:"short",day:"numeric"});
+  tickCountdowns();
 }
 
 /* ============ ORCHESTRATION ============ */
 function refreshAll(){
   var dot=document.getElementById("statusDot"), label=document.getElementById("refreshLabel");
   dot.classList.remove("stale");label.textContent="Refreshing…";
-  Promise.allSettled([loadAFD(),loadAlerts(),loadCurrent(),loadForecast(),loadRivers(),loadAqi(),loadSpc(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),loadClimate(),loadClimateContext(),loadStationPlot()]).then(function(){
+  Promise.allSettled([loadAFD(),loadAlerts(),loadCurrent(),loadForecast(),loadRivers(),loadAqi(),loadSpc(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),loadClimate(),loadClimateContext(),loadSeasonal(),loadStationPlot()]).then(function(){
     refreshImages();
     label.textContent="Refresh";
     document.getElementById("lastUpdate").textContent="Last updated "+new Date().toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"});
@@ -3151,6 +3641,11 @@ document.getElementById("daily").addEventListener("click",function(e){
   if(row&&row.parentNode) row.parentNode.classList.toggle("open");
 });
 document.getElementById("alerts").addEventListener("click",function(e){
+  if(e.target.closest(".a2-more")){        // "+N more" reveals counties in place, doesn't open details
+    var ac=e.target.closest(".alert");
+    if(ac){ ac.classList.add("areas-all"); e.stopPropagation(); if(typeof scheduleMasonry==="function") scheduleMasonry(); }
+    return;
+  }
   var a=e.target.closest(".alert");
   if(a&&a.querySelector(".alert-more")) a.classList.toggle("open");
 });
@@ -3180,6 +3675,7 @@ var SCHED=[
   {fn:loadDrought,  every:6*60*60000},
   {fn:loadClimate,  every:6*60*60000},
   {fn:loadClimateContext, every:6*60*60000},
+  {fn:loadSeasonal, every:3*60*60000},
   {fn:refreshImages,every:5*60000},
   {fn:loadStationPlot,every:12*60000},
   {fn:refreshRadarLayer, every:4*60000},
