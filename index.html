@@ -170,6 +170,13 @@
   .alert.t-watch .a2-tier{background:rgba(255,176,32,.18);color:var(--warn)}
   .alert.t-advisory .a2-tier{background:rgba(74,163,255,.15);color:var(--accent)}
   .a2-zc{font-size:11px;font-weight:700;color:var(--muted);background:var(--chip);border-radius:10px;padding:2px 8px}
+  /* "this one is over you" — the answer to the question you're actually asking */
+  .a2-me{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;padding:3px 9px;
+    border-radius:10px;background:rgba(255,77,77,.16);color:var(--danger);border:1px solid rgba(255,77,77,.42)}
+  .alert.t-watch .a2-me{background:rgba(255,176,32,.16);color:var(--warn);border-color:rgba(255,176,32,.42)}
+  .alert.t-advisory .a2-me{background:rgba(74,163,255,.14);color:var(--accent);border-color:rgba(74,163,255,.4)}
+  .alert.hits-me{border-left-width:7px}
+  .a2-sumchip.mine{color:var(--text);background:var(--chip);border-color:var(--muted)}
   .a2-cd{margin-left:auto;font-size:13px;font-weight:800}
   /* elapsed-vs-remaining window */
   .a2-time{margin-top:10px}
@@ -1214,6 +1221,66 @@ function alertClass(p){
   if(s==="moderate")return "moderate";
   return "minor";
 }
+/* ===== "Does this alert actually cover me?" =====
+   Two cases, because NWS issues alerts two ways:
+     · storm-based warnings (tornado, severe tstorm, flash flood) carry a POLYGON — ray-cast the
+       saved location against it, holes included. A warning polygon often covers a diagonal
+       slice of three counties, so "St. Charles" in the area list doesn't mean your part of it.
+     · watches/advisories are ZONE-based with geometry:null — but they list affectedZones as
+       zone URLs, and /points hands us the same URLs for our location, so that's an exact match
+       with no extra geometry to fetch. */
+function ptInRing(x,y,ring){
+  var inside=false;
+  for(var i=0,j=ring.length-1;i<ring.length;j=i++){
+    var xi=ring[i][0], yi=ring[i][1], xj=ring[j][0], yj=ring[j][1];
+    if(((yi>y)!==(yj>y)) && (x < (xj-xi)*(y-yi)/(yj-yi)+xi)) inside=!inside;
+  }
+  return inside;
+}
+function ptInPolygon(x,y,rings){
+  if(!rings||!rings.length||!ptInRing(x,y,rings[0])) return false;
+  for(var i=1;i<rings.length;i++){ if(ptInRing(x,y,rings[i])) return false; }   // inside a hole
+  return true;
+}
+function ptInGeometry(lon,lat,geom){
+  if(!geom||!geom.coordinates) return false;
+  if(geom.type==="Polygon") return ptInPolygon(lon,lat,geom.coordinates);
+  if(geom.type==="MultiPolygon"){
+    for(var i=0;i<geom.coordinates.length;i++){ if(ptInPolygon(lon,lat,geom.coordinates[i])) return true; }
+  }
+  return false;
+}
+var userZones={county:"",forecast:"",fire:""}, _zonesCache={};
+function ensureUserZones(){
+  var key=current.lat.toFixed(3)+","+current.lon.toFixed(3);
+  if(_zonesCache[key]) return Promise.resolve(_zonesCache[key]).then(function(z){ userZones=z; return z; });
+  var p=getJSON(API+"/points/"+current.lat.toFixed(4)+","+current.lon.toFixed(4),HEADERS).then(function(pt){
+    var pr=pt.properties||{};
+    var z={county:pr.county||"", forecast:pr.forecastZone||"", fire:pr.fireWeatherZone||""};
+    _zonesCache[key]=z; userZones=z; return z;
+  }).catch(function(){
+    var z={county:"",forecast:"",fire:""};
+    _zonesCache[key]=z; userZones=z; return z;     // no zones → simply no badge, never a wrong one
+  });
+  _zonesCache[key]=p;
+  return p;
+}
+/* Returns WHICH kind of match it was, so the badge can state exactly what the evidence supports.
+   NWS issues watches/advisories against forecast zones (MOZ###), not counties (MOC###) — claiming
+   "your county is included" off a forecast-zone match would be a subtly false statement. */
+function alertCoversMe(f){
+  var p=f.properties||{};
+  if(f.geometry) return ptInGeometry(current.lon,current.lat,f.geometry)?"polygon":false;
+  var az=p.affectedZones||[];
+  if(!az.length) return false;
+  if(userZones.county  &&az.indexOf(userZones.county)>=0)   return "county";
+  if(userZones.forecast&&az.indexOf(userZones.forecast)>=0) return "zone";
+  if(userZones.fire    &&az.indexOf(userZones.fire)>=0)     return "fire";
+  return false;
+}
+var HIT_RANK={polygon:0, county:1, zone:2, fire:3};
+var HIT_TEXT={polygon:"You're inside this area", county:"Your county is included",
+              zone:"Your forecast zone is included", fire:"Your fire zone is included"};
 /* A tornado gets its own mark — the family icon (⛈️) undersells the one event that matters most */
 function alertIcon(ev,famIco){
   var e=(ev||"").toLowerCase();
@@ -1456,10 +1523,16 @@ function loadWarnPolygons(feats){
   });
   if(warnLayer){ rvMap.removeLayer(warnLayer); warnLayer=null; }
   if(!polys.length) return;
-  warnLayer=L.geoJSON({type:"FeatureCollection",features:polys},{
-    style:function(f){ return warnStyle(f.properties.event); },
-    interactive:false, pane:"overlayPane"
-  }).addTo(rvMap);
+  // Drawing is best-effort: this runs before the alert LIST renders, so a single malformed
+  // geometry must not be able to take down the safety-critical list with it.
+  try{
+    warnLayer=L.geoJSON({type:"FeatureCollection",features:polys.map(function(f){
+      return {type:"Feature", geometry:f.geometry, properties:f.properties||{}};
+    })},{
+      style:function(f){ return warnStyle(f.properties.event); },
+      interactive:false, pane:"overlayPane"
+    }).addTo(rvMap);
+  }catch(e){ warnLayer=null; }
 }
 function loadRadar(){  // recenter on location change
   if(!rvMap) return;
@@ -1644,7 +1717,9 @@ function loadCurrent(){
 /* ============ ALERTS + STORM MODE (Fix 2 + Fix 4) ============ */
 function loadAlerts(){
   var el=document.getElementById("alerts"), card=document.getElementById("alertsCard");
-  return getJSON(API+"/alerts/active?area=MO,IL",HEADERS).then(function(data){
+  // zones resolve alongside the alerts (memoised per location) so "covers me" is known at render time
+  return Promise.all([getJSON(API+"/alerts/active?area=MO,IL",HEADERS), ensureUserZones()]).then(function(res){
+    var data=res[0];
     if(typeof markFresh==="function") markFresh();  // alerts are the safety-critical feed — only THEY count as "fresh"
     loadWarnPolygons(data.features||[]);  // one fetch feeds both list and map
     function isLSX(f){
@@ -1698,12 +1773,19 @@ function loadAlerts(){
         if(s&&(!earliest||s<earliest)) earliest=s;
         (p2.areaDesc||"").split(";").forEach(function(c){ c=c.trim(); if(c&&counties.indexOf(c)<0) counties.push(c); });
       });
+      // does any segment cover us? keep the STRONGEST evidence (polygon beats county beats zone)
+      var hit=false;
+      segs.forEach(function(f){
+        var h=alertCoversMe(f);
+        if(h&&(!hit||HIT_RANK[h]<HIT_RANK[hit])) hit=h;
+      });
       return {ev:ev,segs:segs,best:best,sev:best.properties.severity,cls:alertClass(best.properties),
-              latest:latest,earliest:earliest,counties:counties};
+              latest:latest,earliest:earliest,counties:counties,hit:hit};
     });
     glist.sort(function(a,b){
       var ta=alertTier(a.ev).rank, tb=alertTier(b.ev).rank;
       if(ta!==tb) return ta-tb;                     // warnings above watches above advisories
+      if(!!a.hit!==!!b.hit) return a.hit?-1:1;      // the one over YOUR roof leads its tier
       var ra=rank[a.sev],rb=rank[b.sev];
       return (ra==null?5:ra)-(rb==null?5:rb);       // then by severity within the tier
     });
@@ -1711,11 +1793,15 @@ function loadAlerts(){
     // ---- summary chips: what's active, by tier, before you read a single alert ----
     var tierCount={};
     glist.forEach(function(g){ var t=alertTier(g.ev); tierCount[t.k]=(tierCount[t.k]||0)+1; });
-    var sumOrder=[["warning","Warning"],["watch","Watch"],["advisory","Advisory"],["statement","Statement"]];
+    // explicit plurals — "Advisorys"/"Watchs" is what naive +"s" produces
+    var sumOrder=[["warning","Warning","Warnings"],["watch","Watch","Watches"],
+                  ["advisory","Advisory","Advisories"],["statement","Statement","Statements"]];
+    var hitN=glist.filter(function(g){return g.hit;}).length;
     var sumHTML='<div class="a2-sum">'+sumOrder.filter(function(o){return tierCount[o[0]];}).map(function(o){
       var n=tierCount[o[0]];
-      return '<span class="a2-sumchip '+o[0]+'">'+n+' '+o[1]+(n>1?"s":"")+'</span>';
-    }).join("")+'</div>';
+      return '<span class="a2-sumchip '+o[0]+'">'+n+' '+(n>1?o[2]:o[1])+'</span>';
+    }).join("")
+    +(hitN?'<span class="a2-sumchip mine">📍 '+hitN+(hitN>1?" include":" includes")+' you</span>':'')+'</div>';
 
     el.innerHTML=sumHTML+glist.map(function(g){
       var tier=alertTier(g.ev);
@@ -1757,11 +1843,15 @@ function loadAlerts(){
         }).join(" \u00b7 ")+'</div>';
       }
       var aid=esc(g.ev);
-      return '<div class="alert '+g.cls+' t-'+tier.k+(openIds[aid]?' open':'')+'" data-aid="'+aid+'" role="button" tabindex="0">'
+      // A polygon hit is a real point-in-shape test; a zone hit only says your zone is listed.
+      // The badge says whichever is actually true.
+      var meBadge=g.hit?'<span class="a2-me">📍 '+esc(HIT_TEXT[g.hit]||"Includes your location")+'</span>':'';
+      return '<div class="alert '+g.cls+' t-'+tier.k+(g.hit?' hits-me':'')+(openIds[aid]?' open':'')+'" data-aid="'+aid+'" role="button" tabindex="0">'
         +'<div class="a2-top">'
           +'<span class="a2-ico">'+alertIcon(g.ev,fcfg.ico)+'</span>'
           +'<span class="a2-name">'+esc(g.ev)+'</span>'
           +'<span class="a2-tier">'+tier.label+'</span>'
+          +meBadge
           +(g.segs.length>1?'<span class="a2-zc">\u00d7'+g.segs.length+'</span>':'')
           +(pending?'<span class="a2-cd a-cd" data-exp="'+g.earliest+'" data-pre="1"></span>'
                    :(g.latest?'<span class="a2-cd a-cd" data-exp="'+g.latest+'"></span>':''))
