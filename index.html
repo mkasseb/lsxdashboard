@@ -410,7 +410,16 @@
   .rlink.c-major{border-left-color:#ff3b3b}
   .rlink .rmeta{display:flex;align-items:center;gap:2px}
 
-  /* AQI */
+  /* AQI — the card only EARNS its slot when air quality is actually a story (AQI > 100).
+     The rest of the year it's a one-line summary inside Current Conditions. */
+  #aqiCard{display:none}
+  #aqiCard.show{display:block}
+  .aqi-mini{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);margin-top:10px}
+  .aqi-mini:empty{display:none}
+  .aqi-mini b{font-variant-numeric:tabular-nums}
+  .aqi-mini .am-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
+  .aqi-mini .am-pm{opacity:.8}
+  .aqi-mini a{margin-left:auto;font-size:11.5px;white-space:nowrap}
   .aqi-main{display:flex;align-items:center;gap:16px}
   .aqi-num{font-size:46px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
   .aqi-cat{font-size:15px;font-weight:700;margin-top:2px}
@@ -822,12 +831,13 @@
       <h2>Current Conditions <span class="link" id="ccStation">&mdash;</span></h2>
       <div id="current"><div class="loading">Loading…</div></div>
     </section>
-    <!-- AQI (paired under Current so the column fills next to the tall radar) -->
+    <!-- AQI — hidden unless air quality is actually notable (AQI > 100); the everyday reading
+         lives as a one-line summary inside Current Conditions -->
     <section class="card" id="aqiCard">
       <h2>Air Quality
         <a class="link" href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a>
       </h2>
-      <div id="aqi"><div class="loading">Loading…</div></div>
+      <div id="aqi"></div>
     </section>
   </div>
 
@@ -1783,9 +1793,10 @@ function loadCurrent(){
       +'<div class="cc-item"><div class="k">Gusts</div><div class="v">'+(gust!=null?gust+" mph":"—")+'</div></div>'
       +'<div class="cc-item"><div class="k">Pressure</div><div class="v">'+(press!=null?press+'"':"—")+'</div></div>'
       +'<div class="cc-item"><div class="k">Visibility</div><div class="v">'+(vis!=null?vis+" mi":"—")+'</div></div>'
-      +'</div><div class="cc-ctx" id="ccCtx"></div>'
+      +'</div><div class="aqi-mini" id="aqiMini"></div><div class="cc-ctx" id="ccCtx"></div>'
       +'<div class="stn">Observed '+timeAgo(p.timestamp)+' · '+current.station+'</div>';
     renderCurrentCtx();   // normals + today's records, once climate context has landed
+    if(typeof renderAqiMini==="function") renderAqiMini();   // re-fill the AQI line after the re-render
   }).catch(function(){
     stEl.textContent="—";
     el.innerHTML='<div class="empty">No current obs from '+current.station+'. Station may be offline.</div>';
@@ -2080,20 +2091,49 @@ function aqiInfo(v){
   if(v<=300)return {c:"#c13bff",t:"Very Unhealthy",s:"Stay inside if you can."};
   return {c:"#ff3b3b",t:"Hazardous",s:"Don't be a hero. Indoors."};
 }
+var aqiState={val:null, pm:null, err:false};
+function renderAqiMini(){
+  var el=document.getElementById("aqiMini"); if(!el) return;
+  if(aqiState.val==null){
+    el.innerHTML=aqiState.err
+      ?'<span class="am-dot" style="background:var(--muted)"></span>Air quality unavailable'
+        +' <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a>'
+      :"";
+    return;
+  }
+  var i=aqiInfo(aqiState.val);
+  el.innerHTML='<span class="am-dot" style="background:'+i.c+'"></span>'
+    +'Air quality <b style="color:'+i.c+'">'+aqiState.val+'</b> · '+i.t
+    +(aqiState.pm!=null?' <span class="am-pm">· PM2.5 '+aqiState.pm+'</span>':'')
+    +' <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a>';
+}
 function loadAqi(){
-  var el=document.getElementById("aqi");
+  var el=document.getElementById("aqi"), card=document.getElementById("aqiCard");
   var url="https://air-quality-api.open-meteo.com/v1/air-quality?latitude="+current.lat+"&longitude="+current.lon+"&current=us_aqi,pm2_5,pm10";
   return getJSON(url).then(function(d){
     var cur=d.current||{}, aqi=cur.us_aqi, info=aqiInfo(aqi);
-    var pm=(cur.pm2_5!=null)?Math.round(cur.pm2_5):null;
-    el.innerHTML='<div class="aqi-main"><div class="aqi-chip" style="background:'+info.c+'"></div><div>'
-      +'<div class="aqi-num" style="color:'+info.c+'">'+(aqi!=null?aqi:"—")+'</div>'
-      +'<div class="aqi-cat" style="color:'+info.c+'">'+info.t+'</div>'
-      +'<div class="aqi-sub">'+info.s+(pm!=null?' · PM2.5 '+pm+' µg/m³':'')+'</div></div></div>';
-    callAqi=(aqi!=null)?aqi:null;
+    aqiState={val:(aqi!=null)?aqi:null, pm:(cur.pm2_5!=null)?Math.round(cur.pm2_5):null, err:false};
+    // The dedicated card only appears when air quality is a story: AQI > 100 ("Unhealthy for
+    // Sensitive Groups" and worse — EPA's literal "Hazardous" is 301+, far too rare a trigger).
+    // data-aqibad lets a restored snapshot recover the same visibility decision.
+    var bad=(aqiState.val!=null&&aqiState.val>100);
+    if(card) card.classList.toggle("show",bad);
+    if(el) el.innerHTML=bad
+      ?'<div class="aqi-main" data-aqibad="1"><div class="aqi-chip" style="background:'+info.c+'"></div><div>'
+        +'<div class="aqi-num" style="color:'+info.c+'">'+aqiState.val+'</div>'
+        +'<div class="aqi-cat" style="color:'+info.c+'">'+info.t+'</div>'
+        +'<div class="aqi-sub">'+info.s+(aqiState.pm!=null?' · PM2.5 '+aqiState.pm+' µg/m³':'')+'</div></div></div>'
+      :"";
+    renderAqiMini();
+    callAqi=aqiState.val;
     if(typeof renderTheCall==="function") renderTheCall();   // AQI can add/remove a verdict pill
   }).catch(function(){
-    el.innerHTML='<div class="empty">AQI unavailable. <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">Open AirNow ↗</a></div>';
+    aqiState={val:null, pm:null, err:true};
+    if(card) card.classList.remove("show");
+    if(el) el.innerHTML="";
+    renderAqiMini();
+    callAqi=null;                                            // never let a stale reading keep a pill alive
+    if(typeof renderTheCall==="function") renderTheCall();
   });
 }
 
@@ -3710,6 +3750,9 @@ function restoreSnapshot(){
   if(!n) return false;
   if(snap.parts.callRow&&age<=3*3600000){ var cc=document.getElementById("callCard"); if(cc) cc.classList.add("has"); }
   if(snap.calm&&age<=15*60000&&snap.parts.alerts){ var ac=document.getElementById("alertsCard"); if(ac) ac.classList.add("calm"); }
+  // AQI card visibility travels with its content: the bad-air marker inside the restored HTML
+  var aq=document.getElementById("aqi"), aqc=document.getElementById("aqiCard");
+  if(aqc) aqc.classList.toggle("show", !!(aq&&aq.querySelector("[data-aqibad]")));
   if(snap.wx) document.body.setAttribute("data-wx",snap.wx);
   snapRestored=true;
   showSnapBar(snap.t);
