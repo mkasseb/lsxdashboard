@@ -461,6 +461,10 @@
   .cn-lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-weight:700}
   .cn-cell>span:last-child{font-size:16px;font-weight:800;font-variant-numeric:tabular-nums}
   .cn-warm{color:#ff6a3d}.cn-cool{color:#4aa3ff}.cn-wet{color:#3aa0ff}.cn-dry{color:#d98a2b}.cn-flat{color:var(--muted)}.cn-na{color:var(--muted)}
+  /* Provenance / gap note for the departures grid — a dash should never be unexplained */
+  .cn-src{font-size:11.5px;color:var(--muted);line-height:1.45;margin-top:9px}
+  .cn-src:empty{display:none}
+  .cn-src b{color:var(--text);font-weight:700}
   /* Context lines — records, rankings, streaks (never shown unless verified) */
   .cn-ctx{display:flex;flex-direction:column;gap:7px;margin-top:11px;padding-top:10px;border-top:1px solid var(--border)}
   .cn-ctx:empty{display:none}
@@ -881,6 +885,7 @@
       </h2>
       <div id="cnToday" class="cn-today"><span class="cn-na">Normals loading…</span></div>
       <div id="cnGrid" class="cn-grid"><div class="loading">Loading departures…</div></div>
+      <div id="cnSrc" class="cn-src"></div>
       <div id="cnCtx" class="cn-ctx"></div>
       <div class="imgcap"><span>Station: <span id="cnStation">…</span></span><span>1991–2020 normals</span></div>
     </section>
@@ -2634,9 +2639,40 @@ function renderVsNormal(){
   el.innerHTML='<div class="cn-trow"><span class="cn-k">'+hiLbl+'</span><span class="cn-v">'+hi+'</span><span class="cn-n">normal '+nh+'</span></div>'
     +'<div class="cn-trow"><span class="cn-k">Forecast low</span><span class="cn-v">'+lo+'</span><span class="cn-n">normal '+nl+'</span></div>';
 }
+/* Gap tolerance depends on the statistic, because gaps hurt sums and means differently:
+   a SUM of precipitation always loses rain on a missing day (biased low, so be strict), while a
+   MEAN temperature over 19 of 25 days is simply a smaller sample (unbiased, so be generous). */
+function climGapMax(periodDays,isSum){
+  return isSum ? Math.max(2,Math.floor(0.05*periodDays)) : Math.max(3,Math.floor(0.25*periodDays));
+}
+function climPeriods(){
+  var n=new Date(), y=n.getFullYear();
+  var jul1=new Date(y,6,1); if(n<jul1) jul1=new Date(y-1,6,1);   // snow season starts Jul 1
+  return {mtd:n.getDate(),
+          ytd:Math.floor((n-new Date(y,0,1))/86400000)+1,
+          std:Math.floor((n-jul1)/86400000)+1};
+}
+/* Each departure arrives as [value, missingDays] thanks to add:"mcnt" — return the value with a
+   verdict, so the caller can decide between using it, borrowing, or blanking. */
+function climCells(row,showSnow,per){
+  function plain(x){ return Array.isArray(x)?acisNum(x[x.length-1]):acisNum(x); }
+  function grab(x,period,isSum){
+    if(!Array.isArray(x)){ var v0=acisNum(x); return {v:v0, ok:v0!=null}; }
+    var miss=(x.length>1)?(+x[1]||0):0, v=acisNum(x[0]);
+    return {v:v, ok:(v!=null && miss<=climGapMax(period,isSum)), miss:miss};
+  }
+  return {normHi:plain(row[1]), normLo:plain(row[2]),
+          t1:grab(row[3],per.mtd,false), t2:grab(row[4],per.ytd,false),
+          p1:grab(row[5],per.mtd,true),  p2:grab(row[6],per.ytd,true),
+          sn:showSnow?grab(row[7],per.std,true):{v:null,ok:true}};
+}
+function climAllOK(c,showSnow){
+  return c.t1.ok&&c.t2.ok&&c.p1.ok&&c.p2.ok&&(!showSnow||c.sn.ok);
+}
 function loadClimate(){
   var grid=document.getElementById("cnGrid"); if(!grid) return Promise.resolve();
-  return climStation(current.lat,current.lon).then(function(st){
+  return Promise.all([climStation(current.lat,current.lon), deepStation(current.lat,current.lon)]).then(function(sts){
+    var st=sts[0], deep=sts[1];
     climate.station=st.sid; climate.stationName=st.name;
     var nameEl=document.getElementById("cnStation"); if(nameEl) nameEl.textContent=st.name||st.sid;
     var showSnow=(function(){var m=new Date().getMonth();return m>=10||m<=3;})(); // Nov–Apr
@@ -2654,33 +2690,47 @@ function loadClimate(){
     if(showSnow) elems.push({name:"snow",duration:"std",season_start:"07-01",reduce:{reduce:"sum",add:"mcnt"},normal:"departure"});
     var _d=new Date();
     var today=_d.getFullYear()+"-"+("0"+(_d.getMonth()+1)).slice(-2)+"-"+("0"+_d.getDate()).slice(-2); // LOCAL date (toISOString is UTC → wrong in the evening)
-    return acisPost("StnData",{sid:st.sid, sdate:today, edate:today, elems:elems, meta:["name"]}).then(function(r){
-      if(r&&r.error) throw new Error("acis: "+r.error);          // ACIS reports errors as {"error":...} with HTTP 200
-      if(!r||!r.data||!r.data.length) throw new Error("acis: no data");
-      var row=r.data[0];
-      // Some elems (normal:"departure") can return a [value, departure] pair; grab the departure when present.
-      function cell(x){ return Array.isArray(x) ? acisNum(x[x.length-1]) : acisNum(x); }
-      // departure cells are [departure, missing-days]; too many holes → null (renders as "—")
-      function dep(x,maxMiss){
-        if(!Array.isArray(x)) return acisNum(x);
-        var miss=(x.length>1)?(+x[1]||0):0;
-        return (miss>maxMiss)?null:acisNum(x[0]);
-      }
-      climate.normHi=cell(row[1]);
-      climate.normLo=cell(row[2]);
-      var tMTD=dep(row[3],5), tYTD=dep(row[4],14), pMTD=dep(row[5],5), pYTD=dep(row[6],14);
-      var snowSTD=showSnow?dep(row[7],21):null;
-      climate.snowSTD=snowSTD;   // winter slot reports season snow vs normal
-      var cells=''
-        +'<div class="cn-cell"><span class="cn-lbl">Temp · month</span>'+fmtDep(tMTD,"°")+'</div>'
-        +'<div class="cn-cell"><span class="cn-lbl">Temp · year</span>'+fmtDep(tYTD,"°")+'</div>'
-        +'<div class="cn-cell"><span class="cn-lbl">Precip · month</span>'+fmtDep(pMTD,"\u2033")+'</div>'
-        +'<div class="cn-cell"><span class="cn-lbl">Precip · year</span>'+fmtDep(pYTD,"\u2033")+'</div>';
-      if(showSnow) cells+='<div class="cn-cell"><span class="cn-lbl">Snow · season</span>'+fmtDep(snowSTD,"\u2033")+'</div>';
+    var per=climPeriods();
+    function ask(sid){
+      return acisPost("StnData",{sid:sid, sdate:today, edate:today, elems:elems, meta:["name"]}).then(function(r){
+        if(r&&r.error) throw new Error("acis: "+r.error);          // ACIS reports errors as {"error":...} with HTTP 200
+        if(!r||!r.data||!r.data.length) throw new Error("acis: no data");
+        return climCells(r.data[0],showSnow,per);
+      });
+    }
+    function paint(c,borrowedFrom){
+      var cells=""
+        +'<div class="cn-cell"><span class="cn-lbl">Temp \u00b7 month</span>'+fmtDep(c.t1.ok?c.t1.v:null,"\u00b0")+'</div>'
+        +'<div class="cn-cell"><span class="cn-lbl">Temp \u00b7 year</span>'+fmtDep(c.t2.ok?c.t2.v:null,"\u00b0")+'</div>'
+        +'<div class="cn-cell"><span class="cn-lbl">Precip \u00b7 month</span>'+fmtDep(c.p1.ok?c.p1.v:null,"\u2033")+'</div>'
+        +'<div class="cn-cell"><span class="cn-lbl">Precip \u00b7 year</span>'+fmtDep(c.p2.ok?c.p2.v:null,"\u2033")+'</div>';
+      if(showSnow) cells+='<div class="cn-cell"><span class="cn-lbl">Snow \u00b7 season</span>'+fmtDep(c.sn.ok?c.sn.v:null,"\u2033")+'</div>';
       grid.innerHTML=cells;
+      climate.snowSTD=(c.sn&&c.sn.ok)?c.sn.v:null;   // winter slot reports season snow vs normal
+      // A dash must never be a mystery: name whose numbers these are, or say why there aren't any.
+      var src=document.getElementById("cnSrc");
+      if(src){
+        if(borrowedFrom){
+          src.innerHTML="Month &amp; year figures from <b>"+esc(shortStn(borrowedFrom))+"</b> \u2014 "
+            +esc(shortStn(st.name||st.sid))+" has too many missing days";
+        }else if(!climAllOK(c,showSnow)){
+          src.innerHTML="Some figures unavailable \u2014 <b>"+esc(shortStn(st.name||st.sid))+"</b> has gaps in its record";
+        }else src.innerHTML="";
+      }
       renderVsNormal();
       renderCurrentCtx();
       renderContext();
+    }
+    return ask(st.sid).then(function(local){
+      climate.normHi=local.normHi; climate.normLo=local.normLo;   // normals are gap-free \u2014 always local
+      if(climAllOK(local,showSnow) || !deep || !deep.sid || deep.sid===st.sid){ paint(local,""); return; }
+      // Local station is too gappy for the running totals. Month/year anomalies are broad-scale,
+      // so a complete nearby record beats four dashes \u2014 borrowed as a COHERENT set from ONE
+      // station (mixing sources per cell would be impossible to reason about) and attributed.
+      return ask(deep.sid).then(function(dc){
+        if(climAllOK(dc,showSnow)) paint(dc,deep.name||deep.sid);
+        else paint(local,"");
+      }).catch(function(){ paint(local,""); });
     });
   }).catch(function(){
     grid.innerHTML='<div class="empty">Climate normals unavailable. <a href="https://xmacis.rcc-acis.org/" target="_blank" rel="noopener">xmACIS ↗</a></div>';
