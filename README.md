@@ -7,8 +7,8 @@ Not an official NWS product. During severe weather, defer to official warnings a
 
 ## What it is
 
-One file. [`index.html`](index.html) is the entire application: ~800 lines of CSS, ~260 lines of
-markup, and ~3,600 lines of JavaScript, all inline.
+One file. [`index.html`](index.html) is the entire application: ~840 lines of CSS, ~265 lines of
+markup, and ~3,700 lines of JavaScript, all inline.
 
 - **No build step.** No bundler, no transpiler, no `package.json`. Edit the file, reload the page.
 - **No API keys.** Every feed was chosen because it is keyless and CORS-open, so the whole thing
@@ -116,6 +116,20 @@ and rewrites the banner.
 
 **Adding a card** means touching five places: the markup, the `RANK` map in `layoutMasonry`'s
 `tier()`, `SNAP_PARTS`, the `SCHED` table, and `clearLocationUI`/`resetLocationState`.
+
+**Adding a location-scoped loader** means a sixth: the `jobs` array inside `setLocation()`. `SCHED`
+only governs the periodic refresh, and `refreshAll()` only covers the initial paint — a loader
+missing from `setLocation` looks like it works, then silently never re-runs when the visitor
+changes town. Worse, it can appear broken on first load too: geolocation resolves *after* the first
+`refreshAll()`, so the generation bumps, the in-flight fetch is discarded by its own `fresh()`
+guard, and nothing re-issues it.
+
+**Radar and satellite are one widget, two views.** They answer the same question at different
+scales, so they share `#radarCard` and a tab swaps which is visible. They are not layers on one
+map: the radar is a live WMS tile source, while NESDIS's GOES product is a fixed-extent sector
+*image*, not tiles, so it cannot be georeferenced under the radar without a different provider.
+Switching back to the radar calls `invalidateSize()` — Leaflet sized the map against a hidden
+container and would otherwise paint into a stale viewport.
 
 ## Known gaps
 

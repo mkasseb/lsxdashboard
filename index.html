@@ -200,6 +200,7 @@
   @media(min-width:681px){
     .grid>.stack.col-4,.grid>#radarCard{align-self:stretch}
     #radarCard{display:flex;flex-direction:column}
+    #radarCard .rs-view{flex:1 1 auto}
     #radarCard .imgwrap{flex:1 1 auto;display:flex;min-height:420px}
     #radarCard #radar{height:auto;flex:1 1 auto;min-height:420px}
   }
@@ -470,6 +471,25 @@
   .leaflet-tooltip.stn-tip:before{display:none}
   .imgfail{padding:22px;text-align:center;color:var(--muted);font-size:13px;line-height:1.6}
 
+  /* ===== Radar / Satellite tabs ===== */
+  .rs-tabs{display:inline-flex;gap:4px;background:var(--inset);border:1px solid var(--border);
+    border-radius:16px;padding:3px}
+  .rs-tab{min-height:0;padding:5px 13px;font-size:11.5px;font-weight:800;text-transform:uppercase;
+    letter-spacing:.7px;border:0;border-radius:13px;background:transparent;color:var(--muted);
+    font-family:inherit;cursor:pointer;line-height:1.3}
+  .rs-tab:hover{color:var(--text);border-color:transparent}
+  .rs-tab.on{background:var(--chip);color:var(--accent)}
+  .rs-tab:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  /* Views alternate. The stretch rules give the card a flex column, so a shown view has to be a
+     flex child that can grow; [hidden] must still beat that. */
+  .rs-view{display:flex;flex-direction:column;min-width:0}
+  .rs-view[hidden]{display:none}
+  #rsSat .imgwrap{background:#000;align-items:center;justify-content:center}
+  /* The sector image is a fixed 600×600 frame, so it letterboxes rather than distorts or crops —
+     cropping a satellite sector would throw away the part of the region you're looking for. */
+  #rsSat #sat{width:100%;height:100%;object-fit:contain;display:block}
+  @media(max-width:480px){.rs-tab{padding:5px 10px;font-size:11px;letter-spacing:.4px}}
+
   /* Tap-to-interact overlay for map iframes (Fix 1 — kills mobile scroll-trap) */
   .maplock-wrap{position:relative}
   .maplock{position:absolute;inset:0;z-index:3;display:flex;align-items:flex-end;justify-content:center;
@@ -502,6 +522,14 @@
      The rest of the year it's a one-line summary inside Current Conditions. */
   #aqiCard{display:none}
   #aqiCard.show{display:block}
+  /* UV sits with air quality: both are "how much is this going to cost me to be outside" numbers.
+     Deliberately NOT flex — this line is a sentence with <b> inside it, and flex would promote each
+     text run to its own item, opening gaps mid-phrase ("burn ~ 29 min"). */
+  .cc-uv{font-size:12.5px;color:var(--muted);margin-top:10px;line-height:1.5}
+  .cc-uv:empty{display:none}
+  .cc-uv b{font-variant-numeric:tabular-nums;color:var(--text)}
+  .cc-uv .uv-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  .cc-uv .uv-sep{opacity:.45;margin:0 6px}
   .aqi-mini{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);margin-top:10px}
   .aqi-mini:empty{display:none}
   .aqi-mini b{font-variant-numeric:tabular-nums}
@@ -953,22 +981,38 @@
     </section>
   </div>
 
-  <!-- RADAR HERO (official NWS WMS via Leaflet) -->
+  <!-- SKY HERO — radar and satellite as two views of one widget.
+       They answer the same question at different scales ("what is overhead, and what is heading
+       this way"), so they share a card and a tab swaps which one is showing. The radar is a live
+       zoomable WMS map; the satellite is NESDIS's fixed-extent sector image, not a tile source, so
+       these are alternating views rather than stacked layers on one map. -->
   <section class="card hero col-8" id="radarCard">
-    <h2>Live Radar — zoomable
-      <span class="link"><a href="https://radar.weather.gov/station/KLSX/standard" target="_blank" rel="noopener">Official KLSX ↗</a></span>
+    <h2>
+      <span class="rs-tabs" id="rsTabs" role="tablist" aria-label="Sky view">
+        <button type="button" class="rs-tab on" data-v="radar" role="tab" aria-selected="true">Radar</button>
+        <button type="button" class="rs-tab" data-v="sat" role="tab" aria-selected="false">Satellite</button>
+      </span>
+      <span class="link" id="rsLink"><a href="https://radar.weather.gov/station/KLSX/standard" target="_blank" rel="noopener">Official KLSX ↗</a></span>
     </h2>
-    <div class="imgwrap maplock-wrap">
-      <div id="radar" class="frame"></div>
-      <div class="radar-time" id="radarTime"></div>
-      <div class="maplock"><button type="button" class="maplock-pill">👆 Tap to interact with radar</button></div>
+    <div class="rs-view" id="rsRadar">
+      <div class="imgwrap maplock-wrap">
+        <div id="radar" class="frame"></div>
+        <div class="radar-time" id="radarTime"></div>
+        <div class="maplock"><button type="button" class="maplock-pill">👆 Tap to interact with radar</button></div>
+      </div>
+      <div class="radar-ctl" id="radarCtl">
+        <button type="button" id="radarPlay" aria-label="Play radar loop" title="Play the last ~30 minutes">▶︎ Loop</button>
+        <input type="range" id="radarSlider" min="0" max="0" value="0" step="1" aria-label="Scrub radar time">
+        <span class="rc-t" id="radarFrameTime"></span>
+      </div>
     </div>
-    <div class="radar-ctl" id="radarCtl">
-      <button type="button" id="radarPlay" aria-label="Play radar loop" title="Play the last ~30 minutes">▶︎ Loop</button>
-      <input type="range" id="radarSlider" min="0" max="0" value="0" step="1" aria-label="Scrub radar time">
-      <span class="rc-t" id="radarFrameTime"></span>
+    <div class="rs-view" id="rsSat" hidden>
+      <div class="imgwrap">
+        <img id="sat" alt="GOES-19 Upper Mississippi Valley GeoColor" src="https://cdn.star.nesdis.noaa.gov/GOES19/ABI/SECTOR/umv/GEOCOLOR/600x600.jpg" onerror="imgFail(this,'satFail')">
+        <div class="imgfail" id="satFail" style="display:none">Satellite image didn't load. <a href="https://www.star.nesdis.noaa.gov/GOES/sector.php?sat=G19&sector=umv" target="_blank" rel="noopener">Open GOES-East ↗</a></div>
+      </div>
     </div>
-    <div class="imgcap"><span>Official NOAA/NWS radar &middot; tap a <b>warning polygon</b> to jump to its alert &middot; basemap &copy; CARTO/OSM</span><span>auto-updates</span></div>
+    <div class="imgcap" id="rsCap"><span>Official NOAA/NWS radar &middot; tap a <b>warning polygon</b> to jump to its alert &middot; basemap &copy; CARTO/OSM</span><span>auto-updates</span></div>
   </section>
 
   <!-- THE CALL — plain-English verdicts computed client-side from the hourly forecast + AQI.
@@ -1032,16 +1076,6 @@
         <a class="link" href="https://water.noaa.gov/" target="_blank" rel="noopener">NWPS ↗</a>
       </h2>
       <div class="river" id="rivers"><div class="loading">Loading gauges…</div></div>
-    </section>
-    <section class="card" id="satCard">
-      <h2>GOES-19 Satellite
-        <a class="link" href="https://www.star.nesdis.noaa.gov/GOES/sector.php?sat=G19&sector=umv" target="_blank" rel="noopener">Loop ↗</a>
-      </h2>
-      <div class="imgwrap">
-        <img id="sat" alt="GOES-19 Upper Mississippi Valley GeoColor" src="https://cdn.star.nesdis.noaa.gov/GOES19/ABI/SECTOR/umv/GEOCOLOR/600x600.jpg" onerror="imgFail(this,'satFail')">
-        <div class="imgfail" id="satFail" style="display:none">Satellite image didn't load. <a href="https://www.star.nesdis.noaa.gov/GOES/sector.php?sat=G19&sector=umv" target="_blank" rel="noopener">Open GOES-East ↗</a></div>
-      </div>
-      <div class="imgcap"><span>NESDIS · Upper Miss. Valley</span><span>GeoColor</span></div>
     </section>
     <!-- DROUGHT OUTLOOK — current (USDM) + monthly & seasonal forecast (CPC) -->
     <section class="card" id="droughtCard">
@@ -1901,6 +1935,13 @@ function loadForecast(){
               +(function(){var fl=feelsLikeF(main.temperature,rh,parseMph(main.windSpeed));
                 return '<div class="dd-item"><div class="k">Feels Like</div><div class="v">'+(fl!=null?fl+"°":"—")+'</div></div>';})()
               +'<div class="dd-item"><div class="k">Humidity</div><div class="v">'+(rh!=null?rh+"%":"—")+'</div></div>'
+              +(function(){   // that day's peak UV, when Open-Meteo has it for the date
+                var du=_dk?uv.daily[_dk]:null;
+                if(du==null) return "";
+                var dr=Math.round(du), dl=uvLevel(dr);
+                return '<div class="dd-item"><div class="k">UV Index</div>'
+                  +'<div class="v"><span style="color:'+dl.c+'">'+dr+" "+dl.t+'</span></div></div>';
+              })()
               +(function(){   // how this day sits against the 1991–2020 normal for that date
                 var nw=_dk&&ctx.normWeek?ctx.normWeek[_dk]:null;
                 if(!nw||(nw.hi==null&&nw.lo==null)) return "";
@@ -1970,9 +2011,10 @@ function loadCurrent(){
       +'<div class="cc-item"><div class="k">Gusts</div><div class="v">'+(gust!=null?gust+" mph":"—")+'</div></div>'
       +'<div class="cc-item"><div class="k">Pressure</div><div class="v">'+(press!=null?press+'"':"—")+'</div></div>'
       +'<div class="cc-item"><div class="k">Visibility</div><div class="v">'+(vis!=null?vis+" mi":"—")+'</div></div>'
-      +'</div><div class="aqi-mini" id="aqiMini"></div><div class="cc-ctx" id="ccCtx"></div>'
+      +'</div><div class="cc-uv" id="ccUv"></div><div class="aqi-mini" id="aqiMini"></div><div class="cc-ctx" id="ccCtx"></div>'
       +'<div class="stn">Observed '+timeAgo(p.timestamp)+' · '+current.station+'</div>';
     renderHeroToday();    // today's range + sun times, once the 7-day has landed
+    renderUvNow();        // UV, once Open-Meteo has answered
     renderCurrentCtx();   // normals + today's records, once climate context has landed
     if(typeof renderAqiMini==="function") renderAqiMini();   // re-fill the AQI line after the re-render
   }).catch(function(){
@@ -3548,6 +3590,44 @@ function refreshImages(){
     sat.src=bust("https://cdn.star.nesdis.noaa.gov/GOES19/ABI/SECTOR/umv/GEOCOLOR/600x600.jpg"); }
 }
 
+/* ---- Radar / Satellite view switch ----
+   One card, two views. The radar keeps its loop scrubber and warning-polygon links; the satellite
+   is a plain image, so its controls and caption differ. Switching back to the radar has to poke
+   Leaflet: the map was sized for a hidden container and would otherwise render into a stale one. */
+var RS_VIEW="radar";
+var RS_META={
+  radar:{link:'<a href="https://radar.weather.gov/station/KLSX/standard" target="_blank" rel="noopener">Official KLSX ↗</a>',
+         cap:'Official NOAA/NWS radar &middot; tap a <b>warning polygon</b> to jump to its alert &middot; basemap &copy; CARTO/OSM',
+         note:'auto-updates'},
+  sat:  {link:'<a href="https://www.star.nesdis.noaa.gov/GOES/sector.php?sat=G19&amp;sector=umv" target="_blank" rel="noopener">GOES loop ↗</a>',
+         cap:'NESDIS GOES-19 GeoColor &middot; Upper Mississippi Valley sector',
+         note:'every 5 min'}
+};
+function setSkyView(v){
+  if(v!=="sat") v="radar";
+  RS_VIEW=v;
+  var isSat=(v==="sat");
+  var rr=document.getElementById("rsRadar"), rs=document.getElementById("rsSat");
+  if(rr) rr.hidden=isSat;
+  if(rs) rs.hidden=!isSat;
+  [].slice.call(document.querySelectorAll("#rsTabs .rs-tab")).forEach(function(b){
+    var on=(b.getAttribute("data-v")===v);
+    b.classList.toggle("on",on);
+    b.setAttribute("aria-selected",on?"true":"false");
+  });
+  var m=RS_META[v];
+  var lk=document.getElementById("rsLink"); if(lk) lk.innerHTML=m.link;
+  var cap=document.getElementById("rsCap");
+  if(cap) cap.innerHTML='<span>'+m.cap+'</span><span>'+m.note+'</span>';
+  if(isSat){ radarPauseLoop(); }
+  else if(rvMap){ setTimeout(function(){ rvMap.invalidateSize(); },0); }
+  if(typeof scheduleMasonry==="function") scheduleMasonry();
+}
+document.addEventListener("click",function(e){
+  var b=e.target.closest?e.target.closest("#rsTabs .rs-tab"):null;
+  if(b) setSkyView(b.getAttribute("data-v"));
+});
+
 /* ============ FORECAST DISCUSSION (the pulse) ============ */
 var AFD_LINK="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1";
 function extractAFD(text){
@@ -3650,7 +3730,8 @@ function resetLocationState(){
   ctx={ready:false, recHi:null, recLo:null, recPcp:null, doyHi:[], doyLo:[],
        monWet:[], monWarm:[], monMtd:null, monMean:null, monName:"", years:0,
        dry:null, hist:null, normWeek:{}, recStation:""};
-  season.uv=null; season.frz=null;
+  season.frz=null;
+  uv={now:null, peak:null, daily:{}};
   smart.hourly=[]; smart.days=[];
   heroNow.temp=null;   // the old city's reading must not mark the new city's range
   aqiState={val:null, pm:null, err:false}; callAqi=null;
@@ -3664,7 +3745,7 @@ function clearLocationUI(){
   load("current"); load("daily","Loading forecast\u2026"); load("hourly24","Loading hourly\u2026");
   load("cnGrid","Loading departures\u2026"); load("spc","Loading outlook\u2026");
   load("hazards","Loading hazards\u2026"); load("cpc","Loading outlooks\u2026");
-  ["cnCtx","cnSrc","ccCtx","aqi","aqiMini","callRow","qpf7","h24loc","spcLoc"].forEach(function(id){
+  ["cnCtx","cnSrc","ccCtx","ccUv","aqi","aqiMini","callRow","qpf7","h24loc","spcLoc"].forEach(function(id){
     var e=document.getElementById(id); if(e) e.innerHTML="";
   });
   ["drNow","drMonth","drSeason"].forEach(function(id){
@@ -3686,7 +3767,7 @@ function setLocation(loc,opts){
   updateLocNow();
   if(opts.save) saveLoc(loc);
   var jobs=[loadForecast(),loadAqi(),loadSpc(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),
-            loadClimate(),loadAlerts(),loadClimateContext(),loadSeasonal()];
+            loadClimate(),loadAlerts(),loadClimateContext(),loadSeasonal(),loadUv()];
   loadRadar();
   if(loc.station){ jobs.push(loadCurrent()); }
   else{
@@ -3947,7 +4028,7 @@ function sunArcSVG(rise,set){
    late-freeze risk in spring (Open-Meteo's pollen fields are Europe-only, so a Missouri spring
    gets the thing that actually matters here — whether the garden survives the night).
    Every row is optional: if its data didn't arrive, the row simply isn't drawn. */
-var season={kind:"", uv:null, frz:null};
+var season={kind:"", frz:null};
 function seasonOf(d){
   var m=(d||new Date()).getMonth();
   if(m===11||m<=1) return "winter";
@@ -3964,18 +4045,60 @@ function uvLevel(v){
   return {t:"Extreme",c:"#c13bff"};
 }
 function shortT(t){ return new Date(t).toLocaleTimeString([], {hour:"numeric"}).replace(/\s/g,"").toLowerCase(); }
-function loadUvPeak(){
+/* ===== UV =====
+   UV reads as a current condition, not a seasonal curiosity, so it lives with the other exposure
+   numbers in the hero and as a per-day figure in the 7-day. One request serves both: the hourly
+   series gives "now" and the next-24h peak, the daily series gives each forecast day's maximum.
+   Fetched year-round — a clear February afternoon over snow still burns. */
+var uv={now:null, peak:null, daily:{}};
+function loadUv(){
+  var fresh=locGuard();
   return getJSON("https://api.open-meteo.com/v1/forecast?latitude="+current.lat+"&longitude="+current.lon
-    +"&hourly=uv_index&forecast_days=2&timezone=auto", null, locSignal()).then(function(d){
-    var h=d.hourly||{}, ts=h.time||[], vs=h.uv_index||[], now=Date.now(), best=null;
+    +"&hourly=uv_index&daily=uv_index_max&forecast_days=7&timezone=auto", null, locSignal()).then(function(d){
+    if(!fresh()) return;   // user moved while this was in flight
+    var h=d.hourly||{}, ts=h.time||[], vs=h.uv_index||[], now=Date.now(), best=null, cur=null, curGap=Infinity;
     for(var i=0;i<ts.length;i++){
-      var t=new Date(ts[i]).getTime();
-      if(t<now-1800000||t>now+24*3600000) continue;    // peak across the next 24 h (useful in the evening too)
       if(vs[i]==null) continue;
+      var t=new Date(ts[i]).getTime(), gap=Math.abs(t-now);
+      // "now" is the nearest hourly sample, but only if one is actually near — never extrapolate
+      if(gap<curGap && gap<=5400000){ curGap=gap; cur=vs[i]; }
+      if(t<now-1800000||t>now+24*3600000) continue;    // peak across the next 24 h (useful in the evening too)
       if(!best||vs[i]>best.v) best={v:vs[i],t:t};
     }
-    season.uv=best;
-  }).catch(function(){ season.uv=null; });
+    uv.now=cur; uv.peak=best;
+    var dd=d.daily||{}, dts=dd.time||[], dvs=dd.uv_index_max||[], map={};
+    for(var j=0;j<dts.length;j++){ if(dvs[j]!=null) map[dts[j]]=dvs[j]; }
+    uv.daily=map;
+    renderUvNow();
+    // The 7-day may already be on screen; repaint it so each day picks up its UV figure.
+    if(typeof loadForecast._paint==="function") loadForecast._paint();
+  }).catch(function(){
+    if(!fresh()) return;
+    uv.now=null; uv.peak=null; uv.daily={}; renderUvNow();
+  });
+}
+/* Painted into the hero. Both this and loadCurrent can run first, so it renders from whatever
+   state exists — the same idempotent-repaint contract as renderCurrentCtx. */
+function renderUvNow(){
+  var el=document.getElementById("ccUv"); if(!el) return;
+  var r=(uv.now!=null)?Math.round(uv.now):null;
+  var p=uv.peak, pr=p?Math.round(p.v):null;
+  // After dark UV is 0 for everyone; saying so is noise. Keep the line only if there is either a
+  // live reading worth having or a peak still ahead worth planning around.
+  if((r==null||r<1)&&!(pr!=null&&pr>=3&&p.t>Date.now())){ el.innerHTML=""; return; }
+  var bits=[], live=(r!=null&&r>=1);
+  if(live){
+    var lv=uvLevel(r);
+    bits.push('<span class="uv-dot" style="background:'+lv.c+'"></span>UV <b style="color:'+lv.c+'">'+r+'</b> '+lv.t);
+  }
+  if(pr!=null&&(!live||pr>r)){
+    // After dark this line is the whole message, so it has to name the quantity itself. A peak
+    // that lands on a later date needs saying so — "at 10am" at 11pm reads as four hours ago.
+    var pd=new Date(p.t), tomorrow=pd.toDateString()!==new Date().toDateString();
+    bits.push((live?'':'UV ')+'peak <b>'+pr+'</b> '+(tomorrow?'tomorrow ':'at ')+shortT(p.t));
+  }
+  if(live&&r>=3) bits.push('burn ~<b>'+Math.max(5,Math.round(200/r))+'</b> min');
+  el.innerHTML=bits.join('<span class="uv-sep">·</span>');
 }
 var FRZ_KEY="lsxFrz_v1";
 function loadFreezeNormals(kind){
@@ -4011,6 +4134,14 @@ function fcFirstNightAtOrBelow(th){
   }
   return null;
 }
+function fcDaysAtOrAbove(th){
+  var ds=smart.days||[], n=0;
+  for(var i=0;i<ds.length;i++){
+    var d=ds[i].day;
+    if(d&&d.temperature!=null&&d.temperature>=th) n++;
+  }
+  return n;
+}
 function fcWintryDay(){
   var ds=smart.days||[];
   for(var i=0;i<ds.length;i++){
@@ -4041,17 +4172,13 @@ function seasonHTML(){
   var k=seasonOf(), items=[], notes=[], head="", ico="";
   function kv(a,b){ return '<div class="sm-kv"><div class="k">'+a+'</div><div class="v">'+b+'</div></div>'; }
   if(k==="summer"){
-    ico="☀️"; head="Summer · Sun &amp; Heat";
-    // classify the ROUNDED value so the number and its label can never disagree (7.8 → "8 Very High")
-    var u=season.uv, uvR=u?Math.round(u.v):null, lv=(uvR!=null)?uvLevel(uvR):null;
-    if(u&&lv){
-      items.push(kv("UV peak (24h)",'<span style="color:'+lv.c+'">'+uvR+" "+lv.t+'</span>'));
-      items.push(kv("Peak UV at",shortT(u.t)));
-      if(uvR>=3) items.push(kv("Unprotected burn","~"+Math.max(5,Math.round(200/uvR))+" min"));
-      if(uvR>=8) notes.push("Very high UV around midday — shade between 10am and 4pm.");
-    }
+    // UV moved out of here: it belongs with the other exposure readings in the hero and as a
+    // per-day figure in the 7-day, not buried in a seasonal slot that only appears in summer.
+    ico="☀️"; head="Summer · Heat";
     var pf=fcPeakFeels();
     if(pf) items.push(kv("Feels-like peak",pf.v+"° at "+shortT(pf.t)));
+    var hotN=fcDaysAtOrAbove(95);
+    if(hotN) items.push(kv("Days ≥95° in 7-day",String(hotN)));
   }else if(k==="fall"){
     ico="🍂"; head="Fall · Freeze Watch";
     var ff=fcFirstNightAtOrBelow(32), fr=fcFirstNightAtOrBelow(36);
@@ -4089,7 +4216,6 @@ function loadSeasonal(){
   var k=seasonOf();
   season.kind=k;
   var jobs=[];
-  if(k==="summer") jobs.push(loadUvPeak());
   if(k==="fall"||k==="spring") jobs.push(loadFreezeNormals(k));
   return Promise.all(jobs).then(function(){ if(!fresh()) return; updateSmartSlot(true); }, function(){ if(!fresh()) return; updateSmartSlot(true); });
 }
@@ -4434,9 +4560,9 @@ function refreshAll(){
   var dot=document.getElementById("statusDot"), label=document.getElementById("refreshLabel");
   dot.classList.remove("stale");label.textContent="Refreshing…";
   stampSched([loadAFD,loadAlerts,loadCurrent,loadForecast,loadRivers,loadAqi,loadSpc,loadCpc,loadQpf,
-              loadHazards,loadDrought,loadClimate,loadClimateContext,loadSeasonal,loadStationPlot,
+              loadHazards,loadDrought,loadClimate,loadClimateContext,loadSeasonal,loadUv,loadStationPlot,
               refreshImages,saveSnapshotIdle]);
-  Promise.allSettled([loadAFD(),loadAlerts(),loadCurrent(),loadForecast(),loadRivers(),loadAqi(),loadSpc(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),loadClimate(),loadClimateContext(),loadSeasonal(),loadStationPlot()]).then(function(){
+  Promise.allSettled([loadAFD(),loadAlerts(),loadCurrent(),loadForecast(),loadRivers(),loadAqi(),loadSpc(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),loadClimate(),loadClimateContext(),loadSeasonal(),loadUv(),loadStationPlot()]).then(function(){
     refreshImages();
     label.textContent="Refresh";
     document.getElementById("lastUpdate").textContent="Last updated "+new Date().toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"});
@@ -4549,6 +4675,7 @@ var SCHED=[
   {fn:loadClimate,  every:6*60*60000},
   {fn:loadClimateContext, every:6*60*60000},
   {fn:loadSeasonal, every:3*60*60000},
+  {fn:loadUv,       every:60*60000},
   {fn:refreshImages,every:5*60000},
   {fn:loadStationPlot,every:12*60000},
   {fn:refreshRadarLayer, every:4*60000},
@@ -4618,12 +4745,11 @@ function layoutMasonry(){
       hazardsCard:3,    // hazards outlook (days 3–14)
       obsCard:4,        // station plot — current regional obs
       riversCard:5,     // river/flood gauges
-      satCard:6,        // satellite imagery
-      droughtCard:7,    // drought outlook
-      climateCard:8,    // climate vs normal
-      cpcCard:9,        // week-ahead leanings
-      smartCard:10,     // sky conditions (sun/moon or lightning)
-      linksCard:11      // deep-dive links — reference, lowest
+      droughtCard:6,    // drought outlook
+      climateCard:7,    // climate vs normal
+      cpcCard:8,        // week-ahead leanings
+      smartCard:9,      // sky conditions (sun/moon or lightning)
+      linksCard:10      // deep-dive links — reference, lowest
     };
     return (RANK[id]!=null) ? RANK[id] : 50;
   }
