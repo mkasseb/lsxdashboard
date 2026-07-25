@@ -189,18 +189,16 @@
   .masonry:not(.mready)>.card{position:static}
   @media(max-width:1100px){.col-8,.col-7,.col-5,.col-6{grid-column:span 12}.col-4,.col-3{grid-column:span 6}}
   @media(max-width:680px){.col-4,.col-3{grid-column:span 12}body{padding:12px}}
-  /* The hero row is a PAIR, split evenly. The 24-hour chart lives in the left column now, and at
-     a third of the width its renderer thinned to ~6 hour labels; an even split gives it ~660px and
-     8, which is worth more here than the extra radar width. The pair must also be held together
-     explicitly: the generic rules above send a col-6 to full width at 1100px, which would leave
-     one half-width card with an empty half-row beside it. */
-  @media(max-width:1100px){.grid>.stack{grid-column:span 6}#radarCard{grid-column:span 6}}
-  @media(max-width:680px){.grid>.stack{grid-column:span 12}#radarCard{grid-column:span 12}}
+  /* The hero row is a PAIR. The generic rules above drop a col-8 to full width while a col-4 stays
+     at half, which for Current Conditions + Radar meant a half-width hero with an empty half-row
+     beside it. Keep the two together until the single-column breakpoint takes them both. */
+  @media(max-width:1100px){#radarCard{grid-column:span 6}}
+  @media(max-width:680px){#radarCard{grid-column:span 12}}
   /* Hero row heights are driven by the left column's content, which no longer has a fixed size now
      that the 24-hour chart lives there. Rather than let the radar strand whatever difference is
      left over, stretch it and let the map absorb the slack — a taller radar is strictly better. */
   @media(min-width:681px){
-    .grid>.stack,.grid>#radarCard{align-self:stretch}
+    .grid>.stack.col-4,.grid>#radarCard{align-self:stretch}
     #radarCard{display:flex;flex-direction:column}
     #radarCard .rs-view{flex:1 1 auto}
     #radarCard .imgwrap{flex:1 1 auto;display:flex;min-height:420px}
@@ -961,7 +959,7 @@
   </div>
 
   <!-- CURRENT -->
-  <div class="stack col-6">
+  <div class="stack col-4">
     <!-- Now + next 24h in one card. #current and #hourly24 stay SIBLINGS rather than nesting the
          chart inside #current: loadCurrent() rebuilds #current wholesale (including on failure),
          which would take the chart down with it and break "every loader owns its failure". -->
@@ -988,7 +986,7 @@
        this way"), so they share a card and a tab swaps which one is showing. The radar is a live
        zoomable WMS map; the satellite is NESDIS's fixed-extent sector image, not a tile source, so
        these are alternating views rather than stacked layers on one map. -->
-  <section class="card hero col-6" id="radarCard">
+  <section class="card hero col-8" id="radarCard">
     <h2>
       <span class="rs-tabs" id="rsTabs" role="tablist" aria-label="Sky view">
         <button type="button" class="rs-tab on" data-v="radar" role="tab" aria-selected="true">Radar</button>
