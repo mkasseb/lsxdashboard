@@ -886,32 +886,19 @@
       <h2>7-Day Forecast</h2>
       <div class="daily" id="daily"><div class="loading">Loading forecast…</div></div>
     </section>
-    <section class="card" id="climateCard">
-      <h2>Climate vs Normal
-        <a class="link" href="https://xmacis.rcc-acis.org/" target="_blank" rel="noopener">ACIS ↗</a>
+    <section class="card" id="riskCard">
+      <h2>Risk Outlook
+        <a class="link" href="https://www.spc.noaa.gov/products/outlook/day1otlk.html" target="_blank" rel="noopener">Maps ↗</a>
       </h2>
-      <div id="cnToday" class="cn-today"><span class="cn-na">Normals loading…</span></div>
-      <div id="cnGrid" class="cn-grid"><div class="loading">Loading departures…</div></div>
-      <div id="cnSrc" class="cn-src"></div>
-      <div id="cnCtx" class="cn-ctx"></div>
-      <div class="imgcap"><span>Station: <span id="cnStation">…</span></span><span>1991–2020 normals</span></div>
+      <div id="spc"><div class="loading">Loading outlook…</div></div>
+      <div class="imgcap"><span id="spcLoc">SPC &middot; WPC</span><span>storm &middot; flood</span></div>
     </section>
-    <section class="card" id="satCard">
-      <h2>GOES-19 Satellite
-        <a class="link" href="https://www.star.nesdis.noaa.gov/GOES/sector.php?sat=G19&sector=umv" target="_blank" rel="noopener">Loop ↗</a>
+    <section class="card" id="hazardsCard">
+      <h2>Hazards Outlook
+        <a class="link" href="https://www.wpc.ncep.noaa.gov/threats/threats.php" target="_blank" rel="noopener">WPC ↗</a>
       </h2>
-      <div class="imgwrap">
-        <img id="sat" alt="GOES-19 Upper Mississippi Valley GeoColor" src="https://cdn.star.nesdis.noaa.gov/GOES19/ABI/SECTOR/umv/GEOCOLOR/600x600.jpg" onerror="imgFail(this,'satFail')">
-        <div class="imgfail" id="satFail" style="display:none">Satellite image didn't load. <a href="https://www.star.nesdis.noaa.gov/GOES/sector.php?sat=G19&sector=umv" target="_blank" rel="noopener">Open GOES-East ↗</a></div>
-      </div>
-      <div class="imgcap"><span>NESDIS · Upper Miss. Valley</span><span>GeoColor</span></div>
-    </section>
-    <section class="card" id="cpcCard">
-      <h2>Week Ahead Leanings
-        <a class="link" href="https://www.cpc.ncep.noaa.gov/products/predictions/610day/" target="_blank" rel="noopener">CPC ↗</a>
-      </h2>
-      <div id="cpc"><div class="loading">Loading outlooks…</div></div>
-      <div class="imgcap"><span>Climate Prediction Center</span><span>6–14 days out</span></div>
+      <div id="hazards"><div class="loading">Loading hazards…</div></div>
+      <div class="imgcap"><span>CPC/WPC U.S. Hazards</span><span id="hazIssued">days 3–14</span></div>
     </section>
     <section class="card" id="obsCard">
       <h2>Station Plot — Live Surface Obs
@@ -927,19 +914,22 @@
       <div class="stn-ex" id="stnEx"></div>
       <div class="imgcap"><span>NWS · regional ASOS/METAR</span><span id="stnAge">tap a station for detail</span></div>
     </section>
-    <section class="card" id="riskCard">
-      <h2>Risk Outlook
-        <a class="link" href="https://www.spc.noaa.gov/products/outlook/day1otlk.html" target="_blank" rel="noopener">Maps ↗</a>
+    <!-- RIVERS — wide (spans 2 columns in the masonry) -->
+    <section class="card wide" id="riversCard">
+      <h2>River &amp; Flood Gauges — live levels <span class="qpfchip" id="qpf7"></span>
+        <a class="link" href="https://water.noaa.gov/" target="_blank" rel="noopener">NWPS ↗</a>
       </h2>
-      <div id="spc"><div class="loading">Loading outlook…</div></div>
-      <div class="imgcap"><span id="spcLoc">SPC &middot; WPC</span><span>storm &middot; flood</span></div>
+      <div class="river" id="rivers"><div class="loading">Loading gauges…</div></div>
     </section>
-    <section class="card" id="hazardsCard">
-      <h2>Hazards Outlook
-        <a class="link" href="https://www.wpc.ncep.noaa.gov/threats/threats.php" target="_blank" rel="noopener">WPC ↗</a>
+    <section class="card" id="satCard">
+      <h2>GOES-19 Satellite
+        <a class="link" href="https://www.star.nesdis.noaa.gov/GOES/sector.php?sat=G19&sector=umv" target="_blank" rel="noopener">Loop ↗</a>
       </h2>
-      <div id="hazards"><div class="loading">Loading hazards…</div></div>
-      <div class="imgcap"><span>CPC/WPC U.S. Hazards</span><span id="hazIssued">days 3–14</span></div>
+      <div class="imgwrap">
+        <img id="sat" alt="GOES-19 Upper Mississippi Valley GeoColor" src="https://cdn.star.nesdis.noaa.gov/GOES19/ABI/SECTOR/umv/GEOCOLOR/600x600.jpg" onerror="imgFail(this,'satFail')">
+        <div class="imgfail" id="satFail" style="display:none">Satellite image didn't load. <a href="https://www.star.nesdis.noaa.gov/GOES/sector.php?sat=G19&sector=umv" target="_blank" rel="noopener">Open GOES-East ↗</a></div>
+      </div>
+      <div class="imgcap"><span>NESDIS · Upper Miss. Valley</span><span>GeoColor</span></div>
     </section>
     <!-- DROUGHT OUTLOOK — current (USDM) + monthly & seasonal forecast (CPC) -->
     <section class="card" id="droughtCard">
@@ -950,6 +940,31 @@
       <div class="dr-tier"><span class="dr-when">Month ahead</span><span id="drMonth"><span class="dr-load">…</span></span></div>
       <div class="dr-tier"><span class="dr-when">Season <span class="dr-sub">(3 mo)</span></span><span id="drSeason"><span class="dr-load">…</span></span></div>
       <div class="imgcap"><span>USDM · CPC outlooks</span><span>NIDIS / drought.gov</span></div>
+    </section>
+    <section class="card" id="climateCard">
+      <h2>Climate vs Normal
+        <a class="link" href="https://xmacis.rcc-acis.org/" target="_blank" rel="noopener">ACIS ↗</a>
+      </h2>
+      <div id="cnToday" class="cn-today"><span class="cn-na">Normals loading…</span></div>
+      <div id="cnGrid" class="cn-grid"><div class="loading">Loading departures…</div></div>
+      <div id="cnSrc" class="cn-src"></div>
+      <div id="cnCtx" class="cn-ctx"></div>
+      <div class="imgcap"><span>Station: <span id="cnStation">…</span></span><span>1991–2020 normals</span></div>
+    </section>
+    <section class="card" id="cpcCard">
+      <h2>Week Ahead Leanings
+        <a class="link" href="https://www.cpc.ncep.noaa.gov/products/predictions/610day/" target="_blank" rel="noopener">CPC ↗</a>
+      </h2>
+      <div id="cpc"><div class="loading">Loading outlooks…</div></div>
+      <div class="imgcap"><span>Climate Prediction Center</span><span>6–14 days out</span></div>
+    </section>
+    <!-- SMART SLOT (lightning when stormy · sun/moon when calm) — goes wide ONLY in storm mode,
+         when it hosts the lightning map (updateSmartSlot toggles the class) -->
+    <section class="card" id="smartCard">
+      <h2><span id="smartTitle">Sky Conditions</span>
+        <a class="link" id="smartLink" href="https://map.blitzortung.org/#7/38.7/-90.4" target="_blank" rel="noopener" style="display:none">Fullscreen ↗</a>
+      </h2>
+      <div id="smartBody"><div class="loading">Reading the sky…</div></div>
     </section>
     <!-- QUICK LINKS (folded into masonry so it packs instead of stranding) -->
     <section class="card" id="linksCard">
@@ -965,21 +980,6 @@
         <a href="https://www.weather.gov/lsx/winter" target="_blank" rel="noopener">❄️ Winter Weather</a>
         <a href="https://water.noaa.gov/#@=-90.3,38.6,7" target="_blank" rel="noopener">🌊 Flood Map</a>
       </div>
-    </section>
-    <!-- RIVERS — wide (spans 2 columns in the masonry) -->
-    <section class="card wide" id="riversCard">
-      <h2>River &amp; Flood Gauges — live levels <span class="qpfchip" id="qpf7"></span>
-        <a class="link" href="https://water.noaa.gov/" target="_blank" rel="noopener">NWPS ↗</a>
-      </h2>
-      <div class="river" id="rivers"><div class="loading">Loading gauges…</div></div>
-    </section>
-    <!-- SMART SLOT (lightning when stormy · sun/moon when calm) — goes wide ONLY in storm mode,
-         when it hosts the lightning map (updateSmartSlot toggles the class) -->
-    <section class="card" id="smartCard">
-      <h2><span id="smartTitle">Sky Conditions</span>
-        <a class="link" id="smartLink" href="https://map.blitzortung.org/#7/38.7/-90.4" target="_blank" rel="noopener" style="display:none">Fullscreen ↗</a>
-      </h2>
-      <div id="smartBody"><div class="loading">Reading the sky…</div></div>
     </section>
   </div>
 
@@ -1388,6 +1388,16 @@ function degToCompass(d){
   var dirs=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
   return dirs[Math.round(d/22.5)%16];
 }
+/* Keep the ARIA state in lockstep with the visual state. A screen reader cannot perceive the .open
+   class, so a toggle that only flips CSS silently misreports whether the row is expanded.
+   `item` carries the class; `ctl` is the thing focus lands on (for alert cards they're the same
+   element, since the card itself has role="button"). */
+function setOpen(item,ctl,on){
+  if(!item) return;
+  item.classList.toggle("open",!!on);
+  if(ctl) ctl.setAttribute("aria-expanded",on?"true":"false");
+}
+function toggleOpen(item,ctl){ setOpen(item,ctl,!item.classList.contains("open")); }
 function timeAgo(ts){
   if(!ts)return "—";
   var m=Math.round((Date.now()-new Date(ts))/60000);
@@ -1638,7 +1648,7 @@ function findAlertCard(ev){
 function focusAlertCard(ev){
   var card=findAlertCard(ev);
   if(!card) return;
-  card.classList.add("open");                       // expand the details they're asking about
+  setOpen(card,card,true);                          // expand the details they're asking about
   if(card.querySelector(".a2-more")) card.classList.add("areas-all");
   card.classList.remove("flash");
   void card.offsetWidth;                            // restart the animation if it's already running
@@ -1737,7 +1747,7 @@ function loadForecast(){
         [].slice.call(daily.querySelectorAll(".day-item")).forEach(function(it,i){ if(it.classList.contains("open")) open.push(i); });
         daily.innerHTML=paintDays();
         var items=daily.querySelectorAll(".day-item");
-        open.forEach(function(i){ if(items[i]) items[i].classList.add("open"); });   // keep expanded rows expanded
+        open.forEach(function(i){ if(items[i]) setOpen(items[i],items[i].querySelector(".day"),true); });   // keep expanded rows expanded
       };
       function paintDays(){ return days.map(function(d){
         var hi=d.day?d.day.temperature:null, lo=d.night?d.night.temperature:null;
@@ -1754,7 +1764,7 @@ function loadForecast(){
         if(d.day)   detail+='<p class="dd-text"><b>Day</b>'+esc(d.day.detailedForecast||d.day.shortForecast)+'</p>';
         if(d.night) detail+='<p class="dd-text"><b>Night</b>'+esc(d.night.detailedForecast||d.night.shortForecast)+'</p>';
         return '<div class="day-item">'
-          +'<button class="day" type="button" title="'+esc(main.shortForecast)+'">'
+          +'<button class="day" type="button" aria-expanded="false" title="'+esc(main.shortForecast)+'">'
             +'<div class="dn">'+esc(d.name)+'</div>'
             +'<div class="di">'+wxImg(main.shortForecast,!!d.day,26)+'</div>'
             +'<div class="dp">'+(pop>0?"💧"+pop+"%":"&nbsp;")+'</div>'
@@ -1988,7 +1998,9 @@ function loadAlerts(){
       // A polygon hit is a real point-in-shape test; a zone hit only says your zone is listed.
       // The badge says whichever is actually true.
       var meBadge=g.hit?'<span class="a2-me">📍 '+esc(HIT_TEXT[g.hit]||"Includes your location")+'</span>':'';
-      return '<div class="alert '+g.cls+' t-'+tier.k+(g.hit?' hits-me':'')+(openIds[aid]?' open':'')+'" data-aid="'+aid+'" role="button" tabindex="0">'
+      // aria-expanded only when detail exists — a control that cannot expand must not claim it can
+      return '<div class="alert '+g.cls+' t-'+tier.k+(g.hit?' hits-me':'')+(openIds[aid]?' open':'')+'" data-aid="'+aid+'" role="button" tabindex="0"'
+        +(detail?' aria-expanded="'+(openIds[aid]?'true':'false')+'"':'')+'>'
         +'<div class="a2-top">'
           +'<span class="a2-ico">'+alertIcon(g.ev,fcfg.ico)+'</span>'
           +'<span class="a2-name">'+esc(g.ev)+'</span>'
@@ -4130,6 +4142,14 @@ function saveSnapshot(){
     catch(e2){ try{ localStorage.removeItem(SNAP_KEY); }catch(e3){} }
   }
 }
+/* Serialising ~22 cards of rendered HTML is real main-thread work. Two callers, two urgencies:
+   the periodic save and the post-refresh save can wait for an idle moment, but the
+   visibilitychange save CANNOT — the page may be frozen or discarded the instant after, so that
+   one stays synchronous and accepts the hitch. */
+function saveSnapshotIdle(){
+  if(window.requestIdleCallback) requestIdleCallback(function(){ saveSnapshot(); },{timeout:2000});
+  else setTimeout(saveSnapshot,0);
+}
 function showSnapBar(t){
   var bar=document.getElementById("snapBar"), txt=document.getElementById("snapBarText");
   if(!bar||!txt) return;
@@ -4222,16 +4242,29 @@ function tick(){
 }
 
 /* ============ ORCHESTRATION ============ */
+/* Mark the scheduler entries a manual refresh has just satisfied, so runDue() doesn't re-fire the
+   same fetch seconds later. Stamped at START, matching runDue's own semantics (it stamps before
+   calling, not after, so a failure waits a full interval rather than hammering). Guarded because
+   the initial refreshAll() runs before SCHED is initialised — startSchedule() stamps everything on
+   first start anyway, so a no-op there is correct. */
+function stampSched(fns){
+  if(typeof SCHED==="undefined"||!SCHED) return;
+  var now=Date.now();
+  SCHED.forEach(function(t){ if(fns.indexOf(t.fn)>=0) t.last=now; });
+}
 function refreshAll(){
   var dot=document.getElementById("statusDot"), label=document.getElementById("refreshLabel");
   dot.classList.remove("stale");label.textContent="Refreshing…";
+  stampSched([loadAFD,loadAlerts,loadCurrent,loadForecast,loadRivers,loadAqi,loadSpc,loadCpc,loadQpf,
+              loadHazards,loadDrought,loadClimate,loadClimateContext,loadSeasonal,loadStationPlot,
+              refreshImages,saveSnapshotIdle]);
   Promise.allSettled([loadAFD(),loadAlerts(),loadCurrent(),loadForecast(),loadRivers(),loadAqi(),loadSpc(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),loadClimate(),loadClimateContext(),loadSeasonal(),loadStationPlot()]).then(function(){
     refreshImages();
     label.textContent="Refresh";
     document.getElementById("lastUpdate").textContent="Last updated "+new Date().toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"});
     snapSafeSeq=locSeq;  // the screen now matches `current`, so it is safe to snapshot
     resolveSnapBar();   // live data has landed (or we're offline and should say so)
-    saveSnapshot();     // freshest render → instant paint next visit
+    saveSnapshotIdle(); // freshest render → instant paint next visit (no rush: yield to idle)
   });
 }
 
@@ -4286,7 +4319,7 @@ initMapLocks();
 resolveRiskLayers();   // warm the layer-id lookup; loadSpc awaits this same memoised promise
 document.getElementById("daily").addEventListener("click",function(e){
   var row=e.target.closest(".day");
-  if(row&&row.parentNode) row.parentNode.classList.toggle("open");
+  if(row&&row.parentNode) toggleOpen(row.parentNode,row);
 });
 document.getElementById("alerts").addEventListener("click",function(e){
   if(e.target.closest(".a2-radar")){       // jump to this alert's polygons on the radar
@@ -4301,13 +4334,13 @@ document.getElementById("alerts").addEventListener("click",function(e){
     return;
   }
   var a=e.target.closest(".alert");
-  if(a&&a.querySelector(".alert-more")) a.classList.toggle("open");
+  if(a&&a.querySelector(".alert-more")) toggleOpen(a,a);
 });
 document.getElementById("alerts").addEventListener("keydown",function(e){
   if(e.key==="Enter"||e.key===" "){
     if(e.target.closest("button")) return;          // let the inner buttons handle their own keys
     var a=e.target.closest(".alert");
-    if(a&&a.querySelector(".alert-more")){ e.preventDefault(); a.classList.toggle("open"); }
+    if(a&&a.querySelector(".alert-more")){ e.preventDefault(); toggleOpen(a,a); }
   }
 });
 tick();
@@ -4342,7 +4375,7 @@ var SCHED=[
   {fn:loadStationPlot,every:12*60000},
   {fn:refreshRadarLayer, every:4*60000},
   {fn:function(){updateSmartSlot(true);}, every:10*60000},
-  {fn:saveSnapshot, every:5*60000}
+  {fn:saveSnapshotIdle, every:5*60000}   // idle-deferred; the visibilitychange save stays sync
 ];
 var lastGood=Date.now(), schedTimer=null, clockTimer=null;
 function markFresh(){ lastGood=Date.now(); var d=document.getElementById("statusDot"); if(d) d.classList.remove("stale"); }
@@ -4438,7 +4471,8 @@ function layoutMasonry(){
     return {start:bs, top:bt};
   }
   function setPos(d,col,top){
-    d.c.style.left=(col*(colW+GAP))+"px";
+    d.left=col*(colW+GAP); d.top=top;   // remembered so reading order can be derived from geometry
+    d.c.style.left=d.left+"px";
     d.c.style.top=top+"px";
   }
   var queue=data.slice();
@@ -4488,19 +4522,46 @@ function layoutMasonry(){
     for(var k2=w.start;k2<w.start+d.span;k2++) colH[k2]=nb;
   }
   m.style.height=Math.max.apply(null,colH)+"px";
+  reorderMasonryDOM(m,data);
+}
+/* Tab order and screen-reader order follow the DOM, but these cards are absolutely positioned, so
+   after packing they can read in a wholly different order than they appear. Put the nodes into
+   visual order (top row first, then left-to-right); since position comes from inline top/left,
+   moving them changes nothing on screen.
+   The iframe guard is the important part: re-inserting an element reloads any iframe inside it, and
+   in storm mode this band hosts the live lightning map — repacking on every 60-second alert refresh
+   would restart it constantly. A slightly-off reading order beats a map that never finishes loading,
+   and the static HTML is authored in rank order, so the un-reordered case is already close. */
+function reorderMasonryDOM(m,data){
+  if(m.querySelector("iframe")) return;
+  var visual=data.slice().sort(function(a,b){
+    if(Math.abs(a.top-b.top)>4) return a.top-b.top;   // same row within 4px
+    return a.left-b.left;
+  });
+  var kids=[].slice.call(m.children).filter(function(c){ return c.classList.contains("card"); });
+  var same=kids.length===visual.length;
+  for(var i=0;same&&i<visual.length;i++){ if(kids[i]!==visual[i].c) same=false; }
+  if(same) return;                                    // don't churn the DOM for no reason
+  if(_mObs) _mObs.disconnect();                       // our own moves must not re-trigger layout
+  visual.forEach(function(d){ m.appendChild(d.c); });
+  if(_mObs) _mObs.observe(m,_mObsOpts);               // disconnect() also drops queued records
 }
 var _masonryRAF=null;
 function scheduleMasonry(){ if(_masonryRAF) cancelAnimationFrame(_masonryRAF); _masonryRAF=requestAnimationFrame(layoutMasonry); }
 // Recompute on load, resize, image loads, and after any data refresh repaints a card
 window.addEventListener("resize", scheduleMasonry);
 window.addEventListener("load", function(){ scheduleMasonry(); setTimeout(scheduleMasonry,500); setTimeout(scheduleMasonry,1500); });
+// class only: catches expand/collapse + storm-prime height changes; the engine's own style writes
+// are filtered out (no loop). Hoisted so reorderMasonryDOM can disconnect it — moving children
+// fires childList records, which would otherwise re-enter layout forever.
+var _mObs=null, _mObsOpts={childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:["class"]};
 (function(){
   var m=document.querySelector(".masonry");
   if(m){
     // re-pack whenever a child image finishes loading
     [].slice.call(m.querySelectorAll("img")).forEach(function(img){ img.addEventListener("load",scheduleMasonry); img.addEventListener("error",scheduleMasonry); });
     // re-pack when card contents change (data loads in)
-    if(window.MutationObserver){ new MutationObserver(scheduleMasonry).observe(m,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:["class"]}); } // class only: catches expand/collapse + storm-prime height changes; the engine's own style writes are filtered out (no loop)
+    if(window.MutationObserver){ _mObs=new MutationObserver(scheduleMasonry); _mObs.observe(m,_mObsOpts); }
   }
 })();
 scheduleMasonry();

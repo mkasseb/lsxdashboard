@@ -1,0 +1,22 @@
+# Cloudflare Pages response headers.
+#
+# The policy is deliberately permissive about INLINE code and strict about ORIGINS, because that
+# split matches where the risk actually is here:
+#
+#   · The whole application is one inline <script> and one inline <style>, and hundreds of inline
+#     style="" attributes. Hashing them would work, but Cloudflare injects its own bot-detection
+#     script whose inline body embeds a per-request ray id — its hash changes every request, so no
+#     static hash list can ever cover it, and a strict script-src would break bot detection on the
+#     custom domain. 'unsafe-inline' is the honest choice rather than a policy that silently fails.
+#
+#   · What IS worth locking down is where data can go. This page pulls from a fixed set of public
+#     NOAA / Open-Meteo endpoints and talks to nothing else. connect-src below is the real control:
+#     it means a future bug (or a compromised CDN dependency) cannot exfiltrate to an arbitrary host.
+#
+# Keep in sync with the origins the app actually uses — every entry was taken from an audit of the
+# source, not guessed. Adding a new feed means adding it here or the fetch fails.
+/*
+  Content-Security-Policy: default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'self'; form-action 'none'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; img-src 'self' data: https://cdn.jsdelivr.net https://cdn.star.nesdis.noaa.gov https://opengeo.ncep.noaa.gov https://*.basemaps.cartocdn.com https://cdnjs.cloudflare.com; connect-src 'self' https://api.weather.gov https://api.water.noaa.gov https://mapservices.weather.noaa.gov https://services5.arcgis.com https://data.rcc-acis.org https://opengeo.ncep.noaa.gov https://api.open-meteo.com https://air-quality-api.open-meteo.com https://geocoding-api.open-meteo.com; frame-src 'self' https://map.blitzortung.org; manifest-src 'self'
+  Permissions-Policy: geolocation=(self), camera=(), microphone=(), payment=(), usb=()
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
