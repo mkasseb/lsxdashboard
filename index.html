@@ -1654,11 +1654,13 @@ function middayRHByDate(hrs){
   return map;
 }
 function loadForecast(){
+  var _lg=locSeq;
   var daily=document.getElementById("daily");
   return getJSON(API+"/points/"+current.lat+","+current.lon,HEADERS).then(function(pt){
     var fUrl=pt.properties.forecast, hUrl=pt.properties.forecastHourly;
     // Hourly is only an enhancer (humidity + 24h strip). If it fails, the 7-day must still render.
     return Promise.all([getJSON(fUrl,HEADERS), getJSON(hUrl,HEADERS).catch(function(){return null;})]).then(function(res){
+      if(_lg!==locSeq) return;   // user moved while this was in flight
       var f=res[0], h=res[1];
       var rhByDate=h?middayRHByDate(h.properties.periods):{};
       var ps=f.properties.periods.slice(0,15);
@@ -1773,8 +1775,10 @@ function loadForecast(){
 
 /* ============ CURRENT ============ */
 function loadCurrent(){
+  var _lg=locSeq;
   var el=document.getElementById("current"), stEl=document.getElementById("ccStation");
   return getJSON(API+"/stations/"+current.station+"/observations/latest",HEADERS).then(function(o){
+    if(_lg!==locSeq) return;   // user moved while this was in flight
     var p=o.properties, c2f=function(c){return c==null?null:Math.round(c*9/5+32);};
     var temp=c2f(p.temperature&&p.temperature.value), dew=c2f(p.dewpoint&&p.dewpoint.value);
     var rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?Math.round(p.relativeHumidity.value):null;
@@ -1814,10 +1818,12 @@ function loadCurrent(){
 
 /* ============ ALERTS + STORM MODE (Fix 2 + Fix 4) ============ */
 function loadAlerts(){
+  var _lg=locSeq;
   var el=document.getElementById("alerts"), card=document.getElementById("alertsCard");
   // zones resolve alongside the alerts (memoised per location) so "covers me" is known at render time
   return Promise.all([getJSON(API+"/alerts/active?area=MO,IL",HEADERS), ensureUserZones()]).then(function(res){
     var data=res[0];
+    if(_lg!==locSeq) return;   // user moved while this was in flight
     if(typeof markFresh==="function") markFresh();  // alerts are the safety-critical feed — only THEY count as "fresh"
     loadWarnPolygons(data.features||[]);  // one fetch feeds both list and map
     function isLSX(f){
@@ -2117,9 +2123,11 @@ function renderAqiMini(){
     +' <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a>';
 }
 function loadAqi(){
+  var _lg=locSeq;
   var el=document.getElementById("aqi"), card=document.getElementById("aqiCard");
   var url="https://air-quality-api.open-meteo.com/v1/air-quality?latitude="+current.lat+"&longitude="+current.lon+"&current=us_aqi,pm2_5,pm10";
   return getJSON(url).then(function(d){
+    if(_lg!==locSeq) return;   // user moved while this was in flight
     var cur=d.current||{}, aqi=cur.us_aqi, info=aqiInfo(aqi);
     aqiState={val:(aqi!=null)?aqi:null, pm:(cur.pm2_5!=null)?Math.round(cur.pm2_5):null, err:false};
     // The dedicated card only appears when air quality is a story: AQI > 100 ("Unhealthy for
@@ -2273,12 +2281,14 @@ function riskPill(info,denom){
   return '<span class="spc-pill" style="background:'+bg+';color:'+fg+'">'+txt+'</span>';
 }
 function loadSpc(){
+  var _lg=locSeq;
   var el=document.getElementById("spc");
   document.getElementById("spcLoc").textContent="For "+current.name.replace(" (home)","");
   var jobs=[spcQuery(RISK_LAYERS.spc[0]),spcQuery(RISK_LAYERS.spc[1]),spcQuery(RISK_LAYERS.spc[2]),
             eroQuery(RISK_LAYERS.ero[0]),eroQuery(RISK_LAYERS.ero[1]),eroQuery(RISK_LAYERS.ero[2]),
             fireQuery(RISK_LAYERS.fireCat[0]),fireQuery(RISK_LAYERS.fireCat[1]),fireDay3Query()];
   return Promise.all(jobs).then(function(r){
+    if(_lg!==locSeq) return;   // user moved while this was in flight
     smart.spcRisk=r[0]||0;
     smart.eroRisk=r[3]||0;
     smart.fireRisk=r[6]||0;
@@ -2327,9 +2337,11 @@ function cpcPill(kind,r){
   return '<span class="cpc-pill" style="background:'+bg+';color:'+textOn(bg)+'">'+label+pct+'</span>';
 }
 function loadCpc(){
+  var _lg=locSeq;
   var el=document.getElementById("cpc"); if(!el) return Promise.resolve();
   var jobs=[pointQuery(CPC_610,0),pointQuery(CPC_610,1),pointQuery(CPC_814,0),pointQuery(CPC_814,1)];
   return Promise.allSettled(jobs).then(function(rs){
+    if(_lg!==locSeq) return;   // user moved while this was in flight
     function val(i){ return rs[i].status==="fulfilled"?cpcParse(rs[i].value):null; }
     el.innerHTML='<div class="cpc-grid">'
       +'<div class="cpc-item"><div class="k">6\u201310 Day \u00b7 Temp</div>'+cpcPill("t",val(0))+'</div>'
@@ -2368,6 +2380,7 @@ function droughtCat(dm){
   return m[dm]||null;   // null = no drought at this point
 }
 function loadDrought(){
+  var _lg=locSeq;
   var card=document.getElementById("droughtCard"); if(!card) return Promise.resolve();
   function outlookRow(id, rs){
     var el=document.getElementById(id); if(!el) return;
@@ -2383,6 +2396,7 @@ function loadDrought(){
     pointQuery(DROUGHT_OUTLK_URL,1,"outlook"),
     pointQuery(DROUGHT_OUTLK_URL,4,"outlook")
   ]).then(function(r){
+    if(_lg!==locSeq) return;   // user moved while this was in flight
     // Now — U.S. Drought Monitor
     var nowEl=document.getElementById("drNow");
     if(nowEl){
@@ -2514,11 +2528,13 @@ function hazForecastNote(h){
   return mode==="hi"?("peaks "+best.v+"° "+best.n+" in the 7-day"):("down to "+best.v+"° "+best.n+" in the 7-day");
 }
 function loadHazards(){
+  var _lg=locSeq;
   var el=document.getElementById("hazards"); if(!el) return Promise.resolve();
   // Real service layout: 3-7 day → Temp(1) Precip(4) Fire/Drought(7); 8-14 day → Temp(3) Precip(6) Fire/Drought(8)
   var q37=[pointQuery(HZ_URL,1),pointQuery(HZ_URL,4),pointQuery(HZ_URL,7)];
   var q814=[pointQuery(HZ_URL,3),pointQuery(HZ_URL,6),pointQuery(HZ_URL,8)];
   return Promise.allSettled(q37.concat(q814)).then(function(all){
+    if(_lg!==locSeq) return;   // user moved while this was in flight
     var d37=hazScan(all.slice(0,3));
     var d814=hazScan(all.slice(3,6));
     function block(title,list){
@@ -2670,6 +2686,7 @@ function climAllOK(c,showSnow){
   return c.t1.ok&&c.t2.ok&&c.p1.ok&&c.p2.ok&&(!showSnow||c.sn.ok);
 }
 function loadClimate(){
+  var _lg=locSeq;
   var grid=document.getElementById("cnGrid"); if(!grid) return Promise.resolve();
   return Promise.all([climStation(current.lat,current.lon), deepStation(current.lat,current.lon)]).then(function(sts){
     var st=sts[0], deep=sts[1];
@@ -2722,6 +2739,7 @@ function loadClimate(){
       renderContext();
     }
     return ask(st.sid).then(function(local){
+      if(_lg!==locSeq) return;   // user moved while this was in flight
       climate.normHi=local.normHi; climate.normLo=local.normLo;   // normals are gap-free \u2014 always local
       if(climAllOK(local,showSnow) || !deep || !deep.sid || deep.sid===st.sid){ paint(local,""); return; }
       // Local station is too gappy for the running totals. Month/year anomalies are broad-scale,
@@ -2806,6 +2824,7 @@ function ctxNumPairs(rows,col,pickMax){
   return {best:best, sorted:vals};
 }
 function loadClimateContext(){
+  var _lg=locSeq;
   try{ localStorage.removeItem("lsxCtx_v1"); }catch(e){}   // pre-split cache format
   return climStation(current.lat,current.lon).then(function(st){
    return deepStation(current.lat,current.lon).then(function(deep){
@@ -2836,6 +2855,7 @@ function loadClimateContext(){
       acisPost("StnData",{sid:st.sid,sdate:today,edate:wkEndStr,
         elems:[{name:"maxt",normal:"1"},{name:"mint",normal:"1"}]})
     ]).then(function(rs){
+      if(_lg!==locSeq) return;   // user moved while this was in flight
       function data(i){
         if(rs[i].status!=="fulfilled") return null;
         var v=rs[i].value;
@@ -3010,6 +3030,7 @@ function renderCurrentCtx(){
 var QPF_URL="https://mapservices.weather.noaa.gov/vector/rest/services/precip/wpc_qpf/MapServer";
 var qpfLayerId;   // undefined = not checked yet; null = service has no 7-day layer (a real answer — don't refetch)
 function loadQpf(){
+  var _lg=locSeq;
   var chip=document.getElementById("qpf7"); if(!chip) return Promise.resolve();
   function findLayer(){
     if(qpfLayerId!==undefined) return Promise.resolve(qpfLayerId);
@@ -3028,6 +3049,7 @@ function loadQpf(){
     return pointQuery(QPF_URL+"/",id,"*");
   }).then(function(d){
     var maxQ=null;
+    if(_lg!==locSeq) return;   // user moved while this was in flight
     (d.features||[]).forEach(function(f){
       var at=f.attributes||{};
       for(var k in at){
@@ -3291,19 +3313,65 @@ function stationFor(lat,lon){
     return null;
   });
 }
+/* ===== Location generation guard =====
+   Every location-scoped fetch captures the generation it was issued under. If the user moves
+   before it lands, the response is DISCARDED rather than painted: a slow forecast for the old
+   town was otherwise overwriting the new one and sitting there under the new town's label. */
+var locSeq=0, snapSafeSeq=0;
+/* Derived state is cleared on every change so a render can never MIX two places -- e.g. the new
+   town's forecast high ranked against the old town's 96-year record. */
+function resetLocationState(){
+  climate.normHi=null; climate.normLo=null; climate.fcHi=null; climate.fcLo=null;
+  climate.fcHiLabel=""; climate.snowSTD=null; climate.station=null; climate.stationName="";
+  ctx={ready:false, recHi:null, recLo:null, recPcp:null, doyHi:[], doyLo:[],
+       monWet:[], monWarm:[], monMtd:null, monMean:null, monName:"", years:0,
+       dry:null, hist:null, normWeek:{}, recStation:""};
+  season.uv=null; season.frz=null;
+  smart.hourly=[]; smart.days=[];
+  aqiState={val:null, pm:null, err:false}; callAqi=null;
+  userZones={county:"",forecast:"",fire:""};
+  renderHourly24._hrs=null; loadForecast._paint=null;
+}
+/* ...and the on-screen numbers go back to a loading state, so nothing false is legible while
+   the new place loads. */
+function clearLocationUI(){
+  function load(id,txt){ var e=document.getElementById(id); if(e) e.innerHTML='<div class="loading">'+(txt||"Loading\u2026")+'</div>'; }
+  load("current"); load("daily","Loading forecast\u2026"); load("hourly24","Loading hourly\u2026");
+  load("cnGrid","Loading departures\u2026"); load("spc","Loading outlook\u2026");
+  load("hazards","Loading hazards\u2026"); load("cpc","Loading outlooks\u2026");
+  ["cnCtx","cnSrc","ccCtx","aqi","aqiMini","callRow","qpf7","h24loc","spcLoc"].forEach(function(id){
+    var e=document.getElementById(id); if(e) e.innerHTML="";
+  });
+  ["drNow","drMonth","drSeason"].forEach(function(id){
+    var e=document.getElementById(id); if(e) e.innerHTML='<span class="dr-load">\u2026</span>';
+  });
+  var cc=document.getElementById("callCard"); if(cc) cc.classList.remove("has");
+  var aq=document.getElementById("aqiCard"); if(aq) aq.classList.remove("show");
+  var cs=document.getElementById("cnStation"); if(cs) cs.textContent="\u2026";
+  if(typeof scheduleMasonry==="function") scheduleMasonry();
+}
 function setLocation(loc,opts){
   opts=opts||{};
+  var g=++locSeq;              // anything already in flight for the old place is now stale
   current=loc;
+  resetLocationState();
+  clearLocationUI();
   updateLocNow();
   if(opts.save) saveLoc(loc);
-  loadRadar();loadForecast();loadAqi();loadSpc();loadCpc();loadQpf();loadHazards();loadDrought();loadClimate();
-  // location-sensitive too: covers-me badges, station records/rankings, seasonal freeze normals
-  loadAlerts();loadClimateContext();loadSeasonal();
-  if(loc.station){ loadCurrent(); }
+  var jobs=[loadForecast(),loadAqi(),loadSpc(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),
+            loadClimate(),loadAlerts(),loadClimateContext(),loadSeasonal()];
+  loadRadar();
+  if(loc.station){ jobs.push(loadCurrent()); }
   else{
-    var cc=document.getElementById("current"); if(cc) cc.innerHTML='<div class="loading">Finding nearest station…</div>';
-    stationFor(loc.lat,loc.lon).then(function(st){ loc.station=st; if(opts.save)saveLoc(loc); loadCurrent(); }).catch(function(){ loadCurrent(); });
+    var cc=document.getElementById("current"); if(cc) cc.innerHTML='<div class="loading">Finding nearest station\u2026</div>';
+    jobs.push(stationFor(loc.lat,loc.lon).then(function(st){
+      if(g!==locSeq) return;                       // moved again while resolving the station
+      loc.station=st; if(opts.save)saveLoc(loc); return loadCurrent();
+    }).catch(function(){ if(g===locSeq) return loadCurrent(); }));
   }
+  // Only once everything has settled for THIS generation is the screen safe to snapshot --
+  // otherwise a scheduled save could store the old town's cards under the new town's name.
+  Promise.allSettled(jobs).then(function(){ if(g===locSeq) snapSafeSeq=g; });
 }
 function useMyLocation(explicit){
   var btn=document.getElementById("geoBtn");
@@ -3687,12 +3755,13 @@ function seasonHTML(){
     +'</div>';
 }
 function loadSeasonal(){
+  var _lg=locSeq;
   var k=seasonOf();
   season.kind=k;
   var jobs=[];
   if(k==="summer") jobs.push(loadUvPeak());
   if(k==="fall"||k==="spring") jobs.push(loadFreezeNormals(k));
-  return Promise.all(jobs).then(function(){ updateSmartSlot(true); }, function(){ updateSmartSlot(true); });
+  return Promise.all(jobs).then(function(){ if(_lg!==locSeq) return; updateSmartSlot(true); }, function(){ if(_lg!==locSeq) return; updateSmartSlot(true); });
 }
 function stormy(){ return smart.warning||smart.watch||smart.thunderSoon||smart.spcRisk>=4||smart.eroRisk>=2; }
 function smartReason(){
@@ -3894,7 +3963,16 @@ var SNAP_PARTS=[
   {id:"callRow",  ttl:3*3600000}
 ];
 function saveSnapshot(){
-  var snap={t:Date.now(), loc:(current&&current.name)||"", wx:document.body.getAttribute("data-wx")||"", parts:{}};
+  // Mid-transition the DOM still shows the OLD place while `current` is already the new one --
+  // saving then would file the old cards under the new name. setLocation marks the generation
+  // safe only once its loaders settle.
+  if(locSeq!==snapSafeSeq) return;
+  // Snapshots are keyed by COORDINATES, not the display name: geolocation always calls itself
+  // "My Location", so a name-only match served the previous city's cards after you moved.
+  var snap={t:Date.now(), loc:(current&&current.name)||"",
+            lat:(current&&current.lat!=null)?+current.lat.toFixed(3):null,
+            lon:(current&&current.lon!=null)?+current.lon.toFixed(3):null,
+            wx:document.body.getAttribute("data-wx")||"", parts:{}};
   var ac=document.getElementById("alertsCard");
   snap.calm=!!(ac&&ac.classList.contains("calm"));
   SNAP_PARTS.forEach(function(p){
@@ -3934,6 +4012,9 @@ function restoreSnapshot(){
   var age=Date.now()-snap.t;
   if(age<0||age>48*3600000) return false;                       // clock moved or far too old
   if(snap.loc&&current&&snap.loc!==current.name) return false;  // numbers would describe another place
+  if(current&&snap.lat!=null&&snap.lon!=null){                 // and same name != same place
+    if(Math.abs(snap.lat-current.lat)>0.02||Math.abs(snap.lon-current.lon)>0.02) return false;
+  }
   var n=0;
   SNAP_PARTS.forEach(function(p){
     var h=snap.parts[p.id];
@@ -4008,6 +4089,7 @@ function refreshAll(){
     refreshImages();
     label.textContent="Refresh";
     document.getElementById("lastUpdate").textContent="Last updated "+new Date().toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"});
+    snapSafeSeq=locSeq;  // the screen now matches `current`, so it is safe to snapshot
     resolveSnapBar();   // live data has landed (or we're offline and should say so)
     saveSnapshot();     // freshest render → instant paint next visit
   });
