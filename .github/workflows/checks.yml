@@ -1,0 +1,22 @@
+# A push to `main` deploys straight to Cloudflare Pages with no build step in between,
+# so this is the only thing standing between an edit and production. See tools/check.py
+# for what it checks and why.
+name: checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python3 tools/check.py
