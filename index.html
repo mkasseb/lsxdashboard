@@ -112,10 +112,18 @@
   body.storm[data-storm="wind"]{--storm:140,152,176}      /* wind slate */
   body.storm[data-storm="fire"]{--storm:255,94,30}        /* fire orange-red */
   body.storm[data-storm="convective"]{--storm:255,45,85}  /* severe/tornado red */
-  /* Storm Mode EMPHASIZES the critical cards (glow + reorder to top): alerts → radar → the event-relevant "prime" card */
-  body.storm #alertsCard{order:-3}
-  body.storm #radarCard{order:-2}
-  body.storm .masonry{order:-1}   /* float the masonry (prime card packs to its front) up under radar during storms */
+  /* Storm Mode EMPHASIZES the critical cards (glow + explicit ordering). Every grid child gets an
+     order here — hoisting only alerts/radar/masonry shoved Current Conditions and the 24-hour
+     chart below the entire masonry band, and left a 4-col gutter beside the radar (its row
+     partner, the Current stack, wasn't lifted with it). Storm order: alerts → current+radar →
+     next-24h → The Call → The Pulse → masonry with the event's prime card packed first. */
+  body.storm #alertsCard{order:-7}
+  body.storm .stack{order:-6}      /* Current Conditions + AQI — stays beside radar, above the fold */
+  body.storm #radarCard{order:-5}
+  body.storm #hourlyCard{order:-4} /* timing is THE storm question — the 24h chart stays high */
+  body.storm #callCard{order:-3}
+  body.storm #afdCard{order:-2}
+  body.storm .masonry{order:-1}    /* prime card packs to its front */
   body.storm #alertsCard,body.storm #radarCard,body.storm .storm-prime{
     box-shadow:0 0 0 2px rgba(var(--storm),.55),var(--shadow);
     border-color:rgba(var(--storm),.5);
