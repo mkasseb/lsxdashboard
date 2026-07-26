@@ -426,8 +426,7 @@
   .imgwrap img{width:100%;display:block}
   .frame{width:100%;border:0;display:block;background:#0b0f16}
   #radar{height:480px}
-  #lightning{height:340px}
-  @media(max-width:680px){#radar{height:340px}#lightning{height:300px}}
+  @media(max-width:680px){#radar{height:340px}}
   /* Leaflet map + radar overlays */
   #radar.leaflet-container{background:#0b0f16;font-family:inherit}
   .leaflet-control-attribution{font-size:10px}
@@ -1193,12 +1192,10 @@
       <div id="cpc"><div class="loading">Loading outlooks…</div></div>
       <div class="imgcap"><span>Climate Prediction Center</span><span>6–14 days out</span></div>
     </section>
-    <!-- SMART SLOT (lightning when stormy · sun/moon when calm) — goes wide ONLY in storm mode,
-         when it hosts the lightning map (updateSmartSlot toggles the class) -->
+    <!-- SUN & MOON + seasonal panel. (This slot once swapped in a Blitzortung lightning iframe
+         during storms; removed — the radar answers "where are the storms" with official data.) -->
     <section class="card" id="smartCard">
-      <h2><span id="smartTitle">Sky Conditions</span>
-        <a class="link" id="smartLink" href="https://map.blitzortung.org/#7/38.7/-90.4" target="_blank" rel="noopener" style="display:none">Fullscreen ↗</a>
-      </h2>
+      <h2>Sun &amp; Moon</h2>
       <div id="smartBody"><div class="loading">Reading the sky…</div></div>
     </section>
     <!-- QUICK LINKS (folded into masonry so it packs instead of stranding) -->
@@ -1224,7 +1221,7 @@
 <footer>
   Data: NOAA / National Weather Service (public domain) — api.weather.gov, official NWS radar (NOAA nowCOAST/GeoServer), SPC &amp; WPC &amp; CPC outlooks, NESDIS/GOES satellite, NWPS river gauges, climate normals via <a href="https://www.rcc-acis.org/" target="_blank" rel="noopener">NOAA RCC-ACIS</a>.<br>
   U.S. Drought Monitor courtesy of the National Drought Mitigation Center (NDMC), NOAA &amp; USDA · drought outlooks by <a href="https://www.drought.gov/" target="_blank" rel="noopener">NIDIS / drought.gov</a>.<br>
-  Air quality &amp; geocoding by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (CC BY 4.0) · lightning by <a href="https://www.blitzortung.org/" target="_blank" rel="noopener">Blitzortung.org</a> &amp; contributors · basemap © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> &amp; © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · weather icons by <a href="https://github.com/basmilius/weather-icons" target="_blank" rel="noopener">Meteocons</a> (Bas Milius, MIT) · maps by <a href="https://leafletjs.com/" target="_blank" rel="noopener">Leaflet</a>.<br>
+  Air quality &amp; geocoding by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (CC BY 4.0) · basemap © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> &amp; © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · weather icons by <a href="https://github.com/basmilius/weather-icons" target="_blank" rel="noopener">Meteocons</a> (Bas Milius, MIT) · maps by <a href="https://leafletjs.com/" target="_blank" rel="noopener">Leaflet</a>.<br>
   Not an official NWS product. During severe weather, always defer to official warnings &amp; a NOAA Weather Radio.<br>
   <span id="lastUpdate">&mdash;</span>
 </footer>
@@ -2048,12 +2045,9 @@ function loadForecast(){
         +'</div>';
       }).join(""); }
       loadForecast._paint();
-      if(h){ // hourly strip + thunder detection only when the hourly feed succeeded
+      if(h){ // hourly strip only when the hourly feed succeeded
         var hrs=h.properties.periods.slice(0,24);
         smart.hourly=hrs;
-        smart.thunderSoon=hrs.slice(0,12).some(function(p){
-          return /thunder|t-?storm/i.test(p.shortForecast||"");
-        });
         renderHourly24(hrs);
         var hl=document.getElementById("h24loc"); if(hl) hl.textContent=current.name.replace(" (home)","");
         updateSmartSlot(true);
@@ -2138,9 +2132,8 @@ function loadAlerts(){
     var warn=null;
     for(var i=0;i<feats.length;i++){if((feats[i].properties.event||"").toLowerCase().indexOf("warning")>=0){warn=feats[i].properties;break;}}
     setStormMode(warn);
-    // The smart slot's lightning face is only relevant content when the threat is convective or
-    // flood-driven — a Winter Storm or Excessive Heat Warning shouldn't put a lightning map in a
-    // double-wide slot (the family's prime card already floats up; sun/moon + seasonal stay).
+    // Gate smart.warning to convective/flood: it feeds radarWorthy(), and a Heat or Winter Storm
+    // Warning shouldn't summon the radar by itself (falling snow already does via data-wx).
     var warnFam=warn?eventFamily(warn.event):null;
     smart.warning=!!warn&&(warnFam==="convective"||warnFam==="flood");
     smart.watch=feats.some(function(f){
@@ -2283,7 +2276,7 @@ function loadAlerts(){
   });
 }
 // Classify an NWS event into a "family" so the dashboard can adapt its theme, prime card, and tone.
-var STORM_FAMILY=null, STORM_PRIME="smartCard";
+var STORM_FAMILY=null, STORM_PRIME="obsCard";
 function eventFamily(ev){
   ev=(ev||"").toLowerCase();
   if(/tornado|thunderstorm|special marine|dust storm|squall/.test(ev)) return "convective";
@@ -2296,7 +2289,7 @@ function eventFamily(ev){
 }
 // Per-family presentation: icon, the most-relevant card to float to the prime slot, and the banner sub-tone.
 var FAMILY_CFG={
-  convective:{ico:"⛈️", prime:"smartCard",  sub:"Radar & alerts up top. Seek sturdy shelter if warned."},
+  convective:{ico:"⛈️", prime:"obsCard",    sub:"Radar & alerts up top. Seek sturdy shelter if warned."},
   winter:    {ico:"❄️", prime:"obsCard",    sub:"Radar & regional temps up top. Bundle up, drive safe."},
   flood:     {ico:"🌊", prime:"riversCard", sub:"River gauges up top. Turn around, don't drown."},
   heat:      {ico:"🥵", prime:"obsCard",    sub:"Regional feels-like up top. Hydrate, find shade & AC."},
@@ -2339,7 +2332,7 @@ function setStormMode(warnProps){
     if(typeof updateRadarCtl==="function") updateRadarCtl();
     if(typeof updateRadarSlot==="function") updateRadarSlot();   // a live warning summons the radar
   }else{
-    STORM_FAMILY=null; STORM_PRIME="smartCard";
+    STORM_FAMILY=null; STORM_PRIME="obsCard";
     body.classList.remove("storm");
     body.removeAttribute("data-storm");
     if(typeof updateRadarSlot==="function") updateRadarSlot();   // …and it may stand down with the warning
@@ -3741,10 +3734,9 @@ function radarWorthy(){
   if(smart.warning||smart.watch) return true;
   var wx=document.body.getAttribute("data-wx");
   if(wx==="rain"||wx==="storm"||wx==="snow") return true;
-  /* Deliberately NOT smart.thunderSoon: that flag serves the lightning slot and looks 12 hours
-     out, "slight chance" included — enough to keep the radar up all night for storms still eight
-     hours away. The radar's own question is "should I look at the sky NOW", so its window is the
-     same 6 hours as the rain-chance check. */
+  /* A 12-hour thunder lookout kept the radar up all night for storms still eight hours away —
+     "slight chance" included. The radar's question is "should I look at the sky NOW", so thunder
+     is scanned over the same 6-hour window as the rain-chance check. */
   var hrs=smart.hourly||[];
   for(var i=0;i<Math.min(6,hrs.length);i++){
     var pp=hrs[i].probabilityOfPrecipitation;
@@ -4150,8 +4142,8 @@ function initLocation(){
   useMyLocation(false);           // silent attempt; falls back to default if denied
 }
 
-/* ============ SMART SLOT (lightning when stormy · sun/moon + chart when calm) ============ */
-var smart={warning:false,watch:false,thunderSoon:false,spcRisk:0,eroRisk:0,fireRisk:0,mode:"",reason:"",hourly:[]};
+/* ============ SMART SLOT (sun & moon + seasonal) ============ */
+var smart={warning:false,watch:false,spcRisk:0,eroRisk:0,fireRisk:0,mode:"",hourly:[]};
 function sunTimes(lat,lon,date){
   var rad=Math.PI/180;
   var start=Date.UTC(date.getFullYear(),0,0);
@@ -4206,7 +4198,7 @@ function sunArcSVG(rise,set){
     +'</svg>';
 }
 /* ============ SEASONAL SLOT ============
-   The smart slot already swaps lightning-for-sun-and-moon; this adds a seasonal panel below it so
+   The smart slot is sun & moon; this adds a seasonal panel below it so
    the card tracks the year: UV and heat in summer, freeze watch in fall, snow watch in winter,
    late-freeze risk in spring (Open-Meteo's pollen fields are Europe-only, so a Missouri spring
    gets the thing that actually matters here — whether the garden survives the night).
@@ -4402,58 +4394,26 @@ function loadSeasonal(){
   if(k==="fall"||k==="spring") jobs.push(loadFreezeNormals(k));
   return Promise.all(jobs).then(function(){ if(!fresh()) return; updateSmartSlot(true); }, function(){ if(!fresh()) return; updateSmartSlot(true); });
 }
-function stormy(){ return smart.warning||smart.watch||smart.thunderSoon||smart.spcRisk>=4||smart.eroRisk>=2; }
-function smartReason(){
-  if(smart.warning) return "active warning";
-  if(smart.watch) return "convective watch";
-  if(smart.thunderSoon) return "storms in the hourly forecast";
-  if(smart.spcRisk>=4) return "elevated SPC risk";
-  if(smart.eroRisk>=2) return "elevated flood risk";
-  return "";
-}
 function updateSmartSlot(force){
   if(typeof updateRadarSlot==="function") updateRadarSlot();   // same signals decide the radar's slot
-  var body=document.getElementById("smartBody"), title=document.getElementById("smartTitle"), link=document.getElementById("smartLink");
+  var body=document.getElementById("smartBody");
   if(!body) return;
-  var mode=stormy()?"storm":"calm";
-  // The lightning map earns a 2-column slot; Sun & Moon looks silly stretched that wide.
-  // (Class flip is caught by the masonry's MutationObserver → automatic repack.)
-  var smartCard=document.getElementById("smartCard");
-  if(smartCard) smartCard.classList.toggle("wide", mode==="storm");
-  if(mode==="storm"){
-    var reason=smartReason();
-    if(smart.mode!=="storm"){
-      title.textContent="⚡ Live Lightning — Storm Watch";
-      link.style.display="";
-      body.innerHTML='<div class="imgwrap maplock-wrap">'
-        +'<iframe id="lightning" class="frame" title="Live lightning map" loading="lazy" '
-        +'src="https://map.blitzortung.org/index.php?interactive=1&NavigationControl=1&FullScreenControl=0&Cookies=0&MenuButtonDiv=0&InfoDiv=0&Advertisment=0&MapStyle=2&MapStyleRangeValue=8&LightningRangeValue=12&CirclesCheckboxChecked=1#7/'+current.lat.toFixed(2)+'/'+current.lon.toFixed(2)+'"></iframe>'
-        +'<div class="maplock"><button type="button" class="maplock-pill">👆 Tap to interact with lightning map</button></div></div>'
-        +'<div class="imgcap"><span>Lightning by Blitzortung.org &amp; contributors · shown because: <span id="smReason">'+reason+'</span></span><span>live</span></div>';
-      bindMapLock(body.querySelector(".maplock-wrap"));
-    }else if(smart.reason!==reason){
-      var r=document.getElementById("smReason");
-      if(r) r.textContent=reason;   // escalation/de-escalation updates caption without reloading the map
-    }
-    smart.reason=reason;
-  }else{
-    if(smart.mode==="calm" && !force){ smart.mode=mode; return; }
-    title.textContent="Sun & Moon";
-    link.style.display="none";
-    var now=new Date(), st=sunTimes(current.lat,current.lon,now), mi=moonInfo(now);
-    var dayLen=(st.rise&&st.set)?fmtDur(st.set-st.rise):"—";
-    body.innerHTML=
-      '<div class="sm-sun"><div class="sm-arc">'+((st.rise&&st.set)?sunArcSVG(st.rise,st.set):'')+'</div>'
-      +'<div class="sm-suntimes">'
-        +'<div class="sm-kv"><div class="k">Sunrise</div><div class="v">'+mcImg("sunrise","🌅",22)+' '+fmtT(st.rise)+'</div></div>'
-        +'<div class="sm-kv"><div class="k">Sunset</div><div class="v">'+mcImg("sunset","🌇",22)+' '+fmtT(st.set)+'</div></div>'
-        +'<div class="sm-kv"><div class="k">Daylight</div><div class="v">'+dayLen+'</div></div>'
-        +'<div class="sm-kv"><div class="k">Moon</div><div class="v">'+mi.illum+'% lit</div></div>'
-      +'</div></div>'
-      +'<div class="sm-moon"><div class="mico">'+mcImg(mi.svg,mi.icon,40)+'</div><div><div class="mname">'+mi.name+'</div><div class="msub">Day '+mi.age+' of the lunar cycle</div></div></div>'
-      +seasonHTML();
-  }
-  smart.mode=mode;
+  // Once rendered, only a forced refresh (schedule tick / location change) repaints — the 60-second
+  // alert path calls this too and doesn't need to redraw a sun arc.
+  if(smart.mode==="calm"&&!force) return;
+  var now=new Date(), st=sunTimes(current.lat,current.lon,now), mi=moonInfo(now);
+  var dayLen=(st.rise&&st.set)?fmtDur(st.set-st.rise):"—";
+  body.innerHTML=
+    '<div class="sm-sun"><div class="sm-arc">'+((st.rise&&st.set)?sunArcSVG(st.rise,st.set):'')+'</div>'
+    +'<div class="sm-suntimes">'
+      +'<div class="sm-kv"><div class="k">Sunrise</div><div class="v">'+mcImg("sunrise","🌅",22)+' '+fmtT(st.rise)+'</div></div>'
+      +'<div class="sm-kv"><div class="k">Sunset</div><div class="v">'+mcImg("sunset","🌇",22)+' '+fmtT(st.set)+'</div></div>'
+      +'<div class="sm-kv"><div class="k">Daylight</div><div class="v">'+dayLen+'</div></div>'
+      +'<div class="sm-kv"><div class="k">Moon</div><div class="v">'+mi.illum+'% lit</div></div>'
+    +'</div></div>'
+    +'<div class="sm-moon"><div class="mico">'+mcImg(mi.svg,mi.icon,40)+'</div><div><div class="mname">'+mi.name+'</div><div class="msub">Day '+mi.age+' of the lunar cycle</div></div></div>'
+    +seasonHTML();
+  smart.mode="calm";
 }
 
 /* ============ THE CALL (plain-English verdicts from data already on hand) ============
@@ -4923,7 +4883,7 @@ function layoutMasonry(){
   // Explicit widget hierarchy: lower rank = more important = packed higher.
   //  (Alerts/Pulse/Current/Radar/Hourly are fixed heroes above this masonry.)
   function tier(id){
-    if(storm && id===(window.STORM_PRIME||"smartCard")) return 0;   // storms: the event-relevant card jumps to the very top
+    if(storm && id===(window.STORM_PRIME||"obsCard")) return 0;   // storms: the event-relevant card jumps to the very top
     var RANK={
       forecastCard:1,   // 7-day forecast — most-checked product
       riskCard:2,       // severe storm/flood/fire risk
@@ -4933,7 +4893,7 @@ function layoutMasonry(){
       droughtCard:6,    // drought outlook
       climateCard:7,    // climate vs normal
       cpcCard:8,        // week-ahead leanings
-      smartCard:9,      // sky conditions (sun/moon or lightning)
+      smartCard:9,      // sun & moon + seasonal
       linksCard:10      // deep-dive links — reference, lowest
     };
     return (RANK[id]!=null) ? RANK[id] : 50;
@@ -5017,10 +4977,9 @@ function layoutMasonry(){
    after packing they can read in a wholly different order than they appear. Put the nodes into
    visual order (top row first, then left-to-right); since position comes from inline top/left,
    moving them changes nothing on screen.
-   The iframe guard is the important part: re-inserting an element reloads any iframe inside it, and
-   in storm mode this band hosts the live lightning map — repacking on every 60-second alert refresh
-   would restart it constantly. A slightly-off reading order beats a map that never finishes loading,
-   and the static HTML is authored in rank order, so the un-reordered case is already close. */
+   The iframe guard is defensive: re-inserting an element reloads any iframe inside it. Nothing in
+   the masonry hosts an iframe today (the lightning map that motivated the guard is gone), so the
+   reorder now always runs and reading order matches visual order. */
 function reorderMasonryDOM(m,data){
   if(m.querySelector("iframe")) return;
   var visual=data.slice().sort(function(a,b){

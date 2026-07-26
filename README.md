@@ -58,7 +58,6 @@ All public-domain or openly licensed, all keyless.
 | `data.rcc-acis.org` | 1991–2020 normals, daily records, rankings, dry streaks, freeze dates |
 | Open-Meteo | Air quality, UV index, and the location geocoder |
 | NESDIS / GOES-19 | Satellite imagery |
-| Blitzortung | Live lightning (embedded iframe) |
 
 Basemap © CARTO & OpenStreetMap contributors. Weather icons by
 [Meteocons](https://github.com/basmilius/weather-icons) (Bas Milius, MIT).
@@ -175,6 +174,7 @@ container and would otherwise paint into a stale viewport.
   content-driven and the radar's is fixed by its aspect ratio. It is page-edge whitespace under the
   radar rather than a framed hole. Growing the radar to close it is exactly the mistake that made
   the map portrait in the first place, so it stays.
-- The masonry positions cards absolutely after sorting by importance and height, so visual order
-  diverges from DOM order — which is what keyboard and screen-reader order follow.
+- The masonry positions cards absolutely after sorting by importance and height. `reorderMasonryDOM`
+  re-syncs DOM order to visual order after each pack; it skips only if a card hosts an iframe
+  (re-inserting reloads them), and nothing in the masonry does today.
 - `saveSnapshot()` serialises synchronously on `visibilitychange`.

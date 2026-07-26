@@ -46,6 +46,7 @@ NAV_ONLY = {
     "https://radar.weather.gov",
     "https://water.noaa.gov",
     "https://www.blitzortung.org",
+    "https://map.blitzortung.org",
     "https://www.cpc.ncep.noaa.gov",
     "https://www.drought.gov",
     "https://www.openstreetmap.org",
