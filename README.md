@@ -8,7 +8,7 @@ Not an official NWS product. During severe weather, defer to official warnings a
 ## What it is
 
 One file. [`index.html`](index.html) is the entire application: ~840 lines of CSS, ~265 lines of
-markup, and ~3,700 lines of JavaScript, all inline.
+markup, and ~3,900 lines of JavaScript, all inline.
 
 - **No build step.** No bundler, no transpiler, no `package.json`. Edit the file, reload the page.
 - **No API keys.** Every feed was chosen because it is keyless and CORS-open, so the whole thing
@@ -128,6 +128,46 @@ and body scroll is locked so a wheel gesture over the map can't scroll the page 
 is told to `invalidateSize()` twice — once immediately, once after the transition — or it renders
 tiles for the old viewport. A `ResizeObserver` on `#radar` covers the same hazard for Storm Mode's
 resize, which no window event announces.
+
+**The location search asks the geocoder several questions, not one.** Open-Meteo's geocoder does
+no fuzzy matching at all — a name that doesn't match the stored spelling character-for-character
+returns an empty list, not a near miss — and its index is inconsistent about the abbreviations this
+area is full of. It holds *Lake Saint Louis*, *East Saint Louis*, *Saint Ann* and *City of Saint
+Peters* spelled out, but *St. Louis* and *Mt. Vernon* abbreviated. Typed the way everyone here
+writes them, "Lake St. Louis", "East St. Louis", "St. Ann" and "Ste. Genevieve" all returned
+nothing, and "St. Charles" returned an airport plus a town in Kane County, Illinois. So
+`queryVariants()` rewrites what was typed into up to six spellings — St./Saint, Ste./Sainte,
+Mt./Mount, Ft./Fort, the directionals, the apostrophe repairs, `&`/and — `geoLookup()` asks for all
+of them at once and merges by geoname id, and the ranking decides what actually matched.
+Requests are memoised per variant string, so the next keystroke re-sends almost nothing.
+
+Four rules do the ranking, in the order they matter:
+
+- **Name match beats population.** Someone who typed six characters of a small town meant that
+  town. `matchScore()` grades exact, word-prefix, still-typing prefix, contained, then bigram
+  similarity; population is a tiebreak worth at most 18 points.
+- **Populated places beat everything else.** Searching Ste. Genevieve turns up a flying club and
+  Lake St. Louis turns up its dam. Non-`PPL*` features survive only when nothing populated matched,
+  where a lake or a park is plausibly the place someone wants a forecast for.
+- **Coincidental alternate-name hits are pruned.** The index matches historical names it doesn't
+  hand back, so "Springfield" returns Palmyra — which is in Marion County, and therefore in area.
+  Left alone that made Palmyra the one suggestion for Springfield. `pruneWeak()` drops it *only*
+  when something in the full result set really is named what was typed; if nothing anywhere matches
+  by name, the hit came from a name we can't see and is trusted rather than thrown away.
+- **A typo is rescued last, never first.** Only after every exact spelling comes back empty does
+  `fuzzyRescue()` re-ask for a prefix of the query and keep what a bigram comparison says is close
+  ("Chesterfeild", "Edwardsvile"). Fuzziness never reorders results that did match, where it would
+  happily rank a wrong town above a right one.
+
+A miss says which kind of miss it was, because they need different responses: a place that exists
+but sits outside the CWA is the dashboard's limit, while no place at all is a spelling to fix.
+Naming the out-of-area town takes an *exact* match — three characters into "Ste. Genevieve" the
+index offers Ste. Marie, Illinois, and that is a confusing thing to read while still typing.
+
+Suggestions are labelled with the county, which is the only thing that tells the three O'Fallons
+apart, and printed the way the area writes them: `prettyPlace()` turns the index's *Saint* back
+into *St.* and drops the *City of* prefix. Arrow keys move the highlight (`.hot` was in the
+stylesheet from the start with nothing applying it) and Enter takes it.
 
 **Location generations.** Every fetch that describes *a place* captures the generation it was
 issued under via `locGuard()`, and checks `fresh()` before writing to the DOM. `setLocation()`
