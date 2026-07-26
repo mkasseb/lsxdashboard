@@ -4569,16 +4569,6 @@ function fcWintryDay(){
   }
   return null;
 }
-function fcPeakFeels(){
-  var hrs=smart.hourly||[], best=null;
-  for(var i=0;i<Math.min(24,hrs.length);i++){
-    var p=hrs[i], rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?p.relativeHumidity.value:null;
-    var fl=feelsLikeF(p.temperature,rh,parseMph(p.windSpeed));
-    if(fl==null) continue;
-    if(!best||fl>best.v) best={v:fl,t:new Date(p.startTime).getTime()};
-  }
-  return best;
-}
 function fcColdestNight(){
   var ds=smart.days||[], best=null;
   ds.forEach(function(d){
@@ -4594,11 +4584,13 @@ function seasonBlock(){
   var k=seasonOf(), items=[], notes=[], head="";
   function kv(a,b){ return '<div class="sm-kv"><div class="k">'+a+'</div><div class="v">'+b+'</div></div>'; }
   if(k==="summer"){
-    // UV moved out of here: it belongs with the other exposure readings in the hero and as a
-    // per-day figure in the 7-day, not buried in a seasonal slot that only appears in summer.
+    // Two readings have left this branch for saying something already said better elsewhere: UV
+    // (it belongs with the other exposure readings in the hero and as a per-day figure in the
+    // 7-day) and the feels-like peak, which was the Bottom Line's heat pill recomputed off the
+    // same smart.hourly array. What survives is the only heat figure the Bottom Line's 18-hour
+    // window cannot reach: how many days the heat runs for. So summer is usually quiet here,
+    // and that is correct — this is a cold-season instrument.
     head="Summer · Heat";
-    var pf=fcPeakFeels();
-    if(pf) items.push(kv("Feels-like peak",pf.v+"° at "+shortT(pf.t)));
     var hotN=fcDaysAtOrAbove(95);
     if(hotN) items.push(kv("Days ≥95° in 7-day",String(hotN)));
   }else if(k==="fall"){
