@@ -55,7 +55,7 @@ All public-domain or openly licensed, all keyless.
 | `opengeo.ncep.noaa.gov` (WMS) | Official NWS radar, including the time dimension driving the loop |
 | `mapservices.weather.noaa.gov` | SPC convective + fire outlooks, WPC excessive rainfall, CPC 6–10/8–14 day, CPC hazards & drought, WPC QPF |
 | `api.water.noaa.gov` (NWPS) | River gauge stages and crest forecasts |
-| `data.rcc-acis.org` | 1991–2020 normals, daily records, rankings, dry streaks, freeze dates |
+| `data.rcc-acis.org` | 1991–2020 normals, daily records, rankings, dry streaks |
 | Open-Meteo | Air quality, UV index, and the location geocoder |
 | NESDIS / GOES-19 | Satellite imagery |
 
@@ -197,13 +197,6 @@ return visit paints a full dashboard before any network request. Each card carri
 **Storm mode.** An active warning is classified into a family (convective / winter / flood / heat /
 wind / fire), which sets the accent colour, floats the most relevant card to the top of the layout,
 and rewrites the banner.
-
-**The seasonal card ranks itself.** `#smartCard` sits second-from-bottom in `RANK` because for most
-of the year it is ambient. When `seasonalUrgent()` sees a frost, a wintry day or a run of dangerous
-heat in the 7-day, it jumps the ranking instead — a freeze tonight is a tonight problem, and
-"cover anything tender" does not belong under the drought outlook. It is deliberately stricter than
-what the card *shows*: "no freeze forecast" is worth printing and not worth promoting. The card's
-`<h2>` is written at render time too, because it names the season it is currently watching.
 
 **Adding a card** means touching five places: the markup, the `RANK` map in `layoutMasonry`'s
 `tier()`, `SNAP_PARTS`, the `SCHED` table, and `clearLocationUI`/`resetLocationState`.
