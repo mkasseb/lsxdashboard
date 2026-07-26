@@ -352,10 +352,13 @@
   .cc-icon{font-size:46px;flex:0 0 auto}
   .cc-desc{font-size:15px;color:var(--text);margin-top:6px;font-weight:600;line-height:1.25}
   .cc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .cc-item{background:var(--inset);border:1px solid var(--border);border-radius:10px;padding:9px 11px}
-  .cc-item .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
-  .cc-item .v{font-size:17px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
-  .stn{font-size:12px;color:var(--muted);margin-top:10px}
+  .cc-item,.cc-uv,.aqi-mini{background:var(--inset);border:1px solid var(--border);border-radius:10px;padding:9px 11px}
+  .cc-item .k,.cc-expo .k{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .cc-item .v,.cc-expo .v{font-size:17px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
+  /* Provenance, not data: who observed what, when, and which station lent the records. It sits
+     below everything it describes and is set to be read second. */
+  .stn{font-size:11.5px;color:var(--muted);opacity:.85;margin-top:12px;line-height:1.5}
+  .stn .nw{white-space:nowrap}   /* break between credits, never inside a station's name */
 
   /* Today strip — high/low with "now" placed inside the day's range, plus sun times. Answers
      "is it still getting hotter?" and "how much daylight is left?" without a scroll, and gives the
@@ -493,9 +496,11 @@
       column-gap:38px;align-items:start}
     body.no-radar #current>*{grid-column:1/-1;min-width:0}
     body.no-radar #current>.cc-main,body.no-radar #current>.cc-today,
-    body.no-radar #current>.cc-uv,body.no-radar #current>.aqi-mini,
+    body.no-radar #current>.cc-expo,
     body.no-radar #current>.cc-ctx,body.no-radar #current>.stn{grid-column:1}
-    body.no-radar #current>.cc-grid{grid-column:2;grid-row:1/span 7;align-self:center}
+    /* The span must match the number of column-1 children, or the metric grid centres against
+       phantom rows. UV and air quality now share one .cc-expo wrapper, so that count is five. */
+    body.no-radar #current>.cc-grid{grid-column:2;grid-row:1/span 6;align-self:center}
   }
   @media(min-width:861px) and (max-width:1100px){
     body.no-radar .cc-grid{grid-template-columns:repeat(2,1fr)}
@@ -602,20 +607,35 @@
      The rest of the year it's a one-line summary inside Current Conditions. */
   #aqiCard{display:none}
   #aqiCard.show{display:block}
-  /* UV sits with air quality: both are "how much is this going to cost me to be outside" numbers.
-     Deliberately NOT flex — this line is a sentence with <b> inside it, and flex would promote each
-     text run to its own item, opening gaps mid-phrase ("burn ~ 29 min"). */
-  .cc-uv{font-size:12.5px;color:var(--muted);margin-top:10px;line-height:1.5}
-  .cc-uv:empty{display:none}
-  .cc-uv b{font-variant-numeric:tabular-nums;color:var(--text)}
-  .cc-uv .uv-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
-  .cc-uv .uv-sep{opacity:.45;margin:0 6px}
-  .aqi-mini{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);margin-top:10px}
-  .aqi-mini:empty{display:none}
-  .aqi-mini b{font-variant-numeric:tabular-nums}
-  .aqi-mini .am-dot{width:8px;height:8px;border-radius:50%;flex:0 0 auto}
-  .aqi-mini .am-pm{opacity:.8}
-  .aqi-mini a{margin-left:auto;font-size:11.5px;white-space:nowrap}
+  /* UV sits with air quality: both are "how much is this going to cost me to be outside" numbers,
+     and neither is observed at the station — they come from Open-Meteo, so they stay OUT of the
+     metric grid that the "Observed … KSUS" line below describes. They wear .cc-item's chrome
+     instead, because four run-on sentences at 12px was the whole readability problem: the burn
+     clock read exactly like a record from 1936. A number the eye can land on, then the detail.
+     The value and sub-lines are phrases with <b> inside them and are deliberately NOT flex —
+     flex promotes each text run to its own item and opens gaps mid-phrase ("burn ~ 29 min").
+     136px is not arbitrary: body.no-radar gives column 1 a minimum of 300px, and two tracks plus
+     the gap have to fit inside it or auto-fit silently stacks them on the commonest layout. */
+  .cc-expo{display:grid;grid-template-columns:repeat(auto-fit,minmax(136px,1fr));gap:10px;margin-top:12px}
+  .cc-uv:empty,.aqi-mini:empty{display:none}
+  .cc-expo .v{line-height:1.25}
+  .cc-expo .ex-cat{font-size:12.5px;font-weight:700;color:var(--muted);margin-left:3px}
+  .cc-expo .ex-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  .cc-expo .s{font-size:11.5px;color:var(--muted);margin-top:4px;line-height:1.45}
+  .cc-expo .s:empty{display:none}
+  .cc-expo .s b{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}
+  .cc-expo .ex-b{white-space:nowrap}   /* wrap BETWEEN clauses, never inside "burn ~33 min" */
+  /* No margin: the literal spaces the renderer puts either side of this are the only break
+     opportunity in the sub-line, and with nowrap clauses on both sides they have to stay real
+     whitespace or the line cannot wrap at all and overflows the tile. */
+  .cc-expo .ex-sep{opacity:.45}
+  /* uvLevel/aqiInfo are tuned for the dark panel and arrive as an inline colour, so CSS can't
+     remap them level by level. On the light panel AQI "Moderate" (#ffd23f) sits at 1.3:1 against
+     --inset — and this change promotes it from a 12.5px <b> to the tile's headline. One scoped
+     darkening pass fixes every level at once: worst case clears 3.4:1, most land past 4.4:1, and
+     hue survives, so the colour still means what it meant. */
+  :root[data-theme="light"] .cc-expo .v,
+  :root[data-theme="light"] .cc-expo .ex-dot{filter:brightness(.62)}
   .aqi-main{display:flex;align-items:center;gap:16px}
   .aqi-num{font-size:46px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
   .aqi-cat{font-size:15px;font-weight:700;margin-top:2px}
@@ -676,9 +696,22 @@
   .cx-rank .cx-row{display:flex;gap:7px;align-items:baseline}
   .cx-bar{position:relative;height:6px;border-radius:3px;background:linear-gradient(90deg,#4aa3ff,#3ecf8e,#ffd23f,#ff6a3d);opacity:.55}
   .cx-bar i{position:absolute;top:-3px;width:3px;height:12px;border-radius:2px;background:var(--text);box-shadow:0 0 0 2px var(--panel)}
-  /* Current-conditions context footer */
-  .cc-ctx{font-size:12px;color:var(--muted);margin-top:9px;line-height:1.5}
-  .cc-ctx b{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}
+  /* Current-conditions climate line — normals and today's records, labeled rather than run
+     together, so the numbers carry the line and the words get out of the way. "record high" and
+     "low" are gone: the RECORD label plus warm/cool colour says it in no characters at all. */
+  .cc-ctx{display:flex;flex-wrap:wrap;gap:5px 20px;font-size:13px;color:var(--text);
+    margin-top:12px;line-height:1.5;font-variant-numeric:tabular-nums}
+  .cc-ctx:empty{display:none}
+  .cc-ctx .cx-pair{white-space:nowrap}        /* a phrase, not a flex container */
+  .cc-ctx .cx-pair i{font-style:normal;font-size:10px;font-weight:800;text-transform:uppercase;
+    letter-spacing:.6px;color:var(--muted);margin-right:7px}
+  .cc-ctx b{font-weight:700}
+  /* --sev and --accent are the theme-aware warm/cool pair; the raw #ff6a3d/#4aa3ff the climate
+     card uses would drop to ~2.7:1 on the light panel at this size. */
+  .cc-ctx .rc-hi{color:var(--sev)}
+  .cc-ctx .rc-lo{color:var(--accent)}
+  .cc-ctx .rc-y{font-size:11px;font-weight:600;color:var(--muted);margin-left:3px}
+  .cc-ctx .rc-sep{display:inline-block;width:11px}   /* groups each record with its year */
   /* River sub-line: distance to flood stage + trend */
   .rlink .rname{display:flex;flex-direction:column;gap:2px;min-width:0}
   .rsub{font-size:11px;color:var(--muted);font-weight:500;font-variant-numeric:tabular-nums}
@@ -2067,8 +2100,19 @@ function loadCurrent(){
       +'<div class="cc-item"><div class="k">Gusts</div><div class="v">'+(gust!=null?gust+" mph":"—")+'</div></div>'
       +'<div class="cc-item"><div class="k">Pressure</div><div class="v">'+(press!=null?press+'"':"—")+'</div></div>'
       +'<div class="cc-item"><div class="k">Visibility</div><div class="v">'+(vis!=null?vis+" mi":"—")+'</div></div>'
-      +'</div><div class="cc-uv" id="ccUv"></div><div class="aqi-mini" id="aqiMini"></div><div class="cc-ctx" id="ccCtx"></div>'
-      +'<div class="stn">Observed '+timeAgo(p.timestamp)+' · '+current.station+'</div>';
+      +'</div>'
+      +'<div class="cc-expo"><div class="cc-uv" id="ccUv"></div><div class="aqi-mini" id="aqiMini"></div></div>'
+      +'<div class="cc-ctx" id="ccCtx"></div>'
+      // Every source in one line, set to be read second. AirNow is a constant href, so it lives in
+      // the markup rather than being rebuilt by renderAqiMini — which means it survives an AQI
+      // outage, exactly when someone would want to go look the number up themselves.
+      // Naming Open-Meteo is not decoration: the exposure pair now wears the same chrome as the
+      // metric tiles, and those ARE the station's. Without this the line above would read as a
+      // claim that KSUS measures UV and PM2.5.
+      +'<div class="stn">Observed '+timeAgo(p.timestamp)+' · '+current.station
+      +' · UV &amp; air Open-Meteo'
+      +'<span id="ccRecSrc"></span>'
+      +' · <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a></div>';
     renderHeroToday();    // today's range + sun times, once the 7-day has landed
     renderUvNow();        // UV, once Open-Meteo has answered
     renderCurrentCtx();   // normals + today's records, once climate context has landed
@@ -2440,17 +2484,17 @@ var aqiState={val:null, pm:null, err:false};
 function renderAqiMini(){
   var el=document.getElementById("aqiMini"); if(!el) return;
   if(aqiState.val==null){
+    // The AirNow link is in the .stn footline now, so the outage state can just say so.
     el.innerHTML=aqiState.err
-      ?'<span class="am-dot" style="background:var(--muted)"></span>Air quality unavailable'
-        +' <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a>'
+      ?'<div class="k"><span class="ex-dot" style="background:var(--muted)"></span>Air Quality</div>'
+        +'<div class="v" style="color:var(--muted)">—</div><div class="s">unavailable</div>'
       :"";
     return;
   }
   var i=aqiInfo(aqiState.val);
-  el.innerHTML='<span class="am-dot" style="background:'+i.c+'"></span>'
-    +'Air quality <b style="color:'+i.c+'">'+aqiState.val+'</b> · '+i.t
-    +(aqiState.pm!=null?' <span class="am-pm">· PM2.5 '+aqiState.pm+'</span>':'')
-    +' <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a>';
+  el.innerHTML='<div class="k"><span class="ex-dot" style="background:'+i.c+'"></span>Air Quality</div>'
+    +'<div class="v" style="color:'+i.c+'">'+aqiState.val+' <span class="ex-cat">'+i.t+'</span></div>'
+    +'<div class="s">'+(aqiState.pm!=null?'PM2.5 <b>'+aqiState.pm+'</b>':'')+'</div>';
 }
 function loadAqi(){
   var fresh=locGuard();
@@ -3427,16 +3471,22 @@ function renderHeroToday(){
   el.innerHTML=out;
 }
 function renderCurrentCtx(){
-  var el=document.getElementById("ccCtx");
+  var el=document.getElementById("ccCtx"), src=document.getElementById("ccRecSrc");
   if(!el) return;
-  var bits=[];
-  if(climate.normHi!=null&&climate.normLo!=null) bits.push("Normal <b>"+Math.round(climate.normHi)+"°/"+Math.round(climate.normLo)+"°</b>");
+  var bits=[], credit="";
+  if(climate.normHi!=null&&climate.normLo!=null)
+    bits.push('<span class="cx-pair"><i>Normal</i><b>'+Math.round(climate.normHi)+"°/"+Math.round(climate.normLo)+"°</b></span>");
   if(ctx.years>=CTX_MIN_YEARS){   // records only when the sample can support them
-    if(ctx.recHi) bits.push("record high <b>"+Math.round(ctx.recHi.v)+"°</b> ("+ctx.recHi.y+")");
-    if(ctx.recLo) bits.push("low <b>"+Math.round(ctx.recLo.v)+"°</b> ("+ctx.recLo.y+")");
-    if(ctx.recStation&&(ctx.recHi||ctx.recLo)) bits.push('<span style="opacity:.75">'+esc(shortStn(ctx.recStation))+" records</span>");
+    var r=[];
+    if(ctx.recHi) r.push('<b class="rc-hi">'+Math.round(ctx.recHi.v)+'°</b><span class="rc-y">'+ctx.recHi.y+'</span>');
+    if(ctx.recLo) r.push('<b class="rc-lo">'+Math.round(ctx.recLo.v)+'°</b><span class="rc-y">'+ctx.recLo.y+'</span>');
+    if(r.length) bits.push('<span class="cx-pair"><i>Record</i>'+r.join('<span class="rc-sep"></span>')+'</span>');
+    // The credit follows the numbers down to the provenance line, but it still follows them —
+    // a figure borrowed from another station stays attributed by name.
+    if(ctx.recStation&&r.length) credit=' · <span class="nw">'+esc(shortStn(ctx.recStation))+" records</span>";
   }
-  el.innerHTML=bits.length?bits.join(" · "):"";
+  el.innerHTML=bits.join("");
+  if(src) src.innerHTML=credit;
 }
 
 /* ============ WPC 7-DAY QPF (best-effort chip) ============ */
@@ -4450,22 +4500,28 @@ function renderUvNow(){
   var el=document.getElementById("ccUv"); if(!el) return;
   var r=(uv.now!=null)?Math.round(uv.now):null;
   var p=uv.peak, pr=p?Math.round(p.v):null;
-  // After dark UV is 0 for everyone; saying so is noise. Keep the line only if there is either a
+  // After dark UV is 0 for everyone; saying so is noise. Keep the tile only if there is either a
   // live reading worth having or a peak still ahead worth planning around.
   if((r==null||r<1)&&!(pr!=null&&pr>=3&&p.t>Date.now())){ el.innerHTML=""; return; }
-  var bits=[], live=(r!=null&&r>=1);
+  var live=(r!=null&&r>=1), lv=live?uvLevel(r):uvLevel(pr), sub=[], val;
+  // A peak that lands on a later date needs saying so — "at 10am" at 11pm reads as four hours ago.
+  var when=p?((new Date(p.t)).toDateString()!==new Date().toDateString()?'tomorrow ':'at ')+shortT(p.t):"";
   if(live){
-    var lv=uvLevel(r);
-    bits.push('<span class="uv-dot" style="background:'+lv.c+'"></span>UV <b style="color:'+lv.c+'">'+r+'</b> '+lv.t);
+    val=r+' <span class="ex-cat">'+lv.t+'</span>';
+    if(pr!=null&&pr>r) sub.push('peak <b>'+pr+'</b> '+when);
+    if(r>=3) sub.push('burn ~<b>'+Math.max(5,Math.round(200/r))+'</b> min');
+  }else{
+    // After dark the peak is the whole message, so it takes the value slot and names itself
+    // rather than trailing after a label with nothing under it.
+    val=pr+' <span class="ex-cat">peak</span>';
+    sub.push(when);
   }
-  if(pr!=null&&(!live||pr>r)){
-    // After dark this line is the whole message, so it has to name the quantity itself. A peak
-    // that lands on a later date needs saying so — "at 10am" at 11pm reads as four hours ago.
-    var pd=new Date(p.t), tomorrow=pd.toDateString()!==new Date().toDateString();
-    bits.push((live?'':'UV ')+'peak <b>'+pr+'</b> '+(tomorrow?'tomorrow ':'at ')+shortT(p.t));
-  }
-  if(live&&r>=3) bits.push('burn ~<b>'+Math.max(5,Math.round(200/r))+'</b> min');
-  el.innerHTML=bits.join('<span class="uv-sep">·</span>');
+  el.innerHTML='<div class="k"><span class="ex-dot" style="background:'+lv.c+'"></span>UV</div>'
+    +'<div class="v" style="color:'+lv.c+'">'+val+'</div>'
+    // Left genuinely empty when there is no detail (a UV of 2 has neither a burn clock nor a
+    // higher peak to name), so .s:empty can collapse it rather than leaving a stray margin.
+    +'<div class="s">'+(sub.length?'<span class="ex-b">'
+      +sub.join('</span> <span class="ex-sep">·</span> <span class="ex-b">')+'</span>':'')+'</div>';
 }
 /* ============ BOTTOM LINE (né The Call — plain-English verdicts from data on hand) ============
    Rules fire off the next ~18 hourly periods (smart.hourly) + the latest AQI. Each verdict
@@ -4633,7 +4689,13 @@ function renderTheCall(){
        NOW, so they only ever come from a live fetch;
      · a snapshot is only reused for the same location it was taken at;
      · while restored content is showing, a bar names the exact snapshot time. */
-var SNAP_KEY="lsxSnap_v1", snapRestored=false, NET_OK=false;
+/* The key carries a version because a snapshot is RESTORED MARKUP, not data: it is painted under
+   whatever stylesheet ships today. When the hero's footer became a tile pair, a v1 snapshot's old
+   rows picked up the new tile chrome without their grid parent and the old context line — now a
+   flex row — spread its words across the card. Reshape the markup, bump the key. One cold paint
+   for a returning visitor beats a deployment's worth of visibly wrong first paints. */
+var SNAP_KEY="lsxSnap_v2", snapRestored=false, NET_OK=false;
+try{ localStorage.removeItem("lsxSnap_v1"); }catch(e){}   // don't let ~200 KB of dead v1 crowd v2
 var SNAP_PARTS=[
   {id:"afd",      ttl:6*3600000},
   {id:"alerts",   ttl:15*60000},     // safety-critical: short leash
