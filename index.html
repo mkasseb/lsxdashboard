@@ -1006,8 +1006,9 @@
 <div class="locbar">
   <button id="geoBtn" title="Use my current location" aria-label="Use my current location">📍<span class="g-txt"> My location</span></button>
   <form id="locForm" class="locsearch" autocomplete="off">
-    <input id="locSearch" type="search" placeholder="Search an LSX-area city or town…" autocomplete="off" aria-label="Search a location in the St. Louis (LSX) forecast area" enterkeyhint="search">
-    <div id="locSug" class="locsug" role="listbox"></div>
+    <input id="locSearch" type="search" placeholder="Search an LSX-area city or town…" autocomplete="off" aria-label="Search a location in the St. Louis (LSX) forecast area" enterkeyhint="search"
+           role="combobox" aria-expanded="false" aria-controls="locSug" aria-autocomplete="list">
+    <div id="locSug" class="locsug" role="listbox" aria-label="Location suggestions"></div>
   </form>
   <span class="locNow" id="locNow"></span>
 </div>
@@ -4164,25 +4165,42 @@ function sugLabel(r){
   where.push(abbrState(r.admin1));
   return {name:name, where:where.join(", ")};
 }
+/* The input is a combobox, so the list being open and which row is highlighted have to be said out
+   loud, not just drawn. Without this the arrow keys move a background colour that a screen reader
+   never hears about. */
+function sugAria(open,active){
+  var inp=document.getElementById("locSearch"); if(!inp) return;
+  inp.setAttribute("aria-expanded",open?"true":"false");
+  if(active) inp.setAttribute("aria-activedescendant",active); else inp.removeAttribute("aria-activedescendant");
+}
 function hideSug(){
   var b=document.getElementById("locSug");
-  b.classList.remove("show"); b.innerHTML=""; sugItems=[]; sugHot=-1;
+  b.classList.remove("show"); b.innerHTML=""; sugItems=[]; sugHot=-1; sugAria(false,null);
 }
 function showSugNote(msg){
   var b=document.getElementById("locSug");
   b.innerHTML='<div class="sug-note">'+msg+'</div>';
   b.classList.add("show"); sugItems=[]; sugHot=-1;
+  sugAria(false,null);   // a note is not a list of options to arrow through
 }
-/* Per-session memo, keyed by the exact string sent. A fan-out of six spellings shares most of
-   them with the fan-out from the previous keystroke, and backspacing costs nothing at all. */
-var geoCache={};
+/* Per-session memo, keyed by the exact string sent, so backspacing a character costs nothing.
+   Bounded, because every prefix of every word typed is its own key holding up to 100 records —
+   an afternoon of searching would otherwise accumulate a few thousand of them. Oldest key out
+   first: the visitor is refining the word in front of them, not returning to one from an hour ago. */
+var geoCache={}, geoCacheKeys=[], GEO_CACHE_MAX=80;
 function geoFetch(q){
   var k=q.toLowerCase();
   if(geoCache[k]) return geoCache[k];
   var p=getJSON("https://geocoding-api.open-meteo.com/v1/search?count=100&countryCode=US&language=en&format=json&name="+encodeURIComponent(q))
     .then(function(d){ return d.results||[]; })
-    .catch(function(e){ delete geoCache[k]; throw e; });   // a dropped connection must not be cached as "no such place"
+    .catch(function(e){                                    // a dropped connection must not be cached as "no such place"
+      delete geoCache[k];
+      var at=geoCacheKeys.indexOf(k); if(at>=0) geoCacheKeys.splice(at,1);
+      throw e;
+    });
   geoCache[k]=p;
+  geoCacheKeys.push(k);
+  while(geoCacheKeys.length>GEO_CACHE_MAX){ delete geoCache[geoCacheKeys.shift()]; }
   return p;
 }
 /* Ask for every spelling at once and merge by geoname id. One variant failing is not the search
@@ -4267,9 +4285,10 @@ function renderSuggestions(res,ask){
   sugHot=-1;
   var b=document.getElementById("locSug");
   b.innerHTML=sugItems.map(function(s,i){
-    return '<div class="sug" role="option" aria-selected="false" data-i="'+i+'"><span class="sname">'+esc(s.label.name)+'</span><span class="swhere">'+esc(s.label.where)+'</span></div>';
+    return '<div class="sug" role="option" id="locSugOpt'+i+'" aria-selected="false" data-i="'+i+'"><span class="sname">'+esc(s.label.name)+'</span><span class="swhere">'+esc(s.label.where)+'</span></div>';
   }).join("");
   b.classList.add("show");
+  sugAria(true,null);
 }
 /* Nothing in the area matched. Say which of the two things went wrong, because they need
    different responses from the visitor: a place that exists but sits outside the CWA is the
@@ -4333,6 +4352,7 @@ function moveHot(d){
     rows[i].setAttribute("aria-selected",on?"true":"false");
     if(on&&rows[i].scrollIntoView) rows[i].scrollIntoView({block:"nearest"});
   }
+  sugAria(true,"locSugOpt"+sugHot);
 }
 function initLocationUI(){
   var inp=document.getElementById("locSearch"), form=document.getElementById("locForm"), box=document.getElementById("locSug");
