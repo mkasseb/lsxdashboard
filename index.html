@@ -900,8 +900,10 @@
     padding:12px 14px;min-height:44px;cursor:pointer;font-size:14px;border-bottom:1px solid var(--border)}
   .locsug .sug:last-child{border-bottom:0}
   .locsug .sug:hover,.locsug .sug.hot{background:var(--chip)}
-  .locsug .sug .sname{font-weight:600}
-  .locsug .sug .swhere{font-size:12px;color:var(--muted);white-space:nowrap}
+  /* The county is the thing that tells the three O'Fallons apart, so it keeps its width and a
+     long place name gives way instead of pushing it off the row. */
+  .locsug .sug .sname{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .locsug .sug .swhere{font-size:12px;color:var(--muted);white-space:nowrap;flex:0 0 auto}
   .locsug .sug-note{padding:12px 14px;font-size:13px;color:var(--muted)}
   .locbar .locNow{font-size:13px;color:var(--muted);font-weight:600;margin-left:auto;white-space:nowrap}
 
@@ -1004,8 +1006,9 @@
 <div class="locbar">
   <button id="geoBtn" title="Use my current location" aria-label="Use my current location">📍<span class="g-txt"> My location</span></button>
   <form id="locForm" class="locsearch" autocomplete="off">
-    <input id="locSearch" type="search" placeholder="Search an LSX-area city or town…" autocomplete="off" aria-label="Search a location in the St. Louis (LSX) forecast area" enterkeyhint="search">
-    <div id="locSug" class="locsug" role="listbox"></div>
+    <input id="locSearch" type="search" placeholder="Search an LSX-area city or town…" autocomplete="off" aria-label="Search a location in the St. Louis (LSX) forecast area" enterkeyhint="search"
+           role="combobox" aria-expanded="false" aria-controls="locSug" aria-autocomplete="list">
+    <div id="locSug" class="locsug" role="listbox" aria-label="Location suggestions"></div>
   </form>
   <span class="locNow" id="locNow"></span>
 </div>
@@ -1235,7 +1238,7 @@
   integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
 <script>
 /* ============ CONFIG ============ */
-var DEFAULT_LOC={name:"Lake Saint Louis, MO", lat:38.7975, lon:-90.7855, station:"KSUS"};
+var DEFAULT_LOC={name:"Lake St. Louis, MO", lat:38.7975, lon:-90.7855, station:"KSUS"};
 var RIVERS = [
   {name:"Mississippi at St. Louis",  id:"EADM7"},
   {name:"Missouri at St. Charles",   id:"SCLM7"},
@@ -3982,7 +3985,7 @@ function useMyLocation(explicit){
   },{enableHighAccuracy:false,timeout:9000,maximumAge:600000});
 }
 /* Type-ahead location search (Open-Meteo geocoder, restricted to the LSX CWA) */
-var sugTimer=null, sugItems=[], sugSeq=0;
+var sugTimer=null, sugItems=[], sugSeq=0, sugHot=-1;
 
 /* ===== LSX County Warning Area restriction =====
    The dashboard only searches places inside the St. Louis (LSX) forecast area.
@@ -4030,74 +4033,300 @@ function inLsx(admin1,admin2){
   var set=LSX_COUNTIES[abbrState(admin1)];
   return set?set.has(normCounty(admin2)):false;
 }
-function geoScore(r){
-  var s=0;
-  if(r.country_code==="US") s+=100;
-  if(r.admin1==="Missouri"||r.admin1==="Illinois") s+=25;
-  s+=Math.min(20,Math.log10((r.population||1))*4); // mild big-city boost
+/* ===== Writing the query the way the index spelled it =====
+   The Open-Meteo geocoder does no fuzzy matching whatsoever: a name that doesn't match the stored
+   spelling character-for-character returns an empty list, not a near miss. That is a problem in a
+   forecast area this full of saints, because the index is not consistent about them — it holds
+   "Lake Saint Louis", "East Saint Louis", "Saint Ann" and "City of Saint Peters" spelled out, but
+   "St. Louis" and "Mt. Vernon" abbreviated. Typed the way everyone here writes them, "Lake St.
+   Louis", "East St. Louis", "St. Ann" and "Ste. Genevieve" all came back with nothing at all, and
+   "St. Charles" came back as an airport plus a town in Kane County, Illinois.
+
+   So the search no longer asks one question. It rewrites what was typed into every spelling the
+   index might be using, asks for all of them at once, merges the answers, and ranks them by how
+   well they actually match what the visitor typed — abbreviation, apostrophe and case aside. */
+var ABBR_LONG={st:"saint",ste:"sainte",mt:"mount",mtn:"mountain",ft:"fort",pt:"point",
+               hts:"heights",spgs:"springs",jct:"junction",n:"north",s:"south",e:"east",w:"west"};
+var ABBR_SHORT={saint:"st",sainte:"ste",mount:"mt",mountain:"mtn",fort:"ft",point:"pt",
+                heights:"hts",springs:"spgs",junction:"jct"};
+/* Rewrites whole words only, so "Street" is never mistaken for "St" and a ZIP code (digits) is
+   passed through untouched. A trailing period is part of the word being replaced. */
+function abbrSwap(s,map){
+  return s.replace(/[A-Za-z]+\.?/g,function(w){
+    var bare=w.replace(/\.$/,"").toLowerCase();
+    return Object.prototype.hasOwnProperty.call(map,bare)?map[bare]:w;
+  });
+}
+/* "Wentzville, MO" and "Columbia IL" both returned nothing — the geocoder matches the place name
+   alone and treats the state as part of it. Peel it off and keep it as a ranking hint instead,
+   which is exactly what it is worth: it settles Columbia, IL vs. Columbia, MO. */
+var STATE_HINT={mo:"Missouri",missouri:"Missouri",il:"Illinois",ill:"Illinois",illinois:"Illinois"};
+function splitState(q){
+  var m=/^(.*[^,\s])[,\s]\s*([A-Za-z]{2,8})\.?$/.exec(q);
+  if(m){
+    var st=STATE_HINT[m[2].toLowerCase()];
+    if(st && m[1].trim().length>=2) return {text:m[1].trim(), state:st};
+  }
+  return {text:q, state:null};
+}
+var MAX_VARIANTS=6;
+function queryVariants(q){
+  var out=[], seen={};
+  function add(s){
+    s=String(s||"").replace(/\s+/g," ").trim();
+    if(s.length<2) return;
+    var k=s.toLowerCase();
+    if(!seen[k]){ seen[k]=1; out.push(s); }
+  }
+  var base=q.replace(/[‘’]/g,"'").replace(/^(?:city|town|village)\s+of\s+/i,"").replace(/\s+/g," ").trim();
+  /* The apostrophe forms, unchanged: "O Fallon" and "OFallon" return NOTHING while "O'Fallon"
+     matches, and iOS smart punctuation turns a typed straight quote into a curly one. */
+  var forms=[base,
+             base.replace(/\b([OoDd])\s+(?=[A-Za-z]{2})/g,"$1'"),
+             base.replace(/\b([OD])(?=[a-z]{2})/g,"$1'"),
+             base.replace(/'/g,"")];
+  if(/&/.test(base)) forms.push(base.replace(/\s*&\s*/g," and "));
+  else if(/\band\b/i.test(base)) forms.push(base.replace(/\band\b/ig,"&"));
+  forms.forEach(function(f){
+    add(f);
+    add(abbrSwap(f,ABBR_LONG));
+    add(abbrSwap(f,ABBR_SHORT));
+    add(f.replace(/\./g,""));
+    add(abbrSwap(f,ABBR_LONG).replace(/\./g,""));
+  });
+  add(base.replace(/\b(county|parish)\b/ig,""));
+  return out.slice(0,MAX_VARIANTS);
+}
+/* One spelling of a name compared to another, with everything the two indexes disagree about
+   flattened away: case, punctuation, the saint/st and mount/mt pairs, and the "City of" prefix
+   the geocoder puts on some incorporated places but not others. */
+function normName(s){
+  return String(s||"").toLowerCase()
+    .replace(/[‘’]/g,"'")
+    .replace(/^(?:city|town|village)\s+of\s+/,"")
+    .replace(/\bsainte\b/g,"ste").replace(/\bsaint\b/g,"st")
+    .replace(/\bmount\b/g,"mt").replace(/\bfort\b/g,"ft")
+    .replace(/[^a-z0-9]+/g," ").replace(/\s+/g," ").trim();
+}
+/* Locals write St. and Ste., and so does the NWS. The geocoder's spelled-out form is the same
+   place, so print the one the area actually uses. */
+function prettyPlace(s){
+  return String(s||"").replace(/^(?:City|Town|Village)\s+of\s+/i,"")
+    .replace(/\bSainte\b/g,"Ste.").replace(/\bSaint\b/g,"St.")
+    .replace(/\bSte\b(?!\.)/g,"Ste.").replace(/\bSt\b(?!\.)/g,"St.").trim();
+}
+/* Dice coefficient on character bigrams — the only fuzziness in the pipeline, and it is used
+   solely to rescue a typo AFTER every exact spelling has come back empty. Never to reorder
+   results that did match, where it would happily rank a wrong town above a right one. */
+function nameSimil(a,b){
+  if(a===b) return 1;
+  if(a.length<2||b.length<2) return 0;
+  var pool={}, hit=0, i;
+  for(i=0;i<a.length-1;i++){ var g=a.substr(i,2); pool[g]=(pool[g]||0)+1; }
+  for(i=0;i<b.length-1;i++){ var h=b.substr(i,2); if(pool[h]>0){ pool[h]--; hit++; } }
+  return (2*hit)/((a.length-1)+(b.length-1));
+}
+/* How well a candidate answers what was typed. Ranked ahead of population, because the visitor
+   who typed six characters of a small town's name meant that town, not the metro area. */
+function matchScore(cand,keys){
+  var best=0;
+  keys.forEach(function(k){
+    var s;
+    if(cand===k) s=100;
+    else if(cand.indexOf(k+" ")===0) s=72;                 // "st charles" → "st charles county smartt airport"
+    else if(cand.indexOf(k)===0) s=66;                     // still typing: "wentz" → "wentzville"
+    else if(k.indexOf(cand+" ")===0) s=56;                 // typed more than the place is called
+    else if((" "+cand+" ").indexOf(" "+k+" ")>=0) s=44;
+    else s=Math.round(nameSimil(cand,k)*42);
+    if(s>best) best=s;
+  });
+  return best;
+}
+/* A geocoder "result" is not necessarily a place anyone lives: searching Ste. Genevieve turns up
+   a flying club, and Lake St. Louis turns up its dam. Populated places win by a wide margin. */
+function featureScore(code){
+  code=String(code||"");
+  if(code.indexOf("PPL")===0) return 40;
+  if(code.indexOf("ADM")===0) return 8;
+  return -30;
+}
+function geoScore(r,ask){
+  var s=matchScore(normName(r.name),ask.keys)+featureScore(r.feature_code);
+  s+=Math.min(18,Math.log10((r.population||0)+1)*4.5);     // mild big-city tiebreak, never the lead
+  if(ask.state) s+=(r.admin1===ask.state)?14:-26;
   return s;
 }
 function sugLabel(r){
+  var name=prettyPlace(r.name);
+  var co=prettyPlace(String(r.admin2||"").replace(/\s+(?:County|Parish)$/i,""));
   var where=[];
-  if(r.admin1) where.push(r.admin1);
-  if(r.country_code!=="US"&&r.country) where.push(r.country);
-  return {name:r.name, where:where.join(", ")};
+  // The county only earns its place when it isn't just the town's name again (St. Louis, St. Charles).
+  if(co && normName(co)!==normName(name)) where.push(co+" Co.");
+  where.push(abbrState(r.admin1));
+  return {name:name, where:where.join(", ")};
 }
-function hideSug(){ var b=document.getElementById("locSug"); b.classList.remove("show"); b.innerHTML=""; sugItems=[]; }
+/* The input is a combobox, so the list being open and which row is highlighted have to be said out
+   loud, not just drawn. Without this the arrow keys move a background colour that a screen reader
+   never hears about. */
+function sugAria(open,active){
+  var inp=document.getElementById("locSearch"); if(!inp) return;
+  inp.setAttribute("aria-expanded",open?"true":"false");
+  if(active) inp.setAttribute("aria-activedescendant",active); else inp.removeAttribute("aria-activedescendant");
+}
+function hideSug(){
+  var b=document.getElementById("locSug");
+  b.classList.remove("show"); b.innerHTML=""; sugItems=[]; sugHot=-1; sugAria(false,null);
+}
 function showSugNote(msg){
   var b=document.getElementById("locSug");
   b.innerHTML='<div class="sug-note">'+msg+'</div>';
-  b.classList.add("show"); sugItems=[];
+  b.classList.add("show"); sugItems=[]; sugHot=-1;
+  sugAria(false,null);   // a note is not a list of options to arrow through
 }
-/* The Open-Meteo geocoder is strict about apostrophes: "O Fallon" and "OFallon" return NOTHING
-   while "O'Fallon" matches. Search the query as typed first, then fall back through apostrophe
-   variants (curly→straight for iOS smart punctuation, "O Fallon"→"O'Fallon", "Ofallon"→"O'fallon",
-   and apostrophes stripped) until one yields an in-area result. */
-function queryVariants(q){
-  var out=[q];
-  function add(s){ s=s.trim(); if(s.length>=2 && out.indexOf(s)<0) out.push(s); }
-  add(q.replace(/[‘’]/g,"'"));
-  add(q.replace(/\b([OoDd])\s+(?=[A-Za-z]{2})/g,"$1'"));
-  add(q.replace(/\b([OD])(?=[a-z]{2})/g,"$1'"));
-  add(q.replace(/['‘’]/g,""));
-  return out;
+/* Per-session memo, keyed by the exact string sent, so backspacing a character costs nothing.
+   Bounded, because every prefix of every word typed is its own key holding up to 100 records —
+   an afternoon of searching would otherwise accumulate a few thousand of them. Oldest key out
+   first: the visitor is refining the word in front of them, not returning to one from an hour ago. */
+var geoCache={}, geoCacheKeys=[], GEO_CACHE_MAX=80;
+function geoFetch(q){
+  var k=q.toLowerCase();
+  if(geoCache[k]) return geoCache[k];
+  var p=getJSON("https://geocoding-api.open-meteo.com/v1/search?count=100&countryCode=US&language=en&format=json&name="+encodeURIComponent(q))
+    .then(function(d){ return d.results||[]; })
+    .catch(function(e){                                    // a dropped connection must not be cached as "no such place"
+      delete geoCache[k];
+      var at=geoCacheKeys.indexOf(k); if(at>=0) geoCacheKeys.splice(at,1);
+      throw e;
+    });
+  geoCache[k]=p;
+  geoCacheKeys.push(k);
+  while(geoCacheKeys.length>GEO_CACHE_MAX){ delete geoCache[geoCacheKeys.shift()]; }
+  return p;
 }
-function geoSearch(q){
-  return getJSON("https://geocoding-api.open-meteo.com/v1/search?count=100&language=en&format=json&name="+encodeURIComponent(q))
-    .then(function(d){
-      return (d.results||[]).filter(function(r){
-        return r.country_code==="US" && (r.admin1==="Missouri"||r.admin1==="Illinois") && r.admin2 && inLsx(r.admin1,r.admin2)===true;
+/* Ask for every spelling at once and merge by geoname id. One variant failing is not the search
+   failing — only every variant failing is, and that is a connection problem worth saying out loud. */
+function geoLookup(variants){
+  var dead=0;
+  return Promise.all(variants.map(function(v){
+    return geoFetch(v).catch(function(){ dead++; return []; });
+  })).then(function(lists){
+    if(dead===variants.length) throw new Error("geocoder unreachable");
+    var seen={}, out=[];
+    lists.forEach(function(rs){
+      rs.forEach(function(r){
+        var id=(r.id!=null)?("#"+r.id):(r.name+"@"+r.latitude+","+r.longitude);
+        if(!seen[id]){ seen[id]=1; out.push(r); }
       });
     });
+    return out;
+  });
+}
+function inArea(r){
+  return r.country_code==="US" && (r.admin1==="Missouri"||r.admin1==="Illinois")
+      && !!r.admin2 && inLsx(r.admin1,r.admin2)===true;
+}
+/* The index matches historical alternate names it doesn't hand back, so a search for Springfield
+   returns Palmyra (Marion County, and therefore in area) alongside the Springfields that aren't.
+   Left alone that made Palmyra the ONE suggestion for "Springfield" — the right answer being out
+   of area is not the same as this being the right answer.
+
+   The test is comparative: only once something in the full result set really is named what was
+   typed does a coincidental hit have to clear the bar for "matches the name at all" — a prefix,
+   which is what half-typed type-ahead looks like, or better. If nothing anywhere matches by name,
+   the index matched on a name we can't see (a neighbourhood, an old name), and the only sane move
+   is to trust it — pruning would leave the visitor with nothing at all. */
+var RELEVANT=40;
+function pruneWeak(hits,all,ask){
+  var best=0;
+  all.forEach(function(r){ var m=matchScore(normName(r.name),ask.keys); if(m>best) best=m; });
+  if(best<44) return hits;
+  return hits.filter(function(r){ return matchScore(normName(r.name),ask.keys)>=RELEVANT; });
+}
+/* Last resort, and only once every exact spelling has come back empty: the geocoder matches on a
+   name PREFIX, so a query with a typo in its tail ("Chesterfeild", "Edwardsvile") still shares a
+   good prefix with the real name. Ask for that prefix, then keep only candidates that a bigram
+   comparison says are genuinely close to what was typed. */
+var FUZZ_FLOOR=0.66;
+function fuzzyRescue(variants,ask){
+  var stems=[], seen={};
+  variants.slice(0,3).forEach(function(v){
+    var stem=v.slice(0,Math.max(4,Math.ceil(v.length*0.62))).trim();
+    var k=stem.toLowerCase();
+    if(stem.length>=4 && stem.length<v.length && !seen[k]){ seen[k]=1; stems.push(stem); }
+  });
+  if(!stems.length) return Promise.resolve([]);
+  return geoLookup(stems.slice(0,2)).then(function(rs){
+    return rs.filter(function(r){
+      if(String(r.feature_code||"").indexOf("PPL")!==0 || !inArea(r)) return false;
+      var n=normName(r.name);
+      return ask.keys.some(function(k){ return nameSimil(n,k)>=FUZZ_FLOOR; });
+    });
+  }).catch(function(){ return []; });
+}
+function renderSuggestions(res,ask){
+  // Once a real town has matched, the dam and the flying club named after it are noise in a list
+  // of six. They stay only when nothing populated matched at all, where a lake or a park is
+  // plausibly the place the visitor wants a forecast for.
+  var ppl=res.filter(function(r){ return String(r.feature_code||"").indexOf("PPL")===0; });
+  if(ppl.length) res=ppl;
+  res.sort(function(a,b){ return geoScore(b,ask)-geoScore(a,ask); });
+  // Collapse true duplicates (the same town returned under two spellings) while keeping the two
+  // different O'Fallons, which differ by county. Sorted first, so the survivor is the best-scored.
+  var seen={};
+  res=res.filter(function(r){
+    var k=normName(r.name)+"|"+r.admin1+"|"+normCounty(r.admin2);
+    if(seen[k]) return false;
+    seen[k]=1; return true;
+  }).slice(0,6);
+  sugItems=res.map(function(r){
+    var l=sugLabel(r);
+    return {name:l.name+", "+abbrState(r.admin1), lat:r.latitude, lon:r.longitude, label:l};
+  });
+  sugHot=-1;
+  var b=document.getElementById("locSug");
+  b.innerHTML=sugItems.map(function(s,i){
+    return '<div class="sug" role="option" id="locSugOpt'+i+'" aria-selected="false" data-i="'+i+'"><span class="sname">'+esc(s.label.name)+'</span><span class="swhere">'+esc(s.label.where)+'</span></div>';
+  }).join("");
+  b.classList.add("show");
+  sugAria(true,null);
+}
+/* Nothing in the area matched. Say which of the two things went wrong, because they need
+   different responses from the visitor: a place that exists but sits outside the CWA is the
+   dashboard's limit, while no place at all is a spelling to fix. */
+function noMatchNote(q,all,ask){
+  // Naming the out-of-area town takes the whole name, not a shared opening: three characters into
+  // "Ste. Genevieve" the index offers Ste. Marie, Illinois, and "Ste. Marie, IL is outside the
+  // area" is a confusing thing to read while still typing the town that isn't.
+  var out=all.filter(function(r){ return String(r.feature_code||"").indexOf("PPL")===0 && matchScore(normName(r.name),ask.keys)===100; });
+  if(out.length){
+    // Prefer a two-state answer when the name is shared nationally: "Mount Vernon, IL is outside
+    // the area" tells a visitor here something; the bigger one in Washington does not.
+    function near(r){ return (r.admin1==="Missouri"||r.admin1==="Illinois")?1:0; }
+    out.sort(function(a,b){ return (near(b)-near(a))||(geoScore(b,ask)-geoScore(a,ask)); });
+    var best=out[0];
+    showSugNote(esc(prettyPlace(best.name)+", "+abbrState(best.admin1))+" is outside the St. Louis (LSX) forecast area, which is all this dashboard covers.");
+  }else{
+    showSugNote('No LSX-area city or town matches "'+esc(q)+'".');
+  }
 }
 function fetchSuggestions(q){
   var seq=++sugSeq;   // guard against out-of-order responses (a slow reply for an old query must not clobber newer results)
+  var parsed=splitState(q);
+  var variants=queryVariants(parsed.text);
+  if(!variants.length){ hideSug(); return; }
+  // Every spelling we are willing to accept as "what the visitor meant", normalised for comparison.
+  var ask={state:parsed.state, keys:variants.map(normName).filter(function(k,i,a){ return k && a.indexOf(k)===i; })};
+  if(!sugItems.length) showSugNote("Searching…");
   ensureLsxCounties().then(function(){
-    var variants=queryVariants(q);
-    function tryVariant(i){
-      if(i>=variants.length) return [];
-      return geoSearch(variants[i]).then(function(res){ return res.length?res:tryVariant(i+1); });
-    }
-    return tryVariant(0);
-  })
-  .then(function(res){
-    if(seq!==sugSeq) return;
-    if(!res.length){ showSugNote('No LSX-area match for "'+esc(q)+'". This dashboard only covers the St. Louis (LSX) forecast area.'); return; }
-    res.sort(function(a,b){ return geoScore(b)-geoScore(a); });
-    // Dedupe identical labels (e.g. O'Fallon the city vs. the St. Louis neighborhood) — keep the higher-scored
-    var seenLbl={};
-    res=res.filter(function(r){ var k=(r.name+"|"+r.admin1).toLowerCase(); if(seenLbl[k]) return false; seenLbl[k]=1; return true; });
-    res=res.slice(0,6);
-    sugItems=res.map(function(r){
-      var l=sugLabel(r);
-      return {name:l.name+(r.admin1&&r.country_code==="US"?", "+abbrState(r.admin1):(l.where?", "+l.where:"")),
-              lat:r.latitude, lon:r.longitude, label:l};
+    return geoLookup(variants).then(function(all){
+      var hits=pruneWeak(all.filter(inArea),all,ask);
+      if(hits.length) return {hits:hits, all:all};
+      return fuzzyRescue(variants,ask).then(function(f){ return {hits:f, all:all}; });
     });
-    var b=document.getElementById("locSug");
-    b.innerHTML=sugItems.map(function(s,i){
-      return '<div class="sug" role="option" data-i="'+i+'"><span class="sname">'+esc(s.label.name)+'</span><span class="swhere">'+esc(s.label.where)+'</span></div>';
-    }).join("");
-    b.classList.add("show");
+  }).then(function(r){
+    if(seq!==sugSeq) return;
+    if(r.hits.length) renderSuggestions(r.hits,ask);
+    else noMatchNote(q,r.all,ask);
   }).catch(function(){ if(seq===sugSeq) showSugNote("Search failed — check your connection and try again."); });
 }
 var STATE_ABBR={"Alabama":"AL","Alaska":"AK","Arizona":"AZ","Arkansas":"AR","California":"CA","Colorado":"CO","Connecticut":"CT","Delaware":"DE","Florida":"FL","Georgia":"GA","Hawaii":"HI","Idaho":"ID","Illinois":"IL","Indiana":"IN","Iowa":"IA","Kansas":"KS","Kentucky":"KY","Louisiana":"LA","Maine":"ME","Maryland":"MD","Massachusetts":"MA","Michigan":"MI","Minnesota":"MN","Mississippi":"MS","Missouri":"MO","Montana":"MT","Nebraska":"NE","Nevada":"NV","New Hampshire":"NH","New Jersey":"NJ","New Mexico":"NM","New York":"NY","North Carolina":"NC","North Dakota":"ND","Ohio":"OH","Oklahoma":"OK","Oregon":"OR","Pennsylvania":"PA","Rhode Island":"RI","South Carolina":"SC","South Dakota":"SD","Tennessee":"TN","Texas":"TX","Utah":"UT","Vermont":"VT","Virginia":"VA","Washington":"WA","West Virginia":"WV","Wisconsin":"WI","Wyoming":"WY","District of Columbia":"DC"};
@@ -4109,6 +4338,21 @@ function pickSuggestion(i){
   var inp=document.getElementById("locSearch");
   inp.value=""; inp.blur();
   setLocation({name:cleanPlace(s.name),lat:s.lat,lon:s.lon,station:null},{save:true});
+}
+/* The .hot style was in the sheet from the start with nothing ever applying it — the list could
+   only be clicked. Arrow keys move it, Enter takes it, and the row scrolls itself into view for
+   the short list the phone layout shows. */
+function moveHot(d){
+  if(!sugItems.length) return;
+  sugHot=(sugHot+d+sugItems.length)%sugItems.length;
+  var rows=document.getElementById("locSug").querySelectorAll(".sug");
+  for(var i=0;i<rows.length;i++){
+    var on=(i===sugHot);
+    rows[i].classList.toggle("hot",on);
+    rows[i].setAttribute("aria-selected",on?"true":"false");
+    if(on&&rows[i].scrollIntoView) rows[i].scrollIntoView({block:"nearest"});
+  }
+  sugAria(true,"locSugOpt"+sugHot);
 }
 function initLocationUI(){
   var inp=document.getElementById("locSearch"), form=document.getElementById("locForm"), box=document.getElementById("locSug");
@@ -4122,17 +4366,20 @@ function initLocationUI(){
   });
   form.addEventListener("submit",function(e){   // iOS "search"/"go" key lands here reliably
     e.preventDefault();
-    if(sugItems.length){ pickSuggestion(0); }
+    if(sugItems.length){ pickSuggestion(sugHot>=0?sugHot:0); }
     else{
       var q=inp.value.trim();
-      if(q.length>=2) fetchSuggestions(q);
+      if(q.length>=2){ clearTimeout(sugTimer); fetchSuggestions(q); }
     }
   });
   box.addEventListener("mousedown",function(e){ // mousedown beats input blur
     var s=e.target.closest(".sug");
     if(s){ e.preventDefault(); pickSuggestion(+s.dataset.i); }
   });
-  inp.addEventListener("keydown",function(e){ if(e.key==="Escape") hideSug(); });
+  inp.addEventListener("keydown",function(e){
+    if(e.key==="Escape"){ hideSug(); return; }
+    if(e.key==="ArrowDown"||e.key==="ArrowUp"){ e.preventDefault(); moveHot(e.key==="ArrowDown"?1:-1); }
+  });
   inp.addEventListener("blur",function(){ setTimeout(hideSug,250); });
 }
 function initLocation(){
