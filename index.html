@@ -124,7 +124,8 @@
      and only direct grid children have an `order`. The two stacks share order -6 and fall back to
      DOM order between them, which is already conditions-then-radar. */
   body.storm #alertsCard{order:-7}
-  body.storm .stack{order:-6}      /* left: Now & Next 24 Hours + AQI · right: radar + 7-day */
+  body.storm .stack{order:-6}      /* left: Now & Next 24 Hours + AQI · right: radar */
+  body.storm #callCard{order:-3}   /* advice ranks below the radar while a warning is live */
   body.storm #afdCard{order:-2}
   body.storm .masonry{order:-1}    /* prime card packs to its front */
   body.storm #alertsCard,body.storm #radarCard,body.storm .storm-prime{
@@ -196,8 +197,11 @@
      card happened to have — which is how it ended up 660px tall on a calm day and PORTRAIT (0.67)
      at 1000px, the worst possible shape for weather that moves west to east. Its height is now its
      own decision: an aspect-locked landscape strip. */
-  @media(max-width:1100px){.grid>.stack.col-8{grid-column:span 6}}
-  @media(max-width:680px){.grid>.stack.col-8{grid-column:span 12}}
+  /* Below 1100px the pair stops being a pair. At ~474px per column the left one still has to carry
+     the reading, the metrics grid and the 24-hour chart while the right has only the radar, so they
+     came out ~400px apart — and both were cramped: a 438x246 radar and a 440px chart. Stacking them
+     costs about the same vertical space the hole did, and both get the full width instead. */
+  @media(max-width:1100px){.grid>.stack{grid-column:span 12}}
 
   /* ===== Phone polish (≤480px): prevent any crowding/overflow ===== */
   /* never let a stray wide element create a horizontal scrollbar */
@@ -988,6 +992,13 @@
     <div id="alerts"><div class="loading">Loading alerts…</div></div>
   </section>
 
+  <!-- THE CALL — plain-English verdicts derived from the hourly forecast + AQI. This is the page
+       reasoning on the visitor's behalf rather than handing them numbers, so it sits directly under
+       the alerts: safety first, then "here is what today actually means for you". -->
+  <section class="card col-12" id="callCard">
+    <div class="callrow" id="callRow"></div>
+  </section>
+
   <!-- ── RIGHT NOW: the hero band. Everything a visitor opens this page to learn is in the
        first screen — conditions on the left, radar on the right, the verdicts underneath. ── -->
   <div class="railhead col-12">
@@ -1055,12 +1066,6 @@
     </div>
     <div class="imgcap" id="rsCap"><span>Official NOAA/NWS radar &middot; tap a <b>warning polygon</b> to jump to its alert &middot; basemap &copy; CARTO/OSM</span><span>auto-updates</span></div>
   </section>
-    <!-- THE CALL — plain-English verdicts derived from the hourly forecast + AQI. Paired with the
-         radar rather than given its own full-width band: "here is what is coming" and "here is what
-         to do about it" belong together, and it uses the column height the compact radar frees. -->
-    <section class="card" id="callCard">
-      <div class="callrow" id="callRow"></div>
-    </section>
   </div>
 
   <!-- ── THE WEEK AHEAD & DEEPER CONTEXT ── -->

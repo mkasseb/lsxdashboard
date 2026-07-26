@@ -71,11 +71,17 @@ helpers → ~15 per-card loaders → derived renderers → orchestration → sch
 A few things are load-bearing and worth understanding before changing anything:
 
 **The page is ordered by what a visitor came for.** Alerts first (in calm weather that card
-collapses to a single all-clear line), then the hero band — "Now & Next 24 Hours" on the left,
-radar and The Call on the right — then the forecast discussion, and finally the masonry.
-`.railhead` labels name each band; Storm Mode reorders the grid for urgency, so those labels hide
-when it engages. Only *direct* grid children get an `order`, so cards that live inside a `.stack`
-(the 24-hour chart, the radar, The Call) ride up with the stack rather than carrying their own.
+collapses to a single all-clear line), then The Call, then the hero band — "Now & Next 24 Hours"
+on the left, radar on the right — then the forecast discussion, and finally the masonry. The Call
+is the page reasoning on the visitor's behalf rather than handing them numbers, so it ranks
+directly under safety. Storm Mode is the one exception: an `order` drops it below the hero, because
+while a warning is live the radar outranks advice.
+
+`.railhead` labels name each band and hide under `body.storm`, where the grid reorders for urgency
+and a band label would lie about what follows it. Only *direct* grid children get an `order`, so
+cards that live inside a `.stack` (the 24-hour chart, the radar) ride up with the stack rather than
+carrying their own — a rule worth remembering, because an `order` on a nested card is silently a
+no-op.
 
 **The hero card is two loaders in one card.** `#current` (the reading, today's range with "now"
 marked inside it, sun times) and `#hourly24` (the 24-hour chart) are *siblings* inside
@@ -85,10 +91,12 @@ with it, breaking the rule below. The chart measures its own container and thins
 survives the narrower column; it shows ~6 hour labels there against ~24 at full width, with
 per-hour detail still available on hover.
 
-**The hero row is a pair of stacks.** Left is the conditions card (+ AQI when it's notable); right
-is the radar and The Call. Both carry breakpoint overrides, because the generic `col-8`/`col-4`
-rules would otherwise drop one to full width while the other stayed at half, stranding an empty
-half-row.
+**The hero row is a pair of stacks, but only on wide screens.** Left is the conditions card (+ AQI
+when it's notable); right is the radar. Below 1100px they stop being a pair and both go full width:
+at ~474px per column the left one still had to carry the reading, the metrics grid and the 24-hour
+chart while the right had only the radar, so they came out ~400px apart *and* both were cramped —
+a 438x246 radar and a 440px chart showing 6 hour labels. Stacking costs roughly the vertical space
+the hole wasted and gives both the full width instead: a 928x521 radar and 12 hour labels.
 
 **The radar is a peek, not the product.** Its height comes from an `aspect-ratio`, never from
 leftover space. An earlier version stretched the map to match the left column, which made its size
@@ -151,11 +159,10 @@ container and would otherwise paint into a stale viewport.
 ## Known gaps
 
 - No `aria-expanded` on the expandable alert and forecast rows.
-- Between 681px and 1100px the hero's two columns are noticeably unequal (~240px), because the
-  left column carries the reading, the metrics grid and the 24-hour chart while the right carries
-  only a narrow radar and The Call. It is page-edge whitespace rather than a framed hole, and the
-  alternatives — stacking the pair, or growing the radar until it goes portrait again — are both
-  worse.
+- The hero pair still runs ~110-170px unequal at desktop widths, since the left column's height is
+  content-driven and the radar's is fixed by its aspect ratio. It is page-edge whitespace under the
+  radar rather than a framed hole. Growing the radar to close it is exactly the mistake that made
+  the map portrait in the first place, so it stays.
 - The masonry positions cards absolutely after sorting by importance and height, so visual order
   diverges from DOM order — which is what keyboard and screen-reader order follow.
 - `saveSnapshot()` serialises synchronously on `visibilitychange`.
