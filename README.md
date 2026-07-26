@@ -7,8 +7,8 @@ Not an official NWS product. During severe weather, defer to official warnings a
 
 ## What it is
 
-One file. [`index.html`](index.html) is the entire application: ~730 lines of CSS, ~270 lines of
-markup, and ~3,400 lines of JavaScript, all inline.
+One file. [`index.html`](index.html) is the entire application: ~840 lines of CSS, ~265 lines of
+markup, and ~3,700 lines of JavaScript, all inline.
 
 - **No build step.** No bundler, no transpiler, no `package.json`. Edit the file, reload the page.
 - **No API keys.** Every feed was chosen because it is keyless and CORS-open, so the whole thing
@@ -58,7 +58,6 @@ All public-domain or openly licensed, all keyless.
 | `data.rcc-acis.org` | 1991–2020 normals, daily records, rankings, dry streaks, freeze dates |
 | Open-Meteo | Air quality, UV index, and the location geocoder |
 | NESDIS / GOES-19 | Satellite imagery |
-| Blitzortung | Live lightning (embedded iframe) |
 
 Basemap © CARTO & OpenStreetMap contributors. Weather icons by
 [Meteocons](https://github.com/basmilius/weather-icons) (Bas Milius, MIT).
@@ -69,6 +68,66 @@ The script is sectioned by `/* ==== BANNER ==== */` comments and reads top to bo
 helpers → ~15 per-card loaders → derived renderers → orchestration → scheduler → layout engine.
 
 A few things are load-bearing and worth understanding before changing anything:
+
+**The page is ordered by what a visitor came for.** Alerts first (in calm weather that card
+collapses to a single all-clear line), then the Bottom Line, then the hero band — "Now & Next 24
+Hours" on the left, radar on the right — then the forecast discussion, and finally the masonry.
+The Bottom Line (né The Call; ids are still `callCard`/`callRow`) is the page reasoning on the
+visitor's behalf rather than handing them numbers: rain/storm windows, heat and cold, UV with a
+burn clock, wind, air quality, a temperature-crash warning, climate records — and one synthesized
+verdict that scores every daylight hour on comfort, rain risk and wind to name the best two-hour
+window to be outside, spoken only when the day has adversity worth dodging. It ranks directly
+under safety. Storm Mode is the one exception: an `order` drops it below the hero, because while
+a warning is live the radar outranks advice.
+
+`.railhead` labels name each band and hide under `body.storm`, where the grid reorders for urgency
+and a band label would lie about what follows it. Only *direct* grid children get an `order`, so
+cards that live inside a `.stack` (the 24-hour chart, the radar) ride up with the stack rather than
+carrying their own — a rule worth remembering, because an `order` on a nested card is silently a
+no-op.
+
+**The hero card is two loaders in one card.** `#current` (the reading, today's range with "now"
+marked inside it, sun times) and `#hourly24` (the 24-hour chart) are *siblings* inside
+`#currentCard`, never nested. `loadCurrent()` rebuilds `#current` wholesale — including on failure
+— so nesting the chart inside it would let a dead observation feed take the forecast chart down
+with it, breaking the rule below. The chart measures its own container and thins its labels, so it
+survives the narrower column; it shows ~6 hour labels there against ~24 at full width, with
+per-hour detail still available on hover.
+
+**The hero row is a pair of stacks, but only on wide screens.** Left is the conditions card (+ AQI
+when it's notable); right is the radar. Below 1100px they stop being a pair and both go full width:
+at ~474px per column the left one still had to carry the reading, the metrics grid and the 24-hour
+chart while the right had only the radar, so they came out ~400px apart *and* both were cramped —
+a 438x246 radar and a 440px chart showing 6 hour labels. Stacking costs roughly the vertical space
+the hole wasted and gives both the full width instead: a 928x521 radar and 12 hour labels.
+
+**The radar earns its slot.** Like the AQI card, it only appears when it has a story to tell:
+Storm Mode, an active warning/watch, thunder in the next 12 hours, precipitation falling now
+(`data-wx`), or a ≥40% rain chance inside the next 6 hours — `radarWorthy()` in the source. On a
+clear day the card (satellite tab included) is hidden, the conditions card takes the full row, and
+the 24-hour chart gets the whole width back — all ~24 hour labels, exactly the thing the hero
+merge had traded away. A rail button summons it by hand; the ✕ to dismiss exists only on a
+hand-summoned card, since an auto-shown one would re-appear on the next update. While hidden it
+fetches no tiles (`refreshRadarLayer` returns early), and the show path re-renders the 24-hour
+chart, because the chart only re-measures on *window* resize and this toggle resizes its container
+without one.
+
+**When shown, the radar is a peek, not the product.** Its height comes from an `aspect-ratio`,
+never from leftover space. An earlier version stretched the map to match the left column, which made its size
+a side effect of how much content the conditions card happened to have — that is how it ended up
+660px tall on a calm day and *portrait* (0.67) at 1000px, the worst possible shape for weather that
+moves west to east. It is now 16:9 (4:3 on phones), so it is landscape at every width, with
+fullscreen a click away for the "where exactly, and when" case. Storm Mode widens it to 16:10 (1:1
+on phones): the page already knows when radar is the story, so the strip earns space back exactly
+then rather than being large all year for the few days it matters.
+
+**Fullscreen moves the card, not the map.** `body.radar-full` makes `#radarCard` fixed and
+full-viewport; the Leaflet instance, the loop, the warning polygons and the satellite tab are
+untouched, so nothing needs re-initialising. Escape closes it, focus returns to whatever opened it,
+and body scroll is locked so a wheel gesture over the map can't scroll the page behind it. Leaflet
+is told to `invalidateSize()` twice — once immediately, once after the transition — or it renders
+tiles for the old viewport. A `ResizeObserver` on `#radar` covers the same hazard for Storm Mode's
+resize, which no window event announces.
 
 **Location generations.** Every fetch that describes *a place* captures the generation it was
 issued under via `locGuard()`, and checks `fresh()` before writing to the DOM. `setLocation()`
@@ -97,9 +156,29 @@ and rewrites the banner.
 **Adding a card** means touching five places: the markup, the `RANK` map in `layoutMasonry`'s
 `tier()`, `SNAP_PARTS`, the `SCHED` table, and `clearLocationUI`/`resetLocationState`.
 
+**Adding a location-scoped loader** means a sixth: the `jobs` array inside `setLocation()`. `SCHED`
+only governs the periodic refresh, and `refreshAll()` only covers the initial paint — a loader
+missing from `setLocation` looks like it works, then silently never re-runs when the visitor
+changes town. Worse, it can appear broken on first load too: geolocation resolves *after* the first
+`refreshAll()`, so the generation bumps, the in-flight fetch is discarded by its own `fresh()`
+guard, and nothing re-issues it.
+
+**Radar and satellite are one widget, two views.** They answer the same question at different
+scales, so they share `#radarCard` and a tab swaps which is visible. They are not layers on one
+map: the radar is a live WMS tile source, while NESDIS's GOES product is a fixed-extent sector
+*image*, not tiles, so it cannot be georeferenced under the radar without a different provider.
+Switching back to the radar calls `invalidateSize()` — Leaflet sized the map against a hidden
+container and would otherwise paint into a stale viewport.
+
 ## Known gaps
 
 - No `aria-expanded` on the expandable alert and forecast rows.
-- The masonry positions cards absolutely after sorting by importance and height, so visual order
-  diverges from DOM order — which is what keyboard and screen-reader order follow.
+- The hero pair (when the radar has earned its slot) still runs ~110-170px unequal at desktop
+  widths, since the left column's height is
+  content-driven and the radar's is fixed by its aspect ratio. It is page-edge whitespace under the
+  radar rather than a framed hole. Growing the radar to close it is exactly the mistake that made
+  the map portrait in the first place, so it stays.
+- The masonry positions cards absolutely after sorting by importance and height. `reorderMasonryDOM`
+  re-syncs DOM order to visual order after each pack; it skips only if a card hosts an iframe
+  (re-inserting reloads them), and nothing in the masonry does today.
 - `saveSnapshot()` serialises synchronously on `visibilitychange`.
