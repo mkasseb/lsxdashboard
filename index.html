@@ -2135,10 +2135,10 @@ function loadAlerts(){
     var warn=null;
     for(var i=0;i<feats.length;i++){if((feats[i].properties.event||"").toLowerCase().indexOf("warning")>=0){warn=feats[i].properties;break;}}
     setStormMode(warn);
-    // Gate smart.warning to convective/flood: it feeds radarWorthy(), and a Heat or Winter Storm
-    // Warning shouldn't summon the radar by itself (falling snow already does via data-wx).
+    // Gate smart.warning by family: it feeds radarWorthy(), and a Heat or Winter Storm Warning
+    // shouldn't summon the radar by itself (falling snow already does via data-wx).
     var warnFam=warn?eventFamily(warn.event):null;
-    smart.warning=!!warn&&(warnFam==="convective"||warnFam==="flood");
+    smart.warning=!!warn&&!!RADAR_FAMILIES[warnFam];
     smart.watch=feats.some(function(f){
       var ev=(f.properties.event||"").toLowerCase();
       return ev.indexOf("tornado watch")>=0||ev.indexOf("severe thunderstorm watch")>=0;
@@ -2290,13 +2290,19 @@ function eventFamily(ev){
   if(/wind|gale|storm warning|hurricane|tropical/.test(ev)) return "wind";
   return "convective"; // default treatment (red)
 }
+/* Which warning families put something ON the radar. Every family engages Storm Mode — theme,
+   banner, prime card — but only convection and flooding are things you go to a reflectivity map to
+   find. Heat, wind, fire and winter warnings describe the air, not echoes in it, so they leave the
+   radar slot to the conditions card. Falling snow still summons the radar by itself through
+   data-wx, which is the case a Winter Storm Warning would have wanted it for anyway. */
+var RADAR_FAMILIES={convective:1,flood:1};
 // Per-family presentation: icon, the most-relevant card to float to the prime slot, and the banner sub-tone.
 var FAMILY_CFG={
   convective:{ico:"⛈️", prime:"obsCard",    sub:"Radar & alerts up top. Seek sturdy shelter if warned."},
-  winter:    {ico:"❄️", prime:"obsCard",    sub:"Radar & regional temps up top. Bundle up, drive safe."},
+  winter:    {ico:"❄️", prime:"obsCard",    sub:"Regional temps up top. Bundle up, drive safe."},
   flood:     {ico:"🌊", prime:"riversCard", sub:"River gauges up top. Turn around, don't drown."},
   heat:      {ico:"🥵", prime:"obsCard",    sub:"Regional feels-like up top. Hydrate, find shade & AC."},
-  wind:      {ico:"💨", prime:"obsCard",    sub:"Radar & regional winds up top. Secure loose objects."},
+  wind:      {ico:"💨", prime:"obsCard",    sub:"Regional winds up top. Secure loose objects."},
   fire:      {ico:"🔥", prime:"riskCard",   sub:"Fire-weather risk up top. Avoid any open flame."}
 };
 function setStormMode(warnProps){
@@ -3726,14 +3732,19 @@ document.addEventListener("click",function(e){
 });
 
 /* ---- Conditional radar ----
-   The card is shown when the sky is a story and hidden when it isn't. "Worthy" means: Storm Mode,
-   an active warning/watch, thunder in the next 12 h, precipitation falling now (data-wx), or a
-   ≥40% rain chance inside the next 6 hours — i.e. every case where a visitor would actually open
-   a radar. Manual show (the rail button) overrides a calm verdict but never suppresses a stormy
-   one; the ✕ only needs to exist for the manual case. */
+   The card is shown when the sky is a story and hidden when it isn't. "Worthy" means: Storm Mode
+   for a radar-shaped family (see RADAR_FAMILIES), a convective/flood warning or a tornado/severe
+   watch, precipitation falling now (data-wx), or thunder or a ≥40% rain chance inside the next 6
+   hours — i.e. every case where a visitor would actually open a radar. A dry warning (heat, wind,
+   fire) still gets the full Storm Mode treatment, just not the radar. Manual show (the rail button)
+   overrides a calm verdict but never suppresses a stormy one; the ✕ only needs to exist for the
+   manual case. */
 var radarManual=false;
 function radarWorthy(){
-  if(document.body.classList.contains("storm")) return true;
+  /* Storm Mode on its own isn't the test — it engages for every warning family, including the dry
+     ones, so an Extreme Heat Warning used to hoist a radar nobody opened the page for. Ask what
+     KIND of storm it is; smart.warning is gated the same way, from the same table. */
+  if(document.body.classList.contains("storm")&&RADAR_FAMILIES[STORM_FAMILY]) return true;
   if(smart.warning||smart.watch) return true;
   var wx=document.body.getAttribute("data-wx");
   if(wx==="rain"||wx==="storm"||wx==="snow") return true;
