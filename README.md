@@ -71,9 +71,11 @@ helpers → ~15 per-card loaders → derived renderers → orchestration → sch
 A few things are load-bearing and worth understanding before changing anything:
 
 **The page is ordered by what a visitor came for.** Alerts first (in calm weather that card
-collapses to a single all-clear line), then the hero band — "Now & Next 24 Hours" beside the radar
-— then The Call, the forecast discussion, and finally the masonry. `.railhead` labels name each
-band; Storm Mode reorders the grid for urgency, so those labels hide when it engages.
+collapses to a single all-clear line), then the hero band — "Now & Next 24 Hours" on the left,
+radar and The Call on the right — then the forecast discussion, and finally the masonry.
+`.railhead` labels name each band; Storm Mode reorders the grid for urgency, so those labels hide
+when it engages. Only *direct* grid children get an `order`, so cards that live inside a `.stack`
+(the 24-hour chart, the radar, The Call) ride up with the stack rather than carrying their own.
 
 **The hero card is two loaders in one card.** `#current` (the reading, today's range with "now"
 marked inside it, sun times) and `#hourly24` (the 24-hour chart) are *siblings* inside
@@ -83,12 +85,27 @@ with it, breaking the rule below. The chart measures its own container and thins
 survives the narrower column; it shows ~6 hour labels there against ~24 at full width, with
 per-hour detail still available on hover.
 
-**The hero row is a pair, and it stretches.** `#radarCard` carries its own breakpoint overrides so
-the generic `col-8`/`col-4` rules can't drop the radar to full width while the hero stays at half.
-Above 680px both sides are `align-self:stretch` and the radar map flexes, so the left column's
-content — which has no fixed height — sets the row height and the map absorbs the slack rather than
-stranding a gap. A `ResizeObserver` on `#radar` calls `invalidateSize()`, because that height moves
-as feeds land and Leaflet only watches the window.
+**The hero row is a pair of stacks.** Left is the conditions card (+ AQI when it's notable); right
+is the radar and The Call. Both carry breakpoint overrides, because the generic `col-8`/`col-4`
+rules would otherwise drop one to full width while the other stayed at half, stranding an empty
+half-row.
+
+**The radar is a peek, not the product.** Its height comes from an `aspect-ratio`, never from
+leftover space. An earlier version stretched the map to match the left column, which made its size
+a side effect of how much content the conditions card happened to have — that is how it ended up
+660px tall on a calm day and *portrait* (0.67) at 1000px, the worst possible shape for weather that
+moves west to east. It is now 16:9 (4:3 on phones), so it is landscape at every width, with
+fullscreen a click away for the "where exactly, and when" case. Storm Mode widens it to 16:10 (1:1
+on phones): the page already knows when radar is the story, so the strip earns space back exactly
+then rather than being large all year for the few days it matters.
+
+**Fullscreen moves the card, not the map.** `body.radar-full` makes `#radarCard` fixed and
+full-viewport; the Leaflet instance, the loop, the warning polygons and the satellite tab are
+untouched, so nothing needs re-initialising. Escape closes it, focus returns to whatever opened it,
+and body scroll is locked so a wheel gesture over the map can't scroll the page behind it. Leaflet
+is told to `invalidateSize()` twice — once immediately, once after the transition — or it renders
+tiles for the old viewport. A `ResizeObserver` on `#radar` covers the same hazard for Storm Mode's
+resize, which no window event announces.
 
 **Location generations.** Every fetch that describes *a place* captures the generation it was
 issued under via `locGuard()`, and checks `fresh()` before writing to the DOM. `setLocation()`
@@ -134,6 +151,11 @@ container and would otherwise paint into a stale viewport.
 ## Known gaps
 
 - No `aria-expanded` on the expandable alert and forecast rows.
+- Between 681px and 1100px the hero's two columns are noticeably unequal (~240px), because the
+  left column carries the reading, the metrics grid and the 24-hour chart while the right carries
+  only a narrow radar and The Call. It is page-edge whitespace rather than a framed hole, and the
+  alternatives — stacking the pair, or growing the radar until it goes portrait again — are both
+  worse.
 - The masonry positions cards absolutely after sorting by importance and height, so visual order
   diverges from DOM order — which is what keyboard and screen-reader order follow.
 - `saveSnapshot()` serialises synchronously on `visibilitychange`.

@@ -120,12 +120,11 @@
      chart below the entire masonry band, and left a 4-col gutter beside the radar (its row
      partner, the Current stack, wasn't lifted with it). Storm order: alerts → current+radar →
      The Call → The Pulse → masonry with the event's prime card packed first.
-     The 24h chart no longer needs its own hoist — timing is THE storm question, and the chart now
-     rides up with the Current stack it lives inside. */
+     Neither the 24h chart nor the radar needs its own hoist any more: both live inside a .stack,
+     and only direct grid children have an `order`. The two stacks share order -6 and fall back to
+     DOM order between them, which is already conditions-then-radar. */
   body.storm #alertsCard{order:-7}
-  body.storm .stack{order:-6}      /* Now & Next 24 Hours + AQI — stays beside radar, above the fold */
-  body.storm #radarCard{order:-5}
-  body.storm #callCard{order:-3}
+  body.storm .stack{order:-6}      /* left: Now & Next 24 Hours + AQI · right: radar + 7-day */
   body.storm #afdCard{order:-2}
   body.storm .masonry{order:-1}    /* prime card packs to its front */
   body.storm #alertsCard,body.storm #radarCard,body.storm .storm-prime{
@@ -189,21 +188,16 @@
   .masonry:not(.mready)>.card{position:static}
   @media(max-width:1100px){.col-8,.col-7,.col-5,.col-6{grid-column:span 12}.col-4,.col-3{grid-column:span 6}}
   @media(max-width:680px){.col-4,.col-3{grid-column:span 12}body{padding:12px}}
-  /* The hero row is a PAIR. The generic rules above drop a col-8 to full width while a col-4 stays
-     at half, which for Current Conditions + Radar meant a half-width hero with an empty half-row
-     beside it. Keep the two together until the single-column breakpoint takes them both. */
-  @media(max-width:1100px){#radarCard{grid-column:span 6}}
-  @media(max-width:680px){#radarCard{grid-column:span 12}}
-  /* Hero row heights are driven by the left column's content, which no longer has a fixed size now
-     that the 24-hour chart lives there. Rather than let the radar strand whatever difference is
-     left over, stretch it and let the map absorb the slack — a taller radar is strictly better. */
-  @media(min-width:681px){
-    .grid>.stack.col-4,.grid>#radarCard{align-self:stretch}
-    #radarCard{display:flex;flex-direction:column}
-    #radarCard .rs-view{flex:1 1 auto}
-    #radarCard .imgwrap{flex:1 1 auto;display:flex;min-height:420px}
-    #radarCard #radar{height:auto;flex:1 1 auto;min-height:420px}
-  }
+  /* The hero row is a PAIR of stacks. The generic rules above drop a col-8 to full width while a
+     col-4 stays at half, which meant a half-width hero with an empty half-row beside it. Keep the
+     two together until the single-column breakpoint takes them both.
+     NOTE: the radar deliberately does NOT stretch to match the left column any more. Letting the
+     map absorb the leftover height made its size a side effect of how much content the conditions
+     card happened to have — which is how it ended up 660px tall on a calm day and PORTRAIT (0.67)
+     at 1000px, the worst possible shape for weather that moves west to east. Its height is now its
+     own decision: an aspect-locked landscape strip. */
+  @media(max-width:1100px){.grid>.stack.col-8{grid-column:span 6}}
+  @media(max-width:680px){.grid>.stack.col-8{grid-column:span 12}}
 
   /* ===== Phone polish (≤480px): prevent any crowding/overflow ===== */
   /* never let a stray wide element create a horizontal scrollbar */
@@ -470,6 +464,45 @@
     border:1px solid var(--border);box-shadow:var(--shadow);border-radius:9px;padding:6px 10px}
   .leaflet-tooltip.stn-tip:before{display:none}
   .imgfail{padding:22px;text-align:center;color:var(--muted);font-size:13px;line-height:1.6}
+
+  /* ===== Radar sizing: a peek, not the product =====
+     Compact by default — enough to answer "is anything heading my way", with fullscreen a click
+     away for "where exactly, and when". Height comes from an aspect ratio rather than a pixel
+     value so the map is landscape at every width instead of going portrait in narrow columns. */
+  #radarCard .imgwrap{aspect-ratio:16/9}
+  #radarCard #radar{height:100%}
+  /* Storm Mode: the dashboard already knows when radar is the story, so the strip earns its space
+     back exactly then, instead of being large all year for the few days it matters. */
+  body.storm #radarCard .imgwrap{aspect-ratio:16/10}
+  @media(max-width:680px){
+    #radarCard .imgwrap{aspect-ratio:4/3}
+    body.storm #radarCard .imgwrap{aspect-ratio:1/1}
+  }
+  .rs-right{display:inline-flex;align-items:center;gap:12px;margin-left:auto}
+  .rs-full{min-height:0;padding:5px 11px;font-size:11.5px;font-weight:700;border-radius:14px;
+    background:var(--inset);border:1px solid var(--border);color:var(--muted);font-family:inherit;
+    cursor:pointer;text-transform:none;letter-spacing:0;line-height:1.3;white-space:nowrap}
+  .rs-full:hover{color:var(--accent);border-color:var(--accent)}
+  .rs-full:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  @media(max-width:600px){.rs-full .rsf-t{display:none}.rs-full{padding:5px 9px;font-size:14px}}
+
+  /* ===== Radar fullscreen =====
+     The card lifts out of the grid and covers the viewport. Nothing about the map changes, so the
+     loop, the polygons and the satellite tab all keep working — it simply gets the room to use
+     them. Body scroll is locked so a wheel gesture over the map can't scroll the page behind it. */
+  body.radar-full{overflow:hidden}
+  body.radar-full #radarCard{
+    position:fixed;inset:0;z-index:400;margin:0;border-radius:0;border:0;
+    display:flex;flex-direction:column;max-width:none;
+    padding:max(12px, env(safe-area-inset-top,0px)) 14px calc(12px + env(safe-area-inset-bottom,0px));
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));
+  }
+  body.radar-full #radarCard .rs-view{flex:1 1 auto;min-height:0}
+  /* aspect-ratio would fight the flex fill — in fullscreen the map takes whatever is left */
+  body.radar-full #radarCard .imgwrap{aspect-ratio:auto;flex:1 1 auto;min-height:0}
+  body.radar-full #radarCard #radar{height:100%}
+  /* the tap-to-interact guard exists to stop mobile scroll-trapping; fullscreen has no page to trap */
+  body.radar-full #radarCard .maplock{display:none}
 
   /* ===== Radar / Satellite tabs ===== */
   .rs-tabs{display:inline-flex;gap:4px;background:var(--inset);border:1px solid var(--border);
@@ -986,13 +1019,17 @@
        this way"), so they share a card and a tab swaps which one is showing. The radar is a live
        zoomable WMS map; the satellite is NESDIS's fixed-extent sector image, not a tile source, so
        these are alternating views rather than stacked layers on one map. -->
-  <section class="card hero col-8" id="radarCard">
+  <div class="stack col-8">
+  <section class="card hero" id="radarCard">
     <h2>
       <span class="rs-tabs" id="rsTabs" role="tablist" aria-label="Sky view">
         <button type="button" class="rs-tab on" data-v="radar" role="tab" aria-selected="true">Radar</button>
         <button type="button" class="rs-tab" data-v="sat" role="tab" aria-selected="false">Satellite</button>
       </span>
-      <span class="link" id="rsLink"><a href="https://radar.weather.gov/station/KLSX/standard" target="_blank" rel="noopener">Official KLSX ↗</a></span>
+      <span class="rs-right">
+        <button type="button" class="rs-full" id="rsFull" aria-expanded="false">⛶ <span class="rsf-t">Fullscreen</span></button>
+        <span class="link" id="rsLink"><a href="https://radar.weather.gov/station/KLSX/standard" target="_blank" rel="noopener">Official KLSX ↗</a></span>
+      </span>
     </h2>
     <div class="rs-view" id="rsRadar">
       <div class="imgwrap maplock-wrap">
@@ -1014,12 +1051,13 @@
     </div>
     <div class="imgcap" id="rsCap"><span>Official NOAA/NWS radar &middot; tap a <b>warning polygon</b> to jump to its alert &middot; basemap &copy; CARTO/OSM</span><span>auto-updates</span></div>
   </section>
-
-  <!-- THE CALL — plain-English verdicts computed client-side from the hourly forecast + AQI.
-       Sits directly under the hero: it is the page answering "so what do I do about it?" -->
-  <section class="card col-12" id="callCard">
-    <div class="callrow" id="callRow"></div>
-  </section>
+    <!-- THE CALL — plain-English verdicts derived from the hourly forecast + AQI. Paired with the
+         radar rather than given its own full-width band: "here is what is coming" and "here is what
+         to do about it" belong together, and it uses the column height the compact radar frees. -->
+    <section class="card" id="callCard">
+      <div class="callrow" id="callRow"></div>
+    </section>
+  </div>
 
   <!-- ── THE WEEK AHEAD & DEEPER CONTEXT ── -->
   <div class="railhead col-12">
@@ -3626,6 +3664,41 @@ function setSkyView(v){
 document.addEventListener("click",function(e){
   var b=e.target.closest?e.target.closest("#rsTabs .rs-tab"):null;
   if(b) setSkyView(b.getAttribute("data-v"));
+});
+
+/* ---- Radar fullscreen ----
+   The inline radar is a peek; this is the "where exactly, and when" view. The card itself goes
+   fixed-position rather than cloning anything, so the Leaflet instance, the loop, the warning
+   polygons and the satellite tab survive the transition untouched — only the box changes size.
+   Leaflet has to be told, twice: once when the layout has settled and once after the CSS
+   transition, or it renders tiles for the old viewport. */
+var radarFull=false, radarFullPrevFocus=null;
+function setRadarFull(on){
+  var card=document.getElementById("radarCard"), btn=document.getElementById("rsFull");
+  if(!card||radarFull===on) return;
+  radarFull=on;
+  document.body.classList.toggle("radar-full",on);
+  if(btn){
+    btn.setAttribute("aria-expanded",on?"true":"false");
+    var t=btn.querySelector(".rsf-t"); if(t) t.textContent=on?"Close":"Fullscreen";
+    btn.firstChild.nodeValue=on?"✕ ":"⛶ ";
+  }
+  if(on){
+    radarFullPrevFocus=document.activeElement;
+    if(btn) btn.focus();
+  }else{
+    // Return focus where it came from; a keyboard user must not be dumped at the top of the page.
+    if(radarFullPrevFocus&&radarFullPrevFocus.focus) radarFullPrevFocus.focus();
+    radarFullPrevFocus=null;
+  }
+  if(rvMap){ rvMap.invalidateSize(); setTimeout(function(){ if(rvMap) rvMap.invalidateSize(); },260); }
+  if(typeof scheduleMasonry==="function") scheduleMasonry();
+}
+document.addEventListener("click",function(e){
+  if(e.target.closest&&e.target.closest("#rsFull")) setRadarFull(!radarFull);
+});
+document.addEventListener("keydown",function(e){
+  if(e.key==="Escape"&&radarFull) setRadarFull(false);
 });
 
 /* ============ FORECAST DISCUSSION (the pulse) ============ */
