@@ -737,28 +737,6 @@
   .h24-tip{position:absolute;top:2px;display:none;pointer-events:none;background:var(--bg);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid var(--border);
     border-radius:10px;padding:7px 11px;font-size:12.5px;white-space:nowrap;box-shadow:var(--shadow);z-index:5}
 
-  /* Smart Slot: sun/moon */
-  .sm-sun{display:flex;align-items:center;gap:14px;margin-bottom:4px}
-  .sm-arc{flex:0 0 150px}
-  .sm-arc svg{width:150px;height:84px;display:block}
-  .sm-suntimes{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:8px}
-  .sm-kv{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:7px 10px}
-  .sm-kv .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
-  .sm-kv .v{font-size:14px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
-  .sm-moon{display:flex;align-items:center;gap:10px;margin:10px 0 12px;padding:9px 11px;
-    background:var(--panel-2);border:1px solid var(--border);border-radius:8px}
-  .sm-moon .mico{font-size:24px}
-  .sm-moon .mname{font-weight:700;font-size:13px}
-  .sm-moon .msub{font-size:12px;color:var(--muted)}
-  /* Seasonal block inside the smart slot */
-  .sm-season{margin-top:12px;padding-top:11px;border-top:1px solid var(--border)}
-  .ss-head{font-size:11px;font-weight:800;letter-spacing:.9px;text-transform:uppercase;color:var(--muted);
-    margin-bottom:9px;display:flex;align-items:center;gap:6px}
-  .ss-items{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:8px}
-  .ss-note{font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.45}
-  .sm-chart svg{width:100%;height:auto;display:block}
-  .sm-cap{font-size:11px;color:var(--muted);margin-top:6px;display:flex;justify-content:space-between}
-
   footer{margin-top:20px;text-align:center;color:var(--muted);font-size:12px;line-height:1.7}
   .loading{color:var(--muted);font-size:13px}
 
@@ -883,8 +861,6 @@
   .cc-icon{display:flex;align-items:center}
   .day .di .wxi{display:block;margin:0 auto}
   .h24-pill .wxi{margin:-3px 3px -2px 0}
-  .sm-moon .mico{display:flex;align-items:center}
-  .sm-kv .wxi{margin:-3px 2px -2px 0}
 
   /* Location bar */
   .locbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:16px}
@@ -945,9 +921,6 @@
     header.top{gap:10px;margin-bottom:12px}
     .locbar{margin-bottom:13px}
     .cc-temp{font-size:46px}
-    /* Sun & Moon: stack the arc above the times so nothing crowds on a phone */
-    .sm-sun{flex-direction:column;align-items:stretch;gap:12px}
-    .sm-arc{flex:none;align-self:center}
     /* Header controls get their own full-width row, spaced out */
     .header-right{width:100%;justify-content:space-between;gap:8px}
     /* River rows: let long gauge names wrap instead of squeezing the value */
@@ -1194,12 +1167,6 @@
       </h2>
       <div id="cpc"><div class="loading">Loading outlooks…</div></div>
       <div class="imgcap"><span>Climate Prediction Center</span><span>6–14 days out</span></div>
-    </section>
-    <!-- SUN & MOON + seasonal panel. (This slot once swapped in a Blitzortung lightning iframe
-         during storms; removed — the radar answers "where are the storms" with official data.) -->
-    <section class="card" id="smartCard">
-      <h2>Sun &amp; Moon</h2>
-      <div id="smartBody"><div class="loading">Reading the sky…</div></div>
     </section>
     <!-- QUICK LINKS (folded into masonry so it packs instead of stranding) -->
     <section class="card" id="linksCard">
@@ -1961,7 +1928,7 @@ function loadForecast(){
           i++;
         }
       }
-      smart.days=days;   // seasonal slot scans the 7-day for freezes, snow, and the coldest night
+      smart.days=days;   // read by the hero's range bar and the hazard-outlook corroboration
       renderHeroToday(); // today's high/low is now known — fill the hero's range bar
       // Week-wide temp range for bar scaling
       var wMin=999, wMax=-999;
@@ -2053,7 +2020,8 @@ function loadForecast(){
         smart.hourly=hrs;
         renderHourly24(hrs);
         var hl=document.getElementById("h24loc"); if(hl) hl.textContent=current.name.replace(" (home)","");
-        updateSmartSlot(true);
+        // smart.hourly just changed and radarWorthy() reads it — the radar slot must re-decide.
+        if(typeof updateRadarSlot==="function") updateRadarSlot();
         if(typeof renderTheCall==="function") renderTheCall();
       }
     });
@@ -2143,7 +2111,7 @@ function loadAlerts(){
       var ev=(f.properties.event||"").toLowerCase();
       return ev.indexOf("tornado watch")>=0||ev.indexOf("severe thunderstorm watch")>=0;
     });
-    updateSmartSlot();
+    if(typeof updateRadarSlot==="function") updateRadarSlot();   // warning/watch just changed → radar re-decides
     if(typeof tickCountdowns==="function") setTimeout(tickCountdowns,0);   // fill the new countdowns immediately
     if(feats.length===0){
       card.classList.add("calm");
@@ -2670,7 +2638,6 @@ function loadSpc(){
     smart.spcRisk=r[0]||0;
     smart.eroRisk=r[3]||0;
     smart.fireRisk=r[6]||0;
-    updateSmartSlot();
     var days=["Today","Tomorrow","Day 3"];
     var html='<div class="spc-row rhead"><span></span><span class="rh">\u26c8\ufe0f Storm</span><span class="rh">\ud83c\udf0a Flood</span><span class="rh">\ud83d\udd25 Fire</span></div>';
     for(var i=0;i<3;i++){
@@ -3113,7 +3080,6 @@ function loadClimate(){
         +'<div class="cn-cell"><span class="cn-lbl">Precip \u00b7 year</span>'+fmtDep(c.p2.ok?c.p2.v:null,"\u2033")+'</div>';
       if(showSnow) cells+='<div class="cn-cell"><span class="cn-lbl">Snow \u00b7 season</span>'+fmtDep(c.sn.ok?c.sn.v:null,"\u2033")+'</div>';
       grid.innerHTML=cells;
-      climate.snowSTD=(c.sn&&c.sn.ok)?c.sn.v:null;   // winter slot reports season snow vs normal
       // A dash must never be a mystery: name whose numbers these are, or say why there aren't any.
       var src=document.getElementById("cnSrc");
       if(src){
@@ -3915,11 +3881,10 @@ function locSignal(){ if(!locAbort) locAbort=new AbortController(); return locAb
    town's forecast high ranked against the old town's 96-year record. */
 function resetLocationState(){
   climate.normHi=null; climate.normLo=null; climate.fcHi=null; climate.fcLo=null;
-  climate.fcHiLabel=""; climate.snowSTD=null; climate.station=null; climate.stationName="";
+  climate.fcHiLabel=""; climate.station=null; climate.stationName="";
   ctx={ready:false, recHi:null, recLo:null, recPcp:null, doyHi:[], doyLo:[],
        monWet:[], monWarm:[], monMtd:null, monMean:null, monName:"", years:0,
        dry:null, hist:null, normWeek:{}, recStation:""};
-  season.frz=null;
   uv={now:null, peak:null, daily:{}};
   smart.hourly=[]; smart.days=[];
   heroNow.temp=null;   // the old city's reading must not mark the new city's range
@@ -3956,7 +3921,7 @@ function setLocation(loc,opts){
   updateLocNow();
   if(opts.save) saveLoc(loc);
   var jobs=[loadForecast(),loadAqi(),loadSpc(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),
-            loadClimate(),loadAlerts(),loadClimateContext(),loadSeasonal(),loadUv()];
+            loadClimate(),loadAlerts(),loadClimateContext(),loadUv()];
   loadRadar();
   if(loc.station){ jobs.push(loadCurrent()); }
   else{
@@ -4400,8 +4365,11 @@ function initLocation(){
   useMyLocation(false);           // silent attempt; falls back to default if denied
 }
 
-/* ============ SMART SLOT (sun & moon + seasonal) ============ */
-var smart={warning:false,watch:false,spcRisk:0,eroRisk:0,fireRisk:0,mode:"",hourly:[]};
+// Shared forecast/hazard state, read by most renderers below.
+var smart={warning:false,watch:false,spcRisk:0,eroRisk:0,fireRisk:0,hourly:[]};
+/* ============ SUN TIMES ============
+   Outlived the card they were written for. Two callers: the hero's sun line (renderHeroToday) and
+   the day/night variant of the current-conditions icon. fmtT/fmtDur serve the same line. */
 function sunTimes(lat,lon,date){
   var rad=Math.PI/180;
   var start=Date.UTC(date.getFullYear(),0,0);
@@ -4426,49 +4394,8 @@ function sunTimes(lat,lon,date){
   if(r&&s&&s.getTime()<r.getTime()) s=new Date(s.getTime()+86400000);
   return {rise:r, set:s};
 }
-function moonInfo(date){
-  var synodic=29.530588853;
-  var known=Date.UTC(2000,0,6,18,14,0); // reference new moon
-  var age=(((date.getTime()-known)/86400000)%synodic+synodic)%synodic;
-  var frac=age/synodic;
-  var illum=Math.round((1-Math.cos(2*Math.PI*frac))/2*100);
-  var idx=Math.round(frac*8)%8;
-  var icons=["🌑","🌒","🌓","🌔","🌕","🌖","🌗","🌘"];
-  var svgs=["moon-new","moon-waxing-crescent","moon-first-quarter","moon-waxing-gibbous","moon-full","moon-waning-gibbous","moon-last-quarter","moon-waning-crescent"];
-  var names=["New Moon","Waxing Crescent","First Quarter","Waxing Gibbous","Full Moon","Waning Gibbous","Last Quarter","Waning Crescent"];
-  return {icon:icons[idx],svg:svgs[idx],name:names[idx],illum:illum,age:Math.round(age)};
-}
 function fmtT(d){ return d?d.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):"—"; }
 function fmtDur(ms){ var h=Math.floor(ms/3600000), m=Math.round(ms%3600000/60000); return h+"h "+m+"m"; }
-function sunArcSVG(rise,set){
-  var now=Date.now();
-  var f=Math.max(0,Math.min(1,(now-rise.getTime())/(set.getTime()-rise.getTime())));
-  var cx=75,cy=74,r=62;
-  var ang=Math.PI*(1-f);
-  var sx=cx+r*Math.cos(ang), sy=cy-r*Math.sin(ang);
-  var up=now>=rise.getTime()&&now<=set.getTime();
-  return '<svg viewBox="0 0 150 84" aria-hidden="true">'
-    +'<path d="M 13 74 A 62 62 0 0 1 137 74" fill="none" stroke="var(--border)" stroke-width="2" stroke-dasharray="4 5"/>'
-    +'<line x1="6" y1="74" x2="144" y2="74" stroke="var(--border)" stroke-width="2"/>'
-    +(up?'<circle cx="'+sx.toFixed(1)+'" cy="'+sy.toFixed(1)+'" r="7" fill="#ffb020"/><circle cx="'+sx.toFixed(1)+'" cy="'+sy.toFixed(1)+'" r="11" fill="#ffb020" opacity=".25"/>':'')
-    +'<text x="13" y="82" font-size="9" fill="var(--muted)" text-anchor="middle">↑</text>'
-    +'<text x="137" y="82" font-size="9" fill="var(--muted)" text-anchor="middle">↓</text>'
-    +'</svg>';
-}
-/* ============ SEASONAL SLOT ============
-   The smart slot is sun & moon; this adds a seasonal panel below it so
-   the card tracks the year: UV and heat in summer, freeze watch in fall, snow watch in winter,
-   late-freeze risk in spring (Open-Meteo's pollen fields are Europe-only, so a Missouri spring
-   gets the thing that actually matters here — whether the garden survives the night).
-   Every row is optional: if its data didn't arrive, the row simply isn't drawn. */
-var season={kind:"", frz:null};
-function seasonOf(d){
-  var m=(d||new Date()).getMonth();
-  if(m===11||m<=1) return "winter";
-  if(m<=4) return "spring";
-  if(m<=7) return "summer";
-  return "fall";
-}
 function uvLevel(v){
   if(v==null) return null;
   if(v<3)  return {t:"Low",c:"#3ecf8e"};
@@ -4533,147 +4460,6 @@ function renderUvNow(){
   if(live&&r>=3) bits.push('burn ~<b>'+Math.max(5,Math.round(200/r))+'</b> min');
   el.innerHTML=bits.join('<span class="uv-sep">·</span>');
 }
-var FRZ_KEY="lsxFrz_v1";
-function loadFreezeNormals(kind){
-  return climStation(current.lat,current.lon).then(function(st){
-    var yr=new Date().getFullYear(), key=st.sid+"|"+kind+"|"+yr;
-    try{ var c=JSON.parse(localStorage.getItem(FRZ_KEY)||"null"); if(c&&c.key===key&&c.v){ season.frz=c.v; return null; } }catch(e){}
-    var sd=(kind==="fall")?(yr+"-09-01"):(yr+"-02-01"), ed=(kind==="fall")?(yr+"-12-31"):(yr+"-05-31");
-    return acisPost("StnData",{sid:st.sid, sdate:sd, edate:ed, elems:[{name:"mint",normal:"1"}]}).then(function(r){
-      if(!r||r.error||!r.data) throw new Error("frz");
-      var rows=r.data.filter(function(x){ return acisNum(x[1])!=null; });
-      var t32=null, t36=null, i, v;
-      if(kind==="fall"){                       // first crossing of the season: frost (36°) then freeze (32°)
-        for(i=0;i<rows.length;i++){ v=acisNum(rows[i][1]);
-          if(t36==null&&v<=36) t36=rows[i][0];
-          if(v<=32){ t32=rows[i][0]; break; } }
-      }else{                                   // spring: scan backwards → the LAST dates at each threshold
-        for(i=rows.length-1;i>=0;i--){ v=acisNum(rows[i][1]);
-          if(t36==null&&v<=36) t36=rows[i][0];
-          if(v<=32){ t32=rows[i][0]; break; } }
-      }
-      season.frz={t32:t32,t36:t36};
-      try{ localStorage.setItem(FRZ_KEY,JSON.stringify({key:key,v:season.frz})); }catch(e){}
-      return null;
-    });
-  }).catch(function(){ season.frz=null; });
-}
-/* ---- forecast scans for the seasonal rows ---- */
-function fcFirstNightAtOrBelow(th){
-  var ds=smart.days||[];
-  for(var i=0;i<ds.length;i++){
-    var n=ds[i].night;
-    if(n&&n.temperature!=null&&n.temperature<=th) return {name:ds[i].name, t:n.temperature};
-  }
-  return null;
-}
-function fcDaysAtOrAbove(th){
-  var ds=smart.days||[], n=0;
-  for(var i=0;i<ds.length;i++){
-    var d=ds[i].day;
-    if(d&&d.temperature!=null&&d.temperature>=th) n++;
-  }
-  return n;
-}
-function fcWintryDay(){
-  var ds=smart.days||[];
-  for(var i=0;i<ds.length;i++){
-    var dtxt=(ds[i].day&&ds[i].day.shortForecast)||"", ntxt=(ds[i].night&&ds[i].night.shortForecast)||"";
-    if(/snow|sleet|wintry|flurr|freezing/i.test(dtxt+" "+ntxt)) return {name:ds[i].name, txt:dtxt||ntxt};
-  }
-  return null;
-}
-function fcPeakFeels(){
-  var hrs=smart.hourly||[], best=null;
-  for(var i=0;i<Math.min(24,hrs.length);i++){
-    var p=hrs[i], rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?p.relativeHumidity.value:null;
-    var fl=feelsLikeF(p.temperature,rh,parseMph(p.windSpeed));
-    if(fl==null) continue;
-    if(!best||fl>best.v) best={v:fl,t:new Date(p.startTime).getTime()};
-  }
-  return best;
-}
-function fcColdestNight(){
-  var ds=smart.days||[], best=null;
-  ds.forEach(function(d){
-    if(d.night&&d.night.temperature!=null&&(!best||d.night.temperature<best.t)) best={t:d.night.temperature,name:d.name};
-  });
-  return best;
-}
-function frzDate(s){ return s?fmtMD(new Date(s+"T12:00:00")):null; }
-function seasonHTML(){
-  var k=seasonOf(), items=[], notes=[], head="", ico="";
-  function kv(a,b){ return '<div class="sm-kv"><div class="k">'+a+'</div><div class="v">'+b+'</div></div>'; }
-  if(k==="summer"){
-    // UV moved out of here: it belongs with the other exposure readings in the hero and as a
-    // per-day figure in the 7-day, not buried in a seasonal slot that only appears in summer.
-    ico="☀️"; head="Summer · Heat";
-    var pf=fcPeakFeels();
-    if(pf) items.push(kv("Feels-like peak",pf.v+"° at "+shortT(pf.t)));
-    var hotN=fcDaysAtOrAbove(95);
-    if(hotN) items.push(kv("Days ≥95° in 7-day",String(hotN)));
-  }else if(k==="fall"){
-    ico="🍂"; head="Fall · Freeze Watch";
-    var ff=fcFirstNightAtOrBelow(32), fr=fcFirstNightAtOrBelow(36);
-    items.push(kv("Freeze in 7-day", ff?(ff.name+" · "+ff.t+"°"):"none forecast"));
-    if(!ff&&fr) items.push(kv("Frost risk", fr.name+" · "+fr.t+"°"));
-    if(season.frz&&frzDate(season.frz.t36)) items.push(kv("Normal first frost","~"+frzDate(season.frz.t36)));
-    if(season.frz&&frzDate(season.frz.t32)) items.push(kv("Normal first freeze","~"+frzDate(season.frz.t32)));
-    if(ff) notes.push("Bring in tender plants and disconnect hoses before "+esc(ff.name)+".");   // never lowercase a day name
-  }else if(k==="winter"){
-    ico="❄️"; head="Winter · Snow Watch";
-    if(climate.snowSTD!=null) items.push(kv("Season snow vs normal",fmtDep(climate.snowSTD,"″")));
-    var sn=fcWintryDay();
-    items.push(kv("Wintry in 7-day", sn?(sn.name+" · "+esc(sn.txt)):"none forecast"));
-    var cn=fcColdestNight();
-    if(cn) items.push(kv("Coldest night ahead",cn.t+"° "+esc(cn.name)));
-    var wcn=fcFirstNightAtOrBelow(10);
-    if(wcn) notes.push("Single digits "+esc(wcn.name)+" — watch pipes on exterior walls.");
-  }else{
-    ico="🌱"; head="Spring · Freeze Risk";
-    var sf=fcFirstNightAtOrBelow(32), sfr=fcFirstNightAtOrBelow(36);
-    items.push(kv("Freeze in 7-day", sf?(sf.name+" · "+sf.t+"°"):"none forecast"));
-    if(!sf&&sfr) items.push(kv("Frost risk", sfr.name+" · "+sfr.t+"°"));
-    if(season.frz&&frzDate(season.frz.t32)) items.push(kv("Normal last freeze","~"+frzDate(season.frz.t32)));
-    if(season.frz&&frzDate(season.frz.t36)) items.push(kv("Frost possible to","~"+frzDate(season.frz.t36)));
-    if(sf) notes.push("Cover anything tender — "+sf.t+"° will burn new growth.");
-  }
-  if(!items.length) return "";
-  return '<div class="sm-season"><div class="ss-head">'+ico+" "+head+'</div>'
-    +'<div class="ss-items">'+items.join("")+'</div>'
-    +(notes.length?'<div class="ss-note">'+notes.join(" ")+'</div>':'')
-    +'</div>';
-}
-function loadSeasonal(){
-  var fresh=locGuard();
-  var k=seasonOf();
-  season.kind=k;
-  var jobs=[];
-  if(k==="fall"||k==="spring") jobs.push(loadFreezeNormals(k));
-  return Promise.all(jobs).then(function(){ if(!fresh()) return; updateSmartSlot(true); }, function(){ if(!fresh()) return; updateSmartSlot(true); });
-}
-function updateSmartSlot(force){
-  if(typeof updateRadarSlot==="function") updateRadarSlot();   // same signals decide the radar's slot
-  var body=document.getElementById("smartBody");
-  if(!body) return;
-  // Once rendered, only a forced refresh (schedule tick / location change) repaints — the 60-second
-  // alert path calls this too and doesn't need to redraw a sun arc.
-  if(smart.mode==="calm"&&!force) return;
-  var now=new Date(), st=sunTimes(current.lat,current.lon,now), mi=moonInfo(now);
-  var dayLen=(st.rise&&st.set)?fmtDur(st.set-st.rise):"—";
-  body.innerHTML=
-    '<div class="sm-sun"><div class="sm-arc">'+((st.rise&&st.set)?sunArcSVG(st.rise,st.set):'')+'</div>'
-    +'<div class="sm-suntimes">'
-      +'<div class="sm-kv"><div class="k">Sunrise</div><div class="v">'+mcImg("sunrise","🌅",22)+' '+fmtT(st.rise)+'</div></div>'
-      +'<div class="sm-kv"><div class="k">Sunset</div><div class="v">'+mcImg("sunset","🌇",22)+' '+fmtT(st.set)+'</div></div>'
-      +'<div class="sm-kv"><div class="k">Daylight</div><div class="v">'+dayLen+'</div></div>'
-      +'<div class="sm-kv"><div class="k">Moon</div><div class="v">'+mi.illum+'% lit</div></div>'
-    +'</div></div>'
-    +'<div class="sm-moon"><div class="mico">'+mcImg(mi.svg,mi.icon,40)+'</div><div><div class="mname">'+mi.name+'</div><div class="msub">Day '+mi.age+' of the lunar cycle</div></div></div>'
-    +seasonHTML();
-  smart.mode="calm";
-}
-
 /* ============ BOTTOM LINE (né The Call — plain-English verdicts from data on hand) ============
    Rules fire off the next ~18 hourly periods (smart.hourly) + the latest AQI. Each verdict
    has a priority; the top 4 render. The rain/umbrella call always exists, so the strip is
@@ -5007,9 +4793,9 @@ function refreshAll(){
   var dot=document.getElementById("statusDot"), label=document.getElementById("refreshLabel");
   dot.classList.remove("stale");label.textContent="Refreshing…";
   stampSched([loadAFD,loadAlerts,loadCurrent,loadForecast,loadRivers,loadAqi,loadSpc,loadCpc,loadQpf,
-              loadHazards,loadDrought,loadClimate,loadClimateContext,loadSeasonal,loadUv,loadStationPlot,
+              loadHazards,loadDrought,loadClimate,loadClimateContext,loadUv,loadStationPlot,
               refreshImages,saveSnapshotIdle]);
-  Promise.allSettled([loadAFD(),loadAlerts(),loadCurrent(),loadForecast(),loadRivers(),loadAqi(),loadSpc(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),loadClimate(),loadClimateContext(),loadSeasonal(),loadUv(),loadStationPlot()]).then(function(){
+  Promise.allSettled([loadAFD(),loadAlerts(),loadCurrent(),loadForecast(),loadRivers(),loadAqi(),loadSpc(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),loadClimate(),loadClimateContext(),loadUv(),loadStationPlot()]).then(function(){
     refreshImages();
     label.textContent="Refresh";
     document.getElementById("lastUpdate").textContent="Last updated "+new Date().toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"});
@@ -5122,12 +4908,10 @@ var SCHED=[
   {fn:loadDrought,  every:6*60*60000},
   {fn:loadClimate,  every:6*60*60000},
   {fn:loadClimateContext, every:6*60*60000},
-  {fn:loadSeasonal, every:3*60*60000},
   {fn:loadUv,       every:60*60000},
   {fn:refreshImages,every:5*60000},
   {fn:loadStationPlot,every:12*60000},
   {fn:refreshRadarLayer, every:4*60000},
-  {fn:function(){updateSmartSlot(true);}, every:10*60000},
   {fn:saveSnapshotIdle, every:5*60000}   // idle-deferred; the visibilitychange save stays sync
 ];
 var lastGood=Date.now(), schedTimer=null, clockTimer=null;
@@ -5196,7 +4980,6 @@ function layoutMasonry(){
       droughtCard:6,    // drought outlook
       climateCard:7,    // climate vs normal
       cpcCard:8,        // week-ahead leanings
-      smartCard:9,      // sun & moon + seasonal
       linksCard:10      // deep-dive links — reference, lowest
     };
     return (RANK[id]!=null) ? RANK[id] : 50;
