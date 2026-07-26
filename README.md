@@ -103,12 +103,17 @@ the hole wasted and gives both the full width instead: a 928x521 radar and 12 ho
 
 **The radar earns its slot.** Like the AQI card, it only appears when it has a story to tell:
 Storm Mode for a *radar-shaped* warning family, a tornado/severe watch, precipitation falling now
-(`data-wx`), or thunder or a ≥40% rain chance inside the next 6 hours — `radarWorthy()` in the
-source. Radar-shaped means `convective` or `flood` (`RADAR_FAMILIES`): those are the families you
-open a reflectivity map to find. Heat, wind, fire and winter warnings describe the air rather than
-echoes in it, so they engage Storm Mode's theme, banner and prime card but leave the radar slot to
-the conditions card — an Extreme Heat Warning shouldn't hoist a radar nobody came for. Falling snow
-still summons it through `data-wx`, which is the case a Winter Storm Warning would want it for. On a
+(`data-wx`), or — inside the next 6 hours — a ≥40% rain chance or a thunderstorm mention carrying at
+least `THUNDER_MIN_POP` (25%). `radarWorthy()` in the source. Radar-shaped means `convective` or
+`flood` (`RADAR_FAMILIES`): those are the families you open a reflectivity map to find. Heat, wind,
+fire and winter warnings describe the air rather than echoes in it, so they engage Storm Mode's
+theme, banner and prime card but leave the radar slot to the conditions card — an Extreme Heat
+Warning shouldn't hoist a radar nobody came for. Falling snow still summons it through `data-wx`,
+which is the case a Winter Storm Warning would want it for. The probability floor on the thunder
+mention is the same idea one level down: NWS reserves "isolated" for 10–20% areal coverage and
+"scattered" for 30–50%, so an *Isolated Showers And Thunderstorms* hour at 17% carries the word
+without carrying the risk — and the map used to come up on a day the Bottom Line was calling dry.
+An hour with no probability at all still passes; unknown risk shouldn't hide the map. On a
 clear day the card (satellite tab included) is hidden, the conditions card takes the full row, and
 the 24-hour chart gets the whole width back — all ~24 hour labels, exactly the thing the hero
 merge had traded away. A rail button summons it by hand; the ✕ to dismiss exists only on a

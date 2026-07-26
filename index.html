@@ -3700,12 +3700,16 @@ document.addEventListener("click",function(e){
 /* ---- Conditional radar ----
    The card is shown when the sky is a story and hidden when it isn't. "Worthy" means: Storm Mode
    for a radar-shaped family (see RADAR_FAMILIES), a convective/flood warning or a tornado/severe
-   watch, precipitation falling now (data-wx), or thunder or a ≥40% rain chance inside the next 6
-   hours — i.e. every case where a visitor would actually open a radar. A dry warning (heat, wind,
-   fire) still gets the full Storm Mode treatment, just not the radar. Manual show (the rail button)
-   overrides a calm verdict but never suppresses a stormy one; the ✕ only needs to exist for the
-   manual case. */
+   watch, precipitation falling now (data-wx), or — inside the next 6 hours — a ≥40% rain chance or
+   a thunderstorm mention that clears THUNDER_MIN_POP. I.e. every case where a visitor would
+   actually open a radar. A dry warning (heat, wind, fire) still gets the full Storm Mode treatment,
+   just not the radar. Manual show (the rail button) overrides a calm verdict but never suppresses a
+   stormy one; the ✕ only needs to exist for the manual case. */
 var radarManual=false;
+/* How much rain chance a "thunderstorms" mention needs before it counts. NWS reserves "isolated"
+   for 10-20% areal coverage and "scattered" for 30-50%; 25 sits in the gap, so a slight-chance
+   afternoon doesn't summon the map while a genuinely unsettled one does. */
+var THUNDER_MIN_POP=25;
 function radarWorthy(){
   /* Storm Mode on its own isn't the test — it engages for every warning family, including the dry
      ones, so an Extreme Heat Warning used to hoist a radar nobody opened the page for. Ask what
@@ -3714,14 +3718,17 @@ function radarWorthy(){
   if(smart.warning||smart.watch) return true;
   var wx=document.body.getAttribute("data-wx");
   if(wx==="rain"||wx==="storm"||wx==="snow") return true;
-  /* A 12-hour thunder lookout kept the radar up all night for storms still eight hours away —
-     "slight chance" included. The radar's question is "should I look at the sky NOW", so thunder
-     is scanned over the same 6-hour window as the rain-chance check. */
+  /* A 12-hour thunder lookout kept the radar up all night for storms still eight hours away, so
+     the scan moved to the same 6-hour window as the rain-chance check. Narrowing the window wasn't
+     enough on its own: an "Isolated Showers And Thunderstorms" hour carries the word at 17% while
+     the Bottom Line is still saying "no umbrella needed", and the map came up on an otherwise dry
+     day. The mention now has to clear THUNDER_MIN_POP as well. A missing probability still passes
+     — unknown risk shouldn't hide the map. */
   var hrs=smart.hourly||[];
   for(var i=0;i<Math.min(6,hrs.length);i++){
-    var pp=hrs[i].probabilityOfPrecipitation;
-    if(pp&&pp.value!=null&&pp.value>=40) return true;
-    if(/thunder|t-?storm/i.test(hrs[i].shortForecast||"")) return true;
+    var pp=hrs[i].probabilityOfPrecipitation, pv=(pp&&pp.value!=null)?pp.value:null;
+    if(pv!=null&&pv>=40) return true;
+    if((pv==null||pv>=THUNDER_MIN_POP)&&/thunder|t-?storm/i.test(hrs[i].shortForecast||"")) return true;
   }
   return false;
 }
