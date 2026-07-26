@@ -359,6 +359,10 @@
   .cc-today{margin:0 0 13px}
   .cc-range{display:flex;align-items:center;gap:10px;font-variant-numeric:tabular-nums}
   .cc-range .cr-lo,.cc-range .cr-hi{font-size:13px;font-weight:800;flex:0 0 auto}
+  .cc-range .cr-lbl{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;
+    color:var(--muted);flex:0 0 auto}
+  .cc-range .cr-nx{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;
+    color:var(--muted);margin-left:3px}
   .cc-track{position:relative;flex:1 1 auto;height:8px;border-radius:5px;background:var(--chip);min-width:0}
   .cc-track i{position:absolute;top:0;bottom:0;border-radius:5px;
     background:linear-gradient(90deg,#4aa3ff,#3ecf8e,#ffd23f,#ff6a3d)}
@@ -3357,10 +3361,16 @@ var heroNow={temp:null};
 function renderHeroToday(){
   var el=document.getElementById("ccToday");
   if(!el) return;
-  var d=(smart.days&&smart.days.length)?smart.days[0]:null;
-  var hi=d&&d.day?d.day.temperature:null, lo=d&&d.night?d.night.temperature:null;
+  var d0=(smart.days&&smart.days[0])||null, d1=(smart.days&&smart.days[1])||null;
+  var lo=d0&&d0.night?d0.night.temperature:null;
+  var hi=d0&&d0.day?d0.day.temperature:null;
+  /* After the last daytime period has passed, the NWS feed's first entry is night-only, so there is
+     no "today's high" left to show — which silently emptied this whole row every evening. Fall
+     back to tonight's low against TOMORROW's high, and say so, rather than showing nothing. */
+  var nextDay=false;
+  if(hi==null&&d1&&d1.day&&d1.day.temperature!=null){ hi=d1.day.temperature; nextDay=true; }
   var out="";
-  // A range needs both ends and a positive span; a "high" that is really tonight's low is not one.
+  // A range still needs both ends and a positive span.
   if(hi!=null&&lo!=null&&hi>lo){
     var t=heroNow.temp, mark="";
     if(t!=null){
@@ -3368,9 +3378,11 @@ function renderHeroToday(){
       mark='<b style="left:'+(f*100).toFixed(1)+'%"></b>';
     }
     out+='<div class="cc-range">'
+      +'<span class="cr-lbl">'+(nextDay?"Tonight":"Today")+'</span>'
       +'<span class="cr-lo" style="color:'+tCol(lo)+'">'+lo+'°</span>'
       +'<span class="cc-track"><i style="left:0;right:0"></i>'+mark+'</span>'
-      +'<span class="cr-hi" style="color:'+tCol(hi)+'">'+hi+'°</span>'
+      +'<span class="cr-hi" style="color:'+tCol(hi)+'">'+hi+'°'
+        +(nextDay?'<span class="cr-nx">tmrw</span>':'')+'</span>'
       +'</div>';
   }
   // Sun line: lead with whichever event is still ahead — that's the one worth planning around.
