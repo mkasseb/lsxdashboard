@@ -1031,9 +1031,9 @@
     <div id="alerts"><div class="loading">Loading alerts…</div></div>
   </section>
 
-  <!-- THE CALL — plain-English verdicts derived from the hourly forecast + AQI. This is the page
-       reasoning on the visitor's behalf rather than handing them numbers, so it sits directly under
-       the alerts: safety first, then "here is what today actually means for you". -->
+  <!-- BOTTOM LINE (id stays callCard) — plain-English verdicts computed client-side from the
+       hourly forecast, UV, AQI and climate context. The page reasoning on the visitor's behalf,
+       so it sits directly under the alerts: safety first, then what today actually means. -->
   <section class="card col-12" id="callCard">
     <div class="callrow" id="callRow"></div>
   </section>
@@ -4416,7 +4416,7 @@ function updateSmartSlot(force){
   smart.mode="calm";
 }
 
-/* ============ THE CALL (plain-English verdicts from data already on hand) ============
+/* ============ BOTTOM LINE (né The Call — plain-English verdicts from data on hand) ============
    Rules fire off the next ~18 hourly periods (smart.hourly) + the latest AQI. Each verdict
    has a priority; the top 4 render. The rain/umbrella call always exists, so the strip is
    never empty once the hourly feed has loaded. */
@@ -4442,15 +4442,17 @@ function renderTheCall(){
     var mph=parseMph(p.windSpeed), sf=p.shortForecast||"";
     H.push({t:p.temperature,d:d,hr:d.getHours(),pop:pop,rh:rh,mph:mph,
             dew:dewF(p.temperature,rh), fl:feelsLikeF(p.temperature,rh,mph),
-            thund:/thunder|t-?storm/i.test(sf), fog:/fog/i.test(sf), day:p.isDaytime});
+            thund:/thunder|t-?storm/i.test(sf), wint:/snow|sleet|wintry|freezing/i.test(sf),
+            fog:/fog/i.test(sf), day:p.isDaytime});
   }
   // — rain / storm window (the #1 question; always produces a pill) —
-  var wet0=-1, wetEnd=-1, hasThunder=false, maxPop=0;
+  var wet0=-1, wetEnd=-1, hasThunder=false, hasWintry=false, maxPop=0;
   for(i=0;i<n;i++){
     if(H[i].pop>maxPop) maxPop=H[i].pop;
     if(wet0<0 && H[i].pop>=40) wet0=i;
     if(wet0>=0 && wetEnd<0 && i>wet0 && H[i].pop<30) wetEnd=i;
     if(H[i].pop>=30 && H[i].thund) hasThunder=true;
+    if(H[i].pop>=30 && H[i].wint) hasWintry=true;
   }
   if(wet0<0){
     var endLbl=(H[n-1].d.getDate()!==new Date().getDate())?"into tomorrow":("through "+hrWord(H[n-1].d));
@@ -4462,6 +4464,7 @@ function renderTheCall(){
     if(wetEnd>0){ for(i=wetEnd;i<n;i++){ if(H[i].pop>=40){ wet2=i; break; } } }
     var more=(wet2>0)?" · another round ~"+hrWord(H[wet2].d):"";
     if(hasThunder) push(95,"⛈️","Storms likely "+span+" — plan around them"+more);
+    else if(hasWintry) push(93,"❄️","Snow or wintry mix "+span+more+" — roads may slick up");
     else push(60,"🌧️","Rain likely "+span+more);
   }
   // — heat (dangerous ≈ local heat-advisory territory; "hot" tier below that) —
@@ -4481,6 +4484,18 @@ function renderTheCall(){
   for(i=0;i<n;i++){ if(H[i].mph!=null&&H[i].mph>wMax){ wMax=H[i].mph; wAt=H[i].d; } }
   if(wMax>=35) push(78,"💨","Very windy — "+wMax+" mph near "+hrWord(wAt)+"; bring in anything loose");
   else if(wMax>=25) push(65,"💨","Windy — sustained to "+wMax+" mph near "+hrWord(wAt));
+  // — UV (cross-feed from the Open-Meteo series; the burn clock is the actionable part) —
+  if(uv.peak&&uv.peak.t>Date.now()){
+    var uvR=Math.round(uv.peak.v), uvAt=hrWord(new Date(uv.peak.t));
+    if(uvR>=11) push(76,"🧴","Extreme UV "+uvR+" near "+uvAt+" — unprotected burn in ~"+Math.max(5,Math.round(200/uvR))+" min");
+    else if(uvR>=8) push(62,"🧴","UV "+uvR+" near "+uvAt+" — sunscreen before heading out");
+  }
+  // — a front coming through (warm now, markedly colder later — the caught-out-in-a-t-shirt day) —
+  if(H[0].t!=null&&H[0].t>=55){
+    var cMin=999, cAt=null;
+    for(i=3;i<n;i++){ if(H[i].t!=null&&H[i].t<cMin){ cMin=H[i].t; cAt=H[i].d; } }
+    if(cAt&&H[0].t-cMin>=18) push(66,"📉","Drops "+(H[0].t-cMin)+"° to "+cMin+"° by "+hrWord(cAt)+" — take a layer");
+  }
   // — air quality (fed by loadAqi) —
   if(callAqi!=null&&callAqi>100) push(75,"😮‍💨","Poor air (AQI "+callAqi+") — go easy outside if sensitive");
   // — windows-open vs. AC night (dew point is the honest comfort test) —
@@ -4505,6 +4520,36 @@ function renderTheCall(){
     });
     if(nice) push(55,"😎",dhi+"° and dry all day — about as good as it gets");
   }
+  // — the synthesis: WHEN to be outside, not just what is wrong with today. Hours are scored on
+  //   feels-like comfort, rain/storm risk and wind; the best contiguous 2-hour daylight window
+  //   wins. Only speaks when the day has adversity worth dodging (heat, a wet window, real wind) —
+  //   on an all-day-nice day the 😎 pill already covers it — and only while the advice is usable. —
+  if(new Date().getHours()<17&&(maxFl>=99||wet0>=0||wMax>=25)){
+    var cands=[];
+    for(i=0;i<n;i++){
+      var hb=H[i];
+      if(hb.hr<7||hb.hr>20) continue;
+      if(hb.d.getDate()!==new Date().getDate()) continue;   // today's advice only
+      var fl2=(hb.fl!=null)?hb.fl:hb.t; if(fl2==null) continue;
+      var sc=Math.abs(fl2-70)*1.3;
+      sc+=hb.pop>=50?60:(hb.pop>=30?30:(hb.pop>=20?12:0));
+      if(hb.thund&&hb.pop>=30) sc+=70;
+      if(hb.mph!=null) sc+=hb.mph>=20?14:(hb.mph>=15?6:0);
+      cands.push({idx:i,h:hb,sc:sc});
+    }
+    var bw=null;
+    for(i=0;i+1<cands.length;i++){
+      if(cands[i+1].idx!==cands[i].idx+1) continue;
+      var s2=(cands[i].sc+cands[i+1].sc)/2;
+      if(!bw||s2<bw.sc) bw={sc:s2,a:cands[i].h,b:cands[i+1].h};
+    }
+    if(bw&&bw.sc<=30){
+      var bFl=Math.round(((bw.a.fl!=null?bw.a.fl:bw.a.t)+(bw.b.fl!=null?bw.b.fl:bw.b.t))/2);
+      var bWet=Math.max(bw.a.pop,bw.b.pop)>=20?"":", dry";
+      push(58,"🚶","Best window outside: "+hrWord(bw.a.d)+"–"+hrWord(new Date(bw.b.d.getTime()+3600000))
+        +" — feels like "+bFl+"°"+bWet);
+    }
+  }
   // — climate context: only genuinely notable framings earn a pill (and only from a record
   //    deep enough to mean anything) —
   if(ctx.ready&&ctx.years>=CTX_MIN_YEARS&&climate.fcHi!=null&&ctx.recHi){
@@ -4521,7 +4566,7 @@ function renderTheCall(){
 
   pills.sort(function(a,b){ return b.pri-a.pri; });
   pills=pills.slice(0,4);
-  row.innerHTML='<span class="call-lbl">The Call</span>'+pills.map(function(pl){
+  row.innerHTML='<span class="call-lbl">Bottom Line</span>'+pills.map(function(pl){
     return '<span class="call-pill"><span class="ce">'+pl.ico+'</span><span>'+esc(pl.txt)+'</span></span>';
   }).join("");
   card.classList.add("has");

@@ -70,11 +70,15 @@ helpers → ~15 per-card loaders → derived renderers → orchestration → sch
 A few things are load-bearing and worth understanding before changing anything:
 
 **The page is ordered by what a visitor came for.** Alerts first (in calm weather that card
-collapses to a single all-clear line), then The Call, then the hero band — "Now & Next 24 Hours"
-on the left, radar on the right — then the forecast discussion, and finally the masonry. The Call
-is the page reasoning on the visitor's behalf rather than handing them numbers, so it ranks
-directly under safety. Storm Mode is the one exception: an `order` drops it below the hero, because
-while a warning is live the radar outranks advice.
+collapses to a single all-clear line), then the Bottom Line, then the hero band — "Now & Next 24
+Hours" on the left, radar on the right — then the forecast discussion, and finally the masonry.
+The Bottom Line (né The Call; ids are still `callCard`/`callRow`) is the page reasoning on the
+visitor's behalf rather than handing them numbers: rain/storm windows, heat and cold, UV with a
+burn clock, wind, air quality, a temperature-crash warning, climate records — and one synthesized
+verdict that scores every daylight hour on comfort, rain risk and wind to name the best two-hour
+window to be outside, spoken only when the day has adversity worth dodging. It ranks directly
+under safety. Storm Mode is the one exception: an `order` drops it below the hero, because while
+a warning is live the radar outranks advice.
 
 `.railhead` labels name each band and hide under `body.storm`, where the grid reorders for urgency
 and a band label would lie about what follows it. Only *direct* grid children get an `order`, so
