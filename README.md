@@ -94,6 +94,25 @@ with it, breaking the rule below. The chart measures its own container and thins
 survives the narrower column; it shows ~6 hour labels there against ~24 at full width, with
 per-hour detail still available on hover.
 
+**UV and air quality are tiles beside the metric grid, not inside it.** They answer the same
+question as each other — how much is this going to cost me to be outside — so they sit together in
+`.cc-expo`, wearing `.cc-item`'s chrome because the card should speak one language. They stay
+*out* of `.cc-grid` on purpose: those six tiles are what the `Observed … KSUS` footline describes,
+and UV and AQI come from Open-Meteo, so folding them in would make that line assert something
+false. The footline names Open-Meteo for exactly that reason. They were four run-on sentences at
+12.5px until the burn clock read identically to a record from 1936; the fix was hierarchy, not
+smaller type. Below them the climate line labels its figures (`NORMAL`, `RECORD`) and drops the
+words "record high" and "low", because a warm/cool colour pair says it in no characters at all,
+and every credit — observation age, station, records station, AirNow — collects into one dimmer
+line that reads as a caption rather than a fifth row of data.
+
+Two things there are load-bearing. `body.no-radar`'s wide layout enumerates each *direct* child of
+`#current` by class; a new wrapper that isn't in that list doesn't merely go full width, it
+auto-places below `.cc-grid`'s row span and jumps out of DOM order. And the severity palettes
+(`uvLevel`, `aqiInfo`) are tuned for the dark panel and arrive as inline colours, so a light-mode
+`filter` darkens them as a group — at tile size, AQI "Moderate" on the light panel is otherwise
+1.3:1.
+
 **The hero row is a pair of stacks, but only on wide screens.** Left is the conditions card (+ AQI
 when it's notable); right is the radar. Below 1100px they stop being a pair and both go full width:
 at ~474px per column the left one still had to carry the reading, the metrics grid and the 24-hour
@@ -199,6 +218,11 @@ return visit paints a full dashboard before any network request. Each card carri
 (alerts expire after 15 minutes; drought after 48 hours). Storm mode and the warning banner are
 *never* restored, because they assert something about right now.
 
+A snapshot is restored *markup*, painted under whatever stylesheet ships today — so reshaping a
+card's DOM means bumping `SNAP_KEY`. Skip it and every returning visitor gets one visibly wrong
+first paint: yesterday's elements picking up today's rules with none of today's structure. One
+cold paint is the cheaper mistake.
+
 **Storm mode.** An active warning is classified into a family (convective / winter / flood / heat /
 wind / fire), which sets the accent colour, floats the most relevant card to the top of the layout,
 and rewrites the banner.
@@ -223,9 +247,10 @@ container and would otherwise paint into a stale viewport.
 ## Known gaps
 
 - No `aria-expanded` on the expandable alert and forecast rows.
-- The hero pair (when the radar has earned its slot) still runs ~110-170px unequal at desktop
+- The hero pair (when the radar has earned its slot) still runs roughly 50-120px unequal at desktop
   widths, since the left column's height is
-  content-driven and the radar's is fixed by its aspect ratio. It is page-edge whitespace under the
+  content-driven and the radar's is fixed by its aspect ratio. (It was ~110-170px before the
+  conditions footer became a tile pair, which gave the left column back ~50-60px.) It is page-edge whitespace under the
   radar rather than a framed hole. Growing the radar to close it is exactly the mistake that made
   the map portrait in the first place, so it stays.
 - The masonry positions cards absolutely after sorting by importance and height. `reorderMasonryDOM`
