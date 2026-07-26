@@ -98,8 +98,19 @@ chart while the right had only the radar, so they came out ~400px apart *and* bo
 a 438x246 radar and a 440px chart showing 6 hour labels. Stacking costs roughly the vertical space
 the hole wasted and gives both the full width instead: a 928x521 radar and 12 hour labels.
 
-**The radar is a peek, not the product.** Its height comes from an `aspect-ratio`, never from
-leftover space. An earlier version stretched the map to match the left column, which made its size
+**The radar earns its slot.** Like the AQI card, it only appears when it has a story to tell:
+Storm Mode, an active warning/watch, thunder in the next 12 hours, precipitation falling now
+(`data-wx`), or a ≥40% rain chance inside the next 6 hours — `radarWorthy()` in the source. On a
+clear day the card (satellite tab included) is hidden, the conditions card takes the full row, and
+the 24-hour chart gets the whole width back — all ~24 hour labels, exactly the thing the hero
+merge had traded away. A rail button summons it by hand; the ✕ to dismiss exists only on a
+hand-summoned card, since an auto-shown one would re-appear on the next update. While hidden it
+fetches no tiles (`refreshRadarLayer` returns early), and the show path re-renders the 24-hour
+chart, because the chart only re-measures on *window* resize and this toggle resizes its container
+without one.
+
+**When shown, the radar is a peek, not the product.** Its height comes from an `aspect-ratio`,
+never from leftover space. An earlier version stretched the map to match the left column, which made its size
 a side effect of how much content the conditions card happened to have — that is how it ended up
 660px tall on a calm day and *portrait* (0.67) at 1000px, the worst possible shape for weather that
 moves west to east. It is now 16:9 (4:3 on phones), so it is landscape at every width, with
@@ -159,7 +170,8 @@ container and would otherwise paint into a stale viewport.
 ## Known gaps
 
 - No `aria-expanded` on the expandable alert and forecast rows.
-- The hero pair still runs ~110-170px unequal at desktop widths, since the left column's height is
+- The hero pair (when the radar has earned its slot) still runs ~110-170px unequal at desktop
+  widths, since the left column's height is
   content-driven and the radar's is fixed by its aspect ratio. It is page-edge whitespace under the
   radar rather than a framed hole. Growing the radar to close it is exactly the mistake that made
   the map portrait in the first place, so it stays.

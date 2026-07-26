@@ -473,6 +473,26 @@
   .leaflet-tooltip.stn-tip:before{display:none}
   .imgfail{padding:22px;text-align:center;color:var(--muted);font-size:13px;line-height:1.6}
 
+  /* ===== Conditional radar =====
+     The radar earns its slot the way the AQI card does: only when it has a story to tell. Clear
+     day → no radar, and the conditions card takes the full row (the 24-hour chart gets the whole
+     width back — the one real cost of the hero merge disappears exactly when radar isn't needed).
+     Rain, storms, snow, a watch/warning, or a wet next-few-hours → the strip appears on its own.
+     The rail button summons it by hand (satellite lives in this card too); the ✕ appears only on
+     a hand-summoned card, because an auto-shown one would just re-show on the next update. */
+  body.no-radar .grid>.stack.col-8{display:none}
+  body.no-radar .grid>.stack.col-4{grid-column:span 12}
+  @media(min-width:681px){
+    body.no-radar .cc-grid{grid-template-columns:repeat(3,1fr)}
+  }
+  .rail-act{min-height:0;padding:5px 12px;font-size:11.5px;font-weight:700;border-radius:14px;
+    background:var(--inset);border:1px dashed var(--border);color:var(--accent);font-family:inherit;
+    cursor:pointer;line-height:1.3;white-space:nowrap}
+  .rail-act:hover{border-style:solid;border-color:var(--accent)}
+  body:not(.no-radar) #radarPeek{display:none}
+  #rsHide{display:none}
+  body.radar-manual #rsHide{display:inline-block}
+
   /* ===== Radar sizing: a peek, not the product =====
      Compact by default — enough to answer "is anything heading my way", with fullscreen a click
      away for "where exactly, and when". Height comes from an aspect ratio rather than a pixel
@@ -918,7 +938,7 @@
   footer a{color:inherit;text-decoration:underline;text-underline-offset:2px}
 </style>
 </head>
-<body>
+<body class="no-radar">
 <div id="wxbg" aria-hidden="true"><i class="b1"></i><i class="b2"></i></div>
 
 <header class="top">
@@ -1004,6 +1024,7 @@
   <div class="railhead col-12">
     <span class="rail-t">Right now</span>
     <span class="rail-s" id="railNowSub"></span>
+    <button type="button" class="rail-act" id="radarPeek">🛰️ Show radar &amp; satellite</button>
   </div>
 
   <!-- CURRENT -->
@@ -1042,6 +1063,7 @@
         <button type="button" class="rs-tab" data-v="sat" role="tab" aria-selected="false">Satellite</button>
       </span>
       <span class="rs-right">
+        <button type="button" class="rs-full" id="rsHide">✕ <span class="rsf-t">Hide</span></button>
         <button type="button" class="rs-full" id="rsFull" aria-expanded="false">⛶ <span class="rsf-t">Fullscreen</span></button>
         <span class="link" id="rsLink"><a href="https://radar.weather.gov/station/KLSX/standard" target="_blank" rel="noopener">Official KLSX ↗</a></span>
       </span>
@@ -1772,6 +1794,7 @@ function initRadarCtl(){
 }
 function refreshRadarLayer(){
   if(!rvMap) return;
+  if(document.body.classList.contains("no-radar")) return;   // hidden card fetches nothing; show refreshes
   fetchRadarTimes().then(function(times){
     var wasLatest=(radarIdx<0)||(radarIdx>=radarFrames.length-1);
     buildRadarFrames(times);
@@ -2045,6 +2068,7 @@ function loadCurrent(){
     var day=(st.rise&&st.set)?(now>=st.rise&&now<=st.set):(now.getHours()>=7&&now.getHours()<19);
     stEl.textContent=current.station;
     document.body.setAttribute("data-wx", wxGroup(desc,day));
+    if(typeof updateRadarSlot==="function") updateRadarSlot();   // precipitation observed → radar appears
     heroNow.temp=temp;   // where "now" sits inside today's range, once the 7-day has landed
     el.innerHTML='<div class="cc-main"><div class="cc-icon">'+wxImg(desc,day,64)+'</div><div>'
       +'<div class="cc-temp">'+(temp!=null?temp+"°":"—")+'</div><div class="cc-desc">'+esc(desc)+'</div>'
@@ -2293,10 +2317,12 @@ function setStormMode(warnProps){
     // Start the radar loop NOW — its autoplay gate only ran on tile-load / the 4-min refresh,
     // which could leave the loop parked for minutes right after a warning popped.
     if(typeof updateRadarCtl==="function") updateRadarCtl();
+    if(typeof updateRadarSlot==="function") updateRadarSlot();   // a live warning summons the radar
   }else{
     STORM_FAMILY=null; STORM_PRIME="smartCard";
     body.classList.remove("storm");
     body.removeAttribute("data-storm");
+    if(typeof updateRadarSlot==="function") updateRadarSlot();   // …and it may stand down with the warning
     var scd0=document.getElementById("stormCd");
     if(scd0){ scd0.removeAttribute("data-exp"); scd0.removeAttribute("data-pre"); scd0.textContent=""; scd0.classList.remove("urgent","expired"); }
     [].forEach.call(document.querySelectorAll(".storm-prime"), function(e){ e.classList.remove("storm-prime"); });
@@ -3683,6 +3709,48 @@ document.addEventListener("click",function(e){
   if(b) setSkyView(b.getAttribute("data-v"));
 });
 
+/* ---- Conditional radar ----
+   The card is shown when the sky is a story and hidden when it isn't. "Worthy" means: Storm Mode,
+   an active warning/watch, thunder in the next 12 h, precipitation falling now (data-wx), or a
+   ≥40% rain chance inside the next 6 hours — i.e. every case where a visitor would actually open
+   a radar. Manual show (the rail button) overrides a calm verdict but never suppresses a stormy
+   one; the ✕ only needs to exist for the manual case. */
+var radarManual=false;
+function radarWorthy(){
+  if(document.body.classList.contains("storm")) return true;
+  if(smart.warning||smart.watch||smart.thunderSoon) return true;
+  var wx=document.body.getAttribute("data-wx");
+  if(wx==="rain"||wx==="storm"||wx==="snow") return true;
+  var hrs=smart.hourly||[];
+  for(var i=0;i<Math.min(6,hrs.length);i++){
+    var pp=hrs[i].probabilityOfPrecipitation;
+    if(pp&&pp.value!=null&&pp.value>=40) return true;
+  }
+  return false;
+}
+function updateRadarSlot(){
+  var worthy=radarWorthy(), show=worthy||radarManual;
+  var wasHidden=document.body.classList.contains("no-radar");
+  document.body.classList.toggle("no-radar",!show);
+  document.body.classList.toggle("radar-manual",show&&!worthy);
+  if(show&&wasHidden){
+    // Leaflet initialised into a display:none container; give it real dimensions and fresh frames.
+    if(rvMap) setTimeout(function(){ if(rvMap) rvMap.invalidateSize(); },0);
+    if(typeof refreshRadarLayer==="function") refreshRadarLayer();
+  }
+  if(show!==!wasHidden){
+    // The 24-hour chart re-measures only on WINDOW resize, but this toggle changes its container
+    // from full-row to a third of it (and back) with the window untouched — re-render, after the
+    // class change has actually laid out, or 24 labels get crammed into a 423px column.
+    setTimeout(function(){ if(typeof renderHourly24==="function") renderHourly24(); },0);
+  }
+  if(typeof scheduleMasonry==="function") scheduleMasonry();
+}
+document.addEventListener("click",function(e){
+  if(e.target.closest&&e.target.closest("#radarPeek")){ radarManual=true; updateRadarSlot(); }
+  if(e.target.closest&&e.target.closest("#rsHide")){ radarManual=false; setRadarFull(false); updateRadarSlot(); }
+});
+
 /* ---- Radar fullscreen ----
    The inline radar is a peek; this is the "where exactly, and when" view. The card itself goes
    fixed-position rather than cloning anything, so the Leaflet instance, the loop, the warning
@@ -4319,6 +4387,7 @@ function smartReason(){
   return "";
 }
 function updateSmartSlot(force){
+  if(typeof updateRadarSlot==="function") updateRadarSlot();   // same signals decide the radar's slot
   var body=document.getElementById("smartBody"), title=document.getElementById("smartTitle"), link=document.getElementById("smartLink");
   if(!body) return;
   var mode=stormy()?"storm":"calm";
@@ -4717,6 +4786,7 @@ document.getElementById("daily").addEventListener("click",function(e){
 });
 document.getElementById("alerts").addEventListener("click",function(e){
   if(e.target.closest(".a2-radar")){       // jump to this alert's polygons on the radar
+    radarManual=true; if(typeof updateRadarSlot==="function") updateRadarSlot();  // can't jump to a hidden card
     var rc=e.target.closest(".alert");
     e.stopPropagation();
     if(rc) showAlertOnRadar(rc.getAttribute("data-aid"));
