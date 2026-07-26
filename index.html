@@ -3718,13 +3718,18 @@ document.addEventListener("click",function(e){
 var radarManual=false;
 function radarWorthy(){
   if(document.body.classList.contains("storm")) return true;
-  if(smart.warning||smart.watch||smart.thunderSoon) return true;
+  if(smart.warning||smart.watch) return true;
   var wx=document.body.getAttribute("data-wx");
   if(wx==="rain"||wx==="storm"||wx==="snow") return true;
+  /* Deliberately NOT smart.thunderSoon: that flag serves the lightning slot and looks 12 hours
+     out, "slight chance" included — enough to keep the radar up all night for storms still eight
+     hours away. The radar's own question is "should I look at the sky NOW", so its window is the
+     same 6 hours as the rain-chance check. */
   var hrs=smart.hourly||[];
   for(var i=0;i<Math.min(6,hrs.length);i++){
     var pp=hrs[i].probabilityOfPrecipitation;
     if(pp&&pp.value!=null&&pp.value>=40) return true;
+    if(/thunder|t-?storm/i.test(hrs[i].shortForecast||"")) return true;
   }
   return false;
 }
