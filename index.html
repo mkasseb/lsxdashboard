@@ -273,15 +273,25 @@
   .dot{width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 8px var(--good)}
   .dot.stale{background:var(--warn);box-shadow:0 0 8px var(--warn)}
 
-  /* Storm banner. This is the ONE thing on the page allowed to glow — see the note on the storm
-     ordering block below for why the cards underneath gave theirs up. */
-  #stormBanner{display:none;align-items:center;gap:12px;background:linear-gradient(90deg,rgba(var(--storm),.25),rgba(var(--storm),.08));
-    border:1px solid rgba(var(--storm),.5);border-radius:var(--r-md);padding:12px 16px;margin-bottom:16px;
-    --pulse:var(--storm);animation:pulse 1.6s infinite;font-weight:700}
-  #stormBanner .bico{font-size:var(--fs-xl);display:inline-flex;color:rgb(var(--storm));flex:0 0 auto}
-  #stormBanner .btxt{font-size:var(--fs-lg);line-height:1.3}
-  @media (prefers-reduced-motion: reduce){#stormBanner{animation:none}}
-  body.storm #stormBanner{display:flex}
+  /* ===== Storm Mode emphasis =====
+     There was a full-width banner above this card that said the hazard's name and when it ends.
+     The alert card says both, in its own headline, with the tier badge and the zone match and the
+     guidance beside them — so the banner had become a louder copy of the line beneath it. What it
+     really contributed was WEIGHT: a wash of the event's colour at the top of the page saying
+     today is not a normal day. That weight belongs to the card carrying the information.
+     The weight is all OUTSIDE the text: a ring and a glow, no background tint. The banner could
+     wash itself in the event's colour because the only thing written on it was one line of --text;
+     this card carries muted metadata, accent links and tier badges, and a .16 storm tint lifted its
+     surfaces far enough to drop --muted to 3.78:1, --accent to 3.63 and --sev to 3.05. Border and
+     box-shadow sit outside every one of those backdrops, so the card can shout without moving a
+     single contrast ratio.
+     Still no pulse here. `.alert.lv-emergency` pulses and nothing else does — a page where every
+     card breathes has no top of the ramp, which is the same reason the cards gave their glow up
+     to the banner in the first place. This just hands it back. */
+  body.storm #alertsCard{
+    border-color:rgba(var(--storm),.75);
+    box-shadow:0 0 0 3px rgba(var(--storm),.20),0 0 26px rgba(var(--storm),.20),var(--shadow);
+  }
   /* Event-aware storm accent (--storm = R,G,B). Default convective red; families override below. */
   body.storm{--storm:255,45,85; background:radial-gradient(1200px 600px at 80% -10%, rgba(var(--storm),.10), transparent),var(--bg)}
   body.storm[data-storm="winter"]{--storm:122,150,245}   /* icy blue-violet */
@@ -314,7 +324,7 @@
      ramp had to compete with a border painted by family instead of by level. The ordering above is
      what actually does the work; these cards now just take a tinted hairline, and the banner keeps
      the glow to itself. */
-  body.storm #alertsCard,body.storm #radarCard,body.storm .storm-prime{
+  body.storm #radarCard,body.storm .storm-prime{
     border-color:rgba(var(--storm),.45);
   }
 
@@ -1164,7 +1174,6 @@
      the whole reason this exists) kept animating while everything else stopped. Uniform rather
      than only on #wxbg, so the next rule written as a shorthand doesn't quietly reopen the hole. */
   html.tab-hidden .logo .lg-sweep,
-  html.tab-hidden #stormBanner,
   html.tab-hidden .alert.lv-emergency,
   html.tab-hidden .snapbar .sb-spin,
   html.tab-hidden #wxbg::after,
@@ -1194,10 +1203,6 @@
       -webkit-backdrop-filter:blur(24px) saturate(1.5);
       backdrop-filter:blur(24px) saturate(1.5);
       border-color:var(--gline);
-    }
-    #stormBanner{
-      -webkit-backdrop-filter:blur(16px) saturate(1.4);
-      backdrop-filter:blur(16px) saturate(1.4);
     }
     .maplock-pill,.maplock-toggle{
       -webkit-backdrop-filter:blur(10px);
@@ -1464,16 +1469,6 @@
 
 <div id="snapBar" class="snapbar"><span class="sb-spin"></span><span id="snapBarText"></span></div>
 
-<div id="stormBanner">
-  <div class="bico"><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg></div>
-  <!-- One line. The banner used to carry a second line of NWS guidance, which existed because the
-       alert card kept its instruction folded away in a drawer — the banner was the only place the
-       advice appeared without a tap. The card shows What / When / Impacts / What to do itself now,
-       and it sits directly beneath this, so the subline had become the same sentence twice within
-       a screen. What is left is what the card below cannot be: a flag, above everything, that says
-       which hazard is running and until when. -->
-  <div class="btxt" id="stormText">Active Warning</div>
-</div>
 
 <div class="grid">
 
@@ -1727,14 +1722,6 @@ function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replac
 /* One reference into the inline sprite at the top of <body>. Always aria-hidden: every icon in this
    page sits beside a text label that already says the same thing, so announcing it twice is noise. */
 function ic(name,cls){ return '<svg class="ic'+(cls?" "+cls:"")+'" aria-hidden="true"><use href="#i-'+name+'"/></svg>'; }
-/* A clock time, plus the weekday when it isn't today. A multi-day heat warning that "ends at
-   9:00 PM" reads as tonight; naming the day is the difference between true and useful. */
-function fmtWhen(d){
-  if(!d) return "";
-  var now=new Date(), sameDay=d.toDateString()===now.toDateString();
-  return d.toLocaleString([], sameDay?{hour:"numeric",minute:"2-digit"}
-                                     :{weekday:"short",hour:"numeric",minute:"2-digit"});
-}
 /* The DOM form, for the handful of places that set an element's contents rather than build HTML. */
 function icNode(name,cls){
   var s=document.createElementNS("http://www.w3.org/2000/svg","svg");
@@ -2710,19 +2697,7 @@ function loadAlerts(){
     feats.sort(function(a,b){var ra=rank[a.properties.severity],rb=rank[b.properties.severity];return (ra==null?5:ra)-(rb==null?5:rb);});
     var warn=null;
     for(var i=0;i<feats.length;i++){if((feats[i].properties.event||"").toLowerCase().indexOf("warning")>=0){warn=feats[i].properties;break;}}
-    /* The banner names ONE record's end time; the alert card directly beneath it names the latest
-       across every record of the same event, because that is how the list groups them. NWS split
-       today's Extreme Heat Warning into fifteen records ending anywhere from 7 PM tonight to 8 PM
-       Tuesday, so the two were giving different answers to "until when" for the same warning, a
-       screen apart. The card's answer is the right one — it is the whole event — so the banner
-       borrows it rather than reporting whichever segment happened to sort first. */
-    var warnEnds=0;
-    if(warn) feats.forEach(function(f){
-      if((f.properties.event||"")!==warn.event) return;
-      var e=Date.parse(f.properties.ends||f.properties.expires||"")||0;
-      if(e>warnEnds) warnEnds=e;
-    });
-    setStormMode(warn,warnEnds||null);
+    setStormMode(warn);
     // Gate smart.warning by family: it feeds radarWorthy(), and a Heat or Winter Storm Warning
     // shouldn't summon the radar by itself (falling snow already does via data-wx).
     var warnFam=warn?eventFamily(warn.event):null;
@@ -2935,7 +2910,7 @@ var FAMILY_CFG={
   wind:      {ico:"wind",    prime:"obsCard"},
   fire:      {ico:"fire",    prime:"riskCard"}
 };
-function setStormMode(warnProps,groupEnds){
+function setStormMode(warnProps){
   var body=document.body;
   if(warnProps){
     var fam=eventFamily(warnProps.event);
@@ -2946,22 +2921,6 @@ function setStormMode(warnProps,groupEnds){
     // mark the event-relevant card so it gets the glow (and the masonry floats it to the front)
     [].forEach.call(document.querySelectorAll(".storm-prime"), function(e){ e.classList.remove("storm-prime"); });
     var pc=document.getElementById(cfg.prime); if(pc) pc.classList.add("storm-prime");
-    var exp=groupEnds||warnProps.ends||warnProps.expires;   // see the caller: the whole event's end
-    // Name the day when the window doesn't end today. "until 9:00 PM" on a 23-hour heat warning was
-    // true and useless — it read as tonight.
-    var expStr=exp?fmtWhen(new Date(exp)):"";
-    // Warnings issued ahead of their window (routine for winter storms) must count down to the
-    // START — the old code showed "17h left" for the END of something that hadn't begun.
-    var onsetMs=Date.parse(warnProps.onset||warnProps.effective||"")||0;
-    var pending=!!(onsetMs&&Date.now()<onsetMs);
-    var startStr=pending?fmtWhen(new Date(onsetMs)):"";
-    // The icon lives in .bico only. It used to be set there AND concatenated into the headline, so
-    // the banner carried the same mark twice at two different sizes.
-    var bico=document.querySelector("#stormBanner .bico");
-    if(bico) bico.innerHTML=ic(alertIcon(warnProps.event,cfg.ico));
-    document.getElementById("stormText").textContent=warnProps.event
-      +(pending?(startStr?" — from "+startStr:""):(expStr?" — until "+expStr:""));
-    if(typeof tickCountdowns==="function") tickCountdowns();
     // Start the radar loop NOW — its autoplay gate only ran on tile-load / the 4-min refresh,
     // which could leave the loop parked for minutes right after a warning popped.
     if(typeof updateRadarCtl==="function") updateRadarCtl();
