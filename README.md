@@ -31,16 +31,22 @@ python3 -m http.server 8787
 
 Then open <http://localhost:8787>.
 
-With no build step there is nothing between an edit and production, so the three mistakes that
-would ship silently are checked mechanically — a syntax error in the inline script, an origin the
-CSP doesn't declare, and an icon name with no symbol in the sprite:
+With no build step there is nothing between an edit and production, so the mistakes that would
+ship silently are checked mechanically:
 
 ```bash
-python3 tools/check.py
+python3 tools/check.py        # syntax, CSP origins, icon names
+node tools/logic-tests.js     # the functions that decide something
 ```
 
-CI runs the same command on every pull request. See [`tools/check.py`](tools/check.py) for why
-those three and not others.
+[`tools/check.py`](tools/check.py) catches the three footguns this repo's shape creates — a syntax
+error in the inline script, an origin the CSP doesn't declare, and an icon name with no `<symbol>`.
+[`tools/logic-tests.js`](tools/logic-tests.js) covers the pure decision functions: `rangeRow()`,
+`alertLevel()` and `stormSubline()`. With no build step there is nothing to import from, so it
+lifts them out of `index.html` by name and runs them — which means a rename fails the suite loudly
+rather than leaving it silently testing nothing. Anything that paints is left to the eye.
+
+CI runs both on every pull request.
 
 ## Deploying
 

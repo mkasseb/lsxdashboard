@@ -3621,10 +3621,33 @@ function renderContext(){
    7-day supplies today's high/low. Either can land first, so both call this and it renders
    whatever is currently known — the same idempotent-repaint contract renderCurrentCtx uses. */
 var heroNow={temp:null};
-function renderHeroToday(){
-  var el=document.getElementById("ccToday");
-  if(!el) return;
-  var d0=(smart.days&&smart.days[0])||null, d1=(smart.days&&smart.days[1])||null;
+/* Where the "now" mark sits on the range bar, as a 0-1 fraction of the track, or null when there
+   is nothing to mark. Split out of the paint so it can be exercised without a browser — see
+   tools/logic-tests.js. The two ends are deliberately NOT sorted: left is the earlier reading and
+   right the later one, so chronology survives and a descending bar means the cold is coming.
+   An identical pair has no position to mark but is still a true thing to draw, so it returns null
+   rather than suppressing the row — and never NaN, which would emit `left:NaN%`. */
+function rangeMark(lo,hi,now){
+  if(lo==null||hi==null||now==null||hi===lo) return null;
+  return Math.max(0,Math.min(1,(now-lo)/(hi-lo)));
+}
+/* Everything the range row decides, in one place with no DOM in reach: which two readings are the
+   ends, whether there is a row at all, and where the mark goes. The paint below only formats what
+   this returns — which is the point, because the bug this shape exists to prevent lived in a guard,
+   not in the arithmetic, and a guard buried in a paint function cannot be tested.
+
+   Both ends is the ONLY requirement. It used to also demand hi>lo, which quietly drew nothing on
+   the one evening the row matters most: after the last daytime period the ends are tonight's low
+   and TOMORROW's high, so an Arctic front puts tomorrow below tonight — the reading most worth
+   seeing, and the only one that vanished. Nothing else needed changing: rangeMark()'s fraction
+   already handles a descending pair, because both differences flip sign together.
+
+   The gradient is not what tells you the direction — tCol() maps each end by its ABSOLUTE value on
+   the scale the rest of the page shares, so 62°→48° is green-to-green and reads as two mild
+   readings, which is what they are. Direction comes from the numbers and the mark's position. That
+   is the deliberate trade made when this bar joined the shared scale: a gradient tuned to dramatise
+   each row's own delta would make identical colours mean different things in different cards. */
+function rangeRow(d0,d1,now){
   var lo=d0&&d0.night?d0.night.temperature:null;
   var hi=d0&&d0.day?d0.day.temperature:null;
   /* After the last daytime period has passed, the NWS feed's first entry is night-only, so there is
@@ -3632,14 +3655,17 @@ function renderHeroToday(){
      back to tonight's low against TOMORROW's high, and say so, rather than showing nothing. */
   var nextDay=false;
   if(hi==null&&d1&&d1.day&&d1.day.temperature!=null){ hi=d1.day.temperature; nextDay=true; }
+  if(hi==null||lo==null) return null;
+  return {lo:lo, hi:hi, nextDay:nextDay, mark:rangeMark(lo,hi,now)};
+}
+function renderHeroToday(){
+  var el=document.getElementById("ccToday");
+  if(!el) return;
+  var r=rangeRow((smart.days&&smart.days[0])||null,(smart.days&&smart.days[1])||null,heroNow.temp);
   var out="";
-  // A range still needs both ends and a positive span.
-  if(hi!=null&&lo!=null&&hi>lo){
-    var t=heroNow.temp, mark="";
-    if(t!=null){
-      var f=Math.max(0,Math.min(1,(t-lo)/(hi-lo)));
-      mark='<b style="left:'+(f*100).toFixed(1)+'%"></b>';
-    }
+  if(r){
+    var lo=r.lo, hi=r.hi, nextDay=r.nextDay;
+    var mark=(r.mark==null)?"":'<b style="left:'+(r.mark*100).toFixed(1)+'%"></b>';
     out+='<div class="cc-range">'
       +'<span class="cr-lbl">'+(nextDay?"Tonight":"Today")+'</span>'
       +'<span class="cr-lo" style="color:'+tCol(lo)+'">'+lo+'°</span>'
