@@ -2144,10 +2144,6 @@ function alertDo(instruction){
   return '<div class="a2-do"><b>What to do</b>'+alertParas(instruction).map(function(p){
     return '<p>'+esc(p)+'</p>';}).join("")+'</div>';
 }
-/* Bullets that name places rather than describe the hazard. These are the county list written out
-   as a sentence, so they sit with the county chips (i.e. in the drawer) instead of ahead of them.
-   Keyed lowercase because parseAlertBullets title-cases whatever NWS wrote. */
-var GEO_BULLET={"where":1,"target area":1};
 var AREA_CHIPS=6;   // county chips shown before the "+N more" expander
 function degToCompass(d){
   if(d==null)return "";
@@ -2794,41 +2790,35 @@ function loadAlerts(){
       if(g.earliest&&g.latest&&g.latest>g.earliest){
         prog=Math.max(0,Math.min(100,(Date.now()-g.earliest)/(g.latest-g.earliest)*100));
       }
-      /* ---- what the hazard IS, above where it is ----
-         The NWS bullets and the instruction used to live entirely inside the collapsed drawer,
-         below the county list, so the two questions a warning exists to answer \u2014 what is happening
-         and what should I do \u2014 sat a scroll and a tap behind a wall of place names. They render in
-         the card body now (.a2-lede) and geography follows them.
-         Statements are the exception: SPS / hydrologic-outlook prose is long and low-stakes, and a
-         page carrying six of them open would bury the warning above it. Those keep the drawer. */
+      /* ---- one line on the card, the rest a tap away ----
+         The card had grown to 934px: What, When, Impacts, the whole NWS instruction, and the county
+         chips, all before the fold. That is more than anyone reads standing outside deciding
+         whether to go out, and a card nobody finishes is not safer than a card they do.
+         What stays is the one sentence that says what the hazard IS. When, Impacts, What-to-do,
+         Where, the zone-group breakdown and the counties are all behind Details.
+         This walks back part of the earlier restructure on purpose. The half that stands is the
+         ORDER — hazard before geography, never forty place names between a reader and the words
+         "heat stroke is an emergency". The half that went too far was putting all of it on the
+         card at once.
+         Only the LEADING alert gets even that line. glist is sorted by level, then by whether it
+         covers you, then by CAP severity, so index 0 is the alert this page was opened for; and
+         NWS writes related products as a set, so a second card's What tends to restate the first
+         ("For the Extreme Heat Warning... For the Heat Advisory..."). A statement never leads. */
       var bullets=parseAlertBullets(bp.description);
-      var lede="", detail="", drawerBullets=bullets;
-      /* Only the LEADING alert opens itself up. glist is already sorted by level, then by whether
-         it covers you, then by CAP severity — so index 0 is the one you needed this page for, and
-         it is the one the acceptance criterion is written about ("a multi-county warning").
-         Expanding all of them was the first attempt and it read badly the moment two arrived,
-         because NWS issues related products together and writes them as a set: with a Heat Warning
-         and a Heat Advisory up, the Advisory's description names BOTH events and its instruction
-         contains the Warning's word for word plus one paragraph. The second card was ~90% a
-         restatement of the first, at full length, above the fold. A statement never leads. */
-      var upFront=(gi===0)&&g.lv.k!=="statement";
-      if(upFront){
-        // WHERE restates in prose exactly what the chips below say. Keep it, but in the drawer.
-        var ledeBullets=bullets.filter(function(b){ return !GEO_BULLET[b.k.toLowerCase()]; });
-        drawerBullets=bullets.filter(function(b){ return GEO_BULLET[b.k.toLowerCase()]; });
-        if(ledeBullets.length){ lede+=alertKV(ledeBullets); }
-        else if(bp.description){
-          // Unparseable description: the whole thing is the lede, and nothing is left to drawer.
-          lede+=alertParas(bp.description).map(function(p){return '<p>'+esc(p)+'</p>';}).join("");
-          drawerBullets=[];
-        }
-        if(bp.instruction) lede+=alertDo(bp.instruction);
+      var lede="", detail="";
+      if(gi===0&&g.lv.k!=="statement"){
+        var whatB=bullets.filter(function(b){ return b.k.toLowerCase()==="what"; });
+        if(whatB.length) lede=alertKV(whatB);
       }
-      if(drawerBullets.length){ detail+=alertKV(drawerBullets); }
-      else if(!upFront&&bp.description){
+      // Everything the lede didn't take. No What bullet (an unparseable product) simply means no
+      // summary line — the full prose is in the drawer, and a truncator guessing at a first
+      // sentence is how a warning ends up quoted out of context.
+      var rest=lede?bullets.filter(function(b){ return b.k.toLowerCase()!=="what"; }):bullets;
+      if(rest.length) detail+=alertKV(rest);
+      else if(!lede&&bp.description){
         detail+=alertParas(bp.description).map(function(p){return '<p>'+esc(p)+'</p>';}).join("");
       }
-      if(!upFront&&bp.instruction) detail+=alertDo(bp.instruction);
+      if(bp.instruction) detail+=alertDo(bp.instruction);
       if(g.segs.length>1){
         detail+='<div class="a2-seg"><b>'+g.segs.length+' zone groups:</b> '+g.segs.map(function(f){
           var p2=f.properties, e=p2.ends||p2.expires;
@@ -2837,12 +2827,14 @@ function loadAlerts(){
           return esc(String(ar))+" counties until "+esc(es);
         }).join(" \u00b7 ")+'</div>';
       }
-      /* ---- geography, collapsed ----
-         A regional heat warning lists 40-plus counties. Six is what fits before the list becomes
-         the card; the rest are one tap away. The order is the order NWS issued them in — nothing
-         in the feed carries a county centroid, so "nearest first" would be a guess dressed as a
-         fact. What actually answers "does this include me" is the badge in .a2-top, which is a
-         real point-in-polygon or affected-zone match. */
+      /* ---- geography, in the drawer ----
+         The county list is the last thing on the card and now lives inside Details with everything
+         else. What answers "does this include me" is the badge up in .a2-top — a real
+         point-in-polygon or affected-zone match — so the list itself is reference, not headline.
+         Still capped at six with a "+N more": a regional heat warning runs to forty-plus, and an
+         opened drawer is not a reason to hand someone all of them at once. The order is the order
+         NWS issued them in; nothing in the feed carries a county centroid, so "nearest first"
+         would be a guess dressed as a fact. */
       var moreN=Math.max(0,g.counties.length-AREA_CHIPS);
       var chips=g.counties.map(function(c,i){
         return '<span class="a2-chip'+(i>=AREA_CHIPS?" a2-xtra":"")+'">'+esc(c)+'</span>';
@@ -2851,6 +2843,7 @@ function loadAlerts(){
         +(g.counties.length>1?"Counties":"County")+'</span>'+chips
         +(moreN?'<button type="button" class="a2-more" aria-label="Show '+moreN+' more '
           +(moreN>1?'counties':'county')+'">+'+moreN+' more</button>':'')+'</div>':'';
+      detail+=areasHTML;          // counties are the tail of the drawer, after the prose
       var aid=esc(g.ev);
       // A polygon hit is a real point-in-shape test; a zone hit only says your zone is listed.
       // The badge says whichever is actually true.
@@ -2883,7 +2876,6 @@ function loadAlerts(){
           +'<div class="a2-times"><span>'+(pending?"begins ":"")+esc(startStr||"in effect")+'</span><span>ends '+esc(endStr)+'</span></div></div>'
           :'<div class="a2-times"><span>Through '+esc(endStr)+'</span></div>')
         +(lede?'<div class="a2-lede">'+lede+'</div>':'')
-        +areasHTML
         +((detail||g.mapped)?'<div class="a2-foot">'
           +(detail?'<button type="button" class="a2-hint" aria-expanded="'+(openIds[aid]?'true':'false')
             +'" aria-controls="'+drawerId+'">Details <span class="a-chev">\u25be</span></button>':'')
