@@ -2803,7 +2803,15 @@ function loadAlerts(){
          page carrying six of them open would bury the warning above it. Those keep the drawer. */
       var bullets=parseAlertBullets(bp.description);
       var lede="", detail="", drawerBullets=bullets;
-      var upFront=g.lv.k!=="statement";
+      /* Only the LEADING alert opens itself up. glist is already sorted by level, then by whether
+         it covers you, then by CAP severity — so index 0 is the one you needed this page for, and
+         it is the one the acceptance criterion is written about ("a multi-county warning").
+         Expanding all of them was the first attempt and it read badly the moment two arrived,
+         because NWS issues related products together and writes them as a set: with a Heat Warning
+         and a Heat Advisory up, the Advisory's description names BOTH events and its instruction
+         contains the Warning's word for word plus one paragraph. The second card was ~90% a
+         restatement of the first, at full length, above the fold. A statement never leads. */
+      var upFront=(gi===0)&&g.lv.k!=="statement";
       if(upFront){
         // WHERE restates in prose exactly what the chips below say. Keep it, but in the drawer.
         var ledeBullets=bullets.filter(function(b){ return !GEO_BULLET[b.k.toLowerCase()]; });
