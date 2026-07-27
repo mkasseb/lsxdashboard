@@ -181,16 +181,16 @@ function check(name, actual, expected) {
     check(`${fam} carries no banner subline`, 'sub' in cfg, false);
   }
 
-  // The fold list. `merge` marks families whose products are graduated tiers of ONE hazard, and
-  // its value titles the folded card. Convective and flood must never gain it: a Tornado Warning
-  // and a Severe Thunderstorm Watch share a family without being the same hazard, and a Flash
-  // Flood Warning is not a tier of a river Flood Warning. Adding `merge` to either would silently
-  // start folding distinct hazards into one card — this is the guard that makes it loud.
+  // The fold list. `merge` marks families whose products are graduated tiers of ONE hazard and
+  // fold into a single banner. Convective and flood must never gain it: a Tornado Warning and a
+  // Severe Thunderstorm Watch share a family without being the same hazard, and a Flash Flood
+  // Warning is not a tier of a river Flood Warning. Adding `merge` to either would silently
+  // start folding distinct hazards into one banner — this is the guard that makes it loud.
   check('convective never folds', 'merge' in SUBJECT.FAMILY_CFG.convective, false);
   check('flood never folds', 'merge' in SUBJECT.FAMILY_CFG.flood, false);
   for (const fam of ['heat', 'winter', 'wind', 'fire']) {
     const m = SUBJECT.FAMILY_CFG[fam].merge;
-    check(`${fam} folds under a card title`, typeof m === 'string' && m.length > 0, true);
+    check(`${fam} folds as one hazard`, typeof m === 'string' && m.length > 0, true);
   }
 }
 
