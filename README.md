@@ -1,20 +1,22 @@
-# LSX Weather Command
+# LSX Weather
 
-A one-page weather dashboard for the **NWS St. Louis (LSX) County Warning Area** — alerts, radar,
-forecasts, river gauges, and climate context for a location inside the CWA.
+A one-page weather dashboard for the **NWS St. Louis (LSX) County Warning Area** — eastern Missouri
+and southwest Illinois. Alerts, radar, forecasts, river gauges, and climate context for a location
+inside the CWA.
 
 Not an official NWS product. During severe weather, defer to official warnings and a NOAA Weather Radio.
 
 ## What it is
 
-One file. [`index.html`](index.html) is the entire application: ~840 lines of CSS, ~265 lines of
-markup, and ~3,900 lines of JavaScript, all inline.
+One file. [`index.html`](index.html) is the entire application: ~1,010 lines of CSS, ~315 lines of
+markup, and ~3,965 lines of JavaScript, all inline.
 
 - **No build step.** No bundler, no transpiler, no `package.json`. Edit the file, reload the page.
 - **No API keys.** Every feed was chosen because it is keyless and CORS-open, so the whole thing
   runs as a static page with no server and no secrets.
 - **Two runtime dependencies**, both from a CDN with SRI hashes: Leaflet 1.9.4 for the maps, and
-  Meteocons for the weather icons. Both degrade gracefully if the CDN is unreachable.
+  Meteocons for the sky-condition icons. Both degrade gracefully if the CDN is unreachable — every
+  other icon on the page comes from an inline sprite that ships with the file (see below).
 - **Installable PWA** via [`manifest.webmanifest`](manifest.webmanifest). There is deliberately no
   service worker — return visits paint instantly from a `localStorage` snapshot instead (see below).
 
@@ -28,6 +30,23 @@ python3 -m http.server 8787
 ```
 
 Then open <http://localhost:8787>.
+
+With no build step there is nothing between an edit and production, so the mistakes that would
+ship silently are checked mechanically:
+
+```bash
+python3 tools/check.py        # syntax, CSP origins, icon names
+node tools/logic-tests.js     # the functions that decide something
+```
+
+[`tools/check.py`](tools/check.py) catches the three footguns this repo's shape creates — a syntax
+error in the inline script, an origin the CSP doesn't declare, and an icon name with no `<symbol>`.
+[`tools/logic-tests.js`](tools/logic-tests.js) covers the pure decision functions: `rangeRow()`,
+`alertLevel()` and `stormSubline()`. With no build step there is nothing to import from, so it
+lifts them out of `index.html` by name and runs them — which means a rename fails the suite loudly
+rather than leaving it silently testing nothing. Anything that paints is left to the eye.
+
+CI runs both on every pull request.
 
 ## Deploying
 
@@ -59,8 +78,21 @@ All public-domain or openly licensed, all keyless.
 | Open-Meteo | Air quality, UV index, and the location geocoder |
 | NESDIS / GOES-19 | Satellite imagery |
 
-Basemap © CARTO & OpenStreetMap contributors. Weather icons by
-[Meteocons](https://github.com/basmilius/weather-icons) (Bas Milius, MIT).
+Basemap © CARTO & OpenStreetMap contributors.
+
+Two icon sets, both MIT:
+
+- **Sky conditions** — [Meteocons](https://github.com/basmilius/weather-icons), © Bas Milius. Loaded
+  from a CDN and drawn in colour in the hero and the 24-hour chart.
+- **Everything else** — the inline `<svg id="sprite">` in [`index.html`](index.html). Roughly half of
+  its 35 glyphs — the interface marks (close, expand, lock, pin, check, play/pause) and the generic
+  data marks (alert triangle, info, flag, bar chart, trending-down, wind, droplet, paper plane, bolt)
+  — are drawn from, or closely after, [Feather](https://feathericons.com), © 2013–2023 Cole Bemis.
+  The weather-specific glyphs (cloud, rain, storm, snow, flood, tornado, fog, fire, drought,
+  thermometers, UV, air) are original to this project.
+
+Both licences are the MIT licence, which asks that the copyright notice travel with the work — hence
+the two names above and the credit line in the page footer.
 
 ## How it fits together
 
@@ -68,6 +100,54 @@ The script is sectioned by `/* ==== BANNER ==== */` comments and reads top to bo
 helpers → ~15 per-card loaders → derived renderers → orchestration → scheduler → layout engine.
 
 A few things are load-bearing and worth understanding before changing anything:
+
+**One icon language, and it is not emoji.** Every mark on the page except the sky-condition icons
+comes from the `<svg id="sprite">` block at the top of `<body>`, drawn with `ic("name")`. Icons are
+stroked and sized in `em`, so a mark inherits the colour and the size of the label it sits in —
+which is the whole reason for the change. The page used to draw hazards in emoji, and emoji are a
+separate rendering engine: they carry their own palette, so a heat mark could not take a warning's
+colour; they render as a different picture on every platform; they sit off the text baseline; and
+they have tone, which is a strange thing for a life-safety warning to have. Worse, nothing tied
+them together — heat was a sweating face in five places and a flame in two, and rain was a cloud,
+a droplet or an umbrella depending on which loader drew it. The sprite is one glyph per *concept*,
+so those are now the same picture everywhere.
+
+It is inline rather than a CDN set for the same reason Meteocons has a fallback at all: a page that
+someone opens during severe weather cannot have its icons fail with the network. Inline also means
+no origin to add to the CSP. `tools/check.py` fails if a name has no `<symbol>`, or if a `<symbol>`
+has no caller — a `<use>` pointing at a missing id renders *nothing at all*, with no error anywhere,
+so a typo in one arm of `hazIcon()` would silently drop an icon and stay dropped. Meteocons still
+draws the sky in colour in the hero and the 24-hour chart, and `wxiFail()` now falls back to a
+sprite glyph at the size the dead `<img>` had reserved.
+
+**Severity is one ramp.** `alertLevel()` returns one of `emergency → warning → watch → advisory →
+statement`, and the level sets `--lv` on the card; every tinted thing inside it — the rail, the
+tint, the tier tag, the progress bar, the "what to do" block — reads that one variable, mixed with
+`color-mix()` so the tints follow the light theme instead of staying tuned to the dark one. This
+replaced two functions that classified the same alert by two different rules at once: `alertClass()`
+on CAP `severity` and `alertTier()` on the word in the event name. They disagree in practice — a
+Flood Advisory can carry severity `Severe` — so a card would arrive tinted by one and tagged by the
+other. The ramp ranks by the word, because that is what the reader is being asked to act on, and
+lets CAP severity escalate (never demote) a step above it; a tornado warning is promoted outright,
+being the one event where the word and the stakes are not the same size. `--storm` is *not* part of
+this and stays: it answers "what kind of weather", which is a different question from "how bad".
+
+**The page spends colour like it is scarce.** Saturated colour means severity, and links are blue.
+That is the whole budget. Storm Mode used to ring three cards in the family accent while the banner
+above them glowed in the same colour, so a warning arrived as four concentric halos and the alert
+card's own severity ramp had to compete with a border painted by family rather than by level — the
+banner keeps the glow now and the cards take a tinted hairline. Countdowns moved off `--accent` for
+the same reason: rendered in the link colour, "23h 16m left" read as something you could click.
+
+**Type carries the hierarchy.** Sizes come from `--fs-*`, radii from `--r-*`, spacing from `--sp-*`.
+There were 23 distinct font sizes and 19 pill classes that each defined their own geometry from
+scratch, which is how chips sitting side by side in one card ended up with radii between 8px and
+22px. The pill classes all still exist by name — the JS builds them by name and restored snapshots
+carry those names — but they now declare only what differs. Anything naming a region of the page
+(card titles, band rails, the Bottom Line's own label) is the *eyebrow*: `--fs-xs`, 700, uppercase,
+`--ls-eyebrow`, muted. There used to be three idioms for that one job. Chart and station-plot
+internals deliberately stay on explicit pixels: those values are tuned to SVG geometry, not to the
+text system, and folding them into the type scale would be a category error.
 
 **The page is ordered by what a visitor came for.** Alerts first (in calm weather that card
 collapses to a single all-clear line), then the Bottom Line, then the hero band — "Now & Next 24
@@ -139,7 +219,7 @@ without carrying the risk — and the map used to come up on a day the Bottom Li
 An hour with no probability at all still passes; unknown risk shouldn't hide the map. On a
 clear day the card (satellite tab included) is hidden, the conditions card takes the full row, and
 the 24-hour chart gets the whole width back — all ~24 hour labels, exactly the thing the hero
-merge had traded away. A rail button summons it by hand; the ✕ to dismiss exists only on a
+merge had traded away. A rail button summons it by hand; the Hide button exists only on a
 hand-summoned card, since an auto-shown one would re-appear on the next update. While hidden it
 fetches no tiles (`refreshRadarLayer` returns early), and the show path re-renders the 24-hour
 chart, because the chart only re-measures on *window* resize and this toggle resizes its container
@@ -230,6 +310,20 @@ cold paint is the cheaper mistake.
 **Storm mode.** An active warning is classified into a family (convective / winter / flood / heat /
 wind / fire), which sets the accent colour, floats the most relevant card to the top of the layout,
 and rewrites the banner.
+
+The banner's second line comes from the NWS instruction for *that* warning, via `stormSubline()`,
+not from a string keyed to the family — a family as broad as "winter" spans a blizzard and a frost
+advisory, and one sentence cannot be useful for both. `FAMILY_CFG.sub` is the fallback, and three
+things send it there: a product with no instruction, one written entirely in upper case (legacy
+all-caps products; the alert card has room to show those, the banner does not), and one that opens
+by defining itself — *"A Red Flag Warning means critical fire weather conditions…"* is true and no
+use to someone deciding what to do in the next minute. Sentences are taken whole up to a budget,
+because the useful first sentence of a tornado instruction is "TAKE COVER NOW!" and on its own that
+is an alarm without an instruction.
+
+The line before this one used to narrate the page's own layout — *"Regional feels-like moved up"* —
+which says nothing about the weather and only parses for someone who saw the page **before** the
+warning fired. The banner has one job: what this means and what to do about it.
 
 **Adding a card** means touching five places: the markup, the `RANK` map in `layoutMasonry`'s
 `tier()`, `SNAP_PARTS`, the `SCHED` table, and `clearLocationUI`/`resetLocationState`.

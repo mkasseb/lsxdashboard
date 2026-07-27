@@ -20,3 +20,4 @@ jobs:
         with:
           node-version: '22'
       - run: python3 tools/check.py
+      - run: node tools/logic-tests.js
