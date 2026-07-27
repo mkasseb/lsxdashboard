@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="LSX Weather">
 <meta name="theme-color" content="#0a0e14">
-<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Cstyle%3E.bg%7Bfill%3A%231e63c9%7D%40media(prefers-color-scheme%3Adark)%7B.bg%7Bfill%3A%231b3a66%7D%7D%3C%2Fstyle%3E%3Crect%20class%3D%22bg%22%20width%3D%22100%22%20height%3D%22100%22%20rx%3D%2222%22%2F%3E%3Cpath%20d%3D%22M57%2022%20L42%2054%20L51%2054%20L44%2080%20L63%2048%20L53%2048%20L61%2022%20Z%22%20fill%3D%22%23ffd13f%22%2F%3E%3C%2Fsvg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Cstyle%3E.bg%7Bfill%3A%231e63c9%7D%40media%28prefers-color-scheme%3Adark%29%7B.bg%7Bfill%3A%2316376b%7D%7D%3C%2Fstyle%3E%3Crect%20class%3D%22bg%22%20width%3D%22100%22%20height%3D%22100%22%20rx%3D%2222%22%2F%3E%3Cpath%20d%3D%22M59%2016%2033%2054.5h13.6L41%2084l26-38.5H53.4Z%22%20fill%3D%22%23ffcf3d%22%2F%3E%3C%2Fsvg%3E">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
 <title>LSX Weather Command — St. Louis NWS CWA</title>
@@ -41,8 +41,8 @@
     --shadow:0 6px 24px rgba(0,0,0,.4);
     --inset:rgba(255,255,255,.03);--chip:rgba(255,255,255,.12);--glow:rgba(74,163,255,.08);
     --glass1:rgba(19,25,36,.62);--glass2:rgba(26,34,49,.54);--gline:rgba(255,255,255,.09);--gspec:rgba(255,255,255,.11);
-    /* Logo mark — dark variant: deeper tile, muted rings, subtle edge so it sits in the dark UI */
-    --logo-bg1:#173251;--logo-bg2:#2b62aa;--logo-ring:#8fbdf3;--logo-bolt:#ffd23f;--logo-bolt-stroke:#c9971d;--logo-core:#eaf4ff;--logo-edge:rgba(130,175,255,.30);
+    /* Logo mark — dark variant: deeper tile, quieter rings so the bolt carries the contrast */
+    --logo-bg1:#1b3f70;--logo-bg2:#122b4e;--logo-ring:#7fb6ff;--logo-bolt:#ffcf3d;
   }
   /* Light palette — data-theme always holds the RESOLVED theme ("light"/"dark"); the "auto"
      preference lives only in localStorage and is resolved by JS (boot script + OS-change listener) */
@@ -56,17 +56,17 @@
     --shadow:0 6px 20px rgba(20,32,58,.10),0 1px 3px rgba(20,32,58,.06);
     --inset:rgba(16,23,37,.045);--chip:rgba(16,23,37,.075);--glow:rgba(30,99,201,.10);
     --glass1:rgba(255,255,255,.88);--glass2:rgba(247,250,254,.82);--gline:rgba(16,23,37,.10);--gspec:rgba(255,255,255,.95);
-    /* Logo mark — original bright tile for light backgrounds */
-    --logo-bg1:#1e63c9;--logo-bg2:#4aa3ff;--logo-ring:#dbeeff;--logo-bolt:#ffd23f;--logo-bolt-stroke:#d99e1a;--logo-core:#ffffff;--logo-edge:transparent;
+    /* Logo mark — brighter tile for light backgrounds; the bolt gold is shared across both */
+    --logo-bg1:#2f7ae0;--logo-bg2:#1e63c9;--logo-ring:#dbeeff;--logo-bolt:#ffcf3d;
   }
-  /* Logo mark colors follow the --logo-* theme vars above */
+  /* Logo mark colours follow the --logo-* theme vars above. The bolt is a FILL and nothing else:
+     it used to carry a darker gold stroke around a saturated gold fill, which is the single most
+     reliable way to make a mark read as clip art. */
   .logo svg .lg-bg1{stop-color:var(--logo-bg1)}
   .logo svg .lg-bg2{stop-color:var(--logo-bg2)}
   .logo svg .lg-sweep-stop{stop-color:var(--logo-ring)}
   .logo svg .lg-rings{stroke:var(--logo-ring)}
-  .logo svg .lg-edge{stroke:var(--logo-edge)}
-  .logo svg .lg-bolt{fill:var(--logo-bolt);stroke:var(--logo-bolt-stroke)}
-  .logo svg .lg-core{fill:var(--logo-core)}
+  .logo svg .lg-bolt{fill:var(--logo-bolt)}
   *{box-sizing:border-box}
   html,body{margin:0;padding:0}
   body{
@@ -1101,25 +1101,34 @@
 <header class="top">
   <div class="brand">
     <div class="logo" aria-label="LSX Weather">
+      <!-- The bolt is CUT OUT of the radar rather than laid on top of it. Stacked, the two read as
+           two unrelated pictures fighting for the same 44px — rings saying "radar", a bolt saying
+           "storm", and the bolt simply occluding the rings. Knocked out with a clearance gap, they
+           read as one object, and the gap does the separating that an outline used to do badly.
+           #lgmask's black stroke IS that gap: widen the stroke to widen the halo. -->
       <svg viewBox="0 0 44 44" width="44" height="44" role="img" aria-hidden="true">
         <defs>
-          <linearGradient id="lgbg" x1="0" y1="0" x2="1" y2="1">
+          <linearGradient id="lgbg" x1="0" y1="0" x2="0" y2="1">
             <stop class="lg-bg1" offset="0"/><stop class="lg-bg2" offset="1"/>
           </linearGradient>
           <radialGradient id="lgsweep" cx="50%" cy="50%" r="50%">
-            <stop class="lg-sweep-stop" offset="0" stop-opacity=".95"/><stop class="lg-sweep-stop" offset="1" stop-opacity="0"/>
+            <stop class="lg-sweep-stop" offset=".15" stop-opacity=".5"/><stop class="lg-sweep-stop" offset="1" stop-opacity="0"/>
           </radialGradient>
+          <mask id="lgmask">
+            <rect width="44" height="44" fill="#fff"/>
+            <path d="M26 7 14.5 24H20.5L18 37 29.5 20H23.5Z" fill="#000" stroke="#000" stroke-width="2.6" stroke-linejoin="round"/>
+          </mask>
         </defs>
         <rect width="44" height="44" rx="11" fill="url(#lgbg)"/>
-        <rect class="lg-edge" x="0.7" y="0.7" width="42.6" height="42.6" rx="10.4" fill="none" stroke-width="1.2"/>
-        <g class="lg-rings" fill="none" stroke-linecap="round">
-          <circle cx="22" cy="22" r="14" stroke-width="1.3" opacity=".35"/>
-          <circle cx="22" cy="22" r="9" stroke-width="1.3" opacity=".5"/>
-          <circle cx="22" cy="22" r="4" stroke-width="1.3" opacity=".65"/>
+        <g mask="url(#lgmask)">
+          <g class="lg-rings" fill="none" stroke-width="1.5">
+            <circle cx="22" cy="22" r="15" opacity=".34"/>
+            <circle cx="22" cy="22" r="10" opacity=".46"/>
+            <circle cx="22" cy="22" r="5" opacity=".58"/>
+          </g>
+          <path class="lg-sweep" d="M22 22 22 7A15 15 0 0 0 7.6 16.9Z" fill="url(#lgsweep)"/>
         </g>
-        <path class="lg-sweep" d="M22 22 L22 6 A16 16 0 0 1 37 17 Z" fill="url(#lgsweep)"/>
-        <path class="lg-bolt" d="M25 8 L15.5 25 L21 25 L18 36 L29 18 L23.5 18 L28 8 Z" stroke-width="1" stroke-linejoin="round"/>
-        <circle class="lg-core" cx="22" cy="22" r="1.7"/>
+        <path class="lg-bolt" d="M26 7 14.5 24H20.5L18 37 29.5 20H23.5Z"/>
       </svg>
     </div>
     <div>
