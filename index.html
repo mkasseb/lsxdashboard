@@ -200,6 +200,13 @@
     white-space:nowrap;text-decoration:none}
   .jump a:hover,.jump a:focus-visible{color:var(--text);background:var(--chip);text-decoration:none}
   .jump a:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  /* The radar card only exists when the weather has earned it, and a nav that lists a section the
+     page doesn't currently have is worse than a nav that's one item shorter. The link comes and
+     goes with the card it points at.
+     It would have been easy to make this link summon the radar instead — but that is a third
+     control for one piece of state (the rail's "Show radar & satellite" and the card's own Hide
+     are already two), and a <nav> link that changes what the page contains isn't navigation. */
+  body.no-radar .jump a[href="#radarCard"]{display:none}
   /* Every jump target clears the bar. On .card generally rather than the six ids, because the
      radar-polygon and "+N more" jumps land on cards too and were already landing a little high. */
   .card,#main{scroll-margin-top:calc(var(--jump-h) + 12px)}
@@ -1337,8 +1344,7 @@
      underneath this bar. It has to be a direct child of <body>: a sticky element only sticks while
      its own containing block is on screen, so parking it inside <header> would unstick it the
      moment the header scrolled away, which is the exact moment it becomes useful.
-     Radar is listed even when the radar card is hidden — see the handler in the script, which
-     reveals it rather than scrolling to nothing. -->
+     Radar is the one entry that comes and goes — see body.no-radar in the stylesheet. -->
 <nav class="jump" id="jumpNav" aria-label="Jump to a section">
   <a href="#alertsCard">Alerts</a>
   <a href="#currentCard">Now</a>
@@ -4284,19 +4290,9 @@ document.addEventListener("click",function(e){
   if(e.target.closest&&e.target.closest("#radarPeek")){ radarManual=true; updateRadarSlot(); }
   if(e.target.closest&&e.target.closest("#rsHide")){ radarManual=false; setRadarFull(false); updateRadarSlot(); }
 });
-/* Jumping to a section that isn't there.
-   On a calm day the radar card is display:none, so "Radar" in the jump nav would scroll to a
-   zero-height nothing. Reveal it first and let the browser's own fragment navigation do the rest —
-   the class flips synchronously, so the element has real dimensions by the time the scroll runs.
-   The re-scroll covers what doesn't: updateRadarSlot defers invalidateSize and the 24-hour
-   re-render to a timeout, and both change how tall everything above the card is. */
-document.getElementById("jumpNav").addEventListener("click",function(e){
-  var a=e.target.closest&&e.target.closest("a[href^='#']"); if(!a) return;
-  var el=document.getElementById(a.getAttribute("href").slice(1));
-  if(!el||el.offsetParent||!document.body.classList.contains("no-radar")) return;
-  radarManual=true; updateRadarSlot();
-  setTimeout(function(){ try{ el.scrollIntoView(); }catch(_){} },80);
-});
+/* The jump nav needs no script: every link it shows points at a section that is on the page, and
+   the browser does the scrolling. The Radar entry hides itself with the card (body.no-radar in the
+   stylesheet) rather than being a link that summons it. */
 
 /* ---- Radar fullscreen ----
    The inline radar is a peek; this is the "where exactly, and when" view. The card itself goes
