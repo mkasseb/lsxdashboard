@@ -483,6 +483,21 @@
     font-variant-numeric:tabular-nums}
   /* a window that hasn't opened yet: hatched track, so an empty bar reads as "not started" not "no data" */
   .a2-time.pending .a2-prog{background:repeating-linear-gradient(45deg,var(--chip) 0 5px,transparent 5px 10px)}
+  /* Phase list of a folded hazard card — one product per row: its own tier dot, its own window.
+     The dots MUST track the .alert.lv-* ramp step for step; a warning-coloured dot on an advisory
+     row is the two-signals-disagreeing bug in miniature. (No emergency dot: an emergency never
+     folds, so no phase row can carry one.) */
+  .a2-phases{margin-top:9px;display:grid;gap:5px}
+  .a2-ph{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:var(--fs-sm);line-height:1.4}
+  .a2-ph .phd{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:0 0 auto}
+  .a2-ph.ph-warning .phd{background:var(--sev)}
+  .a2-ph.ph-watch .phd{background:var(--warn)}
+  .a2-ph.ph-advisory .phd{background:var(--accent)}
+  .a2-ph .phn{font-weight:700}
+  .a2-ph .php{display:inline-flex;color:var(--muted);cursor:help}
+  .a2-ph .pht{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+  /* a phase's own hazard line in the drawer, when the lead's text doesn't already carry it */
+  .alert-more p.a2-phwhat{margin-top:9px}
   /* The hazard itself, on the card rather than behind the "Details" tap. Same components as the
      drawer (.a2-kv rows, the .a2-do block) — only the placement changed. */
   .a2-lede{margin-top:11px;padding-top:10px;border-top:1px solid var(--border);
@@ -2406,12 +2421,18 @@ function loadRadar(){  // recenter on location change
 /* ===== Two-way linking between the radar polygons and the alert cards =====
    The list groups by event TYPE (all "Severe Thunderstorm Warning" segments share one card),
    while the map draws one polygon per segment — so a card maps to N polygons and every polygon
-   maps back to exactly one card. Both directions resolve through the event name. */
+   maps back to exactly one card. Both directions resolve through the event name — and a FOLDED
+   card (several products of one hazard family) lists every name it answers to in data-evs,
+   "|"-separated, so a polygon click still finds it and its radar button still flashes every
+   polygon it holds. */
 function findAlertCard(ev){
   var cards=document.querySelectorAll("#alerts .alert");
   for(var i=0;i<cards.length;i++){
     // data-aid was written HTML-escaped; getAttribute hands it back decoded, so compare raw
     if(cards[i].getAttribute("data-aid")===ev) return cards[i];
+    // a folded card answers to any of the products it holds ("|" can't appear in an event name)
+    var evs=cards[i].getAttribute("data-evs");
+    if(evs&&evs.split("|").indexOf(ev)>=0) return cards[i];
   }
   return null;
 }
@@ -2433,7 +2454,8 @@ function focusAlertCard(ev){
 var flashLayer=null, flashTimer=null;
 function showAlertOnRadar(ev){
   if(!rvMap) return;
-  var feats=lastWarnFeats.filter(function(f){ return isMappedAlert(f) && ((f.properties&&f.properties.event)||"")===ev; });
+  var evs=String(ev||"").split("|");   // a folded card sends every product it holds
+  var feats=lastWarnFeats.filter(function(f){ return isMappedAlert(f) && evs.indexOf((f.properties&&f.properties.event)||"")>=0; });
   if(!feats.length) return;
   if(flashTimer){ clearTimeout(flashTimer); flashTimer=null; }
   if(flashLayer){ rvMap.removeLayer(flashLayer); flashLayer=null; }
@@ -2759,14 +2781,51 @@ function loadAlerts(){
               latest:latest,earliest:earliest,counties:counties,hit:hit,
               mapped:segs.some(isMappedAlert)};   // only offer "show on radar" if it IS on the radar
     });
-    glist.sort(function(a,b){
+    function cardCmp(a,b){
       if(a.lv.rank!==b.lv.rank) return a.lv.rank-b.lv.rank;   // emergencies, then warnings, then watches
       if(!!a.hit!==!!b.hit) return a.hit?-1:1;                // the one over YOUR roof leads its level
       var ra=rank[a.sev],rb=rank[b.sev];
       return (ra==null?5:ra)-(rb==null?5:rb);                 // then by CAP severity within the level
-    });
+    }
+    glist.sort(cardCmp);
 
-    // ---- summary chips: what's active, by level, before you read a single alert ----
+    /* ---- one card per hazard, not one per NWS product ----
+       Graduated tiers of the same hazard arrive as separate products only because different zones
+       get different tiers, so a heat event renders as an Extreme Heat Warning card and a Heat
+       Advisory card that half-repeat each other — two cards reading as two hazards. Fold them:
+       the top-tier product hosts the card (its name, level and colour lead) and the others become
+       phases on it. Folding is per-family opt-in (FAMILY_CFG.merge), and an emergency or a
+       statement never folds in either direction — a Tornado Warning must not be a line item
+       inside anything, and a Special Weather Statement is not a tier of anything. The list is
+       already sorted, so the first product seen of a family IS its highest tier. */
+    var byFam={}, folded=[];
+    glist.forEach(function(g){
+      var fam=eventFamily(g.ev), cfg=FAMILY_CFG[fam];
+      if(!cfg||!cfg.merge||g.lv.k==="emergency"||g.lv.k==="statement"){ folded.push(g); return; }
+      var host=byFam[fam];
+      if(!host){
+        /* The host is its own first phase — but the fold below mutates the host's counties, segs
+           and window into the UNION, so the phase row snapshots the host's own facts first.
+           (counties is sliced because the fold appends to it in place; segs survives because
+           concat replaces the reference rather than growing it.) */
+        g.phases=[{ev:g.ev,lv:g.lv,best:g.best,earliest:g.earliest,latest:g.latest,
+                   counties:g.counties.slice(),segs:g.segs,hit:g.hit}];
+        g.famTitle=cfg.merge; byFam[fam]=g; folded.push(g); return;
+      }
+      host.phases.push(g);
+      host.segs=host.segs.concat(g.segs);
+      if(g.latest>host.latest) host.latest=g.latest;
+      if(g.earliest&&(!host.earliest||g.earliest<host.earliest)) host.earliest=g.earliest;
+      g.counties.forEach(function(c){ if(host.counties.indexOf(c)<0) host.counties.push(c); });
+      if(g.hit&&(!host.hit||HIT_RANK[g.hit]<HIT_RANK[host.hit])) host.hit=g.hit;
+      host.mapped=host.mapped||g.mapped;
+    });
+    glist=folded;
+    glist.sort(cardCmp);   // absorbing a phase can add "covers you", and that is a sort key
+
+    /* ---- summary chips: what's active, by level, before you read a single alert ----
+       Counted per CARD, not per product: the chips are the legend for the list under them, so a
+       folded family is one entry at its top tier — its lower tiers are on the card's phase list. */
     var tierCount={};
     glist.forEach(function(g){ tierCount[g.lv.k]=(tierCount[g.lv.k]||0)+1; });
     // explicit plurals — "Advisorys"/"Watchs" is what naive +"s" produces
@@ -2783,6 +2842,7 @@ function loadAlerts(){
     el.innerHTML=sumHTML+glist.map(function(g,gi){
       var fam=eventFamily(g.ev), fcfg=FAMILY_CFG[fam]||FAMILY_CFG.convective;
       var bp=(g.best&&g.best.properties)||{};
+      var mg=!!(g.phases&&g.phases.length>1);   // a folded card holding several products
       var endStr=g.latest?new Date(g.latest).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"\u2014";
       var startStr=g.earliest?new Date(g.earliest).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"";
       // elapsed-vs-remaining bar for the alert window; a window that hasn't opened yet is "pending"
@@ -2804,6 +2864,24 @@ function loadAlerts(){
          covers you, then by CAP severity, so index 0 is the alert this page was opened for; and
          NWS writes related products as a set, so a second card's What tends to restate the first
          ("For the Extreme Heat Warning... For the Heat Advisory..."). A statement never leads. */
+      /* ---- the phase list of a folded card ----
+         The bar above spans the whole hazard, earliest onset to last end; these rows say which
+         product owns which part of it. The tier dot restates each phase's own level because the
+         card wears only the LEAD's colour — without it a Heat Advisory row under a warning-tinted
+         card borrows severity it doesn't have. A per-phase pin appears only when the products
+         DISAGREE about covering you; when they all do, the card's badge has already said so. */
+      var phasesHTML="";
+      if(mg){
+        var allHit=g.phases.every(function(p){ return p.hit; });
+        phasesHTML='<div class="a2-phases">'+g.phases.map(function(ph){
+          var pPend=!!(ph.earliest&&Date.now()<ph.earliest);
+          var pe=ph.latest?new Date(ph.latest).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"—";
+          var ps=ph.earliest?new Date(ph.earliest).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"";
+          return '<div class="a2-ph ph-'+ph.lv.k+'"><span class="phd"></span><span class="phn">'+esc(ph.ev)+'</span>'
+            +(ph.hit&&!allHit?'<span class="php" title="'+esc(HIT_TEXT[ph.hit]||"Includes your location")+'">'+ic("pin")+'</span>':'')
+            +'<span class="pht">'+esc(pPend&&ps?ps+" – "+pe:"until "+pe)+'</span></div>';
+        }).join("")+'</div>';
+      }
       var bullets=parseAlertBullets(bp.description);
       var lede="", detail="";
       if(gi===0&&g.lv.k!=="statement"){
@@ -2818,8 +2896,28 @@ function loadAlerts(){
       else if(!lede&&bp.description){
         detail+=alertParas(bp.description).map(function(p){return '<p>'+esc(p)+'</p>';}).join("");
       }
+      /* A folded phase whose hazard statement the lead's text doesn't already carry. Usually it
+         does \u2014 graduated products ship one description naming every tier \u2014 and "already carries"
+         is tested by NAME, not string equality, because segments differ trivially ("up to 110"
+         here, "up to 111" one zone group over). Only when the lead never mentions the phase at all
+         (independently issued products) does the phase's own What line go in the drawer. The fold
+         must never be able to swallow a hazard statement. */
+      if(mg) g.phases.slice(1).forEach(function(ph){
+        if(String(bp.description||"").indexOf(ph.ev)>=0) return;
+        var pd=(ph.best&&ph.best.properties&&ph.best.properties.description)||"";
+        var pw=parseAlertBullets(pd).filter(function(b){ return b.k.toLowerCase()==="what"; })[0];
+        var v=pw?pw.v:(alertParas(pd)[0]||"");
+        if(v) detail+='<p class="a2-phwhat"><b>'+esc(ph.ev)+':</b> '+esc(v)+'</p>';
+      });
       if(bp.instruction) detail+=alertDo(bp.instruction);
-      if(g.segs.length>1){
+      if(mg){
+        // the per-product ledger: whose counties, until when \u2014 the facts the fold took off the top row
+        detail+='<div class="a2-seg">'+g.phases.map(function(ph){
+          var pe=ph.latest?new Date(ph.latest).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"\u2014";
+          return '<b>'+esc(ph.ev)+'</b> \u2014 '+ph.counties.length+(ph.counties.length===1?" county":" counties")
+            +' in '+ph.segs.length+(ph.segs.length===1?" zone group":" zone groups")+', ends '+esc(pe);
+        }).join("<br>")+'</div>';
+      } else if(g.segs.length>1){
         detail+='<div class="a2-seg"><b>'+g.segs.length+' zone groups:</b> '+g.segs.map(function(f){
           var p2=f.properties, e=p2.ends||p2.expires;
           var es=e?new Date(e).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"\u2014";
@@ -2849,7 +2947,9 @@ function loadAlerts(){
       // The badge says whichever is actually true.
       var meBadge=g.hit?'<span class="a2-me">'+ic("pin")+esc(HIT_TEXT[g.hit]||"Includes your location")+'</span>':'';
       // "×2" was a badge whose meaning lived inside the drawer it sat above. Same fact, in words.
-      var segTxt=g.segs.length>1?'<span class="a2-zc" title="NWS issued this event as '+g.segs.length
+      // A folded card's top row is already carrying a phase list — the zone-group tally moves to
+      // the drawer's per-product ledger rather than stacking a second count chip up here.
+      var segTxt=(!mg&&g.segs.length>1)?'<span class="a2-zc" title="NWS issued this event as '+g.segs.length
         +' separate records, each with its own counties and end time">'+g.segs.length+' zone groups</span>':'';
       /* The card is NOT a button, and this is the second attempt at that.
          It used to carry role="button" + tabindex, which reads well until you look at the
@@ -2862,10 +2962,12 @@ function loadAlerts(){
          handler) — that is a mouse convenience layered on a real control, not a substitute for one. */
       var drawerId="a2more-"+gi;
       return '<div class="alert lv-'+g.lv.k+(g.hit?' hits-me':'')+(openIds[aid]?' open':'')
-        +(detail?' has-more':'')+'" data-aid="'+aid+'">'
+        +(detail?' has-more':'')+'" data-aid="'+aid+'"'
+        // the map resolves polygons↔cards by event name; a folded card answers to ALL of its products'
+        +(mg?' data-evs="'+esc(g.phases.map(function(p){ return p.ev; }).join("|"))+'"':'')+'>'
         +'<div class="a2-top">'
           +'<span class="a2-ico">'+ic(alertIcon(g.ev,fcfg.ico))+'</span>'
-          +'<span class="a2-name">'+esc(g.ev)+'</span>'
+          +'<span class="a2-name">'+esc(mg?g.famTitle:g.ev)+'</span>'
           +'<span class="a2-tier">'+g.lv.label+'</span>'
           +meBadge
           +segTxt
@@ -2875,6 +2977,7 @@ function loadAlerts(){
         +(prog!=null?'<div class="a2-time'+(pending?' pending':'')+'"><div class="a2-prog"><i style="width:'+prog.toFixed(1)+'%"></i></div>'
           +'<div class="a2-times"><span>'+(pending?"begins ":"")+esc(startStr||"in effect")+'</span><span>ends '+esc(endStr)+'</span></div></div>'
           :'<div class="a2-times"><span>Through '+esc(endStr)+'</span></div>')
+        +phasesHTML
         +(lede?'<div class="a2-lede">'+lede+'</div>':'')
         +((detail||g.mapped)?'<div class="a2-foot">'
           +(detail?'<button type="button" class="a2-hint" aria-expanded="'+(openIds[aid]?'true':'false')
@@ -2907,14 +3010,20 @@ function eventFamily(ev){
    radar slot to the conditions card. Falling snow still summons the radar by itself through
    data-wx, which is the case a Winter Storm Warning would have wanted it for anyway. */
 var RADAR_FAMILIES={convective:1,flood:1};
-// Per-family presentation: icon, and the most-relevant card to float to the prime slot.
+/* Per-family presentation: icon, the most-relevant card to float to the prime slot, and — where
+   present — `merge`, the title of a folded card. A family carries `merge` only if its products are
+   graduated TIERS of one hazard: an Extreme Heat Warning and a Heat Advisory are the same air at
+   different strengths, and NWS even writes them as one text ("For the Extreme Heat Warning...
+   For the Heat Advisory..."). It is deliberately absent from convective and flood — a Tornado
+   Warning and a Severe Thunderstorm Watch share a family without being the same hazard, and a
+   Flash Flood Warning is not a tier of a river Flood Warning. */
 var FAMILY_CFG={
   convective:{ico:"storm",   prime:"obsCard"},
-  winter:    {ico:"snow",    prime:"obsCard"},
+  winter:    {ico:"snow",    prime:"obsCard",    merge:"Winter weather"},
   flood:     {ico:"flood",   prime:"riversCard"},
-  heat:      {ico:"heat",    prime:"obsCard"},
-  wind:      {ico:"wind",    prime:"obsCard"},
-  fire:      {ico:"fire",    prime:"riskCard"}
+  heat:      {ico:"heat",    prime:"obsCard",    merge:"Heat"},
+  wind:      {ico:"wind",    prime:"obsCard",    merge:"Wind"},
+  fire:      {ico:"fire",    prime:"riskCard",   merge:"Fire weather"}
 };
 function setStormMode(warnProps){
   var body=document.body;
@@ -5632,7 +5741,7 @@ document.getElementById("alerts").addEventListener("click",function(e){
     radarPref=true; if(typeof updateRadarSlot==="function") updateRadarSlot();  // can't jump to a hidden card
     var rc=e.target.closest(".alert");
     e.stopPropagation();
-    if(rc) showAlertOnRadar(rc.getAttribute("data-aid"));
+    if(rc) showAlertOnRadar(rc.getAttribute("data-evs")||rc.getAttribute("data-aid"));
     return;
   }
   if(e.target.closest(".a2-more")){        // "+N more" reveals counties in place, doesn't open details
