@@ -359,7 +359,15 @@
   .rail-s{font-size:var(--fs-sm);color:var(--muted);font-weight:400}
   .rail-s:empty{display:none}
   .railhead::after{content:"";flex:1 1 40px;height:1px;background:linear-gradient(90deg,var(--border),transparent)}
+  /* Storm Mode drops the band rails: they are chrome, and the page has more urgent things to say
+     with the space. The first rail is the exception, because it carries the only control for the
+     radar's visibility — and hiding that in the one weather where the map matters most is how the
+     old two-button arrangement ended up with no control at all in Storm Mode. The rail survives,
+     stripped to its button; order matches .stack so it stays directly above the radar it toggles
+     rather than falling to the bottom of the reordered grid. */
   body.storm .railhead{display:none}
+  body.storm .rail-now{display:flex;order:-6}
+  body.storm .rail-now .rail-t,body.storm .rail-now .rail-s,body.storm .rail-now::after{display:none}
   /* Let a long subtitle wrap on its own, but don't force the short ones (a place name) onto a
      second line — on a phone that costs a row of height for nothing. */
   @media(max-width:480px){.railhead{gap:4px 10px}.railhead::after{display:none}}
@@ -558,7 +566,10 @@
   .callrow{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
   /* The label was tinted --accent, which is the link colour — "BOTTOM LINE" read as clickable. It
      is a section name like every other, so it wears the eyebrow. */
-  .call-lbl{flex:0 0 auto}
+  /* It became a real <h2> for the document outline, which means `.card h2` above now claims it —
+     and that rule is written for a card TITLE row (its own line, flex, 12px under it), not for a
+     chip sitting inline among the verdicts. Take the outline, decline the layout. */
+  #callRow .call-lbl{flex:0 0 auto;display:inline-flex;align-items:center;margin:0;justify-content:flex-start}
   .call-pill{gap:8px;background:var(--inset);border:1px solid var(--border);
     padding:7px 13px;font-size:var(--fs-md);font-weight:500;color:var(--text);
     align-items:flex-start;text-wrap:pretty}
@@ -635,8 +646,9 @@
      The chart already measures its own container and thins its labels, so a narrower column costs
      label density, not legibility. */
   .cc-h24{margin-top:13px;padding-top:12px;border-top:1px solid var(--border)}
+  /* margin-top:0 because it is an <h3> now and the UA gives headings a top margin of their own. */
   .cc-h24-lbl{font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:.9px;
-    color:var(--muted);margin-bottom:9px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+    color:var(--muted);margin:0 0 9px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
   /* The band rail two inches above already names the place; repeating it here is noise. Kept in
      the DOM (hidden) so the snapshot and clearLocationUI wiring for #h24loc stays untouched. */
   .cc-h24-lbl #h24loc{display:none}
@@ -784,9 +796,13 @@
     background:var(--inset);border:1px dashed var(--border);color:var(--accent);font-family:inherit;
     cursor:pointer;line-height:1.3;white-space:nowrap}
   .rail-act:hover{border-style:solid;border-color:var(--accent)}
-  body:not(.no-radar) #radarPeek{display:none}
-  #rsHide{display:none}
-  body.radar-manual #rsHide{display:inline-block}
+  /* Always on screen, in both states — it is the toggle, not a summon. Both marks ship in the
+     markup and CSS picks one, rather than JS rewriting a <use> href: it keeps the icon in lockstep
+     with the class that decides everything else, and it keeps both symbols visibly referenced
+     (tools/check.py fails on a sprite symbol nothing points at, and an href assembled at runtime
+     is exactly the kind of reference it cannot see). */
+  body.no-radar #radarPeek .ic-hide,
+  body:not(.no-radar) #radarPeek .ic-show{display:none}
 
   /* ===== Radar sizing: a peek, not the product =====
      Compact by default — enough to answer "is anything heading my way", with fullscreen a click
@@ -1131,6 +1147,29 @@
     #wxbg i{animation:none !important}
   }
 
+  /* ===== Ambient motion stops when nobody is looking =====
+     Every animation named here runs forever by design — the logo's radar sweep, the two colour
+     blobs breathing behind the page, the rain and snow textures, and the pulses that mark a storm
+     or an emergency. On a tab left open all day that is a phone quietly warming in a pocket for a
+     page nobody is reading. syncTabMotion() in the script sets the class.
+     The list is explicit rather than a blanket `*`: the one-shot animations must be free to
+     FINISH. A tab hidden mid-load would otherwise freeze cardIn part-way and hand back a page of
+     half-transparent cards on return, which is a worse bug than a sweep that kept turning.
+     Orthogonal to prefers-reduced-motion, which switches these off outright and stays the stronger
+     rule — pausing something already set to `animation:none` is a no-op.
+     !important is load-bearing here, not defensive. The blobs get their motion from
+     `body[data-wx="sun"] #wxbg i.b1{animation:wxBreathe 12s …}` — and the animation SHORTHAND also
+     sets animation-play-state, back to its initial `running`. That rule outranks this one, so
+     without !important the two colour blobs (the largest, longest-running thing on the page, and
+     the whole reason this exists) kept animating while everything else stopped. Uniform rather
+     than only on #wxbg, so the next rule written as a shorthand doesn't quietly reopen the hole. */
+  html.tab-hidden .logo .lg-sweep,
+  html.tab-hidden #stormBanner,
+  html.tab-hidden .alert.lv-emergency,
+  html.tab-hidden .snapbar .sb-spin,
+  html.tab-hidden #wxbg::after,
+  html.tab-hidden #wxbg i{animation-play-state:paused !important}
+
   /* ===== Liquid Glass (frosted widgets over the living background) ===== */
   @supports ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))){
     .card{
@@ -1451,10 +1490,17 @@
 
   <!-- ── RIGHT NOW: the hero band. Everything a visitor opens this page to learn is in the
        first screen — conditions on the left, radar on the right, the verdicts underneath. ── -->
-  <div class="railhead col-12">
+  <div class="railhead rail-now col-12">
     <span class="rail-t">Right now</span>
     <span class="rail-s" id="railNowSub"></span>
-    <button type="button" class="rail-act" id="radarPeek"><svg class="ic" aria-hidden="true"><use href="#i-target"/></svg>Show radar &amp; satellite</button>
+    <!-- The ONE control for whether the sky panel is on screen. It has to live out here rather
+         than in the card's own header, for the reason that decided it: when the radar is hidden
+         the card does not exist, so a control inside it can never be the "Show". Label, icon and
+         aria-expanded all flip; syncRadarToggle() owns them. -->
+    <button type="button" class="rail-act" id="radarPeek" aria-controls="radarCard" aria-expanded="false"
+      ><svg class="ic ic-show" aria-hidden="true"><use href="#i-target"/></svg
+      ><svg class="ic ic-hide" aria-hidden="true"><use href="#i-close"/></svg
+      ><span id="radarPeekTxt">Show radar &amp; satellite</span></button>
   </div>
 
   <!-- CURRENT -->
@@ -1466,7 +1512,9 @@
       <h2>Now &amp; Next 24 Hours <span class="link" id="ccStation">&mdash;</span></h2>
       <div id="current"><div class="loading">Loading…</div></div>
       <div class="cc-h24">
-        <div class="cc-h24-lbl">Next 24 hours <span id="h24loc"></span></div>
+        <!-- A real sub-section of the card, so a real heading: the chart under it is a different
+             question ("what happens next") from the readings above it ("what it is now"). -->
+        <h3 class="cc-h24-lbl">Next 24 hours <span id="h24loc"></span></h3>
         <div id="hourly24"><div class="loading">Loading hourly…</div></div>
       </div>
     </section>
@@ -1493,8 +1541,10 @@
         <button type="button" class="rs-tab" data-v="sat" role="tab" aria-selected="false">Satellite</button>
       </span>
       <span class="rs-right">
-        <button type="button" class="rs-full" id="rsHide"><svg class="ic" aria-hidden="true"><use href="#i-close"/></svg><span class="rsf-t">Hide</span></button>
-        <button type="button" class="rs-full" id="rsFull" aria-expanded="false"><svg class="ic" aria-hidden="true"><use href="#i-expand"/></svg><span class="rsf-t">Fullscreen</span></button>
+        <!-- "Hide" used to live here, next to Fullscreen. It was the other half of a toggle whose
+             two halves sat a screen apart and disagreed about which word described the state; the
+             rail button above is that toggle now. -->
+        <button type="button" class="rs-full" id="rsFull" aria-expanded="false" aria-controls="rsRadar"><svg class="ic" aria-hidden="true"><use href="#i-expand"/></svg><span class="rsf-t">Fullscreen</span></button>
         <span class="link" id="rsLink"><a href="https://radar.weather.gov/station/KLSX/standard" target="_blank" rel="noopener">Official KLSX ↗</a></span>
       </span>
     </h2>
@@ -4381,7 +4431,10 @@ document.addEventListener("click",function(e){
    actually open a radar. A dry warning (heat, wind, fire) still gets the full Storm Mode treatment,
    just not the radar. Manual show (the rail button) overrides a calm verdict but never suppresses a
    stormy one; the close button only needs to exist for the manual case. */
-var radarManual=false;
+/* null = follow the weather; true/false = the visitor decided. It used to be a one-way boolean
+   that could only force the panel ON, which is why an auto-shown radar had no way to be dismissed
+   and why the "Hide" button could only exist on a hand-summoned one. */
+var radarPref=null, radarWasWorthy=false;
 /* How much rain chance a "thunderstorms" mention needs before it counts. NWS reserves "isolated"
    for 10-20% areal coverage and "scattered" for 30-50%; 25 sits in the gap, so a slight-chance
    afternoon doesn't summon the map while a genuinely unsettled one does. */
@@ -4408,11 +4461,28 @@ function radarWorthy(){
   }
   return false;
 }
+/* Keeps the single toggle telling the truth: the word and aria-expanded describe a card that may
+   have appeared on its own. The icon swaps in CSS off the same body class — see #radarPeek. */
+function syncRadarToggle(){
+  var b=document.getElementById("radarPeek"); if(!b) return;
+  var shown=!document.body.classList.contains("no-radar");
+  b.setAttribute("aria-expanded",shown?"true":"false");
+  var t=document.getElementById("radarPeekTxt");
+  if(t) t.textContent=(shown?"Hide":"Show")+" radar & satellite";
+}
 function updateRadarSlot(){
-  var worthy=radarWorthy(), show=worthy||radarManual;
+  var worthy=radarWorthy();
+  /* Weather turning severe clears an earlier "hide". This is the safety property the old one-way
+     flag was protecting, said precisely: a decision made on a clear afternoon should not still be
+     suppressing the map when a warning lands, but it should absolutely survive the next refresh
+     on an afternoon that stays clear. Only the not-worthy → worthy EDGE resets it, so a visitor
+     who hides the radar during a storm keeps it hidden. */
+  if(worthy&&!radarWasWorthy) radarPref=null;
+  radarWasWorthy=worthy;
+  var show=(radarPref===null)?worthy:radarPref;
   var wasHidden=document.body.classList.contains("no-radar");
   document.body.classList.toggle("no-radar",!show);
-  document.body.classList.toggle("radar-manual",show&&!worthy);
+  syncRadarToggle();
   if(show&&wasHidden){
     // Leaflet initialised into a display:none container; give it real dimensions and fresh frames.
     if(rvMap) setTimeout(function(){ if(rvMap) rvMap.invalidateSize(); },0);
@@ -4427,8 +4497,11 @@ function updateRadarSlot(){
   if(typeof scheduleMasonry==="function") scheduleMasonry();
 }
 document.addEventListener("click",function(e){
-  if(e.target.closest&&e.target.closest("#radarPeek")){ radarManual=true; updateRadarSlot(); }
-  if(e.target.closest&&e.target.closest("#rsHide")){ radarManual=false; setRadarFull(false); updateRadarSlot(); }
+  if(e.target.closest&&e.target.closest("#radarPeek")){
+    radarPref=document.body.classList.contains("no-radar");   // hidden → show, shown → hide
+    if(!radarPref) setRadarFull(false);                       // never leave fullscreen behind a hidden card
+    updateRadarSlot();
+  }
 });
 /* The jump nav needs no script: every link it shows points at a section that is on the page, and
    the browser does the scrolling. The Radar entry hides itself with the card (body.no-radar in the
@@ -5321,7 +5394,10 @@ function renderTheCall(){
 
   pills.sort(function(a,b){ return b.pri-a.pri; });
   pills=pills.slice(0,4);
-  row.innerHTML='<span class="call-lbl">Bottom Line</span>'+pills.map(function(pl){
+  /* An <h2>, not a styled span. The Bottom Line was the one card on the page with no heading at
+     all — second from the top, and invisible to anything navigating by structure. It shares the
+     eyebrow styling with every other card title, so this changes the outline and nothing else. */
+  row.innerHTML='<h2 class="call-lbl">Bottom Line</h2>'+pills.map(function(pl){
     return '<span class="call-pill">'+ic(pl.ico,"ce")+'<span>'+esc(pl.txt)+'</span></span>';
   }).join("");
   card.classList.add("has");
@@ -5579,7 +5655,7 @@ document.getElementById("daily").addEventListener("click",function(e){
 });
 document.getElementById("alerts").addEventListener("click",function(e){
   if(e.target.closest(".a2-radar")){       // jump to this alert's polygons on the radar
-    radarManual=true; if(typeof updateRadarSlot==="function") updateRadarSlot();  // can't jump to a hidden card
+    radarPref=true; if(typeof updateRadarSlot==="function") updateRadarSlot();  // can't jump to a hidden card
     var rc=e.target.closest(".alert");
     e.stopPropagation();
     if(rc) showAlertOnRadar(rc.getAttribute("data-aid"));
@@ -5657,10 +5733,17 @@ function stopSchedule(){
   if(schedTimer){clearInterval(schedTimer);schedTimer=null;}
   if(clockTimer){clearInterval(clockTimer);clockTimer=null;}
 }
+/* Everything this page does on a timer already stops when the tab goes away — the scheduler, the
+   clock, the radar loop. CSS animations were the exception: the browser keeps compositing them
+   whether or not anyone can see them, so the logo's sweep and the two colour blobs behind the page
+   were the one thing still costing battery in a tab left open all day. See .tab-hidden. */
+function syncTabMotion(){ document.documentElement.classList.toggle("tab-hidden", document.hidden); }
 document.addEventListener("visibilitychange",function(){
+  syncTabMotion();
   if(document.hidden){ stopSchedule(); radarPauseLoop(); saveSnapshot(); }   // no drain while backgrounded; bank the view on the way out
   else { tick(); startSchedule(); runDue(); freshnessCheck(); } // catch up on return
 });
+syncTabMotion();   // a page opened into a background tab never gets the event
 startSchedule();
 document.getElementById("refresh").addEventListener("click",function(){ refreshAll(); });
 
