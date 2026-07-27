@@ -44,6 +44,7 @@ NAV_ONLY = {
     "https://aviationweather.gov",
     "https://carto.com",
     "https://droughtmonitor.unl.edu",
+    "https://feathericons.com",
     "https://forecast.weather.gov",
     "https://github.com",
     "https://gispub.epa.gov",
