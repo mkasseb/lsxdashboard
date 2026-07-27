@@ -173,14 +173,14 @@
      that sit side by side in the same card did not agree on their own geometry. Each class below
      still exists (JS builds them by name, and restored snapshots carry those names), but now it
      only declares what genuinely differs: colour, weight, size. */
-  .a2-sumchip,.a2-chip,.a2-more,.a2-radar,.a2-tier,.a2-me,.a2-zc,.call-pill,.h24-pill,.hz-chip,
+  .a2-chip,.a2-more,.a2-radar,.a2-me,.a2-zc,.call-pill,.h24-pill,.hz-chip,
   .dr-pill,.cpc-pill,.rfcat,.qpfchip,.rail-act,.rs-full,.stn-tools button,.quicklinks a,.dr-none{
     display:inline-flex;align-items:center;gap:6px;border-radius:var(--r-pill);
     font-family:inherit;line-height:1.35;text-align:left}
   /* The uppercase micro-label variant — a tag, not a chip. Shorter radius so it reads as a stamp.
      Reserved for words that ARE labels (WARNING, MAJOR); anything phrased as a sentence stays
      sentence case, because setting a sentence in tracked caps is shouting it. */
-  .a2-tier,.rfcat{font-size:var(--fs-2xs);font-weight:800;text-transform:uppercase;
+  .rfcat{font-size:var(--fs-2xs);font-weight:800;text-transform:uppercase;
     letter-spacing:var(--ls-eyebrow);border-radius:var(--r-sm);padding:3px 8px}
   /* Members that are real controls keep a touch target; the rest are inert labels. */
   .a2-more,.a2-radar,.rail-act,.rs-full,.stn-tools button{cursor:pointer;min-height:0}
@@ -195,13 +195,13 @@
      Pointer-events are inherited, so it counts as part of its own control for hit-testing while
      being invisible to everything else. Where it overhangs, it overhangs county chips and heading
      text — inert things with no target of their own to lose. */
-  .card h2 a,.rs-tab,.rs-full,.a2-more,.a2-radar,.rail-act,.a2-hint,.a2-elsewhere{position:relative}
-  .card h2 a::after,.rs-tab::after,.rs-full::after,.a2-more::after,.a2-radar::after,.rail-act::after,.a2-hint::after,.a2-elsewhere::after{
+  .card h2 a,.rs-tab,.rs-full,.a2-more,.a2-radar,.rail-act,.a2-elsewhere{position:relative}
+  .card h2 a::after,.rs-tab::after,.rs-full::after,.a2-more::after,.a2-radar::after,.rail-act::after,.a2-elsewhere::after{
     content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
     width:100%;height:100%;min-width:44px;min-height:44px}
   /* Everything else that sets an icon beside a word. An .ic is 1em with no margin of its own, so
      the gap has to come from the container — which is also what keeps the two vertically centred. */
-  #geoBtn,#themeBtn,#radarPlay,.maplock-toggle,.locbar .locNow,.day .dp,.spc-row .rh,.cx .cxi,.a2-hint{
+  #geoBtn,#themeBtn,#radarPlay,.maplock-toggle,.locbar .locNow,.day .dp,.spc-row .rh,.cx .cxi{
     display:inline-flex;align-items:center;gap:6px;justify-content:center}
   /* Icon-only buttons: the base padding plus a 1em glyph lands at 43px wide — a pixel short of the
      target, and only in the one dimension nobody thinks to check. */
@@ -266,7 +266,12 @@
   .clock{text-align:right;font-variant-numeric:tabular-nums}
   .clock .time{font-size:var(--fs-xl);font-weight:700;letter-spacing:.5px}
   .clock .date{font-size:var(--fs-sm);color:var(--muted)}
-  select,button{background:var(--panel-2);color:var(--text);border:1px solid var(--border);
+  /* :where(:not(.ab-head)) throughout: the banner head is a <button> for semantics, but its face
+     IS the banner — the glass background, bevel and radius here painted a frosted strip inside
+     it. :where() and not a bare :not() because :not() adds its argument's specificity: a plain
+     `button:not(.ab-head)` outweighed every single-class button skin on the page (.a2-more,
+     .a2-radar, ...) and reskinned them all as glass buttons. :where() contributes zero. */
+  select,button:where(:not(.ab-head)){background:var(--panel-2);color:var(--text);border:1px solid var(--border);
     border-radius:var(--r-md);padding:10px 14px;font-size:var(--fs-md);cursor:pointer;font-family:inherit;min-height:44px}
   select:hover,button:hover{border-color:var(--accent)}
   .refresh-btn{display:flex;align-items:center;gap:7px}
@@ -294,17 +299,16 @@
     0%,100%{box-shadow:0 0 0 0 rgba(var(--storm),.55),0 0 30px 2px rgba(var(--storm),.26),var(--shadow)}
     50%    {box-shadow:0 0 0 10px rgba(var(--storm),0),0 0 46px 7px rgba(var(--storm),.42),var(--shadow)}
   }
-  body.storm #alertsCard{
+  /* The glow lives on the LEAD banner now, not the section: #alertsCard is chrome-less in banner
+     mode, so it has no box to ring. One breathing thing at a time still holds — the #alerts id in
+     this selector outweighs `.alert.lv-emergency`'s own pulse, so an emergency that IS the lead
+     runs stormPulse alone, not two rings on two clocks. */
+  body.storm #alerts .alert.lead{
     border-color:rgba(var(--storm),.8);
     box-shadow:0 0 0 3px rgba(var(--storm),.22),0 0 30px 2px rgba(var(--storm),.30),var(--shadow);
     animation:stormPulse 1.9s ease-in-out infinite;
   }
-  @media (prefers-reduced-motion: reduce){body.storm #alertsCard{animation:none}}
-  /* One breathing thing at a time. `.alert.lv-emergency` pulses on its own so the top of the ramp
-     is visible in calm-ish weather, but a tornado warning turns Storm Mode on too — and a ring
-     inside a ring, on two different clocks, is the concentric-halo problem this page already
-     solved once. The card's pulse is the louder and outer of the two, so it wins. */
-  body.storm #alertsCard .alert.lv-emergency{animation:none}
+  @media (prefers-reduced-motion: reduce){body.storm #alerts .alert.lead{animation:none}}
   /* Event-aware storm accent (--storm = R,G,B). Default convective red; families override below. */
   body.storm{--storm:255,45,85; background:radial-gradient(1200px 600px at 80% -10%, rgba(var(--storm),.10), transparent),var(--bg)}
   body.storm[data-storm="winter"]{--storm:122,150,245}   /* icy blue-violet */
@@ -430,10 +434,26 @@
   .card,.grid,.stack{max-width:100%}
   img,svg{max-width:100%}
 
-  /* Alerts */
-  #alerts .alert{border-radius:var(--r-md);padding:11px 14px;margin-bottom:8px;border-left:5px solid var(--muted);
-    background:var(--inset);border-top:1px solid var(--border);border-right:1px solid var(--border);border-bottom:1px solid var(--border)}
+  /* Alerts — each one a BANNER: a full tinted-border strip standing on the page background,
+     since the section around it no longer draws a card. The border is uniform (the level colour
+     ringing the whole strip is what makes it read as a banner rather than a list row), with the
+     left edge kept heavier as the severity spine the old card established. */
+  #alerts .alert{border-radius:var(--r-lg);padding:12px 15px;margin-bottom:8px;
+    border:1px solid var(--muted);border-left-width:5px;background:var(--inset);box-shadow:var(--shadow)}
   #alerts .alert:last-child{margin-bottom:0}
+  /* the banner head: the whole strip's face is one <button>, shedding every piece of button chrome */
+  .ab-head{display:flex;align-items:flex-start;gap:10px;width:100%;text-align:left;
+    background:none;border:0;padding:0;margin:0;font-family:inherit;color:var(--text);cursor:pointer;min-height:0}
+  .ab-head .a2-ico{margin-top:1px}
+  .ab-hx{flex:1 1 auto;min-width:0}
+  .ab-title{display:block;font-weight:800;font-size:var(--fs-lg);line-height:1.3}
+  /* The second line stays --text, not --muted: it sits on the level tint, and dimmed text on a
+     tinted surface is precisely the contrast failure the storm work measured and backed out of. */
+  .ab-sub{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+    margin-top:3px;font-size:var(--fs-sm);font-weight:400;color:var(--text);line-height:1.45}
+  .ab-head .a-chev{color:var(--muted);margin-top:3px;flex:0 0 auto}
+  .ab-head .a2-me,.ab-head .a2-zc{flex:0 0 auto;margin-top:2px}
+  .ab-cd{display:flex;justify-content:flex-end;margin-bottom:3px}
   .alert .ev{font-weight:700;font-size:var(--fs-lg);display:flex;justify-content:space-between;gap:10px;align-items:baseline}
   .alert .area{font-size:var(--fs-sm);color:var(--muted);margin-top:4px;line-height:1.4}
   .alert .exp{font-size:var(--fs-sm);color:var(--muted);margin-top:6px}
@@ -449,32 +469,14 @@
   .alert.lv-warning  {--lv:var(--sev)}
   .alert.lv-watch    {--lv:var(--warn)}
   .alert.lv-advisory {--lv:var(--accent)}
-  .a2-sum{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px}
-  .a2-sumchip{--lv:var(--muted);font-size:var(--fs-sm);font-weight:700;padding:5px 12px;
-    border:1px solid color-mix(in srgb,var(--lv) 40%,transparent);
-    background:color-mix(in srgb,var(--lv) 12%,transparent);color:var(--lv);white-space:nowrap}
-  /* These MUST match .alert.lv-* below, step for step. The summary chips are the legend for the
-     cards under them, so a "1 Warning" chip in the emergency colour is the two-signals-disagreeing
-     bug this ramp replaced, rebuilt one level up. */
-  .a2-sumchip.emergency{--lv:var(--danger)}
-  .a2-sumchip.warning{--lv:var(--sev)}
-  .a2-sumchip.watch{--lv:var(--warn)}
-  .a2-sumchip.advisory{--lv:var(--accent)}
-  .a2-top{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
   .a2-ico{font-size:var(--fs-xl);line-height:1;flex:0 0 auto;color:var(--lv);display:inline-flex}
-  .a2-name{font-weight:700;font-size:var(--fs-lg);line-height:1.25}
-  .a2-tier{background:color-mix(in srgb,var(--lv) 18%,transparent);color:var(--lv)}
-  /* Was "×2" — a badge that only made sense once you had opened the drawer underneath it and found
-     the phrase it was short for. It says the phrase now; the title carries the why. */
   .a2-zc{font-size:var(--fs-xs);font-weight:700;color:var(--muted);background:var(--chip);padding:2px 8px;cursor:help}
-  /* "this one is over you" — the answer to the question you're actually asking. It used to shout it
-     in red uppercase inside a red-bordered pill, which is a lot of alarm for a statement of fact:
-     the severity is already carried by the card. Same words, said once, at speaking volume. */
+  /* "this one is over you" — kept only for the strongest claim (a polygon hit) and, area-wide,
+     for the zone match: the location-scoped banner already says it by being there at all. */
   .a2-me{font-size:var(--fs-xs);font-weight:600;padding:3px 9px;background:var(--chip);color:var(--text)}
   .a2-me .ic{color:var(--lv)}
-  .alert.hits-me{border-left-width:7px}
-  .a2-sumchip.mine{--lv:var(--muted);color:var(--text);background:var(--chip);border-color:var(--border)}
-  .a2-cd{margin-left:auto;font-size:var(--fs-md);font-weight:700}
+  #alerts .alert.hits-me{border-left-width:7px}   /* must outweigh the base rule's border shorthand */
+  .a2-cd{font-size:var(--fs-md);font-weight:700}
   /* elapsed-vs-remaining window */
   .a2-time{margin-top:8px}
   .a2-prog{height:4px;border-radius:2px;background:var(--chip);overflow:hidden}
@@ -509,12 +511,6 @@
   #alertsElse{display:none;margin-top:8px}
   #alerts.else-open #alertsElse{display:block}
   #alerts.else-open .a2-elsewhere .a-chev{transform:rotate(180deg)}
-  /* The hazard itself, on the card rather than behind the "Details" tap. Same components as the
-     drawer (.a2-kv rows, the .a2-do block) — only the placement changed. */
-  .a2-lede{margin-top:11px;padding-top:10px;border-top:1px solid var(--border);
-    font-size:var(--fs-sm);line-height:1.55}
-  .a2-lede p{margin:0 0 8px}
-  .a2-lede p:last-child{margin-bottom:0}
   /* county chips, with in-place overflow */
   .a2-areas{display:flex;flex-wrap:wrap;align-items:baseline;gap:5px;margin-top:10px}
   /* Names a row that was previously just chips — a stranger could not tell whether "Warren" was a
@@ -527,12 +523,8 @@
   .alert.areas-all .a2-more{display:none}
   .a2-more{font-size:var(--fs-xs);padding:3px 10px;background:transparent;border:1px dashed var(--border);
     color:var(--accent);font-weight:700}
-  .a2-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px}
-  /* A real <button> now, so it has to shed the chrome every other button gets — this one is a text
-     affordance inside a card, not a control with a box round it. */
-  .a2-hint{font-size:var(--fs-sm);color:var(--accent);font-weight:700;
-    background:none;border:0;padding:0;min-height:0;font-family:inherit;cursor:pointer}
-  .a2-hint:hover{border-color:transparent}
+  .a2-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:10px}
+  .a2-foot .link{font-size:var(--fs-xs)}
   .a2-radar{font-size:var(--fs-xs);font-weight:700;padding:4px 11px;background:transparent;
     border:1px dashed var(--border);color:var(--accent);margin-left:auto}
   .a2-radar:hover{border-color:var(--accent);border-style:solid}
@@ -555,20 +547,27 @@
   .a2-do{margin-top:11px;padding:10px 12px;border-radius:var(--r-md);
     background:color-mix(in srgb,var(--lv) 9%,transparent);
     border:1px solid color-mix(in srgb,var(--lv) 28%,transparent);font-size:var(--fs-md);line-height:1.55}
+  /* The label leans 25% toward --text: pure --lv was fine while the block sat on the old card's
+     near-neutral inset, but on the banner's REAL 8% level tint (light theme) it measured
+     3.9-4.1:1 at 11px. The blend keeps the level colour dominant and clears 5.5:1 worst-case
+     in both themes — computed over every level on its own tint, not eyeballed. */
   .a2-do b{display:block;font-size:var(--fs-2xs);text-transform:uppercase;letter-spacing:var(--ls-eyebrow);
-    color:var(--lv);margin-bottom:5px}
+    color:color-mix(in srgb,var(--lv) 75%,var(--text));margin-bottom:5px}
   .a2-do p{margin:0 0 7px}.a2-do p:last-child{margin-bottom:0}
-  .a2-lede>.a2-do:first-child{margin-top:0}   /* instruction with no bullets above it to clear */
   .a2-seg{font-size:var(--fs-xs);color:var(--muted);margin-top:10px;line-height:1.5}
   .a2-seg b{color:var(--text)}
   @media(max-width:480px){
-    .a2-name{font-size:var(--fs-md)}
-    .a2-cd{margin-left:0;flex-basis:100%}
+    .ab-title{font-size:var(--fs-md)}
     .a2-kv{grid-template-columns:1fr;gap:2px 0}
     .a2-kv .k{padding-top:7px}
   }
-  .alert{border-left-color:var(--lv);background:color-mix(in srgb,var(--lv) 8%,transparent)}
-  .alert.lv-statement{background:var(--inset)}
+  /* ID-scoped to actually OUTWEIGH the base #alerts .alert rule: as a bare `.alert{...}` this
+     ramp lost the specificity fight to the base's muted border and inset background, and every
+     banner rendered gray — the level colour existed only in the badges and icon. (The same bare
+     selector sits in main; the tint there rides on other rules.) */
+  #alerts .alert{border-color:color-mix(in srgb,var(--lv) 45%,transparent);border-left-color:var(--lv);
+    background:color-mix(in srgb,var(--lv) 8%,transparent)}
+  #alerts .alert.lv-statement{background:var(--inset)}
   /* Only the top of the ramp pulses. A page where every card breathes has no top of the ramp. */
   .alert.lv-emergency{animation:pulse 1.6s infinite}
   @media (prefers-reduced-motion: reduce){.alert.lv-emergency{animation:none}}
@@ -577,9 +576,6 @@
   @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(var(--pulse,255,45,85),.5)}
                    50%{box-shadow:0 0 0 6px rgba(var(--pulse,255,45,85),0)}}
   .badge{font-size:var(--fs-sm);font-weight:700;padding:3px 9px;border-radius:var(--r-pill);background:var(--chip);white-space:nowrap}
-  /* Only a card with a drawer is clickable — the ones whose whole story is already on the card
-     are read, not operated, and a pointer cursor on them promises a reveal that never comes. */
-  #alerts .alert.has-more{cursor:pointer}
   .a-hint{color:var(--accent)}
   .a-zcnt{font-size:var(--fs-sm);font-weight:700;color:var(--muted);background:var(--chip);border-radius:var(--r-md);padding:1px 8px;vertical-align:middle}
   .a-more-cnt{color:var(--accent);font-weight:700;white-space:nowrap}
@@ -624,6 +620,18 @@
     align-items:flex-start;text-wrap:pretty}
   .call-pill .ce{width:1.15em;height:1.15em;margin-top:.1em;color:var(--muted)}
   @media(max-width:480px){.call-pill{font-size:var(--fs-sm);padding:6px 11px}}
+
+  /* ===== Banner mode: the section sheds its card =====
+     The banners ARE the alert section; the wrapper contributes nothing visible. The h2 survives
+     for the document outline and the jump-nav target, clipped rather than display:none so it
+     stays in the accessibility tree. In the calm state the card chrome comes back — a green
+     reassurance line standing bare on the page background read as debris, not calm. */
+  #alertsCard.bannered:not(.calm){background:none;border:0;box-shadow:none;padding:0}
+  #alertsCard.bannered:not(.calm)>h2{position:absolute;width:1px;height:1px;margin:0;padding:0;
+    overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  /* the local all-clear line, when alerts exist only elsewhere: a slim card of its own */
+  #alertsCard.bannered:not(.calm) .calmrow{background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--border);border-radius:var(--r-lg);padding:13px 16px;box-shadow:var(--shadow);margin-bottom:8px}
 
   /* Slim "all clear" state (Fix 4) */
   #alertsCard.calm{padding:13px 16px}
@@ -1213,13 +1221,13 @@
      the whole reason this exists) kept animating while everything else stopped. Uniform rather
      than only on #wxbg, so the next rule written as a shorthand doesn't quietly reopen the hole. */
   html.tab-hidden .logo .lg-sweep,
-  /* #alertsCard is scoped to body.storm because it holds TWO animations in one slot: stormPulse
-     under body.storm, the one-shot cardIn entrance otherwise — and leaving Storm Mode reassigns
-     the shorthand, which RESTARTS cardIn. Unscoped, this rule then froze that restart at its
-     `from` frame (opacity:0): a storm ending while the tab was hidden handed back a page whose
-     alerts card was invisible — the exact bug the paragraph above promised to avoid, in through
-     a side door. Scoped, the pause can only ever catch stormPulse, which loops by design. */
-  html.tab-hidden body.storm #alertsCard,
+  /* The lead banner's pulse is scoped to body.storm for the same reason the alerts CARD once
+     was: an element whose `animation` slot can be reassigned to a one-shot must never be
+     pausable outside the state that gives it the looping animation, or a state change while
+     hidden freezes the one-shot at its `from` frame — this page shipped exactly that bug once
+     (#alertsCard, opacity:0, invisible card) before the pause was scoped. Banners aren't grid
+     children, so they have no cardIn to freeze; the scope is cheap insurance all the same. */
+  html.tab-hidden body.storm #alerts .alert.lead,
   html.tab-hidden .alert.lv-emergency,
   html.tab-hidden .snapbar .sb-spin,
   html.tab-hidden #wxbg::after,
@@ -1237,7 +1245,7 @@
          and silently overridden everywhere it mattered. */
       box-shadow:inset 0 1px 0 var(--gspec), inset 0 -1px 0 rgba(0,0,0,.06), var(--shadow);
     }
-    select,button,.locsearch #locSearch{
+    select,button:where(:not(.ab-head)),.locsearch #locSearch{
       background:var(--glass1);
       -webkit-backdrop-filter:blur(14px) saturate(1.4);
       backdrop-filter:blur(14px) saturate(1.4);
@@ -1257,7 +1265,7 @@
   }
   /* users who prefer opacity get solid panels back */
   @media (prefers-reduced-transparency: reduce){
-    .card,select,button,.locsearch #locSearch,.locsug{
+    .card,select,button:where(:not(.ab-head)),.locsearch #locSearch,.locsug{
       background:linear-gradient(180deg,var(--panel),var(--panel-2)) !important;
       -webkit-backdrop-filter:none !important;
       backdrop-filter:none !important;
@@ -1518,15 +1526,14 @@
 
 <div class="grid">
 
-  <!-- ALERTS — safety first, and in calm weather this collapses to a single reassurance line -->
-  <section class="card col-12" id="alertsCard">
-    <!-- the suffix is the list's scope: the current place name, or "LSX" when zone lookup
-         failed and the list has fallen back to the whole county warning area. The outer span
-         keeps title and suffix ONE flex item — the h2 is a space-between flex row, and a bare
-         #alertsScope became its own item, centred, with the dash orphaned on the left. -->
-    <h2><span>Active Watches, Warnings &amp; Advisories — <span id="alertsScope">LSX</span></span>
-      <a class="link" href="https://www.weather.gov/lsx/" target="_blank" rel="noopener">weather.gov/lsx ↗</a>
-    </h2>
+  <!-- ALERTS — banners, not a card: each active hazard is a two-line strip that expands in
+       place, and in calm weather this collapses to a single reassurance line. `bannered` strips
+       the card chrome; the h2 stays for the document outline and the jump nav, visually hidden
+       (its weather.gov link moved into each banner's drawer — a focusable link inside clipped
+       text is a keyboard trap). #alertsScope is the list's scope: the place name, or "LSX" when
+       zone lookup failed and the list fell back to the whole county warning area. -->
+  <section class="card col-12 bannered" id="alertsCard">
+    <h2>Active Watches, Warnings &amp; Advisories — <span id="alertsScope">LSX</span></h2>
     <div id="alerts"><div class="loading">Loading alerts…</div></div>
   </section>
 
@@ -2168,6 +2175,14 @@ function parseAlertBullets(desc){
 function alertParas(txt){
   return String(txt||"").split(/\n\s*\n/).map(function(p){ return p.replace(/\s*\n\s*/g," ").trim(); }).filter(Boolean);
 }
+/* The banner's one-line subline. A sentence boundary, not a character count: a clamp cuts
+   mid-clause ("check up on relatives and neigh…"), and NWS instructions front-load the action,
+   so the first sentence is the one worth a banner. */
+function firstSentence(t){
+  t=String(t||"").replace(/\s+/g," ").trim();
+  var m=t.match(/^[\s\S]*?[.!?](?=\s|$)/);
+  return m?m[0]:t;
+}
 /* The two ways a parsed alert body gets drawn. They exist as functions because the card now renders
    bullets in two places — the always-visible lede and the details drawer — and a second copy of the
    markup is how the two would quietly drift apart. */
@@ -2463,9 +2478,7 @@ function focusAlertCard(ev){
   // A polygon tap can land on a card behind the "elsewhere" fold — open the fold, or the page
   // would smooth-scroll to a display:none element, which is to say nowhere.
   if(card.closest("#alertsElse")&&!elseOpen){ elseOpen=true; syncElsewhere(); }
-  // Not every card has a drawer any more — the hazard text is on the card unless the drawer holds
-  // something extra. setOpen() on a card without one would set aria-expanded on a non-control.
-  var hint=card.querySelector(".a2-hint");
+  var hint=card.querySelector(".ab-head");   // the banner head owns aria-expanded
   if(hint) setOpen(card,hint,true);
   if(card.querySelector(".a2-more")) card.classList.add("areas-all");
   card.classList.remove("flash");
@@ -2867,7 +2880,7 @@ function loadAlerts(){
            concat replaces the reference rather than growing it.) */
         g.phases=[{ev:g.ev,lv:g.lv,best:g.best,earliest:g.earliest,latest:g.latest,
                    counties:g.counties.slice(),segs:g.segs,hit:g.hit}];
-        g.famTitle=cfg.merge; byFam[fam]=g; folded.push(g); return;
+        byFam[fam]=g; folded.push(g); return;
       }
       host.phases.push(g);
       host.segs=host.segs.concat(g.segs);
@@ -2886,26 +2899,9 @@ function loadAlerts(){
     var mineN=0, awayN=0;
     glist.forEach(function(g){ if(g.away) awayN++; else mineN++; });
 
-    /* ---- summary chips: what's active, by level, before you read a single alert ----
-       Counted per CARD, not per product: the chips are the legend for the list under them, so a
-       folded family is one entry at its top tier — its lower tiers are on the card's phase list.
-       Elsewhere cards aren't counted (they're behind the fold), and the "N affect your area" chip
-       only exists in the area-wide fallback: a location-scoped list is that chip, said once. */
-    var tierCount={};
-    glist.forEach(function(g){ if(!g.away) tierCount[g.lv.k]=(tierCount[g.lv.k]||0)+1; });
-    // explicit plurals — "Advisorys"/"Watchs" is what naive +"s" produces
-    var sumOrder=[["emergency","Emergency","Emergencies"],["warning","Warning","Warnings"],
-                  ["watch","Watch","Watches"],
-                  ["advisory","Advisory","Advisories"],["statement","Statement","Statements"]];
-    var hitN=localMode?0:glist.filter(function(g){return g.hit;}).length;
-    var sumChips=sumOrder.filter(function(o){return tierCount[o[0]];}).map(function(o){
-      var n=tierCount[o[0]];
-      return '<span class="a2-sumchip '+o[0]+'">'+n+' '+(n>1?o[2]:o[1])+'</span>';
-    }).join("")
-    +(hitN?'<span class="a2-sumchip mine">'+ic("pin")+hitN+(hitN>1?" affect":" affects")+' your area</span>':'');
-    var sumHTML=sumChips?'<div class="a2-sum">'+sumChips+'</div>':'';
-
-    // the lede belongs to the first card that is actually YOURS, not to a hidden one
+    /* No summary chips: each banner names its own event in its own colour, which is everything
+       the chips used to say. The lead banner — the first card that is actually YOURS, not a
+       hidden one — carries the storm glow, since the section around it no longer has a box. */
     var leadIdx=0; while(leadIdx<glist.length&&glist[leadIdx].away) leadIdx++;
 
     var cardHTMLs=glist.map(function(g,gi){
@@ -2919,21 +2915,14 @@ function loadAlerts(){
       if(g.earliest&&g.latest&&g.latest>g.earliest){
         prog=Math.max(0,Math.min(100,(Date.now()-g.earliest)/(g.latest-g.earliest)*100));
       }
-      /* ---- one line on the card, the rest a tap away ----
-         The card had grown to 934px: What, When, Impacts, the whole NWS instruction, and the county
-         chips, all before the fold. That is more than anyone reads standing outside deciding
-         whether to go out, and a card nobody finishes is not safer than a card they do.
-         What stays is the one sentence that says what the hazard IS. When, Impacts, What-to-do,
-         Where, the zone-group breakdown and the counties are all behind Details.
-         This walks back part of the earlier restructure on purpose. The half that stands is the
-         ORDER — hazard before geography, never forty place names between a reader and the words
-         "heat stroke is an emergency". The half that went too far was putting all of it on the
-         card at once.
-         Only the LEADING alert gets even that line — the first card that is YOURS. leadIdx skips
-         hidden elsewhere cards, which can outrank yours in the sort (an away warning sorts above
-         a local advisory), and NWS writes related products as a set, so a second card's What
-         tends to restate the first ("For the Extreme Heat Warning... For the Heat Advisory...").
-         A statement never leads. */
+      /* ---- a banner, not a card ----
+         Two lines: the event with its window ("Extreme Heat Warning — until Tue 7:00 PM") and the
+         first sentence of the instruction. The whole banner is one <button>; everything else —
+         the time bar, the phase list, What/When/Impacts, the full instruction, the ledger, the
+         counties, the radar jump — expands in place under it. This is the third size this section
+         has been (934px card → 141px collapsed card → this), and the direction has been the same
+         each time: the resting state earns less and less of the page, and nothing is deleted,
+         only demoted a tap. */
       /* ---- the phase list of a folded card ----
          The bar above spans the whole hazard, earliest onset to last end; these rows say which
          product owns which part of it. The tier dot restates each phase's own level because the
@@ -2953,17 +2942,9 @@ function loadAlerts(){
         }).join("")+'</div>';
       }
       var bullets=parseAlertBullets(bp.description);
-      var lede="", detail="";
-      if(gi===leadIdx&&g.lv.k!=="statement"){
-        var whatB=bullets.filter(function(b){ return b.k.toLowerCase()==="what"; });
-        if(whatB.length) lede=alertKV(whatB);
-      }
-      // Everything the lede didn't take. No What bullet (an unparseable product) simply means no
-      // summary line — the full prose is in the drawer, and a truncator guessing at a first
-      // sentence is how a warning ends up quoted out of context.
-      var rest=lede?bullets.filter(function(b){ return b.k.toLowerCase()!=="what"; }):bullets;
-      if(rest.length) detail+=alertKV(rest);
-      else if(!lede&&bp.description){
+      var detail="";
+      if(bullets.length) detail+=alertKV(bullets);
+      else if(bp.description){
         detail+=alertParas(bp.description).map(function(p){return '<p>'+esc(p)+'</p>';}).join("");
       }
       /* A folded phase whose hazard statement the lead's text doesn't already carry. Usually it
@@ -3025,45 +3006,55 @@ function loadAlerts(){
         meBadge='<span class="a2-me">'+ic("pin")+esc(HIT_TEXT[g.hit]||"Includes your location")+'</span>';
       else if(localMode&&!g.hit)
         meBadge='<span class="a2-zc" title="Active in the NWS St. Louis area, but its zones and polygons don\'t include '+esc(place)+'">Elsewhere in LSX</span>';
-      // "×2" was a badge whose meaning lived inside the drawer it sat above. Same fact, in words.
-      // A folded card's top row is already carrying a phase list — the zone-group tally moves to
-      // the drawer's per-product ledger rather than stacking a second count chip up here.
-      var segTxt=(!mg&&g.segs.length>1)?'<span class="a2-zc" title="NWS issued this event as '+g.segs.length
-        +' separate records, each with its own counties and end time">'+g.segs.length+' zone groups</span>':'';
-      /* The card is NOT a button, and this is the second attempt at that.
-         It used to carry role="button" + tabindex, which reads well until you look at the
-         accessibility tree: ARIA makes every descendant of a button presentational, so the whole
-         card collapsed to one unnamed "button" with nothing inside it. That swallowed "+34 more"
-         and "Show on radar" — and it swallowed the What/When/Impacts text this card was
-         restructured to put in front of people, for precisely the users who most needed it there.
-         The drawer's control is the "Details" button in the footer, which owns aria-expanded and
-         aria-controls. Clicking anywhere else on the card still toggles it (see the #alerts click
-         handler) — that is a mouse convenience layered on a real control, not a substitute for one. */
+      /* The banner's own window, not the folded union: "Extreme Heat Warning — until Tue 7 PM"
+         must state when the WARNING ends. If an advisory phase outlives it, the merged end would
+         put a wrong time next to the warning's name; the union stays on the time bar inside. */
+      var hEnd=mg?g.phases[0].latest:g.latest, hStart=mg?g.phases[0].earliest:g.earliest;
+      var hPend=!!(hStart&&Date.now()<hStart);
+      var hWhen=hPend?("from "+new Date(hStart).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}))
+                     :(hEnd?"until "+new Date(hEnd).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"");
+      // Second line: the ACTION, because the first line already named the hazard. Products with
+      // no instruction (statements, mostly) fall back to the What text, then to the prose.
+      var sub=firstSentence(bp.instruction);
+      if(!sub){
+        var wb=bullets.filter(function(b){ return b.k.toLowerCase()==="what"; })[0];
+        sub=wb?wb.v:firstSentence(alertParas(bp.description)[0]||"");
+      }
+      /* The HEAD is the button, not the banner. The first attempt at a clickable card put
+         role="button" on the whole card, and ARIA made every descendant presentational — the
+         accessibility tree collapsed to one unnamed button with nothing inside it. This shape is
+         immune by construction: the <button> contains only text (its accessible name is the
+         headline), and everything interactive — "+N more", "Show on radar", the weather.gov
+         link — lives in the drawer OUTSIDE it. */
       var drawerId="a2more-"+gi;
       return '<div class="alert lv-'+g.lv.k+(g.hit?' hits-me':'')+(openIds[aid]?' open':'')
-        +(detail?' has-more':'')+'" data-aid="'+aid+'"'
+        +(gi===leadIdx?' lead':'')+'" data-aid="'+aid+'"'
         // the map resolves polygons↔cards by event name; a folded card answers to ALL of its products'
         +(mg?' data-evs="'+esc(g.phases.map(function(p){ return p.ev; }).join("|"))+'"':'')+'>'
-        +'<div class="a2-top">'
+        +'<button type="button" class="ab-head" aria-expanded="'+(openIds[aid]?'true':'false')
+          +'" aria-controls="'+drawerId+'">'
           +'<span class="a2-ico">'+ic(alertIcon(g.ev,fcfg.ico))+'</span>'
-          +'<span class="a2-name">'+esc(mg?g.famTitle:g.ev)+'</span>'
-          +'<span class="a2-tier">'+g.lv.label+'</span>'
+          +'<span class="ab-hx">'
+            +'<span class="ab-title">'+esc(g.ev)+(hWhen?' — '+esc(hWhen):'')+'</span>'
+            +(sub?'<span class="ab-sub">'+esc(sub)+'</span>':'')
+          +'</span>'
           +meBadge
-          +segTxt
+          +'<span class="a-chev">▾</span>'
+        +'</button>'
+        +'<div class="alert-more" id="'+drawerId+'">'
+        +(g.latest||pending?'<div class="ab-cd">'
           +(pending?'<span class="a2-cd a-cd" data-exp="'+g.earliest+'" data-pre="1"></span>'
-                   :(g.latest?'<span class="a2-cd a-cd" data-exp="'+g.latest+'"></span>':''))
-        +'</div>'
+                   :'<span class="a2-cd a-cd" data-exp="'+g.latest+'"></span>')+'</div>':'')
         +(prog!=null?'<div class="a2-time'+(pending?' pending':'')+'"><div class="a2-prog"><i style="width:'+prog.toFixed(1)+'%"></i></div>'
           +'<div class="a2-times"><span>'+(pending?"begins ":"")+esc(startStr||"in effect")+'</span><span>ends '+esc(endStr)+'</span></div></div>'
           :'<div class="a2-times"><span>Through '+esc(endStr)+'</span></div>')
         +phasesHTML
-        +(lede?'<div class="a2-lede">'+lede+'</div>':'')
-        +((detail||g.mapped)?'<div class="a2-foot">'
-          +(detail?'<button type="button" class="a2-hint" aria-expanded="'+(openIds[aid]?'true':'false')
-            +'" aria-controls="'+drawerId+'">Details <span class="a-chev">\u25be</span></button>':'')
+        +detail
+        +'<div class="a2-foot">'
+          +'<a class="link" href="https://www.weather.gov/lsx/" target="_blank" rel="noopener">weather.gov/lsx \u2197</a>'
           +(g.mapped?'<button type="button" class="a2-radar">'+ic("target")+'Show on radar</button>':'')
-          +'</div>':'')
-        +(detail?'<div class="alert-more" id="'+drawerId+'">'+detail+'</div>':'')
+        +'</div>'
+        +'</div>'
         +'</div>';
     });
     var mineHTML="", awayHTML="";
@@ -3079,7 +3070,7 @@ function loadAlerts(){
         +awayN+' '+(awayN===1?"alert":"alerts")+' elsewhere in the LSX area <span class="a-chev">▾</span></button>'
         +'<div id="alertsElse">'+awayHTML+'</div>';
     }
-    el.innerHTML=sumHTML+calmHTML+mineHTML+elseHTML;
+    el.innerHTML=calmHTML+mineHTML+elseHTML;
     syncElsewhere();   // re-apply open/closed across the 60s refresh
   }).catch(function(){
     card.classList.remove("calm");
@@ -3105,9 +3096,10 @@ function eventFamily(ev){
    data-wx, which is the case a Winter Storm Warning would have wanted it for anyway. */
 var RADAR_FAMILIES={convective:1,flood:1};
 /* Per-family presentation: icon, the most-relevant card to float to the prime slot, and — where
-   present — `merge`, the title of a folded card. A family carries `merge` only if its products are
-   graduated TIERS of one hazard: an Extreme Heat Warning and a Heat Advisory are the same air at
-   different strengths, and NWS even writes them as one text ("For the Extreme Heat Warning...
+   present — `merge`, which marks the family's products as foldable into one banner (its value
+   names the hazard, for the reader of this table). A family carries `merge` only if its products
+   are graduated TIERS of one hazard: an Extreme Heat Warning and a Heat Advisory are the same air
+   at different strengths, and NWS even writes them as one text ("For the Extreme Heat Warning...
    For the Heat Advisory..."). It is deliberately absent from convective and flood — a Tornado
    Warning and a Severe Thunderstorm Watch share a family without being the same hazard, and a
    Flash Flood Warning is not a tier of a river Flood Warning. */
@@ -5848,14 +5840,14 @@ document.getElementById("alerts").addEventListener("click",function(e){
     if(ac){ ac.classList.add("areas-all"); e.stopPropagation(); if(typeof scheduleMasonry==="function") scheduleMasonry(); }
     return;
   }
-  /* Anywhere else on a card with a drawer toggles it. The "Details" button is inside the card, so
-     its own activation arrives here too — one path, one toggle, no double-fire. That button is the
-     real control and owns aria-expanded; this is the click target being generous.
-     No keydown handler any more: the card is not focusable, and a <button> gets Enter and Space
-     from the browser, which then arrive here as a click. The hand-rolled version had to special-
-     case "let the inner buttons handle their own keys", which is what having a real button does. */
-  var a=e.target.closest(".alert"), hint=a&&a.querySelector(".a2-hint");
-  if(hint) toggleOpen(a,hint);
+  /* The banner head is the drawer's one control — a real <button>, so Enter and Space arrive
+     here as clicks with no keydown handler. Clicks inside the open drawer fall through to
+     nothing, which is correct: the drawer holds its own controls. */
+  var head=e.target.closest(".ab-head");
+  if(head){
+    toggleOpen(head.closest(".alert"),head);
+    if(typeof scheduleMasonry==="function") scheduleMasonry();
+  }
 });
 tick();
 refreshAll();
