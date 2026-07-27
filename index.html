@@ -2491,13 +2491,39 @@ function eventFamily(ev){
 var RADAR_FAMILIES={convective:1,flood:1};
 // Per-family presentation: icon, the most-relevant card to float to the prime slot, and the banner sub-tone.
 var FAMILY_CFG={
-  convective:{ico:"storm",   prime:"obsCard",    sub:"Radar and alerts moved up. Move indoors, away from windows, if a warning is issued."},
-  winter:    {ico:"snow",    prime:"obsCard",    sub:"Regional temperatures moved up. Allow extra travel time and expect slick roads."},
-  flood:     {ico:"flood",   prime:"riversCard", sub:"River gauges moved up. Turn around, don't drown."},
-  heat:      {ico:"heat",    prime:"obsCard",    sub:"Regional feels-like moved up. Limit strenuous outdoor activity and stay in air conditioning."},
-  wind:      {ico:"wind",    prime:"obsCard",    sub:"Regional winds moved up. Secure loose outdoor objects."},
-  fire:      {ico:"fire",    prime:"riskCard",   sub:"Fire-weather risk moved up. Avoid open flames and outdoor burning."}
+  convective:{ico:"storm",   prime:"obsCard",    sub:"Severe storms in the area. Move indoors, away from windows."},
+  winter:    {ico:"snow",    prime:"obsCard",    sub:"Winter weather hazard in effect. Allow extra time and check road conditions."},
+  flood:     {ico:"flood",   prime:"riversCard", sub:"Flooding possible. Turn around, don't drown."},
+  heat:      {ico:"heat",    prime:"obsCard",    sub:"Dangerous heat. Limit outdoor exertion and stay in air conditioning."},
+  wind:      {ico:"wind",    prime:"obsCard",    sub:"Strong winds in the area. Secure loose outdoor objects."},
+  fire:      {ico:"fire",    prime:"riskCard",   sub:"Elevated fire-weather risk. Avoid open flames and outdoor burning."}
 };
+/* The banner subline. NWS wrote guidance for THIS warning, so say what they said rather than a
+   paraphrase keyed to a family as broad as "winter" — which spans a blizzard and a frost advisory.
+   FAMILY_CFG.sub is only the fallback for a product that shipped without an instruction.
+
+   Sentences are taken whole, up to a budget, because the useful first sentence of a tornado
+   instruction is "TAKE COVER NOW!" and on its own that is an alarm without an instruction. A
+   product that is entirely upper case is left to the alert card, where it has room: shouting the
+   full thing across the top of the page is the register this pass exists to remove. */
+var STORM_SUB_MAX=155;
+function stormSubline(p,cfg){
+  var txt=alertParas(p&&p.instruction).join(" ").trim();
+  if(!txt) return cfg.sub;
+  var letters=txt.replace(/[^A-Za-z]/g,"");
+  if(letters.length>12 && letters.replace(/[^A-Z]/g,"").length/letters.length>0.7) return cfg.sub;
+  // Some products open by defining themselves — "A Red Flag Warning means critical fire weather
+  // conditions are either occurring now, or will shortly." True, and no use to someone deciding
+  // what to do in the next minute. The banner asks for an action, so those keep the family line.
+  if(/^(A|An)\s+[\w\s-]{3,40}\s(Warning|Watch|Advisory|Statement)\s+means\b/i.test(txt)) return cfg.sub;
+  var out="";
+  (txt.match(/[^.!?]+[.!?]*/g)||[txt]).forEach(function(sent){
+    sent=sent.trim(); if(!sent) return;
+    if(!out) out=sent;
+    else if((out+" "+sent).length<=STORM_SUB_MAX) out+=" "+sent;
+  });
+  return out.length>STORM_SUB_MAX ? out.slice(0,STORM_SUB_MAX-1).replace(/\s+\S*$/,"")+"\u2026" : out;
+}
 function setStormMode(warnProps){
   var body=document.body;
   if(warnProps){
@@ -2525,7 +2551,7 @@ function setStormMode(warnProps){
     document.getElementById("stormText").textContent=warnProps.event
       +(pending?(startStr?" — from "+startStr:""):(expStr?" — until "+expStr:""));
     if(typeof tickCountdowns==="function") tickCountdowns();
-    var sub=document.getElementById("stormSub"); if(sub) sub.textContent=cfg.sub;
+    var sub=document.getElementById("stormSub"); if(sub) sub.textContent=stormSubline(warnProps,cfg);
     // Start the radar loop NOW — its autoplay gate only ran on tile-load / the 4-min refresh,
     // which could leave the loop parked for minutes right after a warning popped.
     if(typeof updateRadarCtl==="function") updateRadarCtl();
