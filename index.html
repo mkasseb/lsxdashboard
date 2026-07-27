@@ -195,8 +195,8 @@
      Pointer-events are inherited, so it counts as part of its own control for hit-testing while
      being invisible to everything else. Where it overhangs, it overhangs county chips and heading
      text — inert things with no target of their own to lose. */
-  .card h2 a,.rs-tab,.rs-full,.a2-more,.a2-radar,.rail-act{position:relative}
-  .card h2 a::after,.rs-tab::after,.rs-full::after,.a2-more::after,.a2-radar::after,.rail-act::after{
+  .card h2 a,.rs-tab,.rs-full,.a2-more,.a2-radar,.rail-act,.a2-hint{position:relative}
+  .card h2 a::after,.rs-tab::after,.rs-full::after,.a2-more::after,.a2-radar::after,.rail-act::after,.a2-hint::after{
     content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
     width:100%;height:100%;min-width:44px;min-height:44px}
   /* Everything else that sets an icon beside a word. An .ic is 1em with no margin of its own, so
@@ -483,7 +483,11 @@
   .a2-more{font-size:var(--fs-xs);padding:3px 10px;background:transparent;border:1px dashed var(--border);
     color:var(--accent);font-weight:700}
   .a2-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px}
-  .a2-hint{font-size:var(--fs-sm);color:var(--accent);font-weight:700}
+  /* A real <button> now, so it has to shed the chrome every other button gets — this one is a text
+     affordance inside a card, not a control with a box round it. */
+  .a2-hint{font-size:var(--fs-sm);color:var(--accent);font-weight:700;
+    background:none;border:0;padding:0;min-height:0;font-family:inherit;cursor:pointer}
+  .a2-hint:hover{border-color:transparent}
   .a2-radar{font-size:var(--fs-xs);font-weight:700;padding:4px 11px;background:transparent;
     border:1px dashed var(--border);color:var(--accent);margin-left:auto}
   .a2-radar:hover{border-color:var(--accent);border-style:solid}
@@ -530,7 +534,7 @@
   .badge{font-size:var(--fs-sm);font-weight:700;padding:3px 9px;border-radius:var(--r-pill);background:var(--chip);white-space:nowrap}
   /* Only a card with a drawer is clickable — the ones whose whole story is already on the card
      are read, not operated, and a pointer cursor on them promises a reveal that never comes. */
-  #alerts .alert[role="button"]{cursor:pointer}
+  #alerts .alert.has-more{cursor:pointer}
   .a-hint{color:var(--accent)}
   .a-zcnt{font-size:var(--fs-sm);font-weight:700;color:var(--muted);background:var(--chip);border-radius:var(--r-md);padding:1px 8px;vertical-align:middle}
   .a-more-cnt{color:var(--accent);font-weight:700;white-space:nowrap}
@@ -1378,7 +1382,10 @@
 <header>
 <div class="top">
   <div class="brand">
-    <div class="logo" aria-label="LSX Weather">
+    <!-- No aria-label. It is prohibited on a bare <div> (no role for it to name), and it was
+         announcing "LSX Weather" a second time immediately before the <h1> that says it. The mark
+         is decorative here: the inner <svg> is already aria-hidden. -->
+    <div class="logo">
       <!-- The bolt is CUT OUT of the radar rather than laid on top of it. Stacked, the two read as
            two unrelated pictures fighting for the same 44px — rings saying "radar", a bolt saying
            "storm", and the bolt simply occluding the rings. Knocked out with a clearance gap, they
@@ -2417,7 +2424,8 @@ function focusAlertCard(ev){
   if(!card) return;
   // Not every card has a drawer any more — the hazard text is on the card unless the drawer holds
   // something extra. setOpen() on a card without one would set aria-expanded on a non-control.
-  if(card.querySelector(".alert-more")) setOpen(card,card,true);
+  var hint=card.querySelector(".a2-hint");
+  if(hint) setOpen(card,hint,true);
   if(card.querySelector(".a2-more")) card.classList.add("areas-all");
   card.classList.remove("flash");
   void card.offsetWidth;                            // restart the animation if it's already running
@@ -2776,7 +2784,7 @@ function loadAlerts(){
     }).join("")
     +(hitN?'<span class="a2-sumchip mine">'+ic("pin")+hitN+(hitN>1?" affect":" affects")+' your area</span>':'')+'</div>';
 
-    el.innerHTML=sumHTML+glist.map(function(g){
+    el.innerHTML=sumHTML+glist.map(function(g,gi){
       var fam=eventFamily(g.ev), fcfg=FAMILY_CFG[fam]||FAMILY_CFG.convective;
       var bp=(g.best&&g.best.properties)||{};
       var endStr=g.latest?new Date(g.latest).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"\u2014";
@@ -2842,10 +2850,18 @@ function loadAlerts(){
       // "×2" was a badge whose meaning lived inside the drawer it sat above. Same fact, in words.
       var segTxt=g.segs.length>1?'<span class="a2-zc" title="NWS issued this event as '+g.segs.length
         +' separate records, each with its own counties and end time">'+g.segs.length+' zone groups</span>':'';
-      // role/tabindex/aria-expanded only when a drawer exists — an element that cannot expand must
-      // not announce itself as a control that can, and must not take a tab stop to do nothing.
-      return '<div class="alert lv-'+g.lv.k+(g.hit?' hits-me':'')+(openIds[aid]?' open':'')+'" data-aid="'+aid+'"'
-        +(detail?' role="button" tabindex="0" aria-expanded="'+(openIds[aid]?'true':'false')+'"':'')+'>'
+      /* The card is NOT a button, and this is the second attempt at that.
+         It used to carry role="button" + tabindex, which reads well until you look at the
+         accessibility tree: ARIA makes every descendant of a button presentational, so the whole
+         card collapsed to one unnamed "button" with nothing inside it. That swallowed "+34 more"
+         and "Show on radar" — and it swallowed the What/When/Impacts text this card was
+         restructured to put in front of people, for precisely the users who most needed it there.
+         The drawer's control is the "Details" button in the footer, which owns aria-expanded and
+         aria-controls. Clicking anywhere else on the card still toggles it (see the #alerts click
+         handler) — that is a mouse convenience layered on a real control, not a substitute for one. */
+      var drawerId="a2more-"+gi;
+      return '<div class="alert lv-'+g.lv.k+(g.hit?' hits-me':'')+(openIds[aid]?' open':'')
+        +(detail?' has-more':'')+'" data-aid="'+aid+'">'
         +'<div class="a2-top">'
           +'<span class="a2-ico">'+ic(alertIcon(g.ev,fcfg.ico))+'</span>'
           +'<span class="a2-name">'+esc(g.ev)+'</span>'
@@ -2861,10 +2877,11 @@ function loadAlerts(){
         +(lede?'<div class="a2-lede">'+lede+'</div>':'')
         +areasHTML
         +((detail||g.mapped)?'<div class="a2-foot">'
-          +(detail?'<span class="a2-hint">Details <span class="a-chev">\u25be</span></span>':'')
+          +(detail?'<button type="button" class="a2-hint" aria-expanded="'+(openIds[aid]?'true':'false')
+            +'" aria-controls="'+drawerId+'">Details <span class="a-chev">\u25be</span></button>':'')
           +(g.mapped?'<button type="button" class="a2-radar">'+ic("target")+'Show on radar</button>':'')
           +'</div>':'')
-        +(detail?'<div class="alert-more">'+detail+'</div>':'')
+        +(detail?'<div class="alert-more" id="'+drawerId+'">'+detail+'</div>':'')
         +'</div>';
     }).join("");
   }).catch(function(){
@@ -5666,15 +5683,14 @@ document.getElementById("alerts").addEventListener("click",function(e){
     if(ac){ ac.classList.add("areas-all"); e.stopPropagation(); if(typeof scheduleMasonry==="function") scheduleMasonry(); }
     return;
   }
-  var a=e.target.closest(".alert");
-  if(a&&a.querySelector(".alert-more")) toggleOpen(a,a);
-});
-document.getElementById("alerts").addEventListener("keydown",function(e){
-  if(e.key==="Enter"||e.key===" "){
-    if(e.target.closest("button")) return;          // let the inner buttons handle their own keys
-    var a=e.target.closest(".alert");
-    if(a&&a.querySelector(".alert-more")){ e.preventDefault(); toggleOpen(a,a); }
-  }
+  /* Anywhere else on a card with a drawer toggles it. The "Details" button is inside the card, so
+     its own activation arrives here too — one path, one toggle, no double-fire. That button is the
+     real control and owns aria-expanded; this is the click target being generous.
+     No keydown handler any more: the card is not focusable, and a <button> gets Enter and Space
+     from the browser, which then arrive here as a click. The hand-rolled version had to special-
+     case "let the inner buttons handle their own keys", which is what having a real button does. */
+  var a=e.target.closest(".alert"), hint=a&&a.querySelector(".a2-hint");
+  if(hint) toggleOpen(a,hint);
 });
 tick();
 refreshAll();
