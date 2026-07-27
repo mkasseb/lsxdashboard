@@ -280,10 +280,6 @@
     --pulse:var(--storm);animation:pulse 1.6s infinite;font-weight:700}
   #stormBanner .bico{font-size:var(--fs-xl);display:inline-flex;color:rgb(var(--storm));flex:0 0 auto}
   #stormBanner .btxt{font-size:var(--fs-lg);line-height:1.3}
-  /* Not --muted: the banner paints its own tint, and on the light theme's warm one --muted drops
-     to 4.35:1. The weight and size already say "sub-line" — the colour doesn't have to, and this
-     is the one line on the page that is never worth making quieter. */
-  #stormBanner .bsub{font-size:var(--fs-sm);color:var(--text);font-weight:500;margin-top:3px;line-height:1.45}
   @media (prefers-reduced-motion: reduce){#stormBanner{animation:none}}
   body.storm #stormBanner{display:flex}
   /* Event-aware storm accent (--storm = R,G,B). Default convective red; families override below. */
@@ -1470,10 +1466,13 @@
 
 <div id="stormBanner">
   <div class="bico"><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg></div>
-  <div>
-    <div class="btxt" id="stormText">Active Warning</div>
-    <div class="bsub" id="stormSub">Radar and alerts have moved to the top of the page.</div>
-  </div>
+  <!-- One line. The banner used to carry a second line of NWS guidance, which existed because the
+       alert card kept its instruction folded away in a drawer — the banner was the only place the
+       advice appeared without a tap. The card shows What / When / Impacts / What to do itself now,
+       and it sits directly beneath this, so the subline had become the same sentence twice within
+       a screen. What is left is what the card below cannot be: a flag, above everything, that says
+       which hazard is running and until when. -->
+  <div class="btxt" id="stormText">Active Warning</div>
 </div>
 
 <div class="grid">
@@ -2711,7 +2710,19 @@ function loadAlerts(){
     feats.sort(function(a,b){var ra=rank[a.properties.severity],rb=rank[b.properties.severity];return (ra==null?5:ra)-(rb==null?5:rb);});
     var warn=null;
     for(var i=0;i<feats.length;i++){if((feats[i].properties.event||"").toLowerCase().indexOf("warning")>=0){warn=feats[i].properties;break;}}
-    setStormMode(warn);
+    /* The banner names ONE record's end time; the alert card directly beneath it names the latest
+       across every record of the same event, because that is how the list groups them. NWS split
+       today's Extreme Heat Warning into fifteen records ending anywhere from 7 PM tonight to 8 PM
+       Tuesday, so the two were giving different answers to "until when" for the same warning, a
+       screen apart. The card's answer is the right one — it is the whole event — so the banner
+       borrows it rather than reporting whichever segment happened to sort first. */
+    var warnEnds=0;
+    if(warn) feats.forEach(function(f){
+      if((f.properties.event||"")!==warn.event) return;
+      var e=Date.parse(f.properties.ends||f.properties.expires||"")||0;
+      if(e>warnEnds) warnEnds=e;
+    });
+    setStormMode(warn,warnEnds||null);
     // Gate smart.warning by family: it feeds radarWorthy(), and a Heat or Winter Storm Warning
     // shouldn't summon the radar by itself (falling snow already does via data-wx).
     var warnFam=warn?eventFamily(warn.event):null;
@@ -2915,42 +2926,16 @@ function eventFamily(ev){
    radar slot to the conditions card. Falling snow still summons the radar by itself through
    data-wx, which is the case a Winter Storm Warning would have wanted it for anyway. */
 var RADAR_FAMILIES={convective:1,flood:1};
-// Per-family presentation: icon, the most-relevant card to float to the prime slot, and the banner sub-tone.
+// Per-family presentation: icon, and the most-relevant card to float to the prime slot.
 var FAMILY_CFG={
-  convective:{ico:"storm",   prime:"obsCard",    sub:"Severe storms in the area. Move indoors, away from windows."},
-  winter:    {ico:"snow",    prime:"obsCard",    sub:"Winter weather hazard in effect. Allow extra time and check road conditions."},
-  flood:     {ico:"flood",   prime:"riversCard", sub:"Flooding possible. Turn around, don't drown."},
-  heat:      {ico:"heat",    prime:"obsCard",    sub:"Dangerous heat. Limit outdoor exertion and stay in air conditioning."},
-  wind:      {ico:"wind",    prime:"obsCard",    sub:"Strong winds in the area. Secure loose outdoor objects."},
-  fire:      {ico:"fire",    prime:"riskCard",   sub:"Elevated fire-weather risk. Avoid open flames and outdoor burning."}
+  convective:{ico:"storm",   prime:"obsCard"},
+  winter:    {ico:"snow",    prime:"obsCard"},
+  flood:     {ico:"flood",   prime:"riversCard"},
+  heat:      {ico:"heat",    prime:"obsCard"},
+  wind:      {ico:"wind",    prime:"obsCard"},
+  fire:      {ico:"fire",    prime:"riskCard"}
 };
-/* The banner subline. NWS wrote guidance for THIS warning, so say what they said rather than a
-   paraphrase keyed to a family as broad as "winter" — which spans a blizzard and a frost advisory.
-   FAMILY_CFG.sub is only the fallback for a product that shipped without an instruction.
-
-   Sentences are taken whole, up to a budget, because the useful first sentence of a tornado
-   instruction is "TAKE COVER NOW!" and on its own that is an alarm without an instruction. A
-   product that is entirely upper case is left to the alert card, where it has room: shouting the
-   full thing across the top of the page is the register this pass exists to remove. */
-var STORM_SUB_MAX=155;
-function stormSubline(p,cfg){
-  var txt=alertParas(p&&p.instruction).join(" ").trim();
-  if(!txt) return cfg.sub;
-  var letters=txt.replace(/[^A-Za-z]/g,"");
-  if(letters.length>12 && letters.replace(/[^A-Z]/g,"").length/letters.length>0.7) return cfg.sub;
-  // Some products open by defining themselves — "A Red Flag Warning means critical fire weather
-  // conditions are either occurring now, or will shortly." True, and no use to someone deciding
-  // what to do in the next minute. The banner asks for an action, so those keep the family line.
-  if(/^(A|An)\s+[\w\s-]{3,40}\s(Warning|Watch|Advisory|Statement)\s+means\b/i.test(txt)) return cfg.sub;
-  var out="";
-  (txt.match(/[^.!?]+[.!?]*/g)||[txt]).forEach(function(sent){
-    sent=sent.trim(); if(!sent) return;
-    if(!out) out=sent;
-    else if((out+" "+sent).length<=STORM_SUB_MAX) out+=" "+sent;
-  });
-  return out.length>STORM_SUB_MAX ? out.slice(0,STORM_SUB_MAX-1).replace(/\s+\S*$/,"")+"\u2026" : out;
-}
-function setStormMode(warnProps){
+function setStormMode(warnProps,groupEnds){
   var body=document.body;
   if(warnProps){
     var fam=eventFamily(warnProps.event);
@@ -2961,7 +2946,7 @@ function setStormMode(warnProps){
     // mark the event-relevant card so it gets the glow (and the masonry floats it to the front)
     [].forEach.call(document.querySelectorAll(".storm-prime"), function(e){ e.classList.remove("storm-prime"); });
     var pc=document.getElementById(cfg.prime); if(pc) pc.classList.add("storm-prime");
-    var exp=warnProps.ends||warnProps.expires;
+    var exp=groupEnds||warnProps.ends||warnProps.expires;   // see the caller: the whole event's end
     // Name the day when the window doesn't end today. "until 9:00 PM" on a 23-hour heat warning was
     // true and useless — it read as tonight.
     var expStr=exp?fmtWhen(new Date(exp)):"";
@@ -2977,7 +2962,6 @@ function setStormMode(warnProps){
     document.getElementById("stormText").textContent=warnProps.event
       +(pending?(startStr?" — from "+startStr:""):(expStr?" — until "+expStr:""));
     if(typeof tickCountdowns==="function") tickCountdowns();
-    var sub=document.getElementById("stormSub"); if(sub) sub.textContent=stormSubline(warnProps,cfg);
     // Start the radar loop NOW — its autoplay gate only ran on tile-load / the 4-min refresh,
     // which could leave the loop parked for minutes right after a warning popped.
     if(typeof updateRadarCtl==="function") updateRadarCtl();
