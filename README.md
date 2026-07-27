@@ -1,7 +1,8 @@
-# LSX Weather Command
+# LSX Weather
 
-A one-page weather dashboard for the **NWS St. Louis (LSX) County Warning Area** — alerts, radar,
-forecasts, river gauges, and climate context for a location inside the CWA.
+A one-page weather dashboard for the **NWS St. Louis (LSX) County Warning Area** — eastern Missouri
+and southwest Illinois. Alerts, radar, forecasts, river gauges, and climate context for a location
+inside the CWA.
 
 Not an official NWS product. During severe weather, defer to official warnings and a NOAA Weather Radio.
 
