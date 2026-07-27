@@ -71,8 +71,21 @@ All public-domain or openly licensed, all keyless.
 | Open-Meteo | Air quality, UV index, and the location geocoder |
 | NESDIS / GOES-19 | Satellite imagery |
 
-Basemap © CARTO & OpenStreetMap contributors. Weather icons by
-[Meteocons](https://github.com/basmilius/weather-icons) (Bas Milius, MIT).
+Basemap © CARTO & OpenStreetMap contributors.
+
+Two icon sets, both MIT:
+
+- **Sky conditions** — [Meteocons](https://github.com/basmilius/weather-icons), © Bas Milius. Loaded
+  from a CDN and drawn in colour in the hero and the 24-hour chart.
+- **Everything else** — the inline `<svg id="sprite">` in [`index.html`](index.html). Roughly half of
+  its 35 glyphs — the interface marks (close, expand, lock, pin, check, play/pause) and the generic
+  data marks (alert triangle, info, flag, bar chart, trending-down, wind, droplet, paper plane, bolt)
+  — are drawn from, or closely after, [Feather](https://feathericons.com), © 2013–2023 Cole Bemis.
+  The weather-specific glyphs (cloud, rain, storm, snow, flood, tornado, fog, fire, drought,
+  thermometers, UV, air) are original to this project.
+
+Both licences are the MIT licence, which asks that the copyright notice travel with the work — hence
+the two names above and the credit line in the page footer.
 
 ## How it fits together
 
