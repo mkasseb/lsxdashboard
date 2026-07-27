@@ -2,7 +2,7 @@
 """Pre-deploy checks for a repo with no build step.
 
 `index.html` is served to production byte-for-byte, so nothing between an edit and a
-visitor's browser would notice a mistake. These are the two mistakes worth catching
+visitor's browser would notice a mistake. These are the three mistakes worth catching
 mechanically:
 
   1. A syntax error in an inline <script>. The whole application is one script block.
@@ -13,10 +13,16 @@ mechanically:
      serves the file), then silently fetches nothing in production. The only evidence
      is a console message nobody is looking at.
 
-Check 2 works by classification, not by guessing which URLs are fetched: every https
-origin in index.html must be declared somewhere in the CSP, or listed in NAV_ONLY below
-as a link target. Adding a feed introduces an origin in neither set, so the check fails
-until it is put in one — which is the point.
+  3. An icon name with no matching <symbol> in the sprite. A <use> pointing at a missing
+     id renders NOTHING — no box, no error, no console message. A typo in one arm of
+     hazIcon() would simply drop the icon off a chip that nobody had a drought outlook
+     for that week, and stay dropped.
+
+Checks 2 and 3 work by classification, not by guessing which URLs are fetched or which
+icons are reachable: every https origin in index.html must be declared somewhere in the
+CSP or listed in NAV_ONLY below as a link target, and every icon-shaped string literal
+must name a symbol that exists. Adding a feed introduces an origin in neither set, so the
+check fails until it is put in one — which is the point.
 
 Run locally with:  python3 tools/check.py
 """
@@ -172,12 +178,67 @@ def check_csp_covers_origins(html, headers_text):
     return True
 
 
+SYMBOL = re.compile(r'<symbol id="i-([a-z0-9-]+)"')
+# Every way an icon name reaches the sprite. ic("x") and <use href="#i-x"> are direct; the rest
+# are the producers that hand a name to ic() indirectly — the per-family and per-hazard lookup
+# tables, and the two renderers that take the name as a positional argument (push(pri, ico, txt)
+# for the Bottom Line, line(ico, html) for the climate context).
+ICON_REFS = [
+    re.compile(r'\bic\("([a-z0-9-]+)"'),
+    re.compile(r'href="#i-([a-z0-9-]+)"'),
+    re.compile(r'\bico:"([a-z0-9-]+)"'),
+    re.compile(r'\bic:"([a-z0-9-]+)"'),
+    re.compile(r'\bpush\(\d+,"([a-z0-9-]+)"'),
+    re.compile(r'\bline\("([a-z0-9-]+)"'),
+]
+
+
+def check_icons_resolve(html):
+    """Every referenced icon name has a <symbol>, and every <symbol> is referenced."""
+    defined = set(SYMBOL.findall(html))
+    if not defined:
+        return fail(["FAIL  icons: no <symbol id=\"i-…\"> found — has the sprite moved?"])
+
+    used = set()
+    for pat in ICON_REFS:
+        used |= set(pat.findall(html))
+
+    # The mapper functions return bare names; scope the scan to their bodies so an unrelated
+    # `return "sleet"` elsewhere in the file can't be mistaken for an icon reference.
+    for fn in ("wxFallback", "alertIcon", "hazIcon"):
+        m = re.search(r"function %s\(.*?\n\}" % fn, html, re.S)
+        if m:
+            used |= set(re.findall(r'return "([a-z0-9-]+)"', m.group(0)))
+
+    missing = sorted(used - defined)
+    if missing:
+        return fail(
+            ["FAIL  icons: name(s) referenced with no <symbol> in the sprite:", ""]
+            + ["        " + n for n in missing]
+            + ["", "      A <use> pointing at a missing id renders nothing at all, silently.",
+               "      Add the symbol to #sprite in index.html, or fix the name."]
+        )
+
+    # The reverse: a symbol nothing draws is dead weight in every page load.
+    unused = sorted(defined - used)
+    if unused:
+        return fail(
+            ["FAIL  icons: <symbol>(s) in the sprite that nothing references:", ""]
+            + ["        i-" + n for n in unused]
+            + ["", "      Remove them — the sprite ships inline on every request."]
+        )
+
+    print("ok    icons: %d symbol(s), all referenced, all references resolve" % len(defined))
+    return True
+
+
 def main():
     html = read(INDEX)
     headers_text = read(HEADERS)
     results = [
         check_inline_script_syntax(html),
         check_csp_covers_origins(html, headers_text),
+        check_icons_resolve(html),
     ]
     if not all(results):
         print("\nchecks failed")
