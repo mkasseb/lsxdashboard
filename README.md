@@ -305,6 +305,20 @@ cold paint is the cheaper mistake.
 wind / fire), which sets the accent colour, floats the most relevant card to the top of the layout,
 and rewrites the banner.
 
+The banner's second line comes from the NWS instruction for *that* warning, via `stormSubline()`,
+not from a string keyed to the family — a family as broad as "winter" spans a blizzard and a frost
+advisory, and one sentence cannot be useful for both. `FAMILY_CFG.sub` is the fallback, and three
+things send it there: a product with no instruction, one written entirely in upper case (legacy
+all-caps products; the alert card has room to show those, the banner does not), and one that opens
+by defining itself — *"A Red Flag Warning means critical fire weather conditions…"* is true and no
+use to someone deciding what to do in the next minute. Sentences are taken whole up to a budget,
+because the useful first sentence of a tornado instruction is "TAKE COVER NOW!" and on its own that
+is an alarm without an instruction.
+
+The line before this one used to narrate the page's own layout — *"Regional feels-like moved up"* —
+which says nothing about the weather and only parses for someone who saw the page **before** the
+warning fired. The banner has one job: what this means and what to do about it.
+
 **Adding a card** means touching five places: the markup, the `RANK` map in `layoutMasonry`'s
 `tier()`, `SNAP_PARTS`, the `SCHED` table, and `clearLocationUI`/`resetLocationState`.
 
