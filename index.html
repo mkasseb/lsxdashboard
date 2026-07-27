@@ -302,14 +302,18 @@
   .a2-top{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
   .a2-ico{font-size:var(--fs-xl);line-height:1;flex:0 0 auto;color:var(--lv);display:inline-flex}
   .a2-name{font-weight:700;font-size:var(--fs-lg);line-height:1.25}
-  .a2-tier{background:color-mix(in srgb,var(--lv) 18%,transparent);color:var(--lv)}
+  /* The chip text leans 25% toward --text: pure --lv passed while the card's tint was dead (the
+     chip sat on near-neutral inset), but on the REAL 8% level tint it measures 3.9-4.3:1 at 11px
+     for sev/warn/danger. The blend keeps the level colour dominant and clears 4.5:1 for every
+     level in both themes — computed, not eyeballed. Same treatment as .a2-do b below. */
+  .a2-tier{background:color-mix(in srgb,var(--lv) 18%,transparent);color:color-mix(in srgb,var(--lv) 75%,var(--text))}
   .a2-zc{font-size:var(--fs-xs);font-weight:700;color:var(--muted);background:var(--chip);padding:2px 8px}
   /* "this one is over you" — the answer to the question you're actually asking. It used to shout it
      in red uppercase inside a red-bordered pill, which is a lot of alarm for a statement of fact:
      the severity is already carried by the card. Same words, said once, at speaking volume. */
   .a2-me{font-size:var(--fs-xs);font-weight:600;padding:3px 9px;background:var(--chip);color:var(--text)}
   .a2-me .ic{color:var(--lv)}
-  .alert.hits-me{border-left-width:7px}
+  #alerts .alert.hits-me{border-left-width:7px}   /* must outweigh the base rule's border-left shorthand */
   .a2-sumchip.mine{--lv:var(--muted);color:var(--text);background:var(--chip);border-color:var(--border)}
   .a2-cd{margin-left:auto;font-size:var(--fs-md);font-weight:700}
   /* elapsed-vs-remaining window */
@@ -353,7 +357,7 @@
     background:color-mix(in srgb,var(--lv) 9%,transparent);
     border:1px solid color-mix(in srgb,var(--lv) 28%,transparent);font-size:var(--fs-md);line-height:1.55}
   .a2-do b{display:block;font-size:var(--fs-2xs);text-transform:uppercase;letter-spacing:var(--ls-eyebrow);
-    color:var(--lv);margin-bottom:5px}
+    color:color-mix(in srgb,var(--lv) 75%,var(--text));margin-bottom:5px}   /* 75/25 — see .a2-tier */
   .a2-do p{margin:0 0 7px}.a2-do p:last-child{margin-bottom:0}
   .a2-seg{font-size:var(--fs-xs);color:var(--muted);margin-top:10px;line-height:1.5}
   .a2-seg b{color:var(--text)}
@@ -363,8 +367,11 @@
     .a2-kv{grid-template-columns:1fr;gap:2px 0}
     .a2-kv .k{padding-top:7px}
   }
-  .alert{border-left-color:var(--lv);background:color-mix(in srgb,var(--lv) 8%,transparent)}
-  .alert.lv-statement{background:var(--inset)}
+  /* ID-scoped to actually OUTWEIGH the base #alerts .alert rule above: as a bare `.alert{...}`
+     this ramp lost the specificity fight to the base's muted border-left and inset background,
+     and every card rendered gray — the level colour existed only in the badges and icon. */
+  #alerts .alert{border-left-color:var(--lv);background:color-mix(in srgb,var(--lv) 8%,transparent)}
+  #alerts .alert.lv-statement{background:var(--inset)}
   /* Only the top of the ramp pulses. A page where every card breathes has no top of the ramp. */
   .alert.lv-emergency{animation:pulse 1.6s infinite}
   @media (prefers-reduced-motion: reduce){.alert.lv-emergency{animation:none}}
