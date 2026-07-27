@@ -285,13 +285,26 @@
      surfaces far enough to drop --muted to 3.78:1, --accent to 3.63 and --sev to 3.05. Border and
      box-shadow sit outside every one of those backdrops, so the card can shout without moving a
      single contrast ratio.
-     Still no pulse here. `.alert.lv-emergency` pulses and nothing else does — a page where every
-     card breathes has no top of the ramp, which is the same reason the cards gave their glow up
-     to the banner in the first place. This just hands it back. */
-  body.storm #alertsCard{
-    border-color:rgba(var(--storm),.75);
-    box-shadow:0 0 0 3px rgba(var(--storm),.20),0 0 26px rgba(var(--storm),.20),var(--shadow);
+     It breathes, as the banner did. stormPulse does both halves of what that looked like at once:
+     a ring that expands and fades (the flash) and a halo that swells with it (the glow). Both are
+     box-shadow, i.e. outside the card, so the animation cannot touch a contrast ratio either.
+     The static box-shadow below is not decoration — it is what remains when the animation is
+     switched off for reduced motion, so the card still reads as the urgent one. */
+  @keyframes stormPulse{
+    0%,100%{box-shadow:0 0 0 0 rgba(var(--storm),.55),0 0 30px 2px rgba(var(--storm),.26),var(--shadow)}
+    50%    {box-shadow:0 0 0 10px rgba(var(--storm),0),0 0 46px 7px rgba(var(--storm),.42),var(--shadow)}
   }
+  body.storm #alertsCard{
+    border-color:rgba(var(--storm),.8);
+    box-shadow:0 0 0 3px rgba(var(--storm),.22),0 0 30px 2px rgba(var(--storm),.30),var(--shadow);
+    animation:stormPulse 1.9s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce){body.storm #alertsCard{animation:none}}
+  /* One breathing thing at a time. `.alert.lv-emergency` pulses on its own so the top of the ramp
+     is visible in calm-ish weather, but a tornado warning turns Storm Mode on too — and a ring
+     inside a ring, on two different clocks, is the concentric-halo problem this page already
+     solved once. The card's pulse is the louder and outer of the two, so it wins. */
+  body.storm #alertsCard .alert.lv-emergency{animation:none}
   /* Event-aware storm accent (--storm = R,G,B). Default convective red; families override below. */
   body.storm{--storm:255,45,85; background:radial-gradient(1200px 600px at 80% -10%, rgba(var(--storm),.10), transparent),var(--bg)}
   body.storm[data-storm="winter"]{--storm:122,150,245}   /* icy blue-violet */
@@ -1174,6 +1187,7 @@
      the whole reason this exists) kept animating while everything else stopped. Uniform rather
      than only on #wxbg, so the next rule written as a shorthand doesn't quietly reopen the hole. */
   html.tab-hidden .logo .lg-sweep,
+  html.tab-hidden #alertsCard,
   html.tab-hidden .alert.lv-emergency,
   html.tab-hidden .snapbar .sb-spin,
   html.tab-hidden #wxbg::after,
