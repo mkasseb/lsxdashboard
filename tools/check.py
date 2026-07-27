@@ -65,6 +65,13 @@ NAV_ONLY = {
     "https://xmacis.rcc-acis.org",
 }
 
+# The site's own origin. It appears absolutely — not as a path — only where a relative URL is
+# not allowed to: rel=canonical, og:url, og:image and twitter:image are resolved by crawlers
+# that never saw the page's base URL, so a relative href there is a coin flip per scraper.
+# 'self' in default-src/img-src already covers it; the origin scan below doesn't know that,
+# hence this name rather than a stray CSP entry that would look like a third party.
+SELF_ORIGIN = "https://lsxdashboard.com"
+
 INLINE_SCRIPT = re.compile(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", re.S)
 ORIGIN = re.compile(r"https://[A-Za-z0-9.*-]+")
 
@@ -148,7 +155,7 @@ def check_csp_covers_origins(html, headers_text):
     declared = [s for srcs in directives.values() for s in srcs if s.startswith("https://")]
     connect = directives.get("connect-src", [])
 
-    found = sorted(set(ORIGIN.findall(html)))
+    found = sorted(set(ORIGIN.findall(html)) - {SELF_ORIGIN})
     undeclared = [o for o in found if o not in NAV_ONLY and not covered_by(o, declared)]
     if undeclared:
         return fail(
