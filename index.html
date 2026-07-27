@@ -1032,10 +1032,6 @@
     .locbar{gap:8px}
     .locbar .locNow{display:none}
     #geoBtn .g-txt{display:none}
-    /* Beside a 44px mark on a 390px screen the full subtitle runs to three rows. The clause
-       that folds is the geography, not the disclaimer — "Unofficial · NWS LSX warning area"
-       is still a complete and honest sentence. */
-    .brand .sub-geo{display:none}
     #geoBtn{flex:0 0 auto;padding:10px 13px;font-size:var(--fs-lg);line-height:1}
     .locsearch{flex:1 1 120px;min-width:0}
     header.top{gap:10px;margin-bottom:12px}
@@ -1137,11 +1133,11 @@
     </div>
     <div>
       <h1>LSX Weather</h1>
-      <!-- "Unofficial" leads because the only other place it is said is the footer, at the
-           bottom of a very long page — the one place nobody checking a warning will read. The
-           geography clause is what tells a stranger where this is; it folds away on a phone,
-           where the line would otherwise run to three rows beside a 44px mark. -->
-      <div class="sub">Unofficial · <span class="sub-geo">eastern Missouri &amp; southwest Illinois · </span>NWS LSX warning area</div>
+      <!-- Where, in plain English. "NWS LSX County Warning Area" is exact and tells a stranger
+           nothing; LSX in the title already carries the office reference for anyone who knows it.
+           No institutional noun on the end — this is not an NWS operation and the subtitle is the
+           first thing that would imply otherwise. -->
+      <div class="sub">Eastern Missouri and Southwest Illinois</div>
     </div>
   </div>
   <div class="header-right">
