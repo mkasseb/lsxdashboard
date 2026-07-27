@@ -292,7 +292,11 @@
   .a2-sumchip{--lv:var(--muted);font-size:var(--fs-sm);font-weight:700;padding:5px 12px;
     border:1px solid color-mix(in srgb,var(--lv) 40%,transparent);
     background:color-mix(in srgb,var(--lv) 12%,transparent);color:var(--lv);white-space:nowrap}
-  .a2-sumchip.emergency,.a2-sumchip.warning{--lv:var(--danger)}
+  /* These MUST match .alert.lv-* below, step for step. The summary chips are the legend for the
+     cards under them, so a "1 Warning" chip in the emergency colour is the two-signals-disagreeing
+     bug this ramp replaced, rebuilt one level up. */
+  .a2-sumchip.emergency{--lv:var(--danger)}
+  .a2-sumchip.warning{--lv:var(--sev)}
   .a2-sumchip.watch{--lv:var(--warn)}
   .a2-sumchip.advisory{--lv:var(--accent)}
   .a2-top{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
