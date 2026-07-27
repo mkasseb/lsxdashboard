@@ -126,6 +126,23 @@
   a{color:var(--accent);text-decoration:none}
   a:hover{text-decoration:underline}
 
+  /* ===== Codes, explained =====
+     KSUS, AFD, QPF, ASOS and the rest stay — the people this page is built for read them faster
+     than the words — but they stop being the only thing said. The dotted rule is doing the real
+     work: a title nobody can see is a secret, and this is the one convention a reader already
+     knows means "there is a definition under here".
+     It cannot help on a phone, where there is no hover, so nothing load-bearing is ever left to
+     it: every annotated code sits beside text that already says what the card is showing. */
+  abbr[title],.has-hint{text-decoration:underline dotted;text-underline-offset:3px;
+    text-decoration-thickness:1px;
+    text-decoration-color:color-mix(in srgb,currentColor 45%,transparent);cursor:help}
+  a[title]{cursor:help}
+  /* The station tooltip names the site under its code — "SAR 75°" is a serial number until it is
+     Sparta Community-Hunter Field. */
+  .leaflet-tooltip.stn-tip .stn-nm{display:block;font-weight:400;color:var(--muted);
+    font-size:11px;margin-top:2px;line-height:1.35}
+  .leaflet-tooltip.stn-tip .stn-rd{display:block;margin-top:4px}
+
   /* ===== Temperature as text =====
      The ramp's HUE is the data; its lightness is only how the data is made readable, and the two
      themes need opposite answers to that. So the markup writes --th (see tvAttr in the script) and
@@ -167,10 +184,28 @@
     letter-spacing:var(--ls-eyebrow);border-radius:var(--r-sm);padding:3px 8px}
   /* Members that are real controls keep a touch target; the rest are inert labels. */
   .a2-more,.a2-radar,.rail-act,.rs-full,.stn-tools button{cursor:pointer;min-height:0}
+
+  /* ===== Touch targets =====
+     The base rule above gives every <button> a 44px min-height, and the line before this one takes
+     it away again from the members that are deliberately small OBJECTS — a dashed "+34 more" among
+     24px county chips, the Radar/Satellite tabs inside a card heading, the ↗ links in those
+     headings. Growing those to 44px would not make them easier to hit so much as make them
+     something else, and the heading they sit in would grow with them.
+     So the hit area grows and the drawing doesn't: a centred pseudo-element with a 44px floor.
+     Pointer-events are inherited, so it counts as part of its own control for hit-testing while
+     being invisible to everything else. Where it overhangs, it overhangs county chips and heading
+     text — inert things with no target of their own to lose. */
+  .card h2 a,.rs-tab,.rs-full,.a2-more,.a2-radar,.rail-act{position:relative}
+  .card h2 a::after,.rs-tab::after,.rs-full::after,.a2-more::after,.a2-radar::after,.rail-act::after{
+    content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:100%;height:100%;min-width:44px;min-height:44px}
   /* Everything else that sets an icon beside a word. An .ic is 1em with no margin of its own, so
      the gap has to come from the container — which is also what keeps the two vertically centred. */
   #geoBtn,#themeBtn,#radarPlay,.maplock-toggle,.locbar .locNow,.day .dp,.spc-row .rh,.cx .cxi,.a2-hint{
     display:inline-flex;align-items:center;gap:6px;justify-content:center}
+  /* Icon-only buttons: the base padding plus a 1em glyph lands at 43px wide — a pixel short of the
+     target, and only in the one dimension nobody thinks to check. */
+  #geoBtn,#themeBtn{min-width:44px}
   .day .dp,.locbar .locNow{gap:4px}
 
   /* ===== Skip link =====
@@ -178,6 +213,7 @@
      exists only to be reached by Tab. It styles itself as a control, not as a link on the page's
      accent: white on --accent is 2.6:1 and this is the first thing a keyboard user ever sees. */
   .skip{position:fixed;left:50%;top:-140px;transform:translateX(-50%);z-index:100;
+    display:inline-flex;align-items:center;min-height:44px;
     padding:12px 22px;border-radius:0 0 var(--r-md) var(--r-md);
     background:var(--panel-2);color:var(--text);border:2px solid var(--accent);border-top:0;
     font-size:var(--fs-md);font-weight:700;text-decoration:none;box-shadow:var(--shadow)}
@@ -547,6 +583,14 @@
   .cc-item,.cc-uv,.aqi-mini{background:var(--inset);border:1px solid var(--border);border-radius:var(--r-md);padding:9px 11px}
   .cc-item .k,.cc-expo .k{font-size:var(--fs-sm);color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
   .cc-item .v,.cc-expo .v{font-size:var(--fs-lg);font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums}
+  /* The unit after a reading. Was an inline style="font-size:11px" written straight into the Wind
+     tile, which is how it survived the pass that put a 12px floor under everything informational —
+     that pass could only see the stylesheet. */
+  .cc-item .cc-unit{font-size:var(--fs-xs);color:var(--muted);font-weight:600}
+  /* An empty tile that can say why it's empty. Both variants carry a title; the cursor is the only
+     hint a mouse user gets that there is one, and on touch the words have to do the work alone —
+     which is why the gust case says "None" instead of leaving a dash to be interpreted. */
+  .cc-item .cc-gap{color:var(--muted);cursor:help}
   /* Provenance, not data: who observed what, when, and which station lent the records. It sits
      below everything it describes and is set to be read second. */
   /* No opacity here — see the note on .cs-sep. Same rule everywhere text is quietened. */
@@ -642,6 +686,13 @@
      (it has to stay legible over whatever the basemap is doing underneath), darkened to clear AA. */
   .leaflet-control-attribution{font-size:var(--fs-2xs);color:#1c2534;background:rgba(255,255,255,.86)}
   .leaflet-control-attribution a{color:#0a4f77}
+  /* Leaflet's zoom buttons are 30px, which clears the AA floor but not a thumb. Widened only where
+     a thumb is what's being used: on a pointer that can hover, 30px is precise enough and 44px
+     would spend a quarter of a phone-height map on two controls that pinch-zoom already replaces. */
+  @media (pointer:coarse){
+    .leaflet-touch .leaflet-control-zoom a,.leaflet-control-zoom a{
+      width:44px;height:44px;line-height:44px;font-size:20px}
+  }
   .radar-time{position:absolute;top:8px;right:8px;z-index:4;pointer-events:none;
     background:rgba(10,14,20,.82);color:#fff;border:1px solid rgba(255,255,255,.18);
     border-radius:var(--r-lg);padding:4px 11px;font-size:var(--fs-sm);font-weight:600;font-variant-numeric:tabular-nums}
@@ -650,8 +701,8 @@
   /* Radar loop scrubber — sits BELOW the map so it never fights the maplock overlay for taps */
   .radar-ctl{display:none;align-items:center;gap:11px;margin-top:9px}
   .radar-ctl.ready{display:flex}
-  .radar-ctl button{min-height:38px;padding:7px 13px;font-size:var(--fs-md);line-height:1;flex:0 0 auto}
-  .radar-ctl input[type=range]{flex:1 1 auto;min-width:0;height:38px;margin:0;cursor:pointer;accent-color:var(--accent);background:none;border:0}
+  .radar-ctl button{min-height:44px;padding:7px 13px;font-size:var(--fs-md);line-height:1;flex:0 0 auto}
+  .radar-ctl input[type=range]{flex:1 1 auto;min-width:0;height:44px;margin:0;cursor:pointer;accent-color:var(--accent);background:none;border:0}
   .radar-ctl .rc-t{flex:0 0 auto;font-size:var(--fs-sm);font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums;min-width:62px;text-align:right}
   .radar-ctl .rc-load{flex:0 0 auto;font-size:var(--fs-xs);color:var(--muted)}
   @media(max-width:480px){.radar-ctl{gap:8px}.radar-ctl .rc-t{min-width:54px;font-size:var(--fs-xs)}}
@@ -674,7 +725,10 @@
   .stn2.is-hi .stn2-v{box-shadow:0 0 0 2px var(--text),0 1px 5px rgba(0,0,0,.5)}
   /* metric switcher */
   .stn-tools{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px}
-  .stn-tools button{min-height:34px;padding:6px 10px;font-size:var(--fs-sm);font-weight:600;flex:1 1 auto;justify-content:center}
+  /* These four read as buttons and are the card's primary control, so they take the full 44px
+     rather than hiding it behind an overlay — a metric switcher you tap all the time should feel
+     like one. Same for the radar transport above. */
+  .stn-tools button{min-height:44px;padding:6px 10px;font-size:var(--fs-sm);font-weight:600;flex:1 1 auto;justify-content:center}
   .stn-tools button.on{border-color:var(--accent);color:var(--accent);background:var(--glow)}
   /* regional extremes — the "what's notable" line the old plot never had */
   .stn-ex{display:flex;flex-wrap:wrap;gap:6px;margin-top:9px}
@@ -684,8 +738,11 @@
     border-radius:var(--r-md);padding:4px 10px;white-space:nowrap}
   .stn-ex .sx b{color:var(--text);font-weight:800;margin-right:4px}
   .stn-ex .sx-n{color:var(--muted)}
+  /* Leaflet tooltips are nowrap by default, which was fine for one line of readings and is not now
+     that a station name sits above them — 336px of tooltip on a 390px phone. */
   .leaflet-tooltip.stn-tip{font-size:12px;font-weight:600;background:var(--panel);color:var(--text);
-    border:1px solid var(--border);box-shadow:var(--shadow);border-radius:var(--r-sm);padding:6px 10px}
+    border:1px solid var(--border);box-shadow:var(--shadow);border-radius:var(--r-sm);padding:6px 10px;
+    white-space:normal;width:max-content;max-width:min(230px,70vw);line-height:1.4}
   .leaflet-tooltip.stn-tip:before{display:none}
   .imgfail{padding:22px;text-align:center;color:var(--muted);font-size:var(--fs-md);line-height:1.6}
 
@@ -838,7 +895,8 @@
   .cc-expo .s{font-size:var(--fs-xs);color:var(--muted);margin-top:4px;line-height:1.45}
   .cc-expo .s:empty{display:none}
   .cc-expo .s b{color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}
-  .cc-expo .ex-b{white-space:nowrap}   /* wrap BETWEEN clauses, never inside "burn ~33 min" */
+  .cc-expo .ex-b{white-space:nowrap}   /* wrap BETWEEN clauses, never inside "sunburn in ~33 min" */
+  .cc-expo .ex-hint{cursor:help}       /* carries the assumption behind the burn figure in a title */
   /* No margin: the literal spaces the renderer puts either side of this are the only break
      opportunity in the sub-line, and with nowrap clauses on both sides they have to stay real
      whitespace or the line cannot wrap at all and overflows the tile. */
@@ -1010,7 +1068,13 @@
   .h24-tip{position:absolute;top:2px;display:none;pointer-events:none;background:var(--bg);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid var(--border);
     border-radius:var(--r-md);padding:7px 11px;font-size:var(--fs-sm);white-space:nowrap;box-shadow:var(--shadow);z-index:5}
 
-  footer{margin-top:20px;text-align:center;color:var(--muted);font-size:var(--fs-sm);line-height:1.7}
+  /* line-height 1.7 → 2.0 is a tap-target change, not a typographic one. The attribution links are
+     inline in running prose, which both target-size criteria explicitly exempt — and rightly, since
+     a 44px inline link would tear the paragraph apart. But 14px tall is meaner than it needs to be,
+     so they take vertical padding to 24px (the AA floor) and the extra leading is what stops the
+     enlarged boxes on consecutive lines from overlapping each other. */
+  footer{margin-top:20px;text-align:center;color:var(--muted);font-size:var(--fs-sm);line-height:2.0}
+  footer a{padding-block:5px}
   .loading{color:var(--muted);font-size:var(--fs-md)}
 
   /* ===== Dynamic weather background (ambient, accessibility-safe) ===== */
@@ -1486,10 +1550,10 @@
     </section>
     <section class="card" id="hazardsCard">
       <h2>Hazards Outlook
-        <a class="link" href="https://www.wpc.ncep.noaa.gov/threats/threats.php" target="_blank" rel="noopener">WPC ↗</a>
+        <a class="link" href="https://www.wpc.ncep.noaa.gov/threats/threats.php" target="_blank" rel="noopener" title="Weather Prediction Center — NOAA’s national precipitation and hazards guidance">WPC ↗</a>
       </h2>
       <div id="hazards"><div class="loading">Loading hazards…</div></div>
-      <div class="imgcap"><span>CPC/WPC U.S. Hazards</span><span id="hazIssued">days 3–14</span></div>
+      <div class="imgcap"><span><abbr title="Climate Prediction Center">CPC</abbr>/<abbr title="Weather Prediction Center">WPC</abbr> U.S. Hazards</span><span id="hazIssued">days 3–14</span></div>
     </section>
     <section class="card" id="obsCard">
       <h2>Station Plot — Live Surface Obs
@@ -1503,12 +1567,12 @@
       </div>
       <div id="stnmap" class="stnmap"></div>
       <div class="stn-ex" id="stnEx"></div>
-      <div class="imgcap"><span>NWS · regional ASOS/METAR</span><span id="stnAge">tap a station for detail</span></div>
+      <div class="imgcap"><span>NWS &middot; regional <abbr title="Automated Surface Observing System — the automated weather stations at airports">ASOS</abbr>/<abbr title="the routine surface weather report those stations file, usually hourly">METAR</abbr></span><span id="stnAge">tap a station for detail</span></div>
     </section>
     <!-- RIVERS — wide (spans 2 columns in the masonry) -->
     <section class="card wide" id="riversCard">
       <h2>River &amp; Flood Gauges — live levels <span class="qpfchip" id="qpf7"></span>
-        <a class="link" href="https://water.noaa.gov/" target="_blank" rel="noopener">NWPS ↗</a>
+        <a class="link" href="https://water.noaa.gov/" target="_blank" rel="noopener" title="National Water Prediction Service — NOAA’s river gauge and flood forecast site">NWPS ↗</a>
       </h2>
       <div class="river" id="rivers"><div class="loading">Loading gauges…</div></div>
     </section>
@@ -1520,21 +1584,21 @@
       <div class="dr-tier"><span class="dr-when">Now</span><span id="drNow"><span class="dr-load">…</span></span></div>
       <div class="dr-tier"><span class="dr-when">Month ahead</span><span id="drMonth"><span class="dr-load">…</span></span></div>
       <div class="dr-tier"><span class="dr-when">Season <span class="dr-sub">(3 mo)</span></span><span id="drSeason"><span class="dr-load">…</span></span></div>
-      <div class="imgcap"><span>USDM · CPC outlooks</span><span>NIDIS / drought.gov</span></div>
+      <div class="imgcap"><span><abbr title="U.S. Drought Monitor — the weekly national drought map">USDM</abbr> &middot; <abbr title="Climate Prediction Center">CPC</abbr> outlooks</span><span><abbr title="National Integrated Drought Information System">NIDIS</abbr> / drought.gov</span></div>
     </section>
     <section class="card" id="climateCard">
       <h2>Climate vs Normal
-        <a class="link" href="https://xmacis.rcc-acis.org/" target="_blank" rel="noopener">ACIS ↗</a>
+        <a class="link" href="https://xmacis.rcc-acis.org/" target="_blank" rel="noopener" title="Applied Climate Information System — the NOAA regional climate centers’ station archive">ACIS ↗</a>
       </h2>
       <div id="cnToday" class="cn-today"><span class="cn-na">Normals loading…</span></div>
       <div id="cnGrid" class="cn-grid"><div class="loading">Loading departures…</div></div>
       <div id="cnSrc" class="cn-src"></div>
       <div id="cnCtx" class="cn-ctx"></div>
-      <div class="imgcap"><span>Station: <span id="cnStation">…</span></span><span>1991–2020 normals</span></div>
+      <div class="imgcap"><span>Station: <span id="cnStation">…</span></span><span title="The 30-year averages NOAA compares today against, recomputed each decade">1991–2020 normals</span></div>
     </section>
     <section class="card" id="cpcCard">
       <h2>Week Ahead Leanings
-        <a class="link" href="https://www.cpc.ncep.noaa.gov/products/predictions/610day/" target="_blank" rel="noopener">CPC ↗</a>
+        <a class="link" href="https://www.cpc.ncep.noaa.gov/products/predictions/610day/" target="_blank" rel="noopener" title="Climate Prediction Center — NOAA’s 6–14 day and seasonal outlooks">CPC ↗</a>
       </h2>
       <div id="cpc"><div class="loading">Loading outlooks…</div></div>
       <div class="imgcap"><span>Climate Prediction Center</span><span>6–14 days out</span></div>
@@ -1543,9 +1607,9 @@
     <section class="card" id="linksCard">
       <h2>Deep-Dive Links</h2>
       <div class="quicklinks">
-        <a href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg>Forecast Discussion (AFD)</a>
+        <a href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg>Forecast Discussion (<abbr title="Area Forecast Discussion — the forecasters’ own written reasoning">AFD</abbr>)</a>
         <a href="https://www.spc.noaa.gov/exper/mesoanalysis/" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-stats"/></svg>SPC Mesoanalysis</a>
-        <a href="https://www.wpc.ncep.noaa.gov/qpf/qpf2.shtml" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-rain"/></svg>WPC Precip (QPF)</a>
+        <a href="https://www.wpc.ncep.noaa.gov/qpf/qpf2.shtml" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-rain"/></svg><abbr title="Weather Prediction Center">WPC</abbr> Precip (<abbr title="Quantitative Precipitation Forecast — how much rain or melted snow is expected, not just whether">QPF</abbr>)</a>
         <a href="https://map.blitzortung.org/#7/38.7/-90.4" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg>Live Lightning</a>
         <a href="https://droughtmonitor.unl.edu/CurrentMap/StateDroughtMonitor.aspx?MO" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-drought"/></svg>Drought Monitor</a>
         <a href="https://www.weather.gov/lsx/climate" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-record"/></svg>Climate &amp; Records</a>
@@ -1661,14 +1725,26 @@ function wxName(text,day){
   if(t.indexOf("sunny")>=0||t.indexOf("clear")>=0||t.indexOf("fair")>=0||t.indexOf("hot")>=0)return day?"clear-day":"clear-night";
   return day?"partly-cloudy-day":"partly-cloudy-night";
 }
-function mcImg(name,fb,px){
-  return '<img class="wxi" src="'+ICON_BASE+name+'.svg" width="'+px+'" height="'+px+'" alt="" data-ic="'+fb+'" loading="lazy" onerror="wxiFail(this)">';
+function mcImg(name,fb,px,alt){
+  /* alt is empty by DEFAULT and that is the right default: nearly every sky icon on this page sits
+     beside words that already say the condition, and a second announcement of "Sunny" is noise.
+     The exception is the collapsed 7-day row, where the icon is the only thing saying what the
+     weather is — no condition text is visible there until the row is opened — so that one call
+     passes the forecast through. data-alt carries it to the CDN-failure path below. */
+  return '<img class="wxi" src="'+ICON_BASE+name+'.svg" width="'+px+'" height="'+px+'" alt="'
+    +esc(alt||"")+'" data-ic="'+fb+'"'+(alt?' data-alt="'+esc(alt)+'"':'')
+    +' loading="lazy" onerror="wxiFail(this)">';
 }
-function wxImg(text,day,px){ return mcImg(wxName(text,day), wxFallback(text,day), px); }
+function wxImg(text,day,px,describe){ return mcImg(wxName(text,day), wxFallback(text,day), px, describe?text:""); }
 function wxiFail(img){  // CDN down → fall back to the local sprite, at the size the <img> reserved
   var px=+img.getAttribute("width")||24;
   var s=icNode(img.getAttribute("data-ic")||"cloud");
   s.style.width=px+"px"; s.style.height=px+"px";
+  // icNode() is aria-hidden, which is right for a decorative mark and wrong for the one icon that
+  // was carrying the condition on its own. A CDN outage shouldn't also cost a screen reader the
+  // forecast, so a described icon keeps its description across the swap.
+  var alt=img.getAttribute("data-alt");
+  if(alt){ s.setAttribute("aria-hidden","false"); s.setAttribute("role","img"); s.setAttribute("aria-label",alt); }
   img.replaceWith(s);
 }
 /* Feels-like: NOAA's own formulas. Heat index (Rothfusz) when >=80°F; wind chill when <=50°F & wind >3 mph. */
@@ -2410,7 +2486,7 @@ function loadForecast(){
         return '<div class="day-item">'
           +'<button class="day" type="button" aria-expanded="false" title="'+esc(main.shortForecast)+'">'
             +'<div class="dn">'+esc(d.name)+'</div>'
-            +'<div class="di">'+wxImg(main.shortForecast,!!d.day,26)+'</div>'
+            +'<div class="di">'+wxImg(main.shortForecast,!!d.day,26,true)+'</div>'
             +'<div class="dp">'+(pop>0?ic("drop")+pop+"%":"&nbsp;")+'</div>'
             +'<div class="tbar"><div class="tfill" style="left:'+left.toFixed(1)+'%;width:'+width.toFixed(1)+'%;background:'+grad+'"></div></div>'
             +'<div class="dt">'+(lo!=null?'<span '+tvAttr(lo,"lo")+'>'+lo+'°</span>':'')
@@ -2465,6 +2541,24 @@ function loadForecast(){
 }
 
 /* ============ CURRENT ============ */
+/* ---- The two ways a metric tile can be empty ----
+   A field the station left out of this observation and a field it is telling you nothing happened
+   in rendered as the same "—", which is the whole of the complaint: one is a gap in the data and
+   the other is the data.
+   Gusts made it obvious. KSUS filed no gust in eleven of its last twelve observations, because a
+   METAR only carries one when the peak run exceeds the steady wind by enough to be worth noting.
+   A dash there drew a hole where the truth was "the wind is steady" — the reading people actually
+   wanted. A real gap still gets a dash, but one that says whose gap it is; a screen reader was
+   otherwise announcing these tiles as "Gusts, em dash".
+   Neither case is a failed FETCH: that path is the .catch below, which says the station may be
+   offline, and the scheduler re-runs loadCurrent on its own interval either way. */
+function ccGap(what){
+  return '<span class="cc-gap" title="'+esc(current.station)+' didn\'t report the '+esc(what)
+    +' in this observation" aria-label="'+esc(what)+' not reported">—</span>';
+}
+function ccNone(label,why){
+  return '<span class="cc-gap" title="'+esc(why)+'">'+esc(label)+'</span>';
+}
 function loadCurrent(){
   var fresh=locGuard();
   var el=document.getElementById("current"), stEl=document.getElementById("ccStation");
@@ -2484,7 +2578,13 @@ function loadCurrent(){
     // Real sunrise/sunset for the icon's day/night variant (polar-edge fallback: 7am–7pm)
     var st=sunTimes(current.lat,current.lon,now);
     var day=(st.rise&&st.set)?(now>=st.rise&&now<=st.set):(now.getHours()>=7&&now.getHours()<19);
+    // The code stays — the audience that reads this page likes it — but it stops being the only
+    // thing said. A station we have no name for gets no title rather than an invented one.
     stEl.textContent=current.station;
+    stEl.title=stnName(current.station)
+      ? stnName(current.station)+" — the weather station these readings come from"
+      : "The weather station these readings come from";
+    stEl.classList.add("has-hint");
     document.body.setAttribute("data-wx", wxGroup(desc,day));
     if(typeof updateRadarSlot==="function") updateRadarSlot();   // precipitation observed → radar appears
     heroNow.temp=temp;   // where "now" sits inside today's range, once the 7-day has landed
@@ -2494,12 +2594,17 @@ function loadCurrent(){
       +'</div></div>'
       +'<div class="cc-today" id="ccToday"></div>'
       +'<div class="cc-grid">'
-      +'<div class="cc-item"><div class="k">Dew Point</div><div class="v">'+(dew!=null?dew+"°":"—")+'</div></div>'
-      +'<div class="cc-item"><div class="k">Humidity</div><div class="v">'+(rh!=null?rh+"%":"—")+'</div></div>'
-      +'<div class="cc-item"><div class="k">Wind</div><div class="v">'+(windMph!=null?windDir+" "+windMph:"—")+'<span style="font-size:11px;color:var(--muted)">'+(windMph!=null?" mph":"")+'</span></div></div>'
-      +'<div class="cc-item"><div class="k">Gusts</div><div class="v">'+(gust!=null?gust+" mph":"—")+'</div></div>'
-      +'<div class="cc-item"><div class="k">Pressure</div><div class="v">'+(press!=null?press+'"':"—")+'</div></div>'
-      +'<div class="cc-item"><div class="k">Visibility</div><div class="v">'+(vis!=null?vis+" mi":"—")+'</div></div>'
+      +'<div class="cc-item"><div class="k">Dew Point</div><div class="v">'+(dew!=null?dew+"°":ccGap("dew point"))+'</div></div>'
+      +'<div class="cc-item"><div class="k">Humidity</div><div class="v">'+(rh!=null?rh+"%":ccGap("humidity"))+'</div></div>'
+      +'<div class="cc-item"><div class="k">Wind</div><div class="v">'
+        +(windMph!=null?windDir+" "+windMph+'<span class="cc-unit"> mph</span>':ccGap("wind"))+'</div></div>'
+      // "None" rather than a dash: see ccNone above — an absent gust is a reading, not a gap.
+      +'<div class="cc-item"><div class="k">Gusts</div><div class="v">'
+        +(gust!=null?gust+'<span class="cc-unit"> mph</span>'
+                    :ccNone("None","No gust reported — a station files one only when the peak run "
+                                  +"exceeds the steady wind by enough to be worth noting"))+'</div></div>'
+      +'<div class="cc-item"><div class="k">Pressure</div><div class="v">'+(press!=null?press+'"':ccGap("pressure"))+'</div></div>'
+      +'<div class="cc-item"><div class="k">Visibility</div><div class="v">'+(vis!=null?vis+'<span class="cc-unit"> mi</span>':ccGap("visibility"))+'</div></div>'
       +'</div>'
       +'<div class="cc-expo"><div class="cc-uv" id="ccUv"></div><div class="aqi-mini" id="aqiMini"></div></div>'
       +'<div class="cc-ctx" id="ccCtx"></div>'
@@ -2509,7 +2614,9 @@ function loadCurrent(){
       // Naming Open-Meteo is not decoration: the exposure pair now wears the same chrome as the
       // metric tiles, and those ARE the station's. Without this the line above would read as a
       // claim that KSUS measures UV and PM2.5.
-      +'<div class="stn">Observed '+timeAgo(p.timestamp)+' · '+current.station
+      +'<div class="stn">Observed '+timeAgo(p.timestamp)+' · <span class="has-hint" title="'
+      +esc(stnName(current.station)||"The weather station these readings come from")+'">'
+      +esc(current.station)+'</span>'
       +' · UV &amp; air Open-Meteo'
       +'<span id="ccRecSrc"></span>'
       +' · <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a></div>';
@@ -3798,6 +3905,12 @@ function ctxSince(kind,v){
   return {date:null, days:null, beyond:true};
 }
 function fmtMD(d){ return d?d.toLocaleDateString([], {month:"short", day:"numeric"}):""; }
+/* Same date, with the year. ctxSince() searches two full years back and only reports a gap of 21
+   days or more, so "warmest since Aug 27" could mean five weeks ago or twenty months — and a
+   reader has no way to tell which, or whether the year was simply left off. The year is not
+   decoration on a sentence whose whole point is how long it has been. Always printed, including
+   for a date in the current year: a rule with an exception is a rule you have to check. */
+function fmtMDY(d){ return d?d.toLocaleDateString([], {month:"short", day:"numeric", year:"numeric"}):""; }
 function shortStn(n){   // "ST LOUIS LAMBERT INTL AIRPORT" → "St Louis Lambert"
   var w=String(n||"").split(/\s+/).filter(function(x){
     return !/^(INTL|INTERNATIONAL|AIRPORT|ARPT|AP|FIELD|FLD|MUNICIPAL|MUNI|RGNL|REGIONAL|OUTLAND|AFB)$/i.test(x);
@@ -3850,12 +3963,12 @@ function renderContext(){
   if(climate.fcHi!=null){
     var s=ctxSince("hot",climate.fcHi);
     if(s&&s.beyond) line("heat","<b>"+climate.fcHi+"°</b> would be the warmest in at least 2 years");
-    else if(s&&s.days>=21) line("heat","<b>"+climate.fcHi+"°</b> would be the warmest since "+fmtMD(s.date));
+    else if(s&&s.days>=21) line("heat","<b>"+climate.fcHi+"°</b> would be the warmest since "+fmtMDY(s.date));
   }
   if(climate.fcLo!=null){
     var sc=ctxSince("cold",climate.fcLo);
     if(sc&&sc.beyond) line("cold","<b>"+climate.fcLo+"°</b> would be the coolest in at least 2 years");
-    else if(sc&&sc.days>=21) line("cold","<b>"+climate.fcLo+"°</b> would be the coolest since "+fmtMD(sc.date));
+    else if(sc&&sc.days>=21) line("cold","<b>"+climate.fcLo+"°</b> would be the coolest since "+fmtMDY(sc.date));
   }
   el.innerHTML=L.join("");
   renderCurrentCtx();
@@ -4015,13 +4128,35 @@ function loadQpf(){
 /* ============ STATIC IMAGES ============ */
 // ===== Station Plot: live surface obs (temp/dew/wind) on a St. Louis-region Leaflet map =====
 // Curated regional ASOS/METAR stations around the LSX CWA
+/* The regional plot's stations. `n` is each site's name as api.weather.gov gives it (only the
+   stray title-case "Of" corrected) — read out of /stations/<id> once and written down here rather
+   than fetched, because these fifteen ASOS sites are as fixed as their coordinates are and the
+   table already carries those. A four-letter code is the whole identity of a station to somebody
+   who knows the network and nothing at all to everybody else; the name is what makes "SAR 75°" a
+   place rather than a serial number. */
 var STN_LIST=[
-  {id:"KSTL",lat:38.75,lon:-90.37},{id:"KSUS",lat:38.66,lon:-90.65},{id:"KCPS",lat:38.57,lon:-90.16},
-  {id:"KALN",lat:38.89,lon:-90.05},{id:"KSET",lat:38.93,lon:-90.43},{id:"KBLV",lat:38.54,lon:-89.84},
-  {id:"KUIN",lat:39.94,lon:-91.19},{id:"KCOU",lat:38.82,lon:-92.22},{id:"KJEF",lat:38.59,lon:-92.16},
-  {id:"KFAM",lat:37.76,lon:-90.43},{id:"KVIH",lat:38.13,lon:-91.76},{id:"KSAR",lat:38.14,lon:-89.70},
-  {id:"KMDH",lat:37.78,lon:-89.25},{id:"KPPQ",lat:39.63,lon:-90.78},{id:"KSLO",lat:38.64,lon:-88.96}
+  {id:"KSTL",lat:38.75,lon:-90.37,n:"St. Louis Lambert International Airport"},
+  {id:"KSUS",lat:38.66,lon:-90.65,n:"St. Louis, Spirit of St. Louis Airport"},
+  {id:"KCPS",lat:38.57,lon:-90.16,n:"St. Louis Downtown Airport"},
+  {id:"KALN",lat:38.89,lon:-90.05,n:"St. Louis Regional Airport"},
+  {id:"KSET",lat:38.93,lon:-90.43,n:"St. Charles, St. Charles County Smartt Airport"},
+  {id:"KBLV",lat:38.54,lon:-89.84,n:"Belleville, Scott AFB/MidAmerica Airport"},
+  {id:"KUIN",lat:39.94,lon:-91.19,n:"Quincy Regional Airport-Baldwin Field"},
+  {id:"KCOU",lat:38.82,lon:-92.22,n:"Columbia, Columbia Regional Airport"},
+  {id:"KJEF",lat:38.59,lon:-92.16,n:"Jefferson City, Jefferson City Memorial Airport"},
+  {id:"KFAM",lat:37.76,lon:-90.43,n:"Farmington Airport"},
+  {id:"KVIH",lat:38.13,lon:-91.76,n:"Rolla / Vichy, Rolla National Airport"},
+  {id:"KSAR",lat:38.14,lon:-89.70,n:"Sparta Community-Hunter Field Airport"},
+  {id:"KMDH",lat:37.78,lon:-89.25,n:"Southern Illinois Airport"},
+  {id:"KPPQ",lat:39.63,lon:-90.78,n:"Pittsfield, Pittsfield Penstone Municipal Airport"},
+  {id:"KSLO",lat:38.64,lon:-88.96,n:"Salem, Salem-Leckrone Airport"}
 ];
+/* Whatever we know a station identifier's name to be. Seeded from the table above and topped up by
+   stationFor(), which was already fetching the name and dropping it on the floor. A station we
+   cannot name simply gets no tooltip — a guess would be worse than the code alone. */
+var STN_NAMES={};
+STN_LIST.forEach(function(s){ STN_NAMES[s.id]=s.n; });
+function stnName(id){ return STN_NAMES[id]||""; }
 var stnMap=null, stnBase=null, stnLayer=null;
 var stnObs=[], stnMode="temp";
 function rhFromTd(tF,tdF){   // Magnus — lets us derive feels-like from what METAR actually reports
@@ -4071,15 +4206,20 @@ function stnMarkerHTML(o,mode,isExtreme){
   return '<div class="stn2'+(isExtreme?" is-hi":"")+'" style="--c:'+col+'">'
     +'<div class="stn2-v">'+inner+'</div><div class="stn2-id">'+esc(id)+'</div></div>';
 }
+/* Code, then the place, then the readings — three lines rather than one run, because the name is
+   the part a stranger needs and burying it mid-sentence between "KSTL" and "93° temp" would leave
+   it as hard to find as it was to guess. */
 function stnTip(o){
-  var b=['<b>'+esc(o.id)+'</b>'];
+  var nm=stnName(o.id), b=[];
   if(o.tempF!=null) b.push(o.tempF+"° temp");
   if(o.feelsF!=null&&o.tempF!=null&&Math.abs(o.feelsF-o.tempF)>=2) b.push("feels "+o.feelsF+"°");
   if(o.dewF!=null) b.push(o.dewF+"° dew");
   if(o.rh!=null) b.push(o.rh+"% RH");
   if(o.windMph!=null) b.push(o.windMph>0?(degToCompass(o.windDir)+" "+o.windMph+" mph"):"calm");
   if(o.gustMph!=null&&o.gustMph>0) b.push("gusts "+o.gustMph);
-  return b.join(" · ");
+  return '<b>'+esc(o.id)+'</b>'
+    +(nm?'<span class="stn-nm">'+esc(nm)+'</span>':'')
+    +(b.length?'<span class="stn-rd">'+b.join(" · ")+'</span>':'');
 }
 function renderStnExtremes(){
   var el=document.getElementById("stnEx"); if(!el) return;
@@ -4397,7 +4537,13 @@ function stationFor(lat,lon){
   return pointsFor(lat,lon).then(function(pt){
     return getJSON(pt.properties.observationStations,HEADERS,locSignal());
   }).then(function(s){
-    if(s.features&&s.features.length) return s.features[0].properties.stationIdentifier;
+    if(s.features&&s.features.length){
+      var p0=s.features[0].properties;
+      // The name arrives in the same response the identifier does; remember it for the tooltip
+      // rather than fetching /stations/<id> again later to ask what we were already told.
+      if(p0.stationIdentifier&&p0.name) STN_NAMES[p0.stationIdentifier]=p0.name;
+      return p0.stationIdentifier;
+    }
     if(s.observationStations&&s.observationStations.length){ var u=s.observationStations[0]; return u.substring(u.lastIndexOf("/")+1); }
     return null;
   });
@@ -5004,7 +5150,13 @@ function renderUvNow(){
   if(live){
     val=r+' <span class="ex-cat">'+lv.t+'</span>';
     if(pr!=null&&pr>r) sub.push('peak <b>'+pr+'</b> '+when);
-    if(r>=3) sub.push('burn ~<b>'+Math.max(5,Math.round(200/r))+'</b> min');
+    /* "burn ~33 min" named a number without naming what it measured — 33 minutes of what, and
+       burning what. The words carry it now, because the title cannot: a phone shows no tooltip,
+       and the phone is where this gets read. The title only adds the assumption behind the
+       figure, which is a footnote rather than the point. */
+    if(r>=3) sub.push('<span class="ex-hint" title="Roughly how long untanned, unprotected skin '
+      +'can be in full sun before it starts to burn at this UV index">sunburn in ~<b>'
+      +Math.max(5,Math.round(200/r))+'</b> min</span>');
   }else{
     // After dark the peak is the whole message, so it takes the value slot and names itself
     // rather than trailing after a label with nothing under it.
