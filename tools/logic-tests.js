@@ -98,23 +98,23 @@ function check(name, actual, expected) {
 
   // Daytime: today's own high and tonight's low.
   check('rangeRow daytime uses today', R(both(96, 78), day(90), 81),
-    { lo: 78, hi: 96, nextDay: false, mark: 3 / 18 });
+    { lo: 78, hi: 96, nextDay: false, mark: 3 / 18, drop: null });
 
   // Evening: no daytime period left, so it borrows TOMORROW's high and says so.
   check('rangeRow evening borrows tomorrow and flags it', R(night(78), day(96), 81),
-    { lo: 78, hi: 96, nextDay: true, mark: 3 / 18 });
+    { lo: 78, hi: 96, nextDay: true, mark: 3 / 18, drop: null });
 
   // THE REGRESSION. A front overnight puts tomorrow below tonight. The row must still be drawn —
   // this returned null for as long as the guard demanded hi>lo, taking the row off the page on
   // exactly the evening a reader most needs it.
   check('rangeRow still draws when tomorrow is colder than tonight', R(night(62), day(48), 55),
-    { lo: 62, hi: 48, nextDay: true, mark: 0.5 });
+    { lo: 62, hi: 48, nextDay: true, mark: 0.5, drop: 14 });
   check('rangeRow draws a one-degree fall', R(night(60), day(59), 59),
-    { lo: 60, hi: 59, nextDay: true, mark: 1 });
+    { lo: 60, hi: 59, nextDay: true, mark: 1, drop: 1 });
 
   // Identical ends: a real reading with nothing to mark. Row yes, mark no.
   check('rangeRow draws identical ends without a mark', R(night(60), day(60), 60),
-    { lo: 60, hi: 60, nextDay: true, mark: null });
+    { lo: 60, hi: 60, nextDay: true, mark: null, drop: null });
 
   // No row only when there is genuinely no pair.
   check('rangeRow with no tomorrow to borrow', R(night(62), day(null), 55), null);
@@ -123,8 +123,24 @@ function check(name, actual, expected) {
 
   // No observation yet: the row still draws, it just has no mark on it.
   check('rangeRow before the first observation', R(both(96, 78), day(90), null),
-    { lo: 78, hi: 96, nextDay: false, mark: null });
+    { lo: 78, hi: 96, nextDay: false, mark: null, drop: null });
+
+  // The "N° colder" cue. It speaks only when tomorrow's high lands under tonight's low, and only
+  // in the evening branch — see the gate's comment in index.html for why that matters.
+  check('drop is stated when tomorrow is colder', R(night(62), day(48), 55).drop, 14);
+  check('drop is not stated when tomorrow is warmer', R(night(78), day(96), 81).drop, null);
+  check('drop is not stated for identical ends', R(night(60), day(60), 60).drop, null);
+  check('drop counts whole degrees from the pair', R(night(45), day(38), 41).drop, 7);
+
+  // THE TRAP. In the daytime branch the ends are today's own low and high, stored with the LATER
+  // reading (tonight's low) on the left — a range, not a sequence. A warm front overnight puts
+  // today's high under tonight's low, which is the identical arithmetic meaning the opposite
+  // thing. Saying "5° colder" there would be exactly backwards.
+  check('no drop in the daytime branch, even when hi<lo', R(both(40, 45), day(50), 42).drop, null);
+  check('...and that row still draws', R(both(40, 45), day(50), 42),
+    { lo: 45, hi: 40, nextDay: false, mark: 0.6, drop: null });
 }
+
 
 /* ============ alertLevel ============ */
 // One ramp. Ranks by the word in the event name; CAP severity may escalate, never demote.

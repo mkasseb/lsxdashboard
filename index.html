@@ -445,6 +445,11 @@
     color:var(--muted);flex:0 0 auto}
   .cc-range .cr-nx{font-size:var(--fs-2xs);font-weight:700;text-transform:uppercase;letter-spacing:.4px;
     color:var(--muted);margin-left:3px}
+  /* The delta cue, shown only when tomorrow's high lands under tonight's low. Muted rather than
+     coloured: the two ends already carry the temperature scale's colour, and a third hue here
+     would be spending the page's colour budget to repeat what the words say. */
+  .cc-range .cr-drop{font-size:var(--fs-2xs);font-weight:800;text-transform:uppercase;
+    letter-spacing:var(--ls-eyebrow);color:var(--muted);white-space:nowrap;flex:0 0 auto}
   .cc-track{position:relative;flex:1 1 auto;height:8px;border-radius:5px;background:var(--chip);min-width:0}
   /* Geometry only. The fill's colour is written inline from tCol(lo)→tCol(hi), the same ramp the
      7-day rows use — do not put a static gradient back here. A fixed ramp painted every day the
@@ -3623,8 +3628,8 @@ function renderContext(){
 var heroNow={temp:null};
 /* Where the "now" mark sits on the range bar, as a 0-1 fraction of the track, or null when there
    is nothing to mark. Split out of the paint so it can be exercised without a browser — see
-   tools/logic-tests.js. The two ends are deliberately NOT sorted: left is the earlier reading and
-   right the later one, so chronology survives and a descending bar means the cold is coming.
+   tools/logic-tests.js. The ends are deliberately NOT sorted, so the fraction has to survive a
+   descending pair; it does, because both differences flip sign together.
    An identical pair has no position to mark but is still a true thing to draw, so it returns null
    rather than suppressing the row — and never NaN, which would emit `left:NaN%`. */
 function rangeMark(lo,hi,now){
@@ -3656,7 +3661,18 @@ function rangeRow(d0,d1,now){
   var nextDay=false;
   if(hi==null&&d1&&d1.day&&d1.day.temperature!=null){ hi=d1.day.temperature; nextDay=true; }
   if(hi==null||lo==null) return null;
-  return {lo:lo, hi:hi, nextDay:nextDay, mark:rangeMark(lo,hi,now)};
+  /* How much colder tomorrow's high is than tonight's low — the cue that says out loud what the
+     bar can only imply, since the gradient reports absolute temperature rather than direction.
+
+     Gated on nextDay, and that gate is the whole subtlety of this row. Only in that branch do the
+     ends run in time order: tonight's low on the left, tomorrow's high on the right. In the daytime
+     branch they are today's OWN low and high — a range, not a sequence, and stored with the later
+     reading (tonight's low) on the left. A warm front can put today's high under tonight's low
+     there, which is the same arithmetic meaning the exact opposite thing, so "colder" would be
+     backwards. It also only speaks when it has something to say: a daytime high that outruns the
+     preceding night's low is every ordinary day, and needs no remarking. */
+  var drop=(nextDay&&hi<lo)?(lo-hi):null;
+  return {lo:lo, hi:hi, nextDay:nextDay, mark:rangeMark(lo,hi,now), drop:drop};
 }
 function renderHeroToday(){
   var el=document.getElementById("ccToday");
@@ -3672,6 +3688,7 @@ function renderHeroToday(){
       +'<span class="cc-track"><i style="background:linear-gradient(90deg,'+tCol(lo)+','+tCol(hi)+')"></i>'+mark+'</span>'
       +'<span class="cr-hi" style="color:'+tCol(hi)+'">'+hi+'°'
         +(nextDay?'<span class="cr-nx">tmrw</span>':'')+'</span>'
+      +(r.drop!=null?'<span class="cr-drop">'+r.drop+'° colder</span>':'')
       +'</div>';
   }
   // Sun line: lead with whichever event is still ahead — that's the one worth planning around.
