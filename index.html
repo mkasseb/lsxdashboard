@@ -118,14 +118,20 @@
   /* Storm Mode EMPHASIZES the critical cards (glow + explicit ordering). Every grid child gets an
      order here — hoisting only alerts/radar/masonry shoved Current Conditions and the 24-hour
      chart below the entire masonry band, and left a 4-col gutter beside the radar (its row
-     partner, the Current stack, wasn't lifted with it). Storm order: alerts → current+radar →
-     The Call → The Pulse → masonry with the event's prime card packed first.
+     partner, the Current stack, wasn't lifted with it). Storm order: alerts → Bottom Line →
+     current+radar → The Pulse → masonry with the event's prime card packed first.
+     The Bottom Line holds the rank it has in calm weather — directly under safety — rather than
+     sliding under the hero. It used to rank below the radar on the theory that a live warning
+     makes the map outrank advice, but that put the one card that says what to DO about the
+     warning under a full-width hero band, i.e. a scroll away on a phone in exactly the weather
+     someone is checking the page one-handed. The radar is still the first thing in the hero;
+     the plain-English read of it just gets there first.
      Neither the 24h chart nor the radar needs its own hoist any more: both live inside a .stack,
      and only direct grid children have an `order`. The two stacks share order -6 and fall back to
      DOM order between them, which is already conditions-then-radar. */
-  body.storm #alertsCard{order:-7}
+  body.storm #alertsCard{order:-8}
+  body.storm #callCard{order:-7}   /* directly under safety in every mode — never below the fold */
   body.storm .stack{order:-6}      /* left: Now & Next 24 Hours + AQI · right: radar */
-  body.storm #callCard{order:-3}   /* advice ranks below the radar while a warning is live */
   body.storm #afdCard{order:-2}
   body.storm .masonry{order:-1}    /* prime card packs to its front */
   body.storm #alertsCard,body.storm #radarCard,body.storm .storm-prime{
@@ -1044,7 +1050,9 @@
 
   <!-- BOTTOM LINE (id stays callCard) — plain-English verdicts computed client-side from the
        hourly forecast, UV, AQI and climate context. The page reasoning on the visitor's behalf,
-       so it sits directly under the alerts: safety first, then what today actually means. -->
+       so it sits directly under the alerts: safety first, then what today actually means.
+       That rank holds in every mode — Storm Mode re-orders the grid around it rather than
+       past it, so this card is on the first screen whatever the weather is doing. -->
   <section class="card col-12" id="callCard">
     <div class="callrow" id="callRow"></div>
   </section>

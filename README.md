@@ -77,8 +77,12 @@ visitor's behalf rather than handing them numbers: rain/storm windows, heat and 
 burn clock, wind, air quality, a temperature-crash warning, climate records — and one synthesized
 verdict that scores every daylight hour on comfort, rain risk and wind to name the best two-hour
 window to be outside, spoken only when the day has adversity worth dodging. It ranks directly
-under safety. Storm Mode is the one exception: an `order` drops it below the hero, because while
-a warning is live the radar outranks advice.
+under safety, and that rank is not conditional: Storm Mode re-orders every other band around it
+but leaves it second, so the card is on the first screen whatever the weather is doing. It used to
+drop below the hero under `body.storm`, on the theory that a live warning makes the radar outrank
+advice — but that filed the plain-English read of the warning *under* a full-width hero band,
+a scroll away on a phone in exactly the conditions someone checks this page one-handed. The radar
+still leads the hero; the sentence explaining it just arrives first.
 
 `.railhead` labels name each band and hide under `body.storm`, where the grid reorders for urgency
 and a band label would lie about what follows it. Only *direct* grid children get an `order`, so
