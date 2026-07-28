@@ -2,7 +2,7 @@
 """Pre-deploy checks for a repo with no build step.
 
 `index.html` is served to production byte-for-byte, so nothing between an edit and a
-visitor's browser would notice a mistake. These are the four mistakes worth catching
+visitor's browser would notice a mistake. These are the five mistakes worth catching
 mechanically:
 
   0. An unbalanced comment in the inline <style>. CSS has no nesting: the FIRST `*/`
@@ -24,11 +24,19 @@ mechanically:
      hazIcon() would simply drop the icon off a chip that nobody had a drought outlook
      for that week, and stay dropped.
 
+  4. A missing file at the site root, or a site URL that disagrees with itself. Pages
+     answers an unmatched path with 404.html and a 404 status only while that file
+     exists; delete it and every wrong URL quietly goes back to serving the entire
+     dashboard at 200 — which is how /robots.txt came to be 378 KB of HTML that crawlers
+     read as 5,953 syntax errors. The URL itself is written in four places for four
+     audiences that never compare notes, so nothing else would notice them drifting.
+
 Checks 2 and 3 work by classification, not by guessing which URLs are fetched or which
-icons are reachable: every https origin in index.html must be declared somewhere in the
-CSP or listed in NAV_ONLY below as a link target, and every icon-shaped string literal
-must name a symbol that exists. Adding a feed introduces an origin in neither set, so the
-check fails until it is put in one — which is the point.
+icons are reachable: every https origin in the HTML Pages serves — index.html and 404.html,
+since `_headers` applies the CSP to both — must be declared somewhere in the CSP or listed
+in NAV_ONLY below as a link target, and every icon-shaped string literal must name a symbol
+that exists. Adding a feed introduces an origin in neither set, so the check fails until it
+is put in one — which is the point.
 
 Run locally with:  python3 tools/check.py
 """
@@ -42,6 +50,12 @@ import tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INDEX = os.path.join(ROOT, "index.html")
 HEADERS = os.path.join(ROOT, "_headers")
+# Pages serves the repo root as-is, so these three are live infrastructure, not documentation:
+# 404.html is the only thing giving an unmatched path a 404 status, and the other two are the
+# two files a crawler asks for by name before it asks for anything else.
+NOT_FOUND = os.path.join(ROOT, "404.html")
+ROBOTS = os.path.join(ROOT, "robots.txt")
+SITEMAP = os.path.join(ROOT, "sitemap.xml")
 
 # Origins that appear only as <a href> navigation targets or attribution links. Browsers
 # don't apply fetch directives to a link the user clicks, so these need no CSP entry —
@@ -77,6 +91,8 @@ NAV_ONLY = {
 # 'self' in default-src/img-src already covers it; the origin scan below doesn't know that,
 # hence this name rather than a stray CSP entry that would look like a third party.
 SELF_ORIGIN = "https://lsxdashboard.com"
+CANONICAL = SELF_ORIGIN + "/"
+SITEMAP_URL = SELF_ORIGIN + "/sitemap.xml"
 
 INLINE_STYLE = re.compile(r"<style[^>]*>(.*?)</style>", re.S)
 INLINE_SCRIPT = re.compile(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", re.S)
@@ -201,8 +217,14 @@ def covered_by(origin, allowed):
     return False
 
 
-def check_csp_covers_origins(html, headers_text):
-    """Every https origin in index.html is declared in the CSP or listed as nav-only."""
+def check_csp_covers_origins(served_html, headers_text):
+    """Every https origin in the HTML Pages serves is declared in the CSP or listed as nav-only.
+
+    `served_html` is index.html and 404.html concatenated. The `/*` rule in _headers applies the
+    same policy to both, so an external font or image added to the error page would be blocked
+    exactly as silently as one added to the dashboard — and on a page whose whole job is to
+    render when something has already gone wrong.
+    """
     directives = csp_directives(headers_text)
     if directives is None:
         return fail(["FAIL  csp: no Content-Security-Policy header found in _headers"])
@@ -210,11 +232,11 @@ def check_csp_covers_origins(html, headers_text):
     declared = [s for srcs in directives.values() for s in srcs if s.startswith("https://")]
     connect = directives.get("connect-src", [])
 
-    found = sorted(set(ORIGIN.findall(html)) - {SELF_ORIGIN})
+    found = sorted(set(ORIGIN.findall(served_html)) - {SELF_ORIGIN})
     undeclared = [o for o in found if o not in NAV_ONLY and not covered_by(o, declared)]
     if undeclared:
         return fail(
-            ["FAIL  csp: origin(s) in index.html declared nowhere in the CSP:", ""]
+            ["FAIL  csp: origin(s) in the served HTML declared nowhere in the CSP:", ""]
             + ["        " + o for o in undeclared]
             + [
                 "",
@@ -229,13 +251,13 @@ def check_csp_covers_origins(html, headers_text):
     unused = [o for o in connect if o.startswith("https://") and o not in found]
     if unused:
         return fail(
-            ["FAIL  csp: connect-src allows origin(s) index.html never references:", ""]
+            ["FAIL  csp: connect-src allows origin(s) the served HTML never references:", ""]
             + ["        " + o for o in unused]
             + ["", "      Remove them from _headers — the allowlist should stay minimal."]
         )
 
     print(
-        "ok    csp: %d origin(s) in index.html, all declared (%d fetchable via connect-src)"
+        "ok    csp: %d origin(s) in index.html + 404.html, all declared (%d fetchable via connect-src)"
         % (len(found), len([o for o in connect if o.startswith("https://")]))
     )
     return True
@@ -295,14 +317,102 @@ def check_icons_resolve(html):
     return True
 
 
+def stated(values):
+    """How a list of matches reads in a failure line."""
+    if not values:
+        return "absent"
+    if len(values) == 1:
+        return values[0]
+    return "%d values (%s)" % (len(values), ", ".join(values))
+
+
+def check_root_files(html):
+    """404.html, robots.txt and sitemap.xml exist, and everything agrees on the site's URL.
+
+    Pages has no setting for any of this — the behaviour is the files. An unmatched path gets
+    404.html with a 404 status if the file is there and index.html with a 200 if it isn't, so
+    deleting it doesn't break the site in any visible way: it just quietly starts answering
+    every wrong URL with a complete copy of the dashboard, which is duplicate content to a
+    crawler and 5,953 lines of invalid robots.txt to a validator.
+
+    The URL is then written four times over — rel=canonical and og:url for scrapers that never
+    saw the page's base URL, <loc> for the sitemap, and robots.txt's Sitemap line — and each is
+    read by something that will never see the other three. This is the only thing comparing them.
+    """
+    missing = [os.path.basename(p) for p in (NOT_FOUND, ROBOTS, SITEMAP) if not os.path.exists(p)]
+    if missing:
+        return fail(
+            ["FAIL  root: file(s) missing from the repo root:", ""]
+            + ["        " + n for n in missing]
+            + [
+                "",
+                "      Pages serves the root as-is, so a file that isn't committed isn't served.",
+                "      Without 404.html every unmatched path returns index.html with a 200.",
+            ]
+        )
+
+    robots, sitemap = read(ROBOTS), read(SITEMAP)
+
+    # A blanket disallow deindexes the whole site and reads as deliberate to everything that
+    # obeys it, so nothing reports it — it surfaces as search traffic that quietly stopped,
+    # months later or not at all. `Disallow: /` is the one value that means "none of it".
+    blanket = [n for n, line in enumerate(robots.splitlines(), 1)
+               if re.match(r"\s*disallow:\s*/\s*$", line, re.I)]
+    if blanket:
+        return fail(
+            ["FAIL  root: robots.txt blocks the entire site:", ""]
+            + ["        robots.txt:%d  `Disallow: /`" % n for n in blanket]
+            + [
+                "",
+                "      That asks every crawler to drop the site. If the intent was to allow",
+                "      everything, the line is `Allow: /` or a `Disallow:` with nothing after it.",
+            ]
+        )
+
+    problems = []
+    declared = re.findall(r"^\s*sitemap:\s*(\S+)\s*$", robots, re.I | re.M)
+    if declared != [SITEMAP_URL]:
+        problems.append("robots.txt    Sitemap: %s — expected %s" % (stated(declared), SITEMAP_URL))
+
+    locs = re.findall(r"<loc>\s*(.*?)\s*</loc>", sitemap, re.S)
+    if locs != [CANONICAL]:
+        problems.append("sitemap.xml   <loc>: %s — expected %s" % (stated(locs), CANONICAL))
+
+    for label, pattern in (
+        ("rel=canonical", r'<link rel="canonical" href="([^"]*)"'),
+        ("og:url       ", r'<meta property="og:url" content="([^"]*)"'),
+    ):
+        got = re.findall(pattern, html)
+        if got != [CANONICAL]:
+            problems.append("index.html    %s: %s — expected %s" % (label, stated(got), CANONICAL))
+
+    if problems:
+        return fail(
+            ["FAIL  root: the site's own URL doesn't agree across the files that state it:", ""]
+            + ["        " + p for p in problems]
+            + [
+                "",
+                "      Moving the site means changing SELF_ORIGIN above and every line listed",
+                "      here. A crawler following the stale one lands somewhere that isn't this.",
+            ]
+        )
+
+    print("ok    root: 404.html, robots.txt, sitemap.xml present and agree on %s" % CANONICAL)
+    return True
+
+
 def main():
     html = read(INDEX)
     headers_text = read(HEADERS)
+    # _headers applies `/*` to every response, so the CSP governs the error page too. Read it
+    # only if it's there — its absence is check_root_files's failure to report, not a traceback.
+    served_html = html + (read(NOT_FOUND) if os.path.exists(NOT_FOUND) else "")
     results = [
         check_style_comments(html),
         check_inline_script_syntax(html),
-        check_csp_covers_origins(html, headers_text),
+        check_csp_covers_origins(served_html, headers_text),
         check_icons_resolve(html),
+        check_root_files(html),
     ]
     if not all(results):
         print("\nchecks failed")

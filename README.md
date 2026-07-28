@@ -35,12 +35,13 @@ With no build step there is nothing between an edit and production, so the mista
 ship silently are checked mechanically:
 
 ```bash
-python3 tools/check.py        # syntax, CSP origins, icon names
+python3 tools/check.py        # syntax, CSP origins, icon names, root files
 node tools/logic-tests.js     # the functions that decide something
 ```
 
-[`tools/check.py`](tools/check.py) catches the three footguns this repo's shape creates — a syntax
-error in the inline script, an origin the CSP doesn't declare, and an icon name with no `<symbol>`.
+[`tools/check.py`](tools/check.py) catches the four footguns this repo's shape creates — a syntax
+error in the inline script, an origin the CSP doesn't declare, an icon name with no `<symbol>`, and
+a missing or self-contradicting file at the site root.
 [`tools/logic-tests.js`](tools/logic-tests.js) covers the pure decision functions: `rangeRow()`,
 `alertLevel()` and `stormSubline()`. With no build step there is nothing to import from, so it
 lifts them out of `index.html` by name and runs them — which means a rename fails the suite loudly
@@ -63,6 +64,22 @@ There is nothing to build — Pages serves the repo root as-is.
 [`_headers`](_headers) supplies the response headers, including a Content-Security-Policy whose
 `connect-src` enumerates every origin the app fetches. Adding a feed means adding its origin there
 too, or the fetch is blocked.
+
+Three more root files are configuration rather than content, and Pages reads them by name:
+
+- [`404.html`](404.html) — an unmatched path is answered with this file **and a 404 status**. With no
+  such file the fallback is `index.html` at 200, so `/robots.txt` used to return 378 KB of dashboard
+  (Lighthouse scored the site 92 on SEO and read it as 5,953 syntax errors), and every URL a crawler
+  invented became another indexable, byte-identical copy of the homepage. Delete the file and all of
+  that comes back silently, which is why `tools/check.py` insists on it.
+- [`robots.txt`](robots.txt) — allows everything and points at the sitemap. There is nothing to
+  exclude on a one-page site.
+- [`sitemap.xml`](sitemap.xml) — the one URL there is, with no `<lastmod>`: nothing builds, so any
+  date here would be a hand-written claim about freshness that starts drifting on commit.
+
+That URL is now stated in four places — `rel=canonical`, `og:url`, the sitemap's `<loc>` and the
+`Sitemap:` line — each read by something that never sees the other three, so `tools/check.py` fails
+if they stop agreeing. Moving the site means changing `SELF_ORIGIN` there and all four.
 
 ## Data sources
 
