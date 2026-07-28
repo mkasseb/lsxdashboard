@@ -4857,11 +4857,16 @@ function renderTheCall(){
     if(uvR>=11) push(76,"uv","Extreme UV "+uvR+" near "+uvAt+" — unprotected burn in ~"+Math.max(5,Math.round(200/uvR))+" min");
     else if(uvR>=8) push(62,"uv","UV "+uvR+" near "+uvAt+" — sun protection advised");
   }
-  // — a front coming through (warm now, markedly colder later — the caught-out-in-a-t-shirt day) —
+  /* — a front coming through (warm now, markedly colder later — the caught-out-in-a-t-shirt day) —
+     "Dress in layers" is advice about where the temperature LANDS, not how far it fell. Gated on
+     the fall alone, a 99° afternoon easing to 80° overnight — the ordinary summer diurnal cycle,
+     which every hot day does, and still shorts-and-a-fan weather — told people to dress in
+     layers, directly beside the dangerous-heat pill telling them to limit exertion. 58° is about
+     where an evening starts to want a jacket. */
   if(H[0].t!=null&&H[0].t>=55){
     var cMin=999, cAt=null;
     for(i=3;i<n;i++){ if(H[i].t!=null&&H[i].t<cMin){ cMin=H[i].t; cAt=H[i].d; } }
-    if(cAt&&H[0].t-cMin>=18) push(66,"trend-down","Falling "+(H[0].t-cMin)+"° to "+cMin+"° by "+hrWord(cAt)+" — dress in layers");
+    if(cAt&&cMin<=58&&H[0].t-cMin>=18) push(66,"trend-down","Falling "+(H[0].t-cMin)+"° to "+cMin+"° by "+hrWord(cAt)+" — dress in layers");
   }
   // — air quality (fed by loadAqi) —
   if(callAqi!=null&&callAqi>100) push(75,"air","Poor air quality (AQI "+callAqi+") — sensitive groups should limit exertion");
