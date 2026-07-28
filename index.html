@@ -1620,7 +1620,13 @@
     </div>
     <div class="rs-view" id="rsSat" hidden>
       <div class="imgwrap">
-        <img id="sat" alt="GOES-19 Upper Mississippi Valley GeoColor" src="https://cdn.star.nesdis.noaa.gov/GOES19/ABI/SECTOR/umv/GEOCOLOR/600x600.jpg" onerror="imgFail(this,'satFail')">
+        <!-- Deliberately no src. The sector image is ~290 KB — the heaviest thing on the page by a
+             wide margin — and a hardcoded src had the browser fetching it at parse time, before the
+             page had decided whether this card is even shown, and then refreshImages() fetched the
+             same picture AGAIN under a cache-buster. refreshImages() is now the only thing that sets
+             src, and it fetches nothing while the card is hidden. An <img> with no src attribute
+             makes no request and fires no error event, so satFail stays a real-failure message. -->
+        <img id="sat" alt="GOES-19 Upper Mississippi Valley GeoColor" onerror="imgFail(this,'satFail')">
         <div class="imgfail" id="satFail" style="display:none">Satellite image didn't load. <a href="https://www.star.nesdis.noaa.gov/GOES/sector.php?sat=G19&sector=umv" target="_blank" rel="noopener">Open GOES-East ↗</a></div>
       </div>
     </div>
@@ -4548,10 +4554,26 @@ function loadStationPlot(){
     }
   }).catch(function(){});
 }
+/* The satellite fetches on the same contract as the radar layer: a hidden card downloads nothing,
+   and updateRadarSlot() refreshes on the hidden→shown edge. At ~290 KB for a card that is absent on
+   any ordinary day, that is the difference between the page's largest download and no download.
+
+   The stamp guards one specific collision. On a storm-mode cold load updateRadarSlot() reveals the
+   card from inside loadForecast()/loadAlerts(), and refreshAll() calls this the instant those same
+   loaders settle — two fetches milliseconds apart, which is precisely the waste that dropping the
+   hardcoded src was meant to end. NESDIS posts a new sector image every 5 minutes, so the second
+   copy would be the same picture anyway. The window sits far below that cadence on purpose: the
+   scheduler ticks every 30s and fires this at >=5min, so it can never swallow a scheduled refresh. */
+var SAT_DEDUPE_MS=30000, satAt=0;
 function refreshImages(){
+  if(document.body.classList.contains("no-radar")) return;   // hidden card fetches nothing; the reveal refreshes
   var sat=document.getElementById("sat");
-  if(sat){ sat.style.display="block"; var sf=document.getElementById("satFail"); if(sf)sf.style.display="none";
-    sat.src=bust("https://cdn.star.nesdis.noaa.gov/GOES19/ABI/SECTOR/umv/GEOCOLOR/600x600.jpg"); }
+  if(!sat) return;
+  // Ahead of the display reset, so a collapsed duplicate leaves a failed load showing its message.
+  if(satAt&&Date.now()-satAt<SAT_DEDUPE_MS) return;
+  satAt=Date.now();
+  sat.style.display="block"; var sf=document.getElementById("satFail"); if(sf)sf.style.display="none";
+  sat.src=bust("https://cdn.star.nesdis.noaa.gov/GOES19/ABI/SECTOR/umv/GEOCOLOR/600x600.jpg");
 }
 
 /* ---- Radar / Satellite view switch ----
@@ -4656,6 +4678,7 @@ function updateRadarSlot(){
     // Leaflet initialised into a display:none container; give it real dimensions and fresh frames.
     if(rvMap) setTimeout(function(){ if(rvMap) rvMap.invalidateSize(); },0);
     if(typeof refreshRadarLayer==="function") refreshRadarLayer();
+    if(typeof refreshImages==="function") refreshImages();   // …and the satellite, which fetched nothing while hidden
   }
   if(show!==!wasHidden){
     // The 24-hour chart re-measures only on WINDOW resize, but this toggle changes its container
