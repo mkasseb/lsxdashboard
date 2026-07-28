@@ -39,9 +39,9 @@ const SUBJECT = new Function(`
   ${lift(/^var LEVELS=\{[\s\S]*?^\};/m, 'LEVELS')}
   ${lift(/^function alertLevel\(p\)\{[\s\S]*?^\}/m, 'alertLevel()')}
   ${lift(/^var FAMILY_CFG=\{[\s\S]*?^\};/m, 'FAMILY_CFG')}
-  ${lift(/^var STORM_SUB_MAX=.*$/m, 'STORM_SUB_MAX')}
-  ${lift(/^function stormSubline\(p,cfg\)\{[\s\S]*?^\}/m, 'stormSubline()')}
-  return { rangeMark, rangeRow, alertLevel, stormSubline, FAMILY_CFG, STORM_SUB_MAX };
+  ${lift(/^var LAYERS_MAX=\d+;/m, 'LAYERS_MAX')}
+  ${lift(/^function coldVerdict\(nowT,mMin,cMin\)\{[\s\S]*?^\}/m, 'coldVerdict()')}
+  return { rangeMark, rangeRow, alertLevel, FAMILY_CFG, coldVerdict };
 `)();
 
 let failed = 0;
@@ -169,51 +169,70 @@ function check(name, actual, expected) {
     rank('Heat Watch') < rank('Heat Advisory'), true);
 }
 
-/* ============ stormSubline ============ */
-// The storm banner's second line: the NWS instruction for THIS warning, or the family fallback.
+/* ============ FAMILY_CFG ============ */
+// Storm Mode's per-family presentation. The banner's second line used to live here too, as a
+// fallback sentence per family; it went when the banner dropped to one line — the alert card
+// directly beneath it now carries the NWS instruction itself, so the banner was saying the same
+// thing twice within a screen. What survives is what Storm Mode still routes on.
 {
-  const S = (instruction, fam) => SUBJECT.stormSubline({ instruction }, SUBJECT.FAMILY_CFG[fam]);
-  const FALLBACK = fam => SUBJECT.FAMILY_CFG[fam].sub;
-
-  check('quotes the NWS instruction, unwrapping its hard line breaks',
-    S('Drink plenty of fluids, stay in an air-conditioned room, stay out of the\nsun.', 'heat'),
-    'Drink plenty of fluids, stay in an air-conditioned room, stay out of the sun.');
-
-  // "TAKE COVER NOW!" alone is an alarm without an instruction, so sentences are taken whole up to
-  // a budget rather than cut at the first full stop.
-  check('keeps the sentence after a short imperative opener',
-    S('TAKE COVER NOW! Move to a basement or an interior room on the lowest\nfloor of a sturdy building. Avoid windows.', 'convective'),
-    'TAKE COVER NOW! Move to a basement or an interior room on the lowest floor of a sturdy building. Avoid windows.');
-
-  check('a legacy all-caps product falls back rather than shouting',
-    S('A WIND ADVISORY MEANS THAT WINDS OF 35 MPH ARE EXPECTED. SECURE LOOSE OBJECTS.', 'wind'),
-    FALLBACK('wind'));
-
-  check('a product that only defines itself falls back',
-    S('A Red Flag Warning means critical fire weather conditions are either occurring now, or will shortly.', 'fire'),
-    FALLBACK('fire'));
-
-  check('no instruction falls back', S('', 'winter'), FALLBACK('winter'));
-  check('missing instruction falls back', S(undefined, 'flood'), FALLBACK('flood'));
-
-  // Long single sentences are truncated on a word boundary, not mid-word.
-  const long = 'Slow down and use caution while traveling because the roads across the entire region are expected to become snow covered and icy through the overnight hours and into the morning commute.';
-  const out = S(long, 'winter');
-  check('an over-long instruction is truncated', out.length <= SUBJECT.STORM_SUB_MAX, true);
-  check('...ending in an ellipsis', out.endsWith('…'), true);
-  check('...on a word boundary', /\s\S*$/.test(out.slice(0, -1)) === false || !/\S…$/.test(out) || true, true);
-
-  // Every family's fallback must exist and be a real sentence — these are what ships when the
-  // product carries no usable instruction.
-  for (const fam of Object.keys(SUBJECT.FAMILY_CFG)) {
-    const sub = FALLBACK(fam);
-    check(`${fam} fallback is a non-empty sentence`, typeof sub === 'string' && sub.length > 20 && /[.!]$/.test(sub), true);
-    check(`${fam} fallback does not narrate the layout`, /moved up|up top/i.test(sub), false);
+  const VALID_PRIME = new Set(['obsCard', 'riversCard', 'riskCard']);
+  for (const [fam, cfg] of Object.entries(SUBJECT.FAMILY_CFG)) {
+    check(`${fam} names an icon`, typeof cfg.ico === 'string' && cfg.ico.length > 0, true);
+    check(`${fam} primes a card that exists`, VALID_PRIME.has(cfg.prime), true);
+    // The dead `sub` key must not creep back: the banner has nowhere to put it.
+    check(`${fam} carries no banner subline`, 'sub' in cfg, false);
   }
+
+  // The fold list. `merge` marks families whose products are graduated tiers of ONE hazard and
+  // fold into a single banner. Convective and flood must never gain it: a Tornado Warning and a
+  // Severe Thunderstorm Watch share a family without being the same hazard, and a Flash Flood
+  // Warning is not a tier of a river Flood Warning. Adding `merge` to either would silently
+  // start folding distinct hazards into one banner — this is the guard that makes it loud.
+  check('convective never folds', 'merge' in SUBJECT.FAMILY_CFG.convective, false);
+  check('flood never folds', 'merge' in SUBJECT.FAMILY_CFG.flood, false);
+  for (const fam of ['heat', 'winter', 'wind', 'fire']) {
+    const m = SUBJECT.FAMILY_CFG[fam].merge;
+    check(`${fam} folds as one hazard`, typeof m === 'string' && m.length > 0, true);
+  }
+}
+
+/* ============ coldVerdict ============ */
+// Which cold thing the Bottom Line says about the hours ahead. One trough, one verdict.
+{
+  const V = SUBJECT.coldVerdict;   // (nowT, morning 6-9am low, lowest hour ahead)
+
+  // THE BUG THIS WAS WRITTEN FOR. A hot afternoon easing off overnight is the ordinary summer
+  // diurnal cycle — every hot day does it — and 80° needs no jacket. Gated on the FALL alone
+  // (>=18°), this told people to dress in layers at 80°, next to a dangerous-heat pill.
+  check('99 falling to 80 is not layers weather', V(99, null, 80), null);
+  check('88 falling to 70 is not layers weather', V(88, null, 70), null);
+  check('a fall that lands just above the line stays quiet', V(85, null, 59), null);
+
+  // A real evening chill: same size of fall, but it lands somewhere a jacket helps.
+  check('72 falling to 45 is layers weather', V(72, null, 45), 'falling');
+  check('a fall landing exactly on the line speaks', V(80, null, 58), 'falling');
+
+  // The fall must still be a fall, and it must start from somewhere warm — a 50° day drifting to
+  // 40° is just a cold day, and the morning tier says that better.
+  check('too small a fall is not a fall', V(70, null, 55), null);
+  check('already cold is not a fall', V(50, null, 33), null);
+  check('...and its morning is reported as plain cold', V(50, 33, 33), 'cold');
+
+  // Priority: freezing outranks the swing (ice is a different problem, and "layers" is the wrong
+  // advice for 28°), and the swing outranks the plain cold morning (it says strictly more).
+  check('freezing wins over a big fall', V(60, 28, 28), 'freezing');
+  check('a big fall wins over the cold-morning tier', V(72, 44, 44), 'falling');
+  check('cold morning speaks when nothing else does', V(48, 40, 40), 'cold');
+  check('a mild morning says nothing', V(60, 52, 52), null);
+
+  // Missing inputs must not throw or invent a verdict.
+  check('no data at all', V(null, null, null), null);
+  check('no morning in the window, no fall', V(60, null, 59), null);
+  check('freezing morning with no ahead-low', V(40, 30, null), 'freezing');
 }
 
 if (failed) {
   console.error(`\n${failed} logic test(s) failed`);
   process.exit(1);
 }
-console.log('ok    logic: rangeMark, alertLevel and stormSubline behave');
+console.log('ok    logic: rangeMark, alertLevel, FAMILY_CFG and coldVerdict behave');

@@ -2,8 +2,14 @@
 """Pre-deploy checks for a repo with no build step.
 
 `index.html` is served to production byte-for-byte, so nothing between an edit and a
-visitor's browser would notice a mistake. These are the three mistakes worth catching
+visitor's browser would notice a mistake. These are the four mistakes worth catching
 mechanically:
+
+  0. An unbalanced comment in the inline <style>. CSS has no nesting: the FIRST `*/`
+     closes the comment, so appending a paragraph to an existing block leaves its text
+     as live declarations and takes the next rule down with it. Nothing reports this —
+     not the parser, not the console — the rule is simply gone, which in practice means
+     a fix that was written, reviewed and merged silently does nothing.
 
   1. A syntax error in an inline <script>. The whole application is one script block.
      A stray character doesn't degrade one card, it blanks the entire dashboard.
@@ -65,6 +71,14 @@ NAV_ONLY = {
     "https://xmacis.rcc-acis.org",
 }
 
+# The site's own origin. It appears absolutely — not as a path — only where a relative URL is
+# not allowed to: rel=canonical, og:url, og:image and twitter:image are resolved by crawlers
+# that never saw the page's base URL, so a relative href there is a coin flip per scraper.
+# 'self' in default-src/img-src already covers it; the origin scan below doesn't know that,
+# hence this name rather than a stray CSP entry that would look like a third party.
+SELF_ORIGIN = "https://lsxdashboard.com"
+
+INLINE_STYLE = re.compile(r"<style[^>]*>(.*?)</style>", re.S)
 INLINE_SCRIPT = re.compile(r"<script(?![^>]*\bsrc=)[^>]*>(.*?)</script>", re.S)
 ORIGIN = re.compile(r"https://[A-Za-z0-9.*-]+")
 
@@ -78,6 +92,54 @@ def fail(lines):
     for line in lines:
         print(line)
     return False
+
+
+def check_style_comments(html):
+    """Every `*/` in an inline <style> closes a comment that was actually open.
+
+    Walks the block rather than counting delimiters, because the counts balance in exactly
+    the case that breaks: adding prose to a finished comment gives `/* a */ b */`, which is
+    two of each and still leaves `b` as live CSS plus a stray close.
+    """
+    blocks = list(INLINE_STYLE.finditer(html))
+    if not blocks:
+        return fail(["FAIL  css: no inline <style> found — has index.html moved?"])
+
+    stray, unterminated = [], []
+    for m in blocks:
+        css, base = m.group(1), html.count("\n", 0, m.start(1))
+        i, opened = 0, False
+        while i < len(css) - 1:
+            two = css[i : i + 2]
+            if two == "/*" and not opened:
+                opened = True
+                i += 2
+                continue
+            if two == "*/":
+                if not opened:
+                    stray.append(base + css.count("\n", 0, i) + 1)
+                opened = False
+                i += 2
+                continue
+            i += 1
+        if opened:
+            unterminated.append(base + css.count("\n") + 1)
+
+    if stray or unterminated:
+        lines = ["FAIL  css: comment delimiters don't balance in the inline <style>:", ""]
+        lines += ["        index.html:%d  `*/` with no comment open" % n for n in stray]
+        lines += ["        index.html:%d  comment never closed" % n for n in unterminated]
+        lines += [
+            "",
+            "      A stray `*/` leaves the text before it as live declarations and eats the",
+            "      rule that follows, silently. Usually it means prose was appended to a",
+            "      comment that already ended — delete the earlier `*/`, don't add another.",
+        ]
+        return fail(lines)
+
+    total = sum(len(m.group(1).splitlines()) for m in blocks)
+    print("ok    css: %d inline <style> block(s), %d lines, comments balance" % (len(blocks), total))
+    return True
 
 
 def check_inline_script_syntax(html):
@@ -148,7 +210,7 @@ def check_csp_covers_origins(html, headers_text):
     declared = [s for srcs in directives.values() for s in srcs if s.startswith("https://")]
     connect = directives.get("connect-src", [])
 
-    found = sorted(set(ORIGIN.findall(html)))
+    found = sorted(set(ORIGIN.findall(html)) - {SELF_ORIGIN})
     undeclared = [o for o in found if o not in NAV_ONLY and not covered_by(o, declared)]
     if undeclared:
         return fail(
@@ -237,6 +299,7 @@ def main():
     html = read(INDEX)
     headers_text = read(HEADERS)
     results = [
+        check_style_comments(html),
         check_inline_script_syntax(html),
         check_csp_covers_origins(html, headers_text),
         check_icons_resolve(html),
