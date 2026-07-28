@@ -39,7 +39,9 @@ const SUBJECT = new Function(`
   ${lift(/^var LEVELS=\{[\s\S]*?^\};/m, 'LEVELS')}
   ${lift(/^function alertLevel\(p\)\{[\s\S]*?^\}/m, 'alertLevel()')}
   ${lift(/^var FAMILY_CFG=\{[\s\S]*?^\};/m, 'FAMILY_CFG')}
-  return { rangeMark, rangeRow, alertLevel, FAMILY_CFG };
+  ${lift(/^var LAYERS_MAX=\d+;/m, 'LAYERS_MAX')}
+  ${lift(/^function coldVerdict\(nowT,mMin,cMin\)\{[\s\S]*?^\}/m, 'coldVerdict()')}
+  return { rangeMark, rangeRow, alertLevel, FAMILY_CFG, coldVerdict };
 `)();
 
 let failed = 0;
@@ -194,8 +196,43 @@ function check(name, actual, expected) {
   }
 }
 
+/* ============ coldVerdict ============ */
+// Which cold thing the Bottom Line says about the hours ahead. One trough, one verdict.
+{
+  const V = SUBJECT.coldVerdict;   // (nowT, morning 6-9am low, lowest hour ahead)
+
+  // THE BUG THIS WAS WRITTEN FOR. A hot afternoon easing off overnight is the ordinary summer
+  // diurnal cycle — every hot day does it — and 80° needs no jacket. Gated on the FALL alone
+  // (>=18°), this told people to dress in layers at 80°, next to a dangerous-heat pill.
+  check('99 falling to 80 is not layers weather', V(99, null, 80), null);
+  check('88 falling to 70 is not layers weather', V(88, null, 70), null);
+  check('a fall that lands just above the line stays quiet', V(85, null, 59), null);
+
+  // A real evening chill: same size of fall, but it lands somewhere a jacket helps.
+  check('72 falling to 45 is layers weather', V(72, null, 45), 'falling');
+  check('a fall landing exactly on the line speaks', V(80, null, 58), 'falling');
+
+  // The fall must still be a fall, and it must start from somewhere warm — a 50° day drifting to
+  // 40° is just a cold day, and the morning tier says that better.
+  check('too small a fall is not a fall', V(70, null, 55), null);
+  check('already cold is not a fall', V(50, null, 33), null);
+  check('...and its morning is reported as plain cold', V(50, 33, 33), 'cold');
+
+  // Priority: freezing outranks the swing (ice is a different problem, and "layers" is the wrong
+  // advice for 28°), and the swing outranks the plain cold morning (it says strictly more).
+  check('freezing wins over a big fall', V(60, 28, 28), 'freezing');
+  check('a big fall wins over the cold-morning tier', V(72, 44, 44), 'falling');
+  check('cold morning speaks when nothing else does', V(48, 40, 40), 'cold');
+  check('a mild morning says nothing', V(60, 52, 52), null);
+
+  // Missing inputs must not throw or invent a verdict.
+  check('no data at all', V(null, null, null), null);
+  check('no morning in the window, no fall', V(60, null, 59), null);
+  check('freezing morning with no ahead-low', V(40, 30, null), 'freezing');
+}
+
 if (failed) {
   console.error(`\n${failed} logic test(s) failed`);
   process.exit(1);
 }
-console.log('ok    logic: rangeMark, alertLevel and FAMILY_CFG behave');
+console.log('ok    logic: rangeMark, alertLevel, FAMILY_CFG and coldVerdict behave');

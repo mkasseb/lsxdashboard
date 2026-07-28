@@ -5418,10 +5418,39 @@ function renderUvNow(){
    never empty once the hourly feed has loaded. */
 var callAqi=null;
 function hrWord(d){ return d.toLocaleTimeString([], {hour:"numeric"}).replace(/\s/g,"").toLowerCase(); }
+/* The same clock word, plus the day when it isn't today. The Bottom Line reasons over an 18-hour
+   window, so a bare "near 1pm" read at 8pm was describing TOMORROW afternoon in a voice that
+   sounds like this afternoon. Eighteen hours can only reach tomorrow, never further. */
+function whenWord(d){
+  var w=hrWord(d);
+  return d.getDate()===new Date().getDate()?w:w+" tomorrow";
+}
 function dewF(tF,rh){ // Magnus approximation, good to ~±1° in this range
   if(tF==null||rh==null||rh<=0) return null;
   var tC=(tF-32)/1.8, g=Math.log(rh/100)+17.625*tC/(243.04+tC);
   return Math.round((243.04*g/(17.625-g))*1.8+32);
+}
+/* Which cold thing to say about the hours ahead, if any — the decision on its own, so it can be
+   tested without a DOM. `nowT` is the current temperature, `mMin` the 6–9am low (null if the
+   window holds no morning), `cMin` the lowest hour ahead (null if unknown).
+
+   One trough, one verdict. These used to be two independent blocks and both fired: a 70° evening
+   falling to 40° by dawn printed "Falling 30° to 40° by 7am — dress in layers" AND "40° near 7am
+   — dress for cold", one fact twice, in a card that only shows four.
+
+   The order is what the reader has to do about it. Freezing outranks everything because ice is a
+   different problem from a chilly evening, and "layers" is the wrong advice for 28°.
+
+   `cMin<=LAYERS` is the fix for the bug that started this: "dress in layers" is advice about
+   where the temperature LANDS, not how far it fell. Gated on the fall alone, a 99° afternoon
+   easing to 80° overnight — the ordinary summer diurnal cycle, still shorts-and-a-fan weather —
+   advised layers. Every hot day does that, and none of them need a jacket. */
+var LAYERS_MAX=58;   // about where an evening starts to want a jacket
+function coldVerdict(nowT,mMin,cMin){
+  if(mMin!=null&&mMin<=32) return "freezing";
+  if(nowT!=null&&nowT>=55&&cMin!=null&&cMin<=LAYERS_MAX&&nowT-cMin>=18) return "falling";
+  if(mMin!=null&&mMin<=45) return "cold";
+  return null;
 }
 function renderTheCall(){
   var card=document.getElementById("callCard"), row=document.getElementById("callRow");
@@ -5447,6 +5476,12 @@ function renderTheCall(){
     if(H[i].pop>maxPop) maxPop=H[i].pop;
     if(wet0<0 && H[i].pop>=40) wet0=i;
     if(wet0>=0 && wetEnd<0 && i>wet0 && H[i].pop<30) wetEnd=i;
+  }
+  /* Thunder and wintry are read from the wet BLOCK, not from anywhere in the 18-hour window.
+     Scanning the whole window let a thunderstorm flagged for 9pm relabel an unrelated morning
+     rain block as "Thunderstorms likely ~9am–noon" — a forecast nobody issued, in the one pill
+     that outranks everything else on the card. */
+  for(i=(wet0<0?n:wet0); i<(wetEnd>wet0?wetEnd:n); i++){
     if(H[i].pop>=30 && H[i].thund) hasThunder=true;
     if(H[i].pop>=30 && H[i].wint) hasWintry=true;
   }
@@ -5454,11 +5489,11 @@ function renderTheCall(){
     var endLbl=(H[n-1].d.getDate()!==new Date().getDate())?"into tomorrow":("through "+hrWord(H[n-1].d));
     push(40,"sun","No rain expected "+endLbl+(maxPop>=25?" (peak chance "+maxPop+"%)":""));
   }else{
-    var span=(wet0===0?"now":"~"+hrWord(H[wet0].d))+(wetEnd>wet0?"–"+hrWord(H[wetEnd].d):" on");
+    var span=(wet0===0?"now":"~"+whenWord(H[wet0].d))+(wetEnd>wet0?"–"+whenWord(H[wetEnd].d):" on");
     // a second round after the first block clears?
     var wet2=-1;
     if(wetEnd>0){ for(i=wetEnd;i<n;i++){ if(H[i].pop>=40){ wet2=i; break; } } }
-    var more=(wet2>0)?" · another round ~"+hrWord(H[wet2].d):"";
+    var more=(wet2>0)?" · another round ~"+whenWord(H[wet2].d):"";
     if(hasThunder) push(95,"storm","Thunderstorms likely "+span+more);
     else if(hasWintry) push(93,"snow","Snow or wintry mix "+span+more+" — expect slick roads");
     else push(60,"rain","Rain likely "+span+more);
@@ -5466,36 +5501,45 @@ function renderTheCall(){
   // — heat (dangerous ≈ local heat-advisory territory; "hot" tier below that) —
   var maxFl=-999, flAt=null;
   for(i=0;i<n;i++){ if(H[i].fl!=null&&H[i].fl>maxFl){ maxFl=H[i].fl; flAt=H[i].d; } }
-  if(maxFl>=105) push(100,"heat","Dangerous heat — feels like "+maxFl+"° near "+hrWord(flAt)+". Limit outdoor exertion.");
-  else if(maxFl>=99) push(72,"heat","Feels like "+maxFl+"° near "+hrWord(flAt)+" — take breaks outdoors");
-  // — cold morning (freezing gets its own tier) —
-  var mMin=999, mAt=null;
+  if(maxFl>=105) push(100,"heat","Dangerous heat — feels like "+maxFl+"° near "+whenWord(flAt)+". Limit outdoor exertion.");
+  else if(maxFl>=99) push(72,"heat","Feels like "+maxFl+"° near "+whenWord(flAt)+" — take breaks outdoors");
+  /* — the cold end of the window: ONE pill for one trough —
+     Three ways of saying "it gets cold", in descending order of what the reader has to do about
+     it, and mutually exclusive because they all describe the same upcoming low. They used to be
+     two independent blocks, so a 70° evening falling to 40° by dawn printed "Falling 30° to 40°
+     by 7am — dress in layers" AND "40° near 7am — dress for cold": one fact, twice, eating half
+     the card. Freezing wins outright — ice is a different problem from a chilly evening, and
+     "layers" is the wrong advice for 28°. */
+  var mMin=999, mAt=null;                    // the morning-drive low, 6–9am
   for(i=0;i<n;i++){ if(H[i].hr>=6&&H[i].hr<=9&&H[i].t<mMin){ mMin=H[i].t; mAt=H[i].d; } }
-  if(mAt&&mMin<=32) push(85,"cold","Freezing early — "+mMin+"° near "+hrWord(mAt));
-  else if(mAt&&mMin<=45) push(70,"cold",mMin+"° near "+hrWord(mAt)+" — dress for cold");
+  var cMin=999, cAt=null;                    // the lowest hour ahead, whenever it lands
+  for(i=3;i<n;i++){ if(H[i].t!=null&&H[i].t<cMin){ cMin=H[i].t; cAt=H[i].d; } }
+  var cold=coldVerdict(H[0].t, mAt?mMin:null, cAt?cMin:null);
+  if(cold==="freezing") push(85,"cold","Freezing early — "+mMin+"° near "+whenWord(mAt));
+  else if(cold==="falling") push(66,"trend-down","Falling "+(H[0].t-cMin)+"° to "+cMin+"° by "+whenWord(cAt)+" — dress in layers");
+  else if(cold==="cold") push(70,"cold",mMin+"° near "+whenWord(mAt)+" — dress for cold");
   // — fog around the morning drive —
   for(i=0;i<n;i++){ if(H[i].fog&&H[i].hr>=4&&H[i].hr<=9){ push(68,"fog","Fog early — reduced visibility for the morning drive"); break; } }
   // — wind (sustained; NWS strings undersell gusts, so thresholds are conservative) —
   var wMax=0, wAt=null;
   for(i=0;i<n;i++){ if(H[i].mph!=null&&H[i].mph>wMax){ wMax=H[i].mph; wAt=H[i].d; } }
-  if(wMax>=35) push(78,"wind","Very windy — "+wMax+" mph near "+hrWord(wAt)+". Secure loose objects.");
-  else if(wMax>=25) push(65,"wind","Windy — sustained to "+wMax+" mph near "+hrWord(wAt));
+  if(wMax>=35) push(78,"wind","Very windy — "+wMax+" mph near "+whenWord(wAt)+". Secure loose objects.");
+  else if(wMax>=25) push(65,"wind","Windy — sustained to "+wMax+" mph near "+whenWord(wAt));
   // — UV (cross-feed from the Open-Meteo series; the burn clock is the actionable part) —
   if(uv.peak&&uv.peak.t>Date.now()){
-    var uvR=Math.round(uv.peak.v), uvAt=hrWord(new Date(uv.peak.t));
+    var uvR=Math.round(uv.peak.v), uvAt=whenWord(new Date(uv.peak.t));
     if(uvR>=11) push(76,"uv","Extreme UV "+uvR+" near "+uvAt+" — unprotected burn in ~"+Math.max(5,Math.round(200/uvR))+" min");
     else if(uvR>=8) push(62,"uv","UV "+uvR+" near "+uvAt+" — sun protection advised");
   }
-  // — a front coming through (warm now, markedly colder later — the caught-out-in-a-t-shirt day) —
-  if(H[0].t!=null&&H[0].t>=55){
-    var cMin=999, cAt=null;
-    for(i=3;i<n;i++){ if(H[i].t!=null&&H[i].t<cMin){ cMin=H[i].t; cAt=H[i].d; } }
-    if(cAt&&H[0].t-cMin>=18) push(66,"trend-down","Falling "+(H[0].t-cMin)+"° to "+cMin+"° by "+hrWord(cAt)+" — dress in layers");
-  }
   // — air quality (fed by loadAqi) —
   if(callAqi!=null&&callAqi>100) push(75,"air","Poor air quality (AQI "+callAqi+") — sensitive groups should limit exertion");
-  // — windows-open vs. AC night (dew point is the honest comfort test) —
-  var night=H.filter(function(h){ return h.hr>=21||h.hr<=6; });
+  /* — windows-open vs. AC night (dew point is the honest comfort test) —
+     The contiguous run from the first night hour, not every night-shaped hour in the window: as a
+     filter, at 3am this matched THIS morning's small hours and tomorrow evening's alike, so "low
+     near X" was the minimum across two different nights with a day in between. */
+  var n0=-1; for(i=0;i<n;i++){ if(H[i].hr>=21||H[i].hr<=6){ n0=i; break; } }
+  var night=[];
+  for(i=n0;i>=0&&i<n&&(H[i].hr>=21||H[i].hr<=6);i++) night.push(H[i]);
   if(night.length>=4){
     var ok=true, muggy=false, lo=999;
     night.forEach(function(h){
@@ -5506,15 +5550,19 @@ function renderTheCall(){
     if(ok&&!muggy) push(50,"moon","Comfortable overnight — "+lo+"° and dry");
     else if(muggy) push(30,"moon","Humid overnight — low near "+lo+"°");
   }
-  // — a legitimately good day (only worth saying before evening) —
-  var dayH=H.filter(function(h){ return h.day; });
+  /* — a legitimately good day (only worth saying before evening) —
+     Today's daylight only: the window runs into tomorrow morning, and a verdict on "the day"
+     must not average two of them. And it can only vouch for hours it can SEE — by afternoon
+     those are the ones still ahead, so it stops calling them "all day". */
+  var today=new Date().getDate();
+  var dayH=H.filter(function(h){ return h.day&&h.d.getDate()===today; });
   if(dayH.length>=4 && new Date().getHours()<17){
     var dhi=-999, nice=true;
     dayH.forEach(function(h){
       if(h.t>dhi) dhi=h.t;
       if(h.pop>=20||h.t<58||h.t>88||(h.fl!=null&&h.fl>=95)||(h.mph!=null&&h.mph>15)||(h.dew!=null&&h.dew>66)) nice=false;
     });
-    if(nice) push(55,"check",dhi+"° and dry all day — excellent conditions");
+    if(nice) push(55,"check",dhi+"° and dry "+(new Date().getHours()>=12?"the rest of the day":"all day")+" — excellent conditions");
   }
   // — the synthesis: WHEN to be outside, not just what is wrong with today. Hours are scored on
   //   feels-like comfort, rain/storm risk and wind; the best contiguous 2-hour daylight window
