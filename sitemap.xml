@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- One page, one URL. This is not doing discovery work Google needs — a site with a single
+     root URL would be found regardless — it is here so robots.txt has something true to point
+     at, and so the canonical URL is stated once more in the one place crawlers look for it.
+
+     No <lastmod>: there is no build step to stamp one, and a hand-written date is a claim about
+     freshness that starts drifting the moment it is committed. Omitting it says nothing, which
+     is better than saying something stale. <changefreq> and <priority> are ignored by every
+     major crawler and are left out for the same reason. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://lsxdashboard.com/</loc>
+  </url>
+</urlset>

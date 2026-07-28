@@ -1,0 +1,11 @@
+# The site is one page, and there is nothing on it a crawler shouldn't have — so this file
+# grants everything and excludes nothing. It exists because /robots.txt is requested whether
+# or not it is there: without it Cloudflare Pages answered with the dashboard's own HTML, and
+# every crawler dutifully tried to read 5,953 lines of markup as crawl rules.
+#
+# Keep the Sitemap line pointing at a sitemap that exists — tools/check.py enforces that.
+
+User-agent: *
+Allow: /
+
+Sitemap: https://lsxdashboard.com/sitemap.xml
