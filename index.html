@@ -480,7 +480,10 @@
   /* elapsed-vs-remaining window */
   .a2-time{margin-top:8px}
   .a2-prog{height:4px;border-radius:2px;background:var(--chip);overflow:hidden}
-  .a2-prog i{display:block;height:100%;border-radius:2px;background:var(--lv);opacity:.85}
+  /* width:0 is the starting state, not the resting one — the fill is a live value written by
+     tickCountdowns (see there for why it isn't in the markup). Without it a block-level <i>
+     defaults to auto and every bar would flash full for the instant before the first tick. */
+  .a2-prog i{display:block;width:0;height:100%;border-radius:2px;background:var(--lv);opacity:.85}
   .a2-times{display:flex;justify-content:space-between;gap:10px;font-size:var(--fs-xs);color:var(--muted);margin-top:5px;
     font-variant-numeric:tabular-nums}
   /* a window that hasn't opened yet: hatched track, so an empty bar reads as "not started" not "no data" */
@@ -2755,6 +2758,76 @@ function syncElsewhere(){
   var b=el.querySelector(".a2-elsewhere");
   if(b) b.setAttribute("aria-expanded",elseOpen?"true":"false");
 }
+/* ---- Repainting the list without throwing away the reader's place in it ----
+   The section rebuilds every 60s, and innerHTML destroys every node in it. openIds already carries
+   which drawers were open across that; two things were still being lost with the nodes.
+
+   FOCUS. A reader tabbed onto a banner head — the section's only control — had focus dropped to
+   <body> mid-interaction, silently, at a moment they didn't act at and get no notice of. Worse for
+   the one who opened a drawer and is reading it: the next Tab starts over at the top of the
+   document. So the control focus was on is recorded before the rebuild and re-found after it.
+
+   THE REBUILD ITSELF. NWS alerts rarely change between polls, so most minutes the markup we just
+   built is byte-for-byte what is already on screen. Skipping an identical repaint keeps every node
+   alive — no lost focus to restore, and the "+N more" county reveal survives too, which openIds
+   never covered. Two things make the comparison hold. Nothing time-varying is left in the markup:
+   the countdown text and the time bar's fill are both written in afterwards by tickCountdowns, so
+   an unchanged alert builds an unchanged string. And the comparison is against the last string we
+   BUILT, not against el.innerHTML — tickCountdowns writes into the DOM the instant after we paint,
+   so what is on the page stops matching what we wrote within milliseconds.
+
+   The skip doesn't make the focus restore redundant. An alert genuinely revised mid-window still
+   rebuilds the section, and that is exactly the minute someone is most likely to be reading it. */
+var alertsHTML=null;
+/* Every focusable control the section renders. The drawer's weather.gov link is in here for the
+   same reason as the buttons: it's a tab stop inside #alerts, so it's somewhere focus can be when
+   the timer fires. Drawer controls imply an open drawer (.alert-more is display:none otherwise),
+   and openIds reopens it, so they're findable again after the rebuild. */
+var AB_FOCUS=[".ab-head",".a2-radar",".a2-more",".a2-elsewhere",".a2-foot .link"];
+function alertFocusKey(el){
+  var a=document.activeElement;
+  // Focus outside the section is none of this function's business: "restoring" it would yank the
+  // caret out of the location search or off a link halfway down the page, every 60 seconds.
+  if(!a||!el.contains(a)) return null;
+  for(var i=0;i<AB_FOCUS.length;i++){
+    var c=a.closest(AB_FOCUS[i]);
+    if(!c) continue;
+    // Identified by event name, the way every other alert lookup here identifies a card
+    // (findAlertCard, showAlertOnRadar). The "elsewhere" fold sits outside any card and is
+    // matched on its selector alone.
+    var card=c.closest(".alert");
+    return {sel:AB_FOCUS[i], aid:card?card.getAttribute("data-aid"):null};
+  }
+  return null;
+}
+function restoreAlertFocus(el,k){
+  if(!k) return;
+  // Replacing the focused node leaves focus on <body>. Anything else means something claimed it
+  // between then and now, and it has a better claim than a 60-second timer does.
+  var a=document.activeElement;
+  if(a&&a!==document.body&&a!==document.documentElement) return;
+  var scope=el;
+  if(k.aid){
+    var cards=el.querySelectorAll(".alert"), card=null;
+    for(var i=0;i<cards.length;i++){ if(cards[i].getAttribute("data-aid")===k.aid){ card=cards[i]; break; } }
+    if(!card) return;   // the alert expired between polls — there is no equivalent control to move to
+    scope=card;
+  }
+  var c=scope.querySelector(k.sel);
+  // preventScroll: focus is going back exactly where the reader already had it, so it is already
+  // where they are looking. Scrolling to it could only move the page out from under them.
+  if(c) c.focus({preventScroll:true});
+}
+/* The one way anything paints #alerts — list, calm line and error all route through here, so all
+   three get the comparison and the focus handling rather than just the one that renders alerts. */
+function paintAlerts(el,html,after){
+  if(html===alertsHTML) return;   // nothing changed: leave the DOM, and the reader's place in it, alone
+  var k=alertFocusKey(el);        // read BEFORE innerHTML destroys the element it points at
+  alertsHTML=html;
+  el.innerHTML=html;
+  if(after) after();              // open/closed re-applied first, so focus can't land inside a display:none fold
+  restoreAlertFocus(el,k);
+}
 function loadAlerts(){
   var fresh=locGuard();
   var el=document.getElementById("alerts"), card=document.getElementById("alertsCard");
@@ -2812,7 +2885,7 @@ function loadAlerts(){
     if(typeof tickCountdowns==="function") setTimeout(tickCountdowns,0);   // fill the new countdowns immediately
     if(feats.length===0){
       card.classList.add("calm");
-      el.innerHTML='<div class="calmrow"><span class="cdot"></span>No active watches, warnings or advisories. <span class="cmut">NWS St. Louis county warning area.</span></div>';
+      paintAlerts(el,'<div class="calmrow"><span class="cdot"></span>No active watches, warnings or advisories. <span class="cmut">NWS St. Louis county warning area.</span></div>');
       return;
     }
     card.classList.remove("calm");
@@ -2910,11 +2983,10 @@ function loadAlerts(){
       var mg=!!(g.phases&&g.phases.length>1);   // a folded card holding several products
       var endStr=g.latest?new Date(g.latest).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"\u2014";
       var startStr=g.earliest?new Date(g.earliest).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"";
-      // elapsed-vs-remaining bar for the alert window; a window that hasn't opened yet is "pending"
-      var prog=null, pending=!!(g.earliest&&Date.now()<g.earliest);
-      if(g.earliest&&g.latest&&g.latest>g.earliest){
-        prog=Math.max(0,Math.min(100,(Date.now()-g.earliest)/(g.latest-g.earliest)*100));
-      }
+      // Elapsed-vs-remaining bar for the alert window; a window that hasn't opened yet is "pending".
+      // Only whether the window is a measurable span is decided here — how far along it is changes
+      // by the second, so the fill is left to tickCountdowns and kept out of the markup.
+      var prog=!!(g.earliest&&g.latest&&g.latest>g.earliest), pending=!!(g.earliest&&Date.now()<g.earliest);
       /* ---- a banner, not a card ----
          Two lines: the event with its window ("Extreme Heat Warning — until Tue 7:00 PM") and the
          first sentence of the instruction. The whole banner is one <button>; everything else —
@@ -3045,7 +3117,7 @@ function loadAlerts(){
         +(g.latest||pending?'<div class="ab-cd">'
           +(pending?'<span class="a2-cd a-cd" data-exp="'+g.earliest+'" data-pre="1"></span>'
                    :'<span class="a2-cd a-cd" data-exp="'+g.latest+'"></span>')+'</div>':'')
-        +(prog!=null?'<div class="a2-time'+(pending?' pending':'')+'"><div class="a2-prog"><i style="width:'+prog.toFixed(1)+'%"></i></div>'
+        +(prog?'<div class="a2-time'+(pending?' pending':'')+'"><div class="a2-prog"><i data-prog="'+g.earliest+','+g.latest+'"></i></div>'
           +'<div class="a2-times"><span>'+(pending?"begins ":"")+esc(startStr||"in effect")+'</span><span>ends '+esc(endStr)+'</span></div></div>'
           :'<div class="a2-times"><span>Through '+esc(endStr)+'</span></div>')
         +phasesHTML
@@ -3070,11 +3142,10 @@ function loadAlerts(){
         +awayN+' '+(awayN===1?"alert":"alerts")+' elsewhere in the LSX area <span class="a-chev">▾</span></button>'
         +'<div id="alertsElse">'+awayHTML+'</div>';
     }
-    el.innerHTML=calmHTML+mineHTML+elseHTML;
-    syncElsewhere();   // re-apply open/closed across the 60s refresh
+    paintAlerts(el,calmHTML+mineHTML+elseHTML,syncElsewhere);   // syncElsewhere re-applies open/closed across the refresh
   }).catch(function(){
     card.classList.remove("calm");
-    el.innerHTML='<div class="empty">Couldn\'t load alerts. <a href="https://www.weather.gov/lsx/" target="_blank" rel="noopener">Check weather.gov/lsx ↗</a></div>';
+    paintAlerts(el,'<div class="empty">Couldn\'t load alerts. <a href="https://www.weather.gov/lsx/" target="_blank" rel="noopener">Check weather.gov/lsx ↗</a></div>');
   });
 }
 // Classify an NWS event into a "family" so the dashboard can adapt its theme, prime card, and tone.
@@ -5779,6 +5850,17 @@ function tickCountdowns(){
     el.textContent=s;
     el.classList.remove("expired");
     el.classList.toggle("urgent", left<=15*60000);   // final quarter hour reads red
+  });
+  /* The alert time bar fills here for the same reason the countdowns do: it is a live value, and
+     writing it into the markup as an inline width made every poll's HTML differ from the last —
+     which is precisely what paintAlerts' comparison exists to notice. A one-hour warning's bar
+     moves 1.7 points a minute, so baked in it would have forced a full rebuild of the section on
+     every single refresh and left the skip firing only for multi-day alerts. Out here it also
+     advances once a second instead of stepping once a minute. */
+  [].forEach.call(document.querySelectorAll("[data-prog]"),function(el){
+    var v=(el.getAttribute("data-prog")||"").split(","), s=+v[0], e=+v[1];
+    if(!s||!e||e<=s) return;
+    el.style.width=Math.max(0,Math.min(100,(now-s)/(e-s)*100)).toFixed(1)+"%";
   });
 }
 
