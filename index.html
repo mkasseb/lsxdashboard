@@ -2550,6 +2550,7 @@ function showRadarFrame(i){
   }
   var sl=document.getElementById("radarSlider");
   if(sl && +sl.value!==i) sl.value=i;
+  syncSatToRadar();   // the cloud shield follows the moment the radar is showing
 }
 function radarFramesReady(){
   return radarFrames.length>1 && radarFrames.every(function(f){ return f.layer._ready; });
@@ -2602,6 +2603,9 @@ function radarPauseLoop(){
   radarPlaying=false;
   if(radarTimer){ clearTimeout(radarTimer); radarTimer=null; }
   setRadarBtn();
+  /* Playback skipped every sync on purpose; stopping is the moment the visitor started looking, so
+     the satellite catches up to wherever they landed. */
+  syncSatToRadar();
 }
 function initRadarCtl(){
   var b=document.getElementById("radarPlay"), sl=document.getElementById("radarSlider");
@@ -4806,9 +4810,14 @@ function syncSkyMeta(){
   if(skyOn.radar) bits.push(radarDown()
     ? '<b>Radar unavailable</b> — NOAA is not serving reflectivity right now'
     : 'Official NOAA/NWS radar &middot; tap a <b>warning polygon</b> to jump to its alert');
+  /* A pinned satellite says WHICH moment it is showing. Left as the plain credit it would quietly
+     claim to be current while displaying an hour-old cloud shield — the same lie the radar badge's
+     stale state exists to prevent, arriving through the other layer. */
   if(skyOn.sat) bits.push(satDown()
     ? '<b>Satellite unavailable</b> — no GOES imagery from NASA GIBS right now'
-    : 'GOES-19 GeoColor via NASA GIBS');
+    : (satPinned
+        ? 'GOES-19 GeoColor at <b>'+esc(satClock(satPinned))+'</b>, following the radar'
+        : 'GOES-19 GeoColor via NASA GIBS'));
   if(!bits.length) bits.push('Both layers are off — the buttons above bring them back');
   bits.push('basemap &copy; CARTO/OSM');
   var note=skyOn.radar?'radar every ~4 min':(skyOn.sat?'satellite every ~10 min':'');
@@ -4844,6 +4853,9 @@ function detachRadarLayers(){
   radarFallback=false; skyHealth.radar=null;
   syncRadarBadge();   // skyOn.radar is already false here, so this empties the badge
   updateRadarCtl();   // empty frame list drops .ready, so the scrubber can't outlive its frames
+  /* A pinned satellite outliving the frame list would strand the card on an hour-old cloud shield
+     with nothing left on screen explaining which moment it belongs to. Empty frames means unpin. */
+  syncSatToRadar();
 }
 function applySkyLayers(first){
   syncSkyMeta();
@@ -4858,6 +4870,10 @@ function applySkyLayers(first){
     if(p[1]&&!rvMap.hasLayer(p[0])) p[0].addTo(rvMap);
     else if(!p[1]&&rvMap.hasLayer(p[0])) rvMap.removeLayer(p[0]);
   });
+  /* Switched back on while the radar is parked in the past, the satellite would return as the LIVE
+     frame — the exact mismatch the time track exists to close, reachable by a route that never
+     touches the scrubber. Re-ask where the radar is standing. */
+  if(!first&&skyOn.sat) syncSatToRadar();
   /* Back on, everything reflectivity had was torn down, so rebuild. nwsRadar goes back first for
      the same reason it is added at init: the capabilities fetch takes a moment, and this paints a
      sweep NOW instead of leaving an empty map until the frame list resolves. refreshRadarLayer()
@@ -4880,19 +4896,135 @@ document.addEventListener("click",function(e){
   setSkyLayer(n,!skyOn[n]);
 });
 
+/* ============ SATELLITE TIME TRACK ============
+   Scrubbing the radar back an hour used to leave the cloud shield sitting at "now" — the storm in
+   the past and the system carrying it in the present, drawn as one picture. That is precisely what
+   stacking the two layers was supposed to stop.
+
+   GIBS has always exposed a time dimension, and the reason this waited is not the one the README
+   used to give. The archive's gaps are real: measured across three hours, only 11 of 18 nominal
+   10-minute slots existed, and a slot that does not exist is a hard 404, so the moments have to be
+   DISCOVERED rather than computed. But that turns out to be the cheap part — DescribeDomains
+   bounded to a few hours answers in ~350 bytes. (Unbounded it returns the whole archive back to
+   2021, about 1 MB, which is what made this look impractical for so long.)
+
+   The expensive part is the imagery, and it is what shapes everything below. A reflectivity tile is
+   a sparse transparent PNG — measured, 1,980 bytes. A GeoColor tile is opaque full colour: 113,601
+   bytes, 57x bigger. That single ratio is why the radar keeps ~15 frames alive and the satellite
+   keeps exactly ONE. Nothing here preloads a parallel stack; it re-points one layer at whatever
+   moment the visitor stopped on. Playback is exempt for the same reason — see syncSatToRadar. */
+var SAT_DOMAIN="https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/1.0.0/DescribeDomains";
+var satTimes=[], satTimesPending=null, satPinned=null, satPending=null, satSwapGen=0, satSyncTimer=null;
+/* The time is a segment of its own, AFTER the style — not in place of it. Dropping it where
+   `default` sits looks right and answers 400 for every tile. */
+function satUrl(t){ return t ? GIBS_SAT.replace("/default/","/default/"+t+"/") : GIBS_SAT; }
+function isoZ(ms){ return new Date(ms).toISOString().replace(/\.\d+Z$/,"Z"); }
+function iso8601Ms(d){
+  var m=/^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec((d||"").trim());
+  return m ? ((+m[1]||0)*86400+(+m[2]||0)*3600+(+m[3]||0)*60+(+m[4]||0))*1000 : 0;
+}
+/* The domain is a comma-separated list of START/END/PERIOD *intervals*, not a list of instants —
+   that is exactly how the gaps are expressed, and expanding it is what turns "which slots exist"
+   into something we can snap a radar timestamp onto. */
+function expandSatDomain(s){
+  var out=[];
+  s.split(",").forEach(function(chunk){
+    var p=chunk.trim().split("/");
+    var start=Date.parse(p[0]);
+    if(isNaN(start)) return;
+    var end=(p.length>1)?Date.parse(p[1]):start;
+    var step=iso8601Ms(p[2]);
+    if(!step||isNaN(end)||end<start){ out.push(p[0].trim()); return; }
+    for(var t=start; t<=end && out.length<400; t+=step) out.push(isoZ(t));
+  });
+  return out.sort();
+}
+function fetchSatTimes(){
+  var now=Date.now();
+  // Only as wide as the loop can reach. Unbounded is ~1 MB; this is a few hundred bytes.
+  var url=SAT_DOMAIN+"?SERVICE=WMTS&VERSION=1.0.0&REQUEST=DescribeDomains"
+    +"&layer=GOES-East_ABI_GeoColor&tileMatrixSet=GoogleMapsCompatible_Level7&domains=time"
+    +"&time="+isoZ(now-(RADAR_SPAN_MIN+30)*60000)+"/"+isoZ(now+10*60000);
+  return fetch(url).then(function(r){
+    if(!r.ok) throw new Error("domains "+r.status);
+    return r.text();
+  }).then(function(xml){
+    var m=xml.match(/<Domain>([\s\S]*?)<\/Domain>/i);
+    if(!m) throw new Error("no domain");
+    var list=expandSatDomain(m[1]);
+    if(!list.length) throw new Error("empty domain");
+    satTimes=list;
+    return list;
+  });
+}
+/* Newest satellite frame at or before the radar's moment. GOES publishes every ~10 minutes and the
+   loop steps every ~4, so several radar frames legitimately share one image — the cloud shield
+   really did not move in between, and pretending otherwise would be inventing data. */
+function satTimeFor(ms){
+  for(var i=satTimes.length-1;i>=0;i--){ if(Date.parse(satTimes[i])<=ms) return satTimes[i]; }
+  return satTimes.length?satTimes[0]:null;   // radar frame predates anything GIBS still holds
+}
+function scheduleSatSwap(){
+  clearTimeout(satSyncTimer);
+  // Coalesce a drag: crossing an hour coincides with ~6 satellite frames, and the visitor only
+  // ever looks at the one they stop on. The caption updates immediately; the bytes wait.
+  satSyncTimer=setTimeout(function(){ swapSatLayer(satUrl(satPinned)); },180);
+}
+function unpinSat(){
+  if(!satPinned) return;
+  satPinned=null;
+  scheduleSatSwap();
+  syncSkyMeta();
+}
+/* Called whenever the radar's displayed moment changes. PLAYBACK IS DELIBERATELY EXEMPT: a
+   GeoColor frame is ~450 KB for this map, and fetching that every 450ms would stall the loop
+   rather than enrich it. Pausing or scrubbing means the visitor has stopped on a moment and is
+   actually looking at it — that is when the cloud shield is worth the bytes. */
+function syncSatToRadar(){
+  if(!rvMap||!skyOn.sat||radarPlaying) return;
+  if(!radarFrames.length){ unpinSat(); return; }
+  var i=Math.max(0,Math.min(radarFrames.length-1,radarIdx));
+  if(i===radarFrames.length-1){ unpinSat(); return; }   // back at now → the live, undated layer
+  if(!satTimes.length){
+    // First scrub since the window last moved: discover the valid slots, then re-enter with them.
+    if(!satTimesPending){
+      satTimesPending=fetchSatTimes().then(function(){ satTimesPending=null; syncSatToRadar(); })
+        .catch(function(){ satTimesPending=null; });   // no domain → the satellite simply stays live
+    }
+    return;
+  }
+  var want=satTimeFor(Date.parse(radarFrames[i].time));
+  if(!want||want===satPinned) return;   // ~15 radar steps over ~6 satellite frames: mostly a no-op
+  satPinned=want;
+  scheduleSatSwap();
+  syncSkyMeta();
+}
+function satClock(iso){
+  var d=new Date(iso);
+  return isNaN(d)?"":d.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
+}
 /* GIBS posts a new GeoColor frame every ~10 minutes, and Leaflet caches its tile <img>s in the DOM
    — nothing re-fetches on its own. redraw() would do it, but it drops every tile first and leaves
    a hole in the map while the replacements load. Build the new layer, swap once it has painted,
-   and the change is invisible. Old and new URLs are identical: the endpoint answers `no-store`, so
-   the browser really does re-request instead of serving the frame we already have, which is why
-   there is no cache-buster here. */
-function refreshSatLayer(){
+   and the change is invisible. For the LIVE frame old and new URLs are identical: the endpoint
+   answers `no-store`, so the browser really does re-request instead of serving the frame we
+   already have, which is why there is no cache-buster here. A pinned frame is a different URL and
+   is cacheable on purpose — scrubbing back over ground you already covered should cost nothing. */
+function swapSatLayer(url){
   if(!rvMap||!satLayer||!skyOn.sat) return;
-  var old=satLayer, swapped=false;
-  var next=L.tileLayer(GIBS_SAT,{maxZoom:12,maxNativeZoom:SAT_MAX_NATIVE,zIndex:5});
+  /* A swap already in flight is now aimed at the wrong minute. Drop it before starting another, or
+     dragging the scrubber across an hour stacks half a dozen opaque layers all waiting to paint. */
+  if(satPending&&satPending!==satLayer&&rvMap.hasLayer(satPending)) rvMap.removeLayer(satPending);
+  var gen=++satSwapGen, old=satLayer, swapped=false;
+  var next=L.tileLayer(url,{maxZoom:12,maxNativeZoom:SAT_MAX_NATIVE,zIndex:5});
+  satPending=next;
   bindSkyHealth(next);   // satDown() asks whichever layer is current, and that is about to be this one
   function swap(){
     if(swapped) return; swapped=true;
+    /* Tiles do not necessarily come back in the order they were asked for. Without this, a slow
+       early scrub could paint last and leave the map showing a minute the visitor already left. */
+    if(gen!==satSwapGen){ if(next!==satLayer&&rvMap.hasLayer(next)) rvMap.removeLayer(next); return; }
+    satPending=null;
     if(satLayer===old&&rvMap.hasLayer(old)) rvMap.removeLayer(old);
     // A toggle-off mid-swap wins: never resurrect a layer the visitor just switched away from.
     if(skyOn.sat) satLayer=next;
@@ -4907,6 +5039,16 @@ function refreshSatLayer(){
      an hour-old frame on screen looking current. */
   setTimeout(swap,20000);
   next.addTo(rvMap);
+}
+function refreshSatLayer(){
+  /* The discovery window has moved on; make the next scrub re-ask rather than snap to slots that
+     have since aged out of it. Cleared even while pinned — the pinned frame stays on screen, and
+     the list it came from is what goes stale. */
+  satTimes=[];
+  if(!rvMap||!satLayer||!skyOn.sat) return;
+  // Scrubbed back on purpose: a live refresh here would yank the visitor to "now" mid-look.
+  if(satPinned) return;
+  swapSatLayer(satUrl(null));
 }
 /* The jump nav needs no script: every link points at a section that is always on the page, and the
    browser does the scrolling. */
