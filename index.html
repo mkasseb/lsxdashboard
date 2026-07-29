@@ -173,7 +173,7 @@
      that sit side by side in the same card did not agree on their own geometry. Each class below
      still exists (JS builds them by name, and restored snapshots carry those names), but now it
      only declares what genuinely differs: colour, weight, size. */
-  .a2-chip,.a2-more,.a2-radar,.a2-me,.a2-zc,.call-pill,.h24-pill,.hz-chip,.afd-more,
+  .a2-chip,.a2-more,.a2-radar,.a2-me,.a2-zc,.call-pill,.h24-pill,.hz-chip,
   .dr-pill,.cpc-pill,.rfcat,.qpfchip,.rs-full,.stn-tools button,.quicklinks a,.dr-none{
     display:inline-flex;align-items:center;gap:6px;border-radius:var(--r-pill);
     font-family:inherit;line-height:1.35;text-align:left}
@@ -183,7 +183,7 @@
   .rfcat{font-size:var(--fs-2xs);font-weight:800;text-transform:uppercase;
     letter-spacing:var(--ls-eyebrow);border-radius:var(--r-sm);padding:3px 8px}
   /* Members that are real controls keep a touch target; the rest are inert labels. */
-  .a2-more,.a2-radar,.rs-full,.afd-more,.stn-tools button{cursor:pointer;min-height:0}
+  .a2-more,.a2-radar,.rs-full,.stn-tools button{cursor:pointer;min-height:0}
 
   /* ===== Touch targets =====
      The base rule above gives every <button> a 44px min-height, and the line before this one takes
@@ -195,8 +195,8 @@
      Pointer-events are inherited, so it counts as part of its own control for hit-testing while
      being invisible to everything else. Where it overhangs, it overhangs county chips and heading
      text — inert things with no target of their own to lose. */
-  .card h2 a,.rs-tab,.rs-full,.a2-more,.a2-radar,.a2-elsewhere,.afd-more{position:relative}
-  .card h2 a::after,.rs-tab::after,.rs-full::after,.a2-more::after,.a2-radar::after,.a2-elsewhere::after,.afd-more::after{
+  .card h2 a,.rs-tab,.rs-full,.a2-more,.a2-radar,.a2-elsewhere{position:relative}
+  .card h2 a::after,.rs-tab::after,.rs-full::after,.a2-more::after,.a2-radar::after,.a2-elsewhere::after{
     content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
     width:100%;height:100%;min-width:44px;min-height:44px}
   /* Everything else that sets an icon beside a word. An .ic is 1em with no margin of its own, so
@@ -1364,43 +1364,22 @@
   .afd-list{margin:0;padding-left:20px}
   .afd-list li{margin:0 0 8px;line-height:1.55;font-size:var(--fs-md)}
   .afd-list li:last-child{margin-bottom:0}
-  /* The footline and the expander share one row, the button first and the credit pushed to the far
-     end — .a2-foot's arrangement, and the border that used to belong to .afd-meta now belongs to
-     the row. Wraps on a narrow card, at which point the credit drops under the button. */
-  .afd-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;
-    margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
-  .afd-meta{font-size:var(--fs-sm);color:var(--muted);margin-left:auto}
-  /* ===== The clamp =====
-     What buys The Pulse its rank under the Bottom Line: four lines of the forecaster's opening,
-     and the rest on request. `.afd-clamped` is written by syncAfdClamp() and ONLY when the text
-     genuinely overflows — a "Read more" over fully visible prose is a lie about there being more,
-     and a short Key Messages on a wide card is exactly the case that fits uncut.
-     A max-height, not -webkit-line-clamp (which .ab-sub uses two lines up): `display:-webkit-box`
-     folds the <p> children into a single box and takes the paragraph breaks the forecaster wrote
-     with them. Written as lines of --fs-md at 1.62 rather than a flat pixel count, so the clamp
-     tracks the type scale — and so the phone override below only has to change the line count. */
-  #afdCard{--afd-clamp:calc(var(--fs-md) * 1.62 * 4)}
-  #afdCard.afd-clamped:not(.open) .afd-body{max-height:var(--afd-clamp);overflow:hidden;
-    /* Fades the TEXT, not a rectangle of card colour over it. The card's own background is a
-       gradient between two variables that both move with the theme, so any opaque scrim painted
-       on top would have to guess at a colour that is right in one theme and visible in the other.
-       A mask has nothing to match. */
-    -webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 30px),transparent);
-            mask-image:linear-gradient(180deg,#000 calc(100% - 30px),transparent)}
-  /* A pill like the rest — geometry, touch target and cursor all come from the groups up top; this
-     declares only what differs. The dashed outline is .a2-more's and .a2-radar's, worn for the same
-     job: "there is more of this where you are standing", as against a link that leaves the page.
-     display:none is the default because syncAfdClamp has not measured yet at first paint, and a
-     button that appears and then vanishes is worse than one that arrives a frame late. */
-  .afd-more{display:none;font-size:var(--fs-xs);font-weight:700;padding:4px 11px;
-    background:transparent;border:1px dashed var(--border);color:var(--accent)}
-  .afd-more:hover{border-color:var(--accent);border-style:solid}
-  #afdCard.afd-clamped .afd-more{display:inline-flex}
-  /* Both words ship in the markup and CSS picks one, as .rs-full does with its two icons: it keeps
-     the label in lockstep with the class that decides everything else, with no JS rewriting text. */
-  #afdCard .afdm-less,#afdCard.open .afdm-more{display:none}
-  #afdCard.open .afdm-less{display:inline}
-  #afdCard.open .a-chev{transform:rotate(180deg)}
+  .afd-meta{font-size:var(--fs-sm);color:var(--muted);margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
+  /* ===== Why there is no clamp here =====
+     This card renders at whatever length the office wrote, and that is deliberate — it was
+     clamped for a while, and the measurement is what removed it. Across the 21 most recent LSX
+     products in the calm-weather layout it runs 151–365px (median 304), which puts the top of
+     #currentCard between 668px and 881px: on a 912px phone the hero is on the first screen in
+     every one of them, clamped or not. The clamp was hiding up to 200px to protect something
+     that was never at risk, and cutting the forecaster off mid-sentence to do it.
+     It was sized, originally, against multi-paragraph Short-Term prose — which extractAFD cannot
+     actually produce (see the note above #afdCard). A guard built for an input that never
+     arrives.
+     The case for re-adding it would have to come from the other direction: this card only sits
+     at rank 3 in CALM weather, which is exactly when the space above the hero is at its minimum
+     — a one-line all-clear and a few pills. The moment a warning makes that space expensive,
+     body.storm has already moved this card below the hero. So the door a clamp would guard is
+     one Storm Mode closes first. */
   /* ===== Responsive overrides (kept last so they win over base rules) ===== */
   @media(max-width:480px){
     /* Was `html,body`. The <body> half silently disabled position:sticky at exactly the width
@@ -1446,19 +1425,6 @@
     .rlink .rname{min-width:0;flex:1 1 60%}
     /* Day-detail 2-col grid → single column so wind/humidity never truncate */
     .dd-grid{grid-template-columns:1fr}
-    /* The Pulse teases in two lines here, not four. It is ranked above the hero band, and this is
-       the width where that rank is paid for out of the temperature: four lines plus the card's own
-       chrome moved the current card's start below a 667px screen. Two lines is still enough to see
-       whether the forecaster is writing about storms or about a quiet pattern, which is the whole
-       job of the card at this rank — the rest is one tap away. */
-    #afdCard{--afd-clamp:calc(var(--fs-md) * 1.62 * 2)}
-    /* At this width the credit and the button cannot share a row, so the footline wraps and the
-       collapsed card pays for a whole extra row of chrome to say something the <h2> directly above
-       it already says — "The Pulse — NWS Forecast Discussion", with the link to the product. What
-       the collapsed state genuinely loses is the section name and the issuance age, and both of
-       those matter to someone READING the discussion, which is the expanded state. So the credit
-       comes back the moment the card opens. */
-    #afdCard.afd-clamped:not(.open) .afd-meta{display:none}
   }
   footer a{color:inherit;text-decoration:underline;text-underline-offset:2px}
 </style>
@@ -1637,24 +1603,27 @@
        context", which mis-filed it twice over — extractAFD reaches for Key Messages, then the
        Synopsis, then the SHORT TERM outlook, all of which are about the next 12–24 hours, not the
        week; and it put the forecaster's read of the day some 2,000px down the page.
-       It is CLAMPED at this rank, and the clamp is the whole reason the rank is safe. How much
-       text arrives is the forecaster's call, not ours: Key Messages is a bullet list with no
-       bound on it, and it grows with the event — which is precisely when this card is at rank 3
-       and being read. Measured against the LSX product issued 2026-07-29T11:36Z, four bullets ran
-       165px collapsed against 276px open on a 390px phone. Unclamped, a heavier day pushes the
-       radar and the temperature off the first screen — the same mistake Storm Mode made when it
-       filed the Bottom Line under a full-width hero band. Collapsed it costs four lines, two on a
-       phone; spending more of the screen than that is then the visitor's own choice.
+       It renders at FULL LENGTH here, which took two attempts to get right. It shipped clamped
+       to a few lines behind a "Read the full discussion" button, on the theory that the card had
+       to be cheap to deserve the rank. Measuring the 21 most recent products said otherwise: in
+       the calm-weather layout the card runs 151–365px and puts #currentCard between 668px and
+       881px, so on a 912px phone the hero is on the first screen either way. The clamp was hiding
+       up to 200px, and cutting the forecaster off mid-sentence, to buy room nothing needed. The
+       reasoning behind that removal is kept in the CSS beside the styles, so it does not come
+       back by default.
+       This rank is CALM-WEATHER ONLY. `body.storm #afdCard` sends the card back under the hero,
+       because a warning makes the alert and the radar live while this card is still whatever the
+       office wrote hours ago — and because measured against a real lead banner it left twelve
+       pixels of radar on an 844px phone. See the Storm Mode block in the CSS. That is also why
+       full length is affordable: the only time this card sits second is the time the space above
+       the hero is cheapest.
        (Worth knowing if you change extractAFD: its Synopsis and Short-Term fallbacks currently
        match NOTHING on this office's products — LSX writes `.SHORT TERM /THROUGH THURSDAY/...`
        and the pattern wants `.SHORT TERM...`. It goes unnoticed because Key Messages was present
        in all 21 recent products sampled, so the first branch always wins. Pre-existing, left
        alone here deliberately: fixing it changes what this card SAYS, which is its own change.
-       If it is ever fixed, the paragraphs that fallback returns make the clamp matter more.)
-       This rank is CALM-WEATHER ONLY. `body.storm #afdCard` sends the card back under the hero,
-       because a warning makes the alert and the radar live while this card is still whatever the
-       office wrote hours ago — and because measured against a real lead banner, even the clamped
-       card left twelve pixels of radar on an 844px phone. See the Storm Mode block in the CSS. -->
+       It is also the input the clamp was originally sized against — paragraphs this card has
+       never actually been handed. Fix that first, then re-measure, before reaching for a clamp.) -->
   <section class="card col-12" id="afdCard">
     <h2>The Pulse — NWS Forecast Discussion
       <a class="link" href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener">Full discussion ↗</a>
@@ -5271,42 +5240,7 @@ function renderAFD(sec, issued){
     inner=paras.map(function(p){return '<p>'+p+'</p>';}).join("");
   }
   var meta=sec.label+" · NWS St. Louis"+(issued?" · issued "+timeAgo(issued):"");
-  // The control shares the footline's row rather than taking one of its own — .a2-foot's trick,
-  // for the same reason: two stacked rows of chrome under a four-line teaser cost more height
-  // than the teaser does, and this card is ranked above the hero band on a phone.
-  el.innerHTML='<div class="afd-body" id="afdBody">'+inner+'</div>'
-    +'<div class="afd-foot"><button type="button" class="afd-more" id="afdMore"'
-    +' aria-expanded="false" aria-controls="afdBody"'
-    +'><span class="afdm-more">Read the full discussion</span>'
-    +'<span class="afdm-less">Show less</span><span class="a-chev">▾</span></button>'
-    +'<div class="afd-meta">'+meta+'</div></div>';
-  syncAfdClamp();
-}
-/* Does the collapsed card actually hide anything? That is a question about rendered text, not about
-   the source: the same four-bullet Key Messages that fits uncut across a desktop card needs the
-   control at 390px, and how many bullets the forecaster writes is not ours to predict. So measure
-   it, and let the answer decide whether the control exists at all.
-   Measured with .open forced off and the clamp forced on, then the previous state is restored — an
-   expanded card has `max-height:none`, so scrollHeight would equal clientHeight and every card on
-   the page would measure as short enough to need no button.
-   Bails to no-clamp whenever the pieces aren't both there: renderAFD's failure path writes a single
-   `.empty` line with no body and no button, and a snapshot from before this markup existed restores
-   a body with no button — clamping either would hide text behind a control that isn't there. */
-function syncAfdClamp(){
-  var card=document.getElementById("afdCard"); if(!card) return;
-  var body=document.getElementById("afdBody"), btn=document.getElementById("afdMore");
-  if(!body||!btn){ card.classList.remove("afd-clamped","open"); return; }
-  var wasOpen=card.classList.contains("open");
-  card.classList.remove("open");
-  card.classList.add("afd-clamped");
-  /* The slack is a LINE, not a couple of pixels. A two-bullet Key Messages block measured six
-     pixels past the phone's two-line clamp — enough to trip a bare >0 test, so the card offered a
-     control that revealed six pixels. Nothing under about a line is worth a button; dropping the
-     clamp for those also drops the max-height, so the remainder simply shows. */
-  var lh=parseFloat(getComputedStyle(body).lineHeight)||18;
-  var over=body.scrollHeight-body.clientHeight>lh*0.75;
-  card.classList.toggle("afd-clamped",over);
-  setOpen(card,btn,over&&wasOpen);
+  el.innerHTML='<div class="afd-body">'+inner+'</div><div class="afd-meta">'+meta+'</div>';
 }
 function loadAFD(){
   return getJSON(API+"/products/types/AFD/locations/LSX",LD).then(function(list){
@@ -6197,10 +6131,15 @@ function renderTheCall(){
    for a returning visitor beats a deployment's worth of visibly wrong first paints. */
 // v3: emoji became <svg class="ic"> and the alert card's severity classes became one lv-* ramp.
 // A v2 snapshot is markup that today's stylesheet has no rules for, so it must not be restored.
-// v4: The Pulse moved above the hero band and gained its clamp, so #afd's markup now carries the
-// expander that reveals the rest. A v3 snapshot is that card's body with no way to open it.
-var SNAP_KEY="lsxSnap_v4", snapRestored=false, NET_OK=false;
-try{ localStorage.removeItem("lsxSnap_v1"); localStorage.removeItem("lsxSnap_v3"); }catch(e){}   // don't let dead snapshots crowd the live one
+// v4: The Pulse moved above the hero band and gained its clamp, so #afd's markup carried an
+// expander button. v5: the clamp came back out (measurement said it was guarding nothing — see
+// the note in the CSS), so #afd is plain body-and-credit again. A v4 snapshot still holds that
+// button, and nothing styles it any more: it would restore wearing the default 44px button skin
+// with BOTH of its labels showing, reading "Read the full discussionShow less". Exactly the class
+// of visibly-wrong first paint this version gate exists for, and it only reached real devices
+// because the preview deploys were opened on one.
+var SNAP_KEY="lsxSnap_v5", snapRestored=false, NET_OK=false;
+try{ localStorage.removeItem("lsxSnap_v1"); localStorage.removeItem("lsxSnap_v3"); localStorage.removeItem("lsxSnap_v4"); }catch(e){}   // don't let dead snapshots crowd the live one
 var SNAP_PARTS=[
   {id:"afd",      ttl:6*3600000},
   {id:"alerts",   ttl:15*60000},     // safety-critical: short leash
@@ -6301,10 +6240,6 @@ function restoreSnapshot(){
   var aq=document.getElementById("aqi"), aqc=document.getElementById("aqiCard");
   if(aqc) aqc.classList.toggle("show", !!(aq&&aq.querySelector("[data-aqibad]")));
   if(snap.wx) document.body.setAttribute("data-wx",snap.wx);
-  // Restored markup is measured like freshly rendered markup: the clamp is a fact about how this
-  // text wraps in this viewport, and it has to be re-established before the first paint rather
-  // than waiting for loadAFD to come back over the network.
-  syncAfdClamp();
   snapRestored=true;
   showSnapBar(snap.t);
   if(typeof scheduleMasonry==="function") scheduleMasonry();
@@ -6471,19 +6406,6 @@ document.getElementById("alerts").addEventListener("click",function(e){
     if(typeof scheduleMasonry==="function") scheduleMasonry();
   }
 });
-/* Delegated on #afd rather than bound to #afdMore: renderAFD replaces that whole subtree on every
-   refresh, and a listener on the button would be thrown away with the first one. No scheduleMasonry
-   here — The Pulse is a direct grid child above the masonry band, so its height moves the band down
-   the page without changing which column any masonry card packs into. */
-document.getElementById("afd").addEventListener("click",function(e){
-  var b=e.target.closest(".afd-more");
-  if(b) toggleOpen(document.getElementById("afdCard"),b);
-});
-/* Width decides how the prose wraps, so it also decides whether there is anything left to reveal:
-   a body that needs the button at 390px may fit uncut across a desktop card. Same debounce as the
-   hourly chart's own resize handler. */
-var afdRT;
-window.addEventListener("resize",function(){ clearTimeout(afdRT); afdRT=setTimeout(syncAfdClamp,150); });
 tick();
 refreshAll();
 

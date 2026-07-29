@@ -181,53 +181,45 @@ advice — but that filed the plain-English read of the warning *under* a full-w
 a scroll away on a phone in exactly the conditions someone checks this page one-handed. The radar
 still leads the hero; the sentence explaining it just arrives first.
 
-**The Pulse rides directly behind it in calm weather, and the clamp is what makes that affordable.**
-`#afdCard` is the same kind of card as the Bottom Line — one verdict computed by this page, one
-written by a human at NWS St. Louis — so the two reason together above the numbers. It used to sit below the
+**The Pulse rides directly behind it in calm weather, at full length.** `#afdCard` is the same kind
+of card as the Bottom Line — one verdict computed by this page, one written by a human at NWS
+St. Louis — so the two reason together above the numbers. It used to sit below the
 hero under "the week ahead & deeper context", which mis-filed it twice: `extractAFD` reaches for
 Key Messages, then the Synopsis, then the **Short-Term Outlook**, all of which describe the next
 12–24 hours rather than the week, and the rank buried the forecaster's read of the day some
-2,000px down. How much text arrives is the forecaster's call, not ours — Key Messages is a bullet
-list with no bound on it, and it grows with the event, which is exactly when this card is at rank 3
-and being read — so the card is collapsed to four lines of `--fs-md` (two on a phone) with the rest
-behind "Read the full discussion". Measured against the LSX product issued 2026-07-29T11:36Z, four
-bullets ran 165px collapsed against 276px open at 390px wide.
+2,000px down.
+
+**There is deliberately no clamp, and that took two attempts.** The card first shipped collapsed to
+a few lines behind a "Read the full discussion" button, on the theory that it had to be cheap to
+deserve the rank. Measuring the 21 most recent LSX products said otherwise: in the calm-weather
+layout the card runs 151–365px (median 304), putting the top of `#currentCard` between 668px and
+881px — so on a 912px phone the hero is on the first screen in every one of them, clamped or not.
+The clamp was hiding up to 200px, and cutting the forecaster off mid-sentence, to buy room nothing
+needed. It had been sized against multi-paragraph Short-Term prose, which is an input this card has
+never actually been handed (see below). Full length is affordable for a structural reason too: the
+only time this card sits second is calm weather, which is exactly when the space above the hero is
+cheapest — a one-line all-clear and a few pills.
 
 One thing to know before touching `extractAFD`: its Synopsis and Short-Term fallbacks currently
 match **nothing** on this office's products. LSX writes `.SHORT TERM /THROUGH THURSDAY/...` and the
 pattern wants `.SHORT TERM...`, so the qualifier between the name and the dots defeats it. It goes
 unnoticed because Key Messages was present in all 21 recent products sampled, so the first branch
 always wins. That is pre-existing and deliberately left alone — fixing it changes what the card
-*says*, which deserves its own review — but it means the clamp's real workload today is Key
-Messages length, and that fixing it would make the clamp matter more, not less.
-Unclamped it would push the radar and the temperature off a phone's first screen on precisely the
-days the discussion is worth reading, which is the mistake the paragraph above describes Storm Mode
-making with the Bottom Line.
+*says*, which deserves its own review. It is also the input the clamp was built for, so if it is
+ever fixed, re-measure before reaching for one again.
 
 **That rank is calm-weather only — The Pulse is the one card here whose rank is conditional**, and
 the contrast with the Bottom Line is deliberate. `body.storm #afdCard{order:-2}` puts it back under
 the hero band, for two reasons that agree. Measured: Storm Mode is exactly when everything above the
 hero is already tall — a glowing lead banner in place of the one-line all-clear, and a Bottom Line
 full of pills — and even clamped to two lines The Pulse left the radar at 832px on an 844px phone,
-twelve visible pixels of map during a Tornado Warning. On the merits: an AFD is a scheduled prose
+twelve visible pixels of map during a Tornado Warning (and it is no longer clamped at all). On the
+merits: an AFD is a scheduled prose
 product issued a few times a day, so during a fast-moving warning it was very likely written
 *before* the event being read about. The warning is live and the radar is live; the discussion is
 the only thing in that band that isn't. The Bottom Line can hold its rank through all of this
 because it is a pill row computed from live data, one or two lines that stay true minute to minute
 — paragraphs of periodically issued prose are a different object and get a different rule.
-
-`syncAfdClamp()` decides whether the control exists at all by *measuring*, because whether anything
-is hidden depends on the section NWS sent and on how it wraps at this width — a "Read more" over
-fully visible prose is a lie about there being more. It measures with `.open` forced off and the
-clamp forced on (an expanded card has `max-height:none`, so every card would otherwise measure as
-short enough to need no button) and runs from three places: `renderAFD`, `restoreSnapshot`, and a
-debounced `resize`. It bails to no-clamp when the body and the button aren't both present, which
-covers `renderAFD`'s failure path and any snapshot predating this markup. The clamp is a
-`max-height`, not `-webkit-line-clamp` as `.ab-sub` uses: `display:-webkit-box` folds the `<p>`
-children into one box and takes the forecaster's paragraph breaks with them. The fade is a
-`mask-image` rather than a scrim, since the card's background is a gradient between two
-theme-dependent variables and an opaque overlay would have to guess a colour that is right in only
-one theme.
 
 `.railhead` labels name each band and hide under `body.storm`, where the grid reorders for urgency
 and a band label would lie about what follows it. Only *direct* grid children get an `order`, so
