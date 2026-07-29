@@ -173,7 +173,7 @@
      that sit side by side in the same card did not agree on their own geometry. Each class below
      still exists (JS builds them by name, and restored snapshots carry those names), but now it
      only declares what genuinely differs: colour, weight, size. */
-  .a2-chip,.a2-more,.a2-radar,.a2-me,.a2-zc,.call-pill,.h24-pill,.hz-chip,
+  .a2-chip,.a2-more,.a2-radar,.a2-me,.a2-zc,.a2-where,.call-pill,.h24-pill,.hz-chip,
   .dr-pill,.cpc-pill,.rfcat,.qpfchip,.rs-full,.stn-tools button,.quicklinks a,.dr-none{
     display:inline-flex;align-items:center;gap:6px;border-radius:var(--r-pill);
     font-family:inherit;line-height:1.35;text-align:left}
@@ -195,8 +195,8 @@
      Pointer-events are inherited, so it counts as part of its own control for hit-testing while
      being invisible to everything else. Where it overhangs, it overhangs county chips and heading
      text — inert things with no target of their own to lose. */
-  .card h2 a,.rs-tab,.rs-full,.a2-more,.a2-radar,.a2-elsewhere{position:relative}
-  .card h2 a::after,.rs-tab::after,.rs-full::after,.a2-more::after,.a2-radar::after,.a2-elsewhere::after{
+  .card h2 a,.rs-tab,.rs-full,.a2-more,.a2-radar{position:relative}
+  .card h2 a::after,.rs-tab::after,.rs-full::after,.a2-more::after,.a2-radar::after{
     content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
     width:100%;height:100%;min-width:44px;min-height:44px}
   /* Everything else that sets an icon beside a word. An .ic is 1em with no margin of its own, so
@@ -469,7 +469,7 @@
   .ab-sub{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
     margin-top:3px;font-size:var(--fs-sm);font-weight:400;color:var(--text);line-height:1.45}
   .ab-head .a-chev{color:var(--muted);margin-top:3px;flex:0 0 auto}
-  .ab-head .a2-me,.ab-head .a2-zc{flex:0 0 auto;margin-top:2px}
+  .ab-head .a2-me,.ab-head .a2-zc,.ab-head .a2-where{flex:0 0 auto;margin-top:2px}
   .ab-cd{display:flex;justify-content:flex-end;margin-bottom:3px}
   .alert .ev{font-weight:700;font-size:var(--fs-lg);display:flex;justify-content:space-between;gap:10px;align-items:baseline}
   .alert .area{font-size:var(--fs-sm);color:var(--muted);margin-top:4px;line-height:1.4}
@@ -513,21 +513,43 @@
   .a2-ph.ph-watch .phd{background:var(--warn)}
   .a2-ph.ph-advisory .phd{background:var(--accent)}
   .a2-ph .phn{font-weight:700}
-  .a2-ph .php{display:inline-flex;color:var(--muted);cursor:help}
   .a2-ph .pht{margin-left:auto;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
   /* a phase's own hazard line in the drawer, when the lead's text doesn't already carry it */
   .alert-more p.a2-phwhat{margin-top:9px}
-  /* The fold over alerts elsewhere in the county warning area. A quiet full-width row, not a
-     card: it is a table of contents entry, and it must not compete with the alerts above it,
-     which are the ones that cover this location. No opacity tricks on the revealed cards —
-     dimmed text is how the contrast work gets undone. */
-  .a2-elsewhere{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;margin-top:2px;
-    font-size:var(--fs-sm);font-weight:700;color:var(--muted);background:transparent;
-    border:1px dashed var(--border);padding:8px 12px;border-radius:var(--r-md);cursor:pointer;font-family:inherit}
-  .a2-elsewhere:hover{color:var(--text);border-color:var(--accent);border-style:solid}
-  #alertsElse{display:none;margin-top:8px}
-  #alerts.else-open #alertsElse{display:block}
-  #alerts.else-open .a2-elsewhere .a-chev{transform:rotate(180deg)}
+
+  /* ===== Elsewhere in the office's area =====
+     These used to live behind a collapsed disclosure, so the regional picture cost a tap and a
+     guess. They are on the page now, one line each, under an eyebrow that carries the scope for
+     all of them. The rows are the SAME .alert banner as the local cards — this section only takes
+     things away (the subline, some padding, some weight) and the head toggle puts them back — so
+     there is never a second card renderer to keep in step with the first.
+
+     What it must not do is out-shout the alerts above it, which are the ones over the reader. The
+     separation is structural rather than tonal: no tint behind the row, a thinner rail, smaller
+     type. Deliberately NOT opacity — dimmed text on a tinted rail is how the contrast work gets
+     undone, and these are still watches and warnings for somebody. */
+  .a2-elsehed{display:flex;align-items:center;gap:8px;margin:16px 0 8px;
+    font-size:var(--fs-2xs);font-weight:800;text-transform:uppercase;letter-spacing:var(--ls-eyebrow);
+    color:var(--muted)}
+  .a2-elsehed::after{content:"";flex:1 1 auto;height:1px;background:var(--border)}
+  .a2-elsen{order:1;font-size:var(--fs-2xs);font-weight:800;color:var(--muted);
+    background:var(--chip);border-radius:var(--r-pill);padding:1px 8px;letter-spacing:0}
+  /* Two IDs, and not for decoration: the level ramp near the bottom of this sheet is itself
+     ID-scoped (`#alerts .alert`) to beat the base rule, so a one-ID selector here ties it on
+     specificity and loses on source order — the rows kept the full 8% tint and the 45% border
+     while every other declaration below landed. Measured, not assumed. */
+  #alerts #alertsElse .alert{padding:9px 13px;margin-bottom:5px;border-left-width:4px;
+    background:transparent;border-color:color-mix(in srgb,var(--lv) 30%,transparent);
+    border-left-color:var(--lv);box-shadow:none}
+  #alertsElse .alert .ab-title{font-size:var(--fs-md);font-weight:700}
+  #alertsElse .alert .a2-ico{font-size:var(--fs-lg)}
+  /* The instruction line is the one thing a compact row drops; opening the row is what asks for it. */
+  #alertsElse .alert .ab-sub{display:none}
+  #alertsElse .alert.open .ab-sub{display:-webkit-box}
+  /* The counties this one is actually for — the fact a one-line row is missing, in the slot the
+     "Elsewhere in LSX" badge used to spend on restating the heading above it. */
+  .a2-where{font-size:var(--fs-xs);font-weight:600;padding:3px 9px;background:var(--chip);
+    color:var(--muted);white-space:nowrap;cursor:help}
   /* county chips, with in-place overflow */
   .a2-areas{display:flex;flex-wrap:wrap;align-items:baseline;gap:5px;margin-top:10px}
   /* Names a row that was previously just chips — a stranger could not tell whether "Warren" was a
@@ -2795,9 +2817,10 @@ function loadWarnPolygons(feats){
       onEachFeature:function(f,layer){
         var ev=(f.properties&&f.properties.event)||"";
         layer.bindTooltip(esc(ev)+" — tap for details",{className:"stn-tip",direction:"top",sticky:true});
+        var scope=alertCoversMe(f)?"here":"away";   // which of the event's two possible cards this is
         layer.on("click",function(e){
           if(e.originalEvent) e.originalEvent.stopPropagation();
-          focusAlertCard(ev);
+          focusAlertCard(ev,scope);
         });
       }
     }).addTo(rvMap);
@@ -2810,29 +2833,28 @@ function loadRadar(){  // recenter on location change
 }
 
 /* ===== Two-way linking between the radar polygons and the alert cards =====
-   The list groups by event TYPE (all "Severe Thunderstorm Warning" segments share one card),
-   while the map draws one polygon per segment — so a card maps to N polygons and every polygon
-   maps back to exactly one card. Both directions resolve through the event name — and a FOLDED
-   card (several products of one hazard family) lists every name it answers to in data-evs,
-   "|"-separated, so a polygon click still finds it and its radar button still flashes every
-   polygon it holds. */
-function findAlertCard(ev){
-  var cards=document.querySelectorAll("#alerts .alert");
+   The list groups by event type AND coverage (all "Severe Thunderstorm Warning" segments that
+   cover this location share one card; the ones that don't share another), while the map draws one
+   polygon per segment — so a card maps to N polygons and every polygon maps back to exactly one
+   card. Both directions resolve through the event name PLUS the scope, because the name alone can
+   now name two cards; a FOLDED card (several products of one hazard family) lists every name it
+   answers to in data-evs, "|"-separated. Scope is a preference rather than a filter: a card is
+   better than no card if a coverage test somehow disagrees between the two calls. */
+function findAlertCard(ev,scope){
+  var cards=document.querySelectorAll("#alerts .alert"), any=null;
   for(var i=0;i<cards.length;i++){
     // data-aid was written HTML-escaped; getAttribute hands it back decoded, so compare raw
-    if(cards[i].getAttribute("data-aid")===ev) return cards[i];
-    // a folded card answers to any of the products it holds ("|" can't appear in an event name)
     var evs=cards[i].getAttribute("data-evs");
-    if(evs&&evs.split("|").indexOf(ev)>=0) return cards[i];
+    var named=cards[i].getAttribute("data-aid")===ev || (evs&&evs.split("|").indexOf(ev)>=0);
+    if(!named) continue;
+    if(!scope||cards[i].getAttribute("data-scope")===scope) return cards[i];
+    if(!any) any=cards[i];
   }
-  return null;
+  return any;
 }
-function focusAlertCard(ev){
-  var card=findAlertCard(ev);
+function focusAlertCard(ev,scope){
+  var card=findAlertCard(ev,scope);
   if(!card) return;
-  // A polygon tap can land on a card behind the "elsewhere" fold — open the fold, or the page
-  // would smooth-scroll to a display:none element, which is to say nowhere.
-  if(card.closest("#alertsElse")&&!elseOpen){ elseOpen=true; syncElsewhere(); }
   var hint=card.querySelector(".ab-head");   // the banner head owns aria-expanded
   if(hint) setOpen(card,hint,true);
   if(card.querySelector(".a2-more")) card.classList.add("areas-all");
@@ -2844,10 +2866,17 @@ function focusAlertCard(ev){
   setTimeout(function(){ card.classList.remove("flash"); },2200);
 }
 var flashLayer=null, flashTimer=null;
-function showAlertOnRadar(ev){
+function showAlertOnRadar(ev,scope){
   if(!rvMap) return;
   var evs=String(ev||"").split("|");   // a folded card sends every product it holds
-  var feats=lastWarnFeats.filter(function(f){ return isMappedAlert(f) && evs.indexOf((f.properties&&f.properties.event)||"")>=0; });
+  /* Scoped to the card that asked. Without this, "Show on radar" on the Severe Thunderstorm Warning
+     over this location would fit the map to every severe thunderstorm in the office's area — zooming
+     the reader out and away from the one polygon they tapped the button to look at. */
+  var feats=lastWarnFeats.filter(function(f){
+    if(!isMappedAlert(f) || evs.indexOf((f.properties&&f.properties.event)||"")<0) return false;
+    if(!scope) return true;
+    return (scope==="here")===!!alertCoversMe(f);
+  });
   if(!feats.length) return;
   if(flashTimer){ clearTimeout(flashTimer); flashTimer=null; }
   if(flashLayer){ rvMap.removeLayer(flashLayer); flashLayer=null; }
@@ -3097,15 +3126,31 @@ function loadCurrent(){
 }
 
 /* ============ ALERTS + STORM MODE (Fix 2 + Fix 4) ============ */
-/* Whether the "N alerts elsewhere in the LSX area" fold is open. Session-scoped and survives the
-   60s refresh (the list re-renders around it), but deliberately not persisted: wanting the wide
-   view is a moment, not a setting. */
-var elseOpen=false;
-function syncElsewhere(){
-  var el=document.getElementById("alerts"); if(!el) return;
-  el.classList.toggle("else-open",elseOpen);
-  var b=el.querySelector(".a2-elsewhere");
-  if(b) b.setAttribute("aria-expanded",elseOpen?"true":"false");
+/* CAP's own severity field, ranked. It is the LAST tiebreaker in the card order below and the only
+   thing that decides which segment of a group speaks for it — never the primary sort, because it
+   disagrees with the event name often enough that alertLevel() exists to arbitrate. */
+var ALERT_SEV_RANK={Extreme:0,Severe:1,Moderate:2,Minor:3,Unknown:4};
+/* ===== The card order: what is over YOU leads =====
+   Level used to be the primary key, which sounds right and reads wrong. alertLevel() promotes every
+   Tornado Warning to `emergency`, so a tornado two counties away sorted above a Severe Thunderstorm
+   Warning genuinely over the reader's roof — and took the lead banner's glow with it. The reader is
+   standing in one place; the first thing they see should be about that place.
+
+   So coverage outranks level, with exactly one exception above it: a real emergency leads from
+   anywhere. Storm-based warnings are polygons drawn around where a storm is GOING and are re-issued
+   as it moves, and a page that files an active tornado emergency below your heat advisory because
+   the polygon hasn't reached your house yet is not a weather page. Within the emergencies, yours
+   still comes first.
+
+   Hoisted out of loadAlerts() so tools/logic-tests.js can lift it: this is the rule the whole
+   section exists to express, and it should be asserted rather than eyeballed. */
+function cardCmp(a,b){
+  var ae=(a.lv.k==="emergency")?0:1, be=(b.lv.k==="emergency")?0:1;
+  if(ae!==be) return ae-be;                  // an emergency leads, wherever it is
+  if(!!a.hit!==!!b.hit) return a.hit?-1:1;   // then everything over YOU, whatever its level
+  if(a.lv.rank!==b.lv.rank) return a.lv.rank-b.lv.rank;
+  var ra=ALERT_SEV_RANK[a.sev], rb=ALERT_SEV_RANK[b.sev];
+  return (ra==null?5:ra)-(rb==null?5:rb);    // then by CAP severity within the level
 }
 function loadAlerts(){
   var fresh=locGuard();
@@ -3124,39 +3169,31 @@ function loadAlerts(){
       return s.indexOf("st louis")>=0||s.indexOf("saint louis")>=0; // punctuation/spelling tolerant
     }
     var feats=data.features.filter(isLSX);
-    var rank={Extreme:0,Severe:1,Moderate:2,Minor:3,Unknown:4};
-    feats.sort(function(a,b){var ra=rank[a.properties.severity],rb=rank[b.properties.severity];return (ra==null?5:ra)-(rb==null?5:rb);});
+    feats.sort(function(a,b){
+      var ra=ALERT_SEV_RANK[a.properties.severity],rb=ALERT_SEV_RANK[b.properties.severity];
+      return (ra==null?5:ra)-(rb==null?5:rb);
+    });
     /* ---- the list is for WHERE YOU ARE ----
-       The office issues for a 40-plus-county area; the reader lives at one point in it. Alerts
-       that cover this location show as cards; the rest fold behind one line. Two exceptions,
-       both deliberate:
-         · an EMERGENCY always shows, wherever it is. Storm-based warnings are polygons drawn
-           around where a storm is GOING and are re-issued as it moves — a page that hides an
+       The office issues for a 40-plus-county area; the reader lives at one point in it. Alerts that
+       cover this location lead the page as full banners; the rest sit below in a compact list —
+       present, readable, and plainly not about here. Two exceptions, both deliberate:
+         · an EMERGENCY always leads, wherever it is. Storm-based warnings are polygons drawn
+           around where a storm is GOING and are re-issued as it moves — a page that demotes an
            active tornado emergency until the polygon touches your house is not a weather page.
          · zones unresolved (ensureUserZones failed) means coverage is UNKNOWABLE, and unknowable
-           must fail open. Filtering on a failed lookup would let a network hiccup silently hide
-           a warning that does cover you; a cluttered list is a smaller failure than that. */
+           must fail open. Ranking on a failed lookup would let a network hiccup quietly file a
+           warning that does cover you under "elsewhere", which is worse than one flat list. */
     var localMode=!!(userZones.county||userZones.forecast||userZones.fire);
     var place=(current.name||"").replace(" (home)","");
     var scope=document.getElementById("alertsScope");
     if(scope) scope.textContent=localMode?place:"LSX";
-    var warn=null;
-    for(var i=0;i<feats.length;i++){
-      var wp=feats[i].properties;
-      if((wp.event||"").toLowerCase().indexOf("warning")<0) continue;
-      // Storm Mode follows the card list: a warning themes the page only if it covers this
-      // location or is an emergency. A Severe Thunderstorm Warning three counties east should
-      // not turn the page red for someone it will never touch.
-      if(localMode&&!alertCoversMe(feats[i])&&alertLevel(wp).k!=="emergency") continue;
-      warn=wp; break;
-    }
-    setStormMode(warn);
     if(typeof tickCountdowns==="function") setTimeout(tickCountdowns,0);   // fill the new countdowns immediately
     if(feats.length===0){
+      setStormMode(null);
       /* The scope half earns its place: "no active alerts" without it invites the reader's next
          question, which is "no alerts WHERE — my street, or the region?". This page treats that
-         distinction as real enough to build a whole fold around it ("N alerts elsewhere in the
-         LSX area"), so the all-clear should answer it too. feats is filtered by isLSX, so an
+         distinction as real enough to give "elsewhere in the St. Louis area" its own list below
+         the local banners, so the all-clear should answer it too. feats is filtered by isLSX, so an
          empty list means nothing is out anywhere the office covers — the strong claim, and the
          reassuring one.
          It used to say "NWS St. Louis county warning area." — the office's own term for that
@@ -3175,21 +3212,38 @@ function loadAlerts(){
       return;
     }
     card.classList.remove("calm");
-    // Preserve which alerts the user had expanded across the 60s refresh (keyed by event type)
+    /* Preserve which alerts the user had expanded across the 60s refresh. Keyed by event AND scope,
+       because one event name can now own two cards — the local one and the one elsewhere — and a
+       bare event key would open and close them as a pair. */
     var openIds={};
-    el.querySelectorAll(".alert.open").forEach(function(a){ if(a.dataset.aid) openIds[a.dataset.aid]=1; });
+    el.querySelectorAll(".alert.open").forEach(function(a){
+      if(a.dataset.aid) openIds[a.dataset.aid+"|"+(a.dataset.scope||"")]=1;
+    });
 
-    // Consolidate: NWS issues the same event as separate records per zone group — group them
+    /* ---- one card per hazard PER PLACE ----
+       NWS issues the same event as separate records per zone group, so the segments have to be
+       consolidated or the list reads as a dozen copies of one storm. Grouping on the event name
+       alone did that too well: a Severe Thunderstorm Warning over this location and a different one
+       three counties east arrived as ONE card, flagged as covering you, wearing the union of both
+       county lists. The local storm was then described with geography that wasn't its own, and the
+       distant one had no existence in the list at all — the exact confusion the local/elsewhere
+       split exists to prevent. So the key is event + coverage: the same hazard can hold a card here
+       and a card elsewhere, and neither speaks for the other.
+       Only when localMode holds. With zones unresolved there is no elsewhere list to explain why
+       one event produced two cards, and the degraded mode's whole promise is one flat list — so the
+       split collapses back to grouping by name, exactly as it was. */
     var groups={};
     feats.forEach(function(f){
       var ev=f.properties.event||"Alert";
-      (groups[ev]=groups[ev]||[]).push(f);
+      var here=localMode&&!!alertCoversMe(f);
+      var key=ev+"\u0000"+(here?"here":"away");   // NUL can't appear in an event name
+      (groups[key]=groups[key]||{ev:ev,here:here,segs:[]}).segs.push(f);
     });
-    var glist=Object.keys(groups).map(function(ev){
-      var segs=groups[ev];
+    var glist=Object.keys(groups).map(function(key){
+      var grp=groups[key], ev=grp.ev, segs=grp.segs;
       var best=segs[0];
       segs.forEach(function(f){
-        var rb=rank[f.properties.severity], ra=rank[best.properties.severity];
+        var rb=ALERT_SEV_RANK[f.properties.severity], ra=ALERT_SEV_RANK[best.properties.severity];
         if((rb==null?5:rb)<(ra==null?5:ra)) best=f;
       });
       var latest=0, earliest=0, counties=[];
@@ -3200,22 +3254,21 @@ function loadAlerts(){
         if(s&&(!earliest||s<earliest)) earliest=s;
         (p2.areaDesc||"").split(";").forEach(function(c){ c=c.trim(); if(c&&counties.indexOf(c)<0) counties.push(c); });
       });
-      // does any segment cover us? keep the STRONGEST evidence (polygon beats county beats zone)
+      /* WHICH kind of match, keeping the strongest evidence (polygon beats county beats zone) — the
+         badge states exactly what it can support. In local mode every segment of a `here` group
+         covers us by construction, so this only asks how, and an `away` group skips the ray-casts
+         entirely. In the degraded flat mode nothing was split, so every group still has to ask:
+         a polygon test needs no zones, and that badge is the one coverage claim still available. */
       var hit=false;
-      segs.forEach(function(f){
+      if(!localMode||grp.here) segs.forEach(function(f){
         var h=alertCoversMe(f);
         if(h&&(!hit||HIT_RANK[h]<HIT_RANK[hit])) hit=h;
       });
-      return {ev:ev,segs:segs,best:best,sev:best.properties.severity,lv:alertLevel(best.properties),
+      return {ev:ev,here:grp.here,segs:segs,best:best,sev:best.properties.severity,
+              lv:alertLevel(best.properties),
               latest:latest,earliest:earliest,counties:counties,hit:hit,
               mapped:segs.some(isMappedAlert)};   // only offer "show on radar" if it IS on the radar
     });
-    function cardCmp(a,b){
-      if(a.lv.rank!==b.lv.rank) return a.lv.rank-b.lv.rank;   // emergencies, then warnings, then watches
-      if(!!a.hit!==!!b.hit) return a.hit?-1:1;                // the one over YOUR roof leads its level
-      var ra=rank[a.sev],rb=rank[b.sev];
-      return (ra==null?5:ra)-(rb==null?5:rb);                 // then by CAP severity within the level
-    }
     glist.sort(cardCmp);
 
     /* ---- one card per hazard, not one per NWS product ----
@@ -3226,12 +3279,16 @@ function loadAlerts(){
        phases on it. Folding is per-family opt-in (FAMILY_CFG.merge), and an emergency or a
        statement never folds in either direction — a Tornado Warning must not be a line item
        inside anything, and a Special Weather Statement is not a tier of anything. The list is
-       already sorted, so the first product seen of a family IS its highest tier. */
+       already sorted, so the first product seen of a family IS its highest tier.
+       Keyed by family AND coverage, for the reason the groups above are: an Extreme Heat Warning
+       over this location and a Heat Advisory two counties away are not one hazard the reader can
+       act on as a unit, and folding them would hand the local card the distant one's counties. */
     var byFam={}, folded=[];
     glist.forEach(function(g){
       var fam=eventFamily(g.ev), cfg=FAMILY_CFG[fam];
       if(!cfg||!cfg.merge||g.lv.k==="emergency"||g.lv.k==="statement"){ folded.push(g); return; }
-      var host=byFam[fam];
+      var famKey=fam+"|"+(g.here?"here":"away");
+      var host=byFam[famKey];
       if(!host){
         /* The host is its own first phase — but the fold below mutates the host's counties, segs
            and window into the UNION, so the phase row snapshots the host's own facts first.
@@ -3239,7 +3296,7 @@ function loadAlerts(){
            concat replaces the reference rather than growing it.) */
         g.phases=[{ev:g.ev,lv:g.lv,best:g.best,earliest:g.earliest,latest:g.latest,
                    counties:g.counties.slice(),segs:g.segs,hit:g.hit}];
-        byFam[fam]=g; folded.push(g); return;
+        byFam[famKey]=g; folded.push(g); return;
       }
       host.phases.push(g);
       host.segs=host.segs.concat(g.segs);
@@ -3249,18 +3306,38 @@ function loadAlerts(){
       if(g.hit&&(!host.hit||HIT_RANK[g.hit]<HIT_RANK[host.hit])) host.hit=g.hit;
       host.mapped=host.mapped||g.mapped;
     });
+    /* No re-sort: folding only ever REMOVES entries, so what survives is still in sorted order, and
+       a fold can no longer change a sort key. It used to — absorbing a phase could add "covers you"
+       — but phases now share their host's coverage by construction, so there is nothing left to
+       discover here. */
     glist=folded;
-    glist.sort(cardCmp);   // absorbing a phase can add "covers you", and that is a sort key
 
-    // Which cards are ELSEWHERE: don't cover this location and aren't emergencies. A folded card
-    // counts as covering if ANY of its phases does — it is one hazard, and part of it is yours.
-    glist.forEach(function(g){ g.away=localMode&&!g.hit&&g.lv.k!=="emergency"; });
+    // Which cards are ELSEWHERE: don't cover this location and aren't emergencies. With zones
+    // unresolved (localMode false) nothing is filed away — see the fail-open note above.
+    glist.forEach(function(g){ g.away=localMode&&!g.here&&g.lv.k!=="emergency"; });
     var mineN=0, awayN=0;
     glist.forEach(function(g){ if(g.away) awayN++; else mineN++; });
 
+    /* ---- Storm Mode follows the card list, by construction ----
+       This used to walk the raw feature list in CAP-severity order and test for the word "warning",
+       which is a second severity opinion in a page whose whole alert design is that there is only
+       one (see alertLevel). The two could disagree — a Tornado Warning is promoted to `emergency`
+       by the ramp but sorts merely Severe if the office tagged it that way — and the page would
+       then theme itself for one warning while a different one led the list. Reading the sorted
+       glist instead means the colour, the primed card and the lead banner are the same alert
+       because they cannot be anything else. `away` is already computed, so the old "covers me or is
+       an emergency" test comes along with it. */
+    var warn=null;
+    for(var i=0;i<glist.length;i++){
+      if(glist[i].away) continue;
+      if(glist[i].lv.rank>LEVELS.warning.rank) continue;   // emergencies and warnings only
+      warn=(glist[i].best&&glist[i].best.properties)||null; break;
+    }
+    setStormMode(warn);
+
     /* No summary chips: each banner names its own event in its own colour, which is everything
-       the chips used to say. The lead banner — the first card that is actually YOURS, not a
-       hidden one — carries the storm glow, since the section around it no longer has a box. */
+       the chips used to say. The lead banner — the first card that is actually YOURS, not one from
+       the elsewhere list — carries the storm glow, since the section around it no longer has a box. */
     var leadIdx=0; while(leadIdx<glist.length&&glist[leadIdx].away) leadIdx++;
 
     var cardHTMLs=glist.map(function(g,gi){
@@ -3286,17 +3363,16 @@ function loadAlerts(){
          The bar above spans the whole hazard, earliest onset to last end; these rows say which
          product owns which part of it. The tier dot restates each phase's own level because the
          card wears only the LEAD's colour — without it a Heat Advisory row under a warning-tinted
-         card borrows severity it doesn't have. A per-phase pin appears only when the products
-         DISAGREE about covering you; when they all do, the card's badge has already said so. */
+         card borrows severity it doesn't have. There is no per-phase pin: it existed for the case
+         where a card's products disagreed about covering you, and grouping by coverage means they
+         no longer can — every phase of a card shares the card's answer. */
       var phasesHTML="";
       if(mg){
-        var allHit=g.phases.every(function(p){ return p.hit; });
         phasesHTML='<div class="a2-phases">'+g.phases.map(function(ph){
           var pPend=!!(ph.earliest&&Date.now()<ph.earliest);
           var pe=ph.latest?new Date(ph.latest).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"—";
           var ps=ph.earliest?new Date(ph.earliest).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"";
           return '<div class="a2-ph ph-'+ph.lv.k+'"><span class="phd"></span><span class="phn">'+esc(ph.ev)+'</span>'
-            +(ph.hit&&!allHit?'<span class="php" title="'+esc(HIT_TEXT[ph.hit]||"Includes your location")+'">'+ic("pin")+'</span>':'')
             +'<span class="pht">'+esc(pPend&&ps?ps+" – "+pe:"until "+pe)+'</span></div>';
         }).join("")+'</div>';
       }
@@ -3352,17 +3428,25 @@ function loadAlerts(){
         +(moreN?'<button type="button" class="a2-more" aria-label="Show '+moreN+' more '
           +(moreN>1?'counties':'county')+'">+'+moreN+' more</button>':'')+'</div>':'';
       detail+=areasHTML;          // counties are the tail of the drawer, after the prose
-      var aid=esc(g.ev);
+      /* The second half of a card's identity, written only when the split is real. In flat mode
+         every card is the only one answering to its name, and an unconditional "away" would tell
+         "Show on radar" to skip the very polygon the reader is standing under. */
+      var aid=esc(g.ev), scope=localMode?(g.here?"here":"away"):"";
       /* A polygon hit is a real point-in-shape test; a zone hit only says your zone is listed.
-         In the location-scoped list a card's PRESENCE already says "this includes you", so the
-         zone badge would restate the whole widget on every card — only the polygon claim still
-         earns a badge, because "you're inside this area" on a storm-based warning is an
-         escalation, not a restatement. Cards here WITHOUT a hit are the exceptions the filter
-         lets through (emergencies, and elsewhere cards once expanded), and they must say so:
-         showing a distant emergency unlabelled would imply it's overhead. */
+         In the location-scoped list a card's RANK already says "this includes you", so the zone
+         badge would restate the whole widget on every card — only the polygon claim still earns a
+         badge, because "you're inside this area" on a storm-based warning is an escalation, not a
+         restatement.
+         Cards up here WITHOUT a hit are the one exception the order lets through — a distant
+         emergency — and it must say so, or it reads as overhead. The elsewhere list is already
+         under a heading that says elsewhere, so its cards spend the slot on the fact a one-line
+         row is actually missing: WHERE, in the geography this feed hands us. */
       var meBadge="";
       if(g.hit&&(!localMode||g.hit==="polygon"))
         meBadge='<span class="a2-me">'+ic("pin")+esc(HIT_TEXT[g.hit]||"Includes your location")+'</span>';
+      else if(g.away&&g.counties.length)
+        meBadge='<span class="a2-where" title="'+esc(g.counties.join(", "))+'">'+esc(g.counties[0])
+          +(g.counties.length>1?' +'+(g.counties.length-1):'')+'</span>';
       else if(localMode&&!g.hit)
         meBadge='<span class="a2-zc" title="Active in the NWS St. Louis area, but its zones and polygons don\'t include '+esc(place)+'">Elsewhere in LSX</span>';
       /* The banner's own window, not the folded union: "Extreme Heat Warning — until Tue 7 PM"
@@ -3385,12 +3469,15 @@ function loadAlerts(){
          immune by construction: the <button> contains only text (its accessible name is the
          headline), and everything interactive — "+N more", "Show on radar", the weather.gov
          link — lives in the drawer OUTSIDE it. */
-      var drawerId="a2more-"+gi;
-      return '<div class="alert lv-'+g.lv.k+(g.hit?' hits-me':'')+(openIds[aid]?' open':'')
-        +(gi===leadIdx?' lead':'')+'" data-aid="'+aid+'"'
-        // the map resolves polygons↔cards by event name; a folded card answers to ALL of its products'
+      var drawerId="a2more-"+gi, wasOpen=!!openIds[aid+"|"+scope];
+      return '<div class="alert lv-'+g.lv.k+(g.hit?' hits-me':'')+(wasOpen?' open':'')
+        +(gi===leadIdx?' lead':'')+'" data-aid="'+aid+'"'+(scope?' data-scope="'+scope+'"':'')
+        /* The map resolves polygons↔cards by event name, and a folded card answers to ALL of its
+           products. Two cards can now share a name — the local one and the one elsewhere — so the
+           name alone no longer identifies a card; data-scope is the second half of the key, and
+           both directions of the link read it. */
         +(mg?' data-evs="'+esc(g.phases.map(function(p){ return p.ev; }).join("|"))+'"':'')+'>'
-        +'<button type="button" class="ab-head" aria-expanded="'+(openIds[aid]?'true':'false')
+        +'<button type="button" class="ab-head" aria-expanded="'+(wasOpen?'true':'false')
           +'" aria-controls="'+drawerId+'">'
           +'<span class="a2-ico">'+ic(alertIcon(g.ev,fcfg.ico))+'</span>'
           +'<span class="ab-hx">'
@@ -3418,19 +3505,27 @@ function loadAlerts(){
     });
     var mineHTML="", awayHTML="";
     glist.forEach(function(g,i){ if(g.away) awayHTML+=cardHTMLs[i]; else mineHTML+=cardHTMLs[i]; });
-    /* All clear HERE while the office is busy elsewhere: say so in the calm voice — for the
-       reader this is good news — with the fold right under it for anyone who wants the rest. */
+    /* All clear HERE while the office is busy elsewhere: say so in the calm voice — for the reader
+       this is good news — with the regional list right under it saying what "elsewhere" means. */
     var calmHTML=(!mineN&&awayN)?'<div class="calmrow"><span class="cdot"></span>'
       +'No active watches, warnings or advisories for '+esc(place)+'.</div>':'';
+    /* ---- the rest of the office's area, in full view ----
+       These cards used to sit behind a collapsed "N alerts elsewhere" disclosure, which answered
+       "is anything out near me" with a number and made the reader tap to find out what. They are
+       visible now, at one line each: level rail, event, county, window. The row IS the same .alert
+       banner the local cards use — CSS collapses it and the existing head toggle opens it back to
+       full detail — so there is one card renderer, not a compact one drifting away from a full one.
+       The heading carries the scope so the cards don't have to: each of them would otherwise wear
+       an "Elsewhere in LSX" badge saying what one eyebrow says once. */
     var elseHTML="";
     if(awayN){
-      elseHTML='<button type="button" class="a2-elsewhere" aria-expanded="'+(elseOpen?"true":"false")
-        +'" aria-controls="alertsElse" title="Watches, warnings and advisories in the NWS St. Louis area whose zones and polygons don\'t include '+esc(place)+'">'
-        +awayN+' '+(awayN===1?"alert":"alerts")+' elsewhere in the LSX area <span class="a-chev">▾</span></button>'
+      /* The space is load-bearing: the count is a separate element moved to the far end by `order`,
+         and without it the heading's accessible name runs together as "...areaN". */
+      elseHTML='<h3 class="a2-elsehed">Elsewhere in the St. Louis area '
+        +'<span class="a2-elsen">'+awayN+'</span></h3>'
         +'<div id="alertsElse">'+awayHTML+'</div>';
     }
     el.innerHTML=calmHTML+mineHTML+elseHTML;
-    syncElsewhere();   // re-apply open/closed across the 60s refresh
   }).catch(function(){
     card.classList.remove("calm");
     el.innerHTML='<div class="empty">Couldn\'t load alerts. <a href="https://www.weather.gov/lsx/" target="_blank" rel="noopener">Check weather.gov/lsx ↗</a></div>';
@@ -6155,8 +6250,12 @@ function renderTheCall(){
 // with BOTH of its labels showing, reading "Read the full discussionShow less". Exactly the class
 // of visibly-wrong first paint this version gate exists for, and it only reached real devices
 // because the preview deploys were opened on one.
-var SNAP_KEY="lsxSnap_v5", snapRestored=false, NET_OK=false;
-try{ localStorage.removeItem("lsxSnap_v1"); localStorage.removeItem("lsxSnap_v3"); localStorage.removeItem("lsxSnap_v4"); }catch(e){}   // don't let dead snapshots crowd the live one
+// v6: the "N alerts elsewhere" fold became an always-visible compact list, so #alerts no longer
+// holds that <button> and #alertsElse is no longer display:none. A v5 snapshot restores both — a
+// dashed toggle wearing the default button skin, above a block of cards nothing collapses, sitting
+// where the local alerts belong. Same class of wrong first paint as v4's orphaned expander.
+var SNAP_KEY="lsxSnap_v6", snapRestored=false, NET_OK=false;
+try{ localStorage.removeItem("lsxSnap_v1"); localStorage.removeItem("lsxSnap_v3"); localStorage.removeItem("lsxSnap_v4"); localStorage.removeItem("lsxSnap_v5"); }catch(e){}   // don't let dead snapshots crowd the live one
 var SNAP_PARTS=[
   {id:"afd",      ttl:6*3600000},
   {id:"alerts",   ttl:15*60000},     // safety-critical: short leash
@@ -6401,12 +6500,8 @@ document.getElementById("alerts").addEventListener("click",function(e){
     if(!skyOn.radar) setSkyLayer("radar",true);
     var rc=e.target.closest(".alert");
     e.stopPropagation();
-    if(rc) showAlertOnRadar(rc.getAttribute("data-evs")||rc.getAttribute("data-aid"));
-    return;
-  }
-  if(e.target.closest(".a2-elsewhere")){   // the fold over alerts that don't cover this location
-    elseOpen=!elseOpen; syncElsewhere();
-    if(typeof scheduleMasonry==="function") scheduleMasonry();
+    if(rc) showAlertOnRadar(rc.getAttribute("data-evs")||rc.getAttribute("data-aid"),
+                            rc.getAttribute("data-scope"));
     return;
   }
   if(e.target.closest(".a2-more")){        // "+N more" reveals counties in place, doesn't open details
