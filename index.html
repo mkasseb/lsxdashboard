@@ -323,13 +323,27 @@
      warning under a full-width hero band, i.e. a scroll away on a phone in exactly the weather
      someone is checking the page one-handed. The radar is still the first thing in the hero;
      the plain-English read of it just gets there first.
+     THE PULSE IS THE ONE CARD WHOSE RANK IS CONDITIONAL, and the contrast with the line above is
+     the point. In calm weather it sits second, beside the Bottom Line, because the two are the
+     same kind of card. Here it drops back under the hero, for two reasons that agree:
+     · Measured. Storm Mode is exactly when everything above the hero is already tall — a glowing
+       lead banner instead of the one-line all-clear, and a Bottom Line full of pills. Even
+       clamped to two lines, The Pulse put the radar at 832px on an 844px phone: twelve pixels of
+       the map, during a Tornado Warning, on the page someone opened to find the storm.
+     · On the merits. An AFD is a scheduled prose product issued a few times a day, so during a
+       fast-moving warning it was very likely written BEFORE the event it is being read about.
+       The warning is live and the radar is live; the discussion is the only thing here that
+       isn't, and that is the moment it should yield rather than the moment it should lead.
+     The Bottom Line can hold its rank through all of this because it is a pill row computed from
+     live data — one or two lines that stay true minute to minute. Paragraphs of periodically
+     issued prose are a different object, and they get a different rule.
      Neither the 24h chart nor the radar needs its own hoist any more: both live inside a .stack,
      and only direct grid children have an `order`. The two stacks share order -6 and fall back to
      DOM order between them, which is already conditions-then-radar. */
   body.storm #alertsCard{order:-8}
   body.storm #callCard{order:-7}   /* directly under safety in every mode — never below the fold */
   body.storm .stack{order:-6}      /* left: Now & Next 24 Hours + AQI · right: radar */
-  body.storm #afdCard{order:-2}
+  body.storm #afdCard{order:-2}    /* calm-weather rank does NOT carry here — see above */
   body.storm .masonry{order:-1}    /* prime card packs to its front */
   /* Storm Mode used to ring three cards in the accent colour while the banner above them glowed in
      the same colour — a warning arrived as four concentric halos, and the alert card's own severity
@@ -1351,6 +1365,21 @@
   .afd-list li{margin:0 0 8px;line-height:1.55;font-size:var(--fs-md)}
   .afd-list li:last-child{margin-bottom:0}
   .afd-meta{font-size:var(--fs-sm);color:var(--muted);margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
+  /* ===== Why there is no clamp here =====
+     This card renders at whatever length the office wrote, and that is deliberate — it was
+     clamped for a while, and the measurement is what removed it. Across the 21 most recent LSX
+     products in the calm-weather layout it runs 151–365px (median 304), which puts the top of
+     #currentCard between 668px and 881px: on a 912px phone the hero is on the first screen in
+     every one of them, clamped or not. The clamp was hiding up to 200px to protect something
+     that was never at risk, and cutting the forecaster off mid-sentence to do it.
+     It was sized, originally, against multi-paragraph Short-Term prose — which extractAFD cannot
+     actually produce (see the note above #afdCard). A guard built for an input that never
+     arrives.
+     The case for re-adding it would have to come from the other direction: this card only sits
+     at rank 3 in CALM weather, which is exactly when the space above the hero is at its minimum
+     — a one-line all-clear and a few pills. The moment a warning makes that space expensive,
+     body.storm has already moved this card below the hero. So the door a clamp would guard is
+     one Storm Mode closes first. */
   /* ===== Responsive overrides (kept last so they win over base rules) ===== */
   @media(max-width:480px){
     /* Was `html,body`. The <body> half silently disabled position:sticky at exactly the width
@@ -1568,6 +1597,40 @@
     <div class="callrow" id="callRow"></div>
   </section>
 
+  <!-- THE PULSE — the forecaster's own reasoning, ranked directly under the Bottom Line because
+       the two cards are the same kind of thing: one verdict computed by this page, one written by
+       a human at NWS St. Louis. It used to sit below the hero band under "the week ahead & deeper
+       context", which mis-filed it twice over — extractAFD reaches for Key Messages, then the
+       Synopsis, then the SHORT TERM outlook, all of which are about the next 12–24 hours, not the
+       week; and it put the forecaster's read of the day some 2,000px down the page.
+       It renders at FULL LENGTH here, which took two attempts to get right. It shipped clamped
+       to a few lines behind a "Read the full discussion" button, on the theory that the card had
+       to be cheap to deserve the rank. Measuring the 21 most recent products said otherwise: in
+       the calm-weather layout the card runs 151–365px and puts #currentCard between 668px and
+       881px, so on a 912px phone the hero is on the first screen either way. The clamp was hiding
+       up to 200px, and cutting the forecaster off mid-sentence, to buy room nothing needed. The
+       reasoning behind that removal is kept in the CSS beside the styles, so it does not come
+       back by default.
+       This rank is CALM-WEATHER ONLY. `body.storm #afdCard` sends the card back under the hero,
+       because a warning makes the alert and the radar live while this card is still whatever the
+       office wrote hours ago — and because measured against a real lead banner it left twelve
+       pixels of radar on an 844px phone. See the Storm Mode block in the CSS. That is also why
+       full length is affordable: the only time this card sits second is the time the space above
+       the hero is cheapest.
+       (Worth knowing if you change extractAFD: its Synopsis and Short-Term fallbacks currently
+       match NOTHING on this office's products — LSX writes `.SHORT TERM /THROUGH THURSDAY/...`
+       and the pattern wants `.SHORT TERM...`. It goes unnoticed because Key Messages was present
+       in all 21 recent products sampled, so the first branch always wins. Pre-existing, left
+       alone here deliberately: fixing it changes what this card SAYS, which is its own change.
+       It is also the input the clamp was originally sized against — paragraphs this card has
+       never actually been handed. Fix that first, then re-measure, before reaching for a clamp.) -->
+  <section class="card col-12" id="afdCard">
+    <h2>The Pulse — NWS Forecast Discussion
+      <a class="link" href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener">Full discussion ↗</a>
+    </h2>
+    <div id="afd"><div class="loading">Loading discussion…</div></div>
+  </section>
+
   <!-- ── RIGHT NOW: the hero band. Everything a visitor opens this page to learn is in the
        first screen — conditions on the left, radar on the right, the verdicts underneath. ── -->
   <div class="railhead rail-now col-12">
@@ -1671,17 +1734,8 @@
   <!-- ── THE WEEK AHEAD & DEEPER CONTEXT ── -->
   <div class="railhead col-12">
     <span class="rail-t">The week ahead &amp; deeper context</span>
-    <span class="rail-s">forecaster reasoning, outlooks, rivers, climate</span>
+    <span class="rail-s">outlooks, rivers, drought, climate</span>
   </div>
-
-  <!-- FORECAST DISCUSSION SUMMARY (the pulse) — the forecaster's own reasoning. Rich, but prose:
-       it belongs after the numbers a visitor came for, not in front of them. -->
-  <section class="card col-12" id="afdCard">
-    <h2>The Pulse — NWS Forecast Discussion
-      <a class="link" href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener">Full discussion ↗</a>
-    </h2>
-    <div id="afd"><div class="loading">Loading discussion…</div></div>
-  </section>
 
   <!-- ── Self-packing masonry band: cards flow into the shortest column (no manual balancing, no gaps) ── -->
   <div class="masonry col-12">
@@ -3099,8 +3153,25 @@ function loadAlerts(){
     setStormMode(warn);
     if(typeof tickCountdowns==="function") setTimeout(tickCountdowns,0);   // fill the new countdowns immediately
     if(feats.length===0){
+      /* The scope half earns its place: "no active alerts" without it invites the reader's next
+         question, which is "no alerts WHERE — my street, or the region?". This page treats that
+         distinction as real enough to build a whole fold around it ("N alerts elsewhere in the
+         LSX area"), so the all-clear should answer it too. feats is filtered by isLSX, so an
+         empty list means nothing is out anywhere the office covers — the strong claim, and the
+         reassuring one.
+         It used to say "NWS St. Louis county warning area." — the office's own term for that
+         region, and internal jargon (CWA) outside it: a bare noun phrase, hanging off the end of
+         a finished sentence, in which "county", "warning" and "area" each look like they might be
+         the noun. The region has a plain-English name that this page already uses about itself,
+         in the masthead: eastern Missouri and southwest Illinois. Same two lines on a phone,
+         measured — the jargon was not buying brevity either.
+         The words live in one span rather than sitting directly in the .calmrow flex, so the
+         sentence WRAPS instead of being dealt into columns. As two flex items the claim and its
+         scope were laid out side by side, which reads as a label beside a heading — fine when the
+         second half was a bare noun phrase, wrong once it became the tail of a sentence, since
+         the break landed mid-clause across the row's 10px gap. */
       card.classList.add("calm");
-      el.innerHTML='<div class="calmrow"><span class="cdot"></span>No active watches, warnings or advisories. <span class="cmut">NWS St. Louis county warning area.</span></div>';
+      el.innerHTML='<div class="calmrow"><span class="cdot"></span><span>No active watches, warnings or advisories <span class="cmut">anywhere in eastern Missouri or southwest Illinois.</span></span></div>';
       return;
     }
     card.classList.remove("calm");
@@ -6077,8 +6148,15 @@ function renderTheCall(){
    for a returning visitor beats a deployment's worth of visibly wrong first paints. */
 // v3: emoji became <svg class="ic"> and the alert card's severity classes became one lv-* ramp.
 // A v2 snapshot is markup that today's stylesheet has no rules for, so it must not be restored.
-var SNAP_KEY="lsxSnap_v3", snapRestored=false, NET_OK=false;
-try{ localStorage.removeItem("lsxSnap_v1"); }catch(e){}   // don't let ~200 KB of dead v1 crowd v2
+// v4: The Pulse moved above the hero band and gained its clamp, so #afd's markup carried an
+// expander button. v5: the clamp came back out (measurement said it was guarding nothing — see
+// the note in the CSS), so #afd is plain body-and-credit again. A v4 snapshot still holds that
+// button, and nothing styles it any more: it would restore wearing the default 44px button skin
+// with BOTH of its labels showing, reading "Read the full discussionShow less". Exactly the class
+// of visibly-wrong first paint this version gate exists for, and it only reached real devices
+// because the preview deploys were opened on one.
+var SNAP_KEY="lsxSnap_v5", snapRestored=false, NET_OK=false;
+try{ localStorage.removeItem("lsxSnap_v1"); localStorage.removeItem("lsxSnap_v3"); localStorage.removeItem("lsxSnap_v4"); }catch(e){}   // don't let dead snapshots crowd the live one
 var SNAP_PARTS=[
   {id:"afd",      ttl:6*3600000},
   {id:"alerts",   ttl:15*60000},     // safety-critical: short leash

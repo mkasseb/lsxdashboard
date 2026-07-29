@@ -167,8 +167,8 @@ internals deliberately stay on explicit pixels: those values are tuned to SVG ge
 text system, and folding them into the type scale would be a category error.
 
 **The page is ordered by what a visitor came for.** Alerts first (in calm weather that card
-collapses to a single all-clear line), then the Bottom Line, then the hero band — "Now & Next 24
-Hours" on the left, radar on the right — then the forecast discussion, and finally the masonry.
+collapses to a single all-clear line), then the Bottom Line, then The Pulse, then the hero band —
+"Now & Next 24 Hours" on the left, radar on the right — and finally the masonry.
 The Bottom Line (né The Call; ids are still `callCard`/`callRow`) is the page reasoning on the
 visitor's behalf rather than handing them numbers: rain/storm windows, heat and cold, UV with a
 burn clock, wind, air quality, a temperature-crash warning, climate records — and one synthesized
@@ -180,6 +180,46 @@ drop below the hero under `body.storm`, on the theory that a live warning makes 
 advice — but that filed the plain-English read of the warning *under* a full-width hero band,
 a scroll away on a phone in exactly the conditions someone checks this page one-handed. The radar
 still leads the hero; the sentence explaining it just arrives first.
+
+**The Pulse rides directly behind it in calm weather, at full length.** `#afdCard` is the same kind
+of card as the Bottom Line — one verdict computed by this page, one written by a human at NWS
+St. Louis — so the two reason together above the numbers. It used to sit below the
+hero under "the week ahead & deeper context", which mis-filed it twice: `extractAFD` reaches for
+Key Messages, then the Synopsis, then the **Short-Term Outlook**, all of which describe the next
+12–24 hours rather than the week, and the rank buried the forecaster's read of the day some
+2,000px down.
+
+**There is deliberately no clamp, and that took two attempts.** The card first shipped collapsed to
+a few lines behind a "Read the full discussion" button, on the theory that it had to be cheap to
+deserve the rank. Measuring the 21 most recent LSX products said otherwise: in the calm-weather
+layout the card runs 151–365px (median 304), putting the top of `#currentCard` between 668px and
+881px — so on a 912px phone the hero is on the first screen in every one of them, clamped or not.
+The clamp was hiding up to 200px, and cutting the forecaster off mid-sentence, to buy room nothing
+needed. It had been sized against multi-paragraph Short-Term prose, which is an input this card has
+never actually been handed (see below). Full length is affordable for a structural reason too: the
+only time this card sits second is calm weather, which is exactly when the space above the hero is
+cheapest — a one-line all-clear and a few pills.
+
+One thing to know before touching `extractAFD`: its Synopsis and Short-Term fallbacks currently
+match **nothing** on this office's products. LSX writes `.SHORT TERM /THROUGH THURSDAY/...` and the
+pattern wants `.SHORT TERM...`, so the qualifier between the name and the dots defeats it. It goes
+unnoticed because Key Messages was present in all 21 recent products sampled, so the first branch
+always wins. That is pre-existing and deliberately left alone — fixing it changes what the card
+*says*, which deserves its own review. It is also the input the clamp was built for, so if it is
+ever fixed, re-measure before reaching for one again.
+
+**That rank is calm-weather only — The Pulse is the one card here whose rank is conditional**, and
+the contrast with the Bottom Line is deliberate. `body.storm #afdCard{order:-2}` puts it back under
+the hero band, for two reasons that agree. Measured: Storm Mode is exactly when everything above the
+hero is already tall — a glowing lead banner in place of the one-line all-clear, and a Bottom Line
+full of pills — and even clamped to two lines The Pulse left the radar at 832px on an 844px phone,
+twelve visible pixels of map during a Tornado Warning (and it is no longer clamped at all). On the
+merits: an AFD is a scheduled prose
+product issued a few times a day, so during a fast-moving warning it was very likely written
+*before* the event being read about. The warning is live and the radar is live; the discussion is
+the only thing in that band that isn't. The Bottom Line can hold its rank through all of this
+because it is a pill row computed from live data, one or two lines that stay true minute to minute
+— paragraphs of periodically issued prose are a different object and get a different rule.
 
 `.railhead` labels name each band and hide under `body.storm`, where the grid reorders for urgency
 and a band label would lie about what follows it. Only *direct* grid children get an `order`, so
