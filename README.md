@@ -181,9 +181,9 @@ advice — but that filed the plain-English read of the warning *under* a full-w
 a scroll away on a phone in exactly the conditions someone checks this page one-handed. The radar
 still leads the hero; the sentence explaining it just arrives first.
 
-**The Pulse rides directly behind it, and the clamp is what makes that affordable.** `#afdCard` is
-the same kind of card as the Bottom Line — one verdict computed by this page, one written by a
-human at NWS St. Louis — so the two reason together above the numbers. It used to sit below the
+**The Pulse rides directly behind it in calm weather, and the clamp is what makes that affordable.**
+`#afdCard` is the same kind of card as the Bottom Line — one verdict computed by this page, one
+written by a human at NWS St. Louis — so the two reason together above the numbers. It used to sit below the
 hero under "the week ahead & deeper context", which mis-filed it twice: `extractAFD` reaches for
 Key Messages, then the Synopsis, then the **Short-Term Outlook**, all of which describe the next
 12–24 hours rather than the week, and the rank buried the forecaster's read of the day some
@@ -193,6 +193,18 @@ the card is collapsed to four lines of `--fs-md` with the rest behind "Read the 
 Unclamped it would push the radar and the temperature off a phone's first screen on precisely the
 days the discussion is worth reading, which is the mistake the paragraph above describes Storm Mode
 making with the Bottom Line.
+
+**That rank is calm-weather only — The Pulse is the one card here whose rank is conditional**, and
+the contrast with the Bottom Line is deliberate. `body.storm #afdCard{order:-2}` puts it back under
+the hero band, for two reasons that agree. Measured: Storm Mode is exactly when everything above the
+hero is already tall — a glowing lead banner in place of the one-line all-clear, and a Bottom Line
+full of pills — and even clamped to two lines The Pulse left the radar at 832px on an 844px phone,
+twelve visible pixels of map during a Tornado Warning. On the merits: an AFD is a scheduled prose
+product issued a few times a day, so during a fast-moving warning it was very likely written
+*before* the event being read about. The warning is live and the radar is live; the discussion is
+the only thing in that band that isn't. The Bottom Line can hold its rank through all of this
+because it is a pill row computed from live data, one or two lines that stay true minute to minute
+— paragraphs of periodically issued prose are a different object and get a different rule.
 
 `syncAfdClamp()` decides whether the control exists at all by *measuring*, because whether anything
 is hidden depends on the section NWS sent and on how it wraps at this width — a "Read more" over

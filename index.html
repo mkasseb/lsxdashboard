@@ -316,24 +316,34 @@
      order here — hoisting only alerts/radar/masonry shoved Current Conditions and the 24-hour
      chart below the entire masonry band, and left a 4-col gutter beside the radar (its row
      partner, the Current stack, wasn't lifted with it). Storm order: alerts → Bottom Line →
-     The Pulse → current+radar → masonry with the event's prime card packed first.
+     current+radar → The Pulse → masonry with the event's prime card packed first.
      The Bottom Line holds the rank it has in calm weather — directly under safety — rather than
      sliding under the hero. It used to rank below the radar on the theory that a live warning
      makes the map outrank advice, but that put the one card that says what to DO about the
      warning under a full-width hero band, i.e. a scroll away on a phone in exactly the weather
      someone is checking the page one-handed. The radar is still the first thing in the hero;
      the plain-English read of it just gets there first.
-     The Pulse rides directly behind it, in storm and calm alike, for the same reason it can
-     afford to: collapsed it is four lines of prose, or two on a phone, so the two reasoning cards
-     together still leave the hero on the first screen. Storm Mode is where the forecaster's own
-     words are worth most — an AFD written into an active event says what the polygons cannot.
+     THE PULSE IS THE ONE CARD WHOSE RANK IS CONDITIONAL, and the contrast with the line above is
+     the point. In calm weather it sits second, beside the Bottom Line, because the two are the
+     same kind of card. Here it drops back under the hero, for two reasons that agree:
+     · Measured. Storm Mode is exactly when everything above the hero is already tall — a glowing
+       lead banner instead of the one-line all-clear, and a Bottom Line full of pills. Even
+       clamped to two lines, The Pulse put the radar at 832px on an 844px phone: twelve pixels of
+       the map, during a Tornado Warning, on the page someone opened to find the storm.
+     · On the merits. An AFD is a scheduled prose product issued a few times a day, so during a
+       fast-moving warning it was very likely written BEFORE the event it is being read about.
+       The warning is live and the radar is live; the discussion is the only thing here that
+       isn't, and that is the moment it should yield rather than the moment it should lead.
+     The Bottom Line can hold its rank through all of this because it is a pill row computed from
+     live data — one or two lines that stay true minute to minute. Paragraphs of periodically
+     issued prose are a different object, and they get a different rule.
      Neither the 24h chart nor the radar needs its own hoist any more: both live inside a .stack,
-     and only direct grid children have an `order`. The two stacks share order -5 and fall back to
+     and only direct grid children have an `order`. The two stacks share order -6 and fall back to
      DOM order between them, which is already conditions-then-radar. */
   body.storm #alertsCard{order:-8}
   body.storm #callCard{order:-7}   /* directly under safety in every mode — never below the fold */
-  body.storm #afdCard{order:-6}    /* clamped, so it costs the hero four lines, not a screen */
-  body.storm .stack{order:-5}      /* left: Now & Next 24 Hours + AQI · right: radar */
+  body.storm .stack{order:-6}      /* left: Now & Next 24 Hours + AQI · right: radar */
+  body.storm #afdCard{order:-2}    /* calm-weather rank does NOT carry here — see above */
   body.storm .masonry{order:-1}    /* prime card packs to its front */
   /* Storm Mode used to ring three cards in the accent colour while the banner above them glowed in
      the same colour — a warning arrived as four concentric halos, and the alert card's own severity
@@ -1633,7 +1643,11 @@
        would push the radar and the temperature off a phone's first screen on exactly the days the
        discussion is worth reading — the same mistake Storm Mode made when it filed the Bottom Line
        under a full-width hero band. Collapsed it costs four lines, two on a phone; spending more of
-       the screen than that is then the visitor's own choice. -->
+       the screen than that is then the visitor's own choice.
+       This rank is CALM-WEATHER ONLY. `body.storm #afdCard` sends the card back under the hero,
+       because a warning makes the alert and the radar live while this card is still whatever the
+       office wrote hours ago — and because measured against a real lead banner, even the clamped
+       card left twelve pixels of radar on an 844px phone. See the Storm Mode block in the CSS. -->
   <section class="card col-12" id="afdCard">
     <h2>The Pulse — NWS Forecast Discussion
       <a class="link" href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener">Full discussion ↗</a>
