@@ -1374,7 +1374,7 @@
      What buys The Pulse its rank under the Bottom Line: four lines of the forecaster's opening,
      and the rest on request. `.afd-clamped` is written by syncAfdClamp() and ONLY when the text
      genuinely overflows — a "Read more" over fully visible prose is a lie about there being more,
-     and Key Messages days are exactly the days it fits.
+     and a short Key Messages on a wide card is exactly the case that fits uncut.
      A max-height, not -webkit-line-clamp (which .ab-sub uses two lines up): `display:-webkit-box`
      folds the <p> children into a single box and takes the paragraph breaks the forecaster wrote
      with them. Written as lines of --fs-md at 1.62 rather than a flat pixel count, so the clamp
@@ -1637,13 +1637,20 @@
        context", which mis-filed it twice over — extractAFD reaches for Key Messages, then the
        Synopsis, then the SHORT TERM outlook, all of which are about the next 12–24 hours, not the
        week; and it put the forecaster's read of the day some 2,000px down the page.
-       It is CLAMPED at this rank, and the clamp is the whole reason the rank is safe. Which of
-       those three sections arrives is NWS's call, not ours: Key Messages is a few tight bullets,
-       but the Short-Term Outlook runs to several dense paragraphs. Unclamped here, one of those
-       would push the radar and the temperature off a phone's first screen on exactly the days the
-       discussion is worth reading — the same mistake Storm Mode made when it filed the Bottom Line
-       under a full-width hero band. Collapsed it costs four lines, two on a phone; spending more of
-       the screen than that is then the visitor's own choice.
+       It is CLAMPED at this rank, and the clamp is the whole reason the rank is safe. How much
+       text arrives is the forecaster's call, not ours: Key Messages is a bullet list with no
+       bound on it, and it grows with the event — which is precisely when this card is at rank 3
+       and being read. Measured against the LSX product issued 2026-07-29T11:36Z, four bullets ran
+       165px collapsed against 276px open on a 390px phone. Unclamped, a heavier day pushes the
+       radar and the temperature off the first screen — the same mistake Storm Mode made when it
+       filed the Bottom Line under a full-width hero band. Collapsed it costs four lines, two on a
+       phone; spending more of the screen than that is then the visitor's own choice.
+       (Worth knowing if you change extractAFD: its Synopsis and Short-Term fallbacks currently
+       match NOTHING on this office's products — LSX writes `.SHORT TERM /THROUGH THURSDAY/...`
+       and the pattern wants `.SHORT TERM...`. It goes unnoticed because Key Messages was present
+       in all 21 recent products sampled, so the first branch always wins. Pre-existing, left
+       alone here deliberately: fixing it changes what this card SAYS, which is its own change.
+       If it is ever fixed, the paragraphs that fallback returns make the clamp matter more.) -->
        This rank is CALM-WEATHER ONLY. `body.storm #afdCard` sends the card back under the hero,
        because a warning makes the alert and the radar live while this card is still whatever the
        office wrote hours ago — and because measured against a real lead banner, even the clamped
@@ -5276,9 +5283,9 @@ function renderAFD(sec, issued){
   syncAfdClamp();
 }
 /* Does the collapsed card actually hide anything? That is a question about rendered text, not about
-   the source: Key Messages arrives as three bullets that fit inside the clamp, the Short-Term
-   Outlook as five paragraphs that do not, and the same body wraps to different heights on a phone
-   and a desktop. So measure it, and let the answer decide whether the control exists at all.
+   the source: the same four-bullet Key Messages that fits uncut across a desktop card needs the
+   control at 390px, and how many bullets the forecaster writes is not ours to predict. So measure
+   it, and let the answer decide whether the control exists at all.
    Measured with .open forced off and the clamp forced on, then the previous state is restored — an
    expanded card has `max-height:none`, so scrollHeight would equal clientHeight and every card on
    the page would measure as short enough to need no button.

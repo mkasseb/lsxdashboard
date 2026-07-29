@@ -187,9 +187,19 @@ written by a human at NWS St. Louis — so the two reason together above the num
 hero under "the week ahead & deeper context", which mis-filed it twice: `extractAFD` reaches for
 Key Messages, then the Synopsis, then the **Short-Term Outlook**, all of which describe the next
 12–24 hours rather than the week, and the rank buried the forecaster's read of the day some
-2,000px down. But which of those three sections a given AFD carries is NWS's call, not ours — Key
-Messages is a few tight bullets, the Short-Term Outlook several dense paragraphs — so at this rank
-the card is collapsed to four lines of `--fs-md` with the rest behind "Read the full discussion".
+2,000px down. How much text arrives is the forecaster's call, not ours — Key Messages is a bullet
+list with no bound on it, and it grows with the event, which is exactly when this card is at rank 3
+and being read — so the card is collapsed to four lines of `--fs-md` (two on a phone) with the rest
+behind "Read the full discussion". Measured against the LSX product issued 2026-07-29T11:36Z, four
+bullets ran 165px collapsed against 276px open at 390px wide.
+
+One thing to know before touching `extractAFD`: its Synopsis and Short-Term fallbacks currently
+match **nothing** on this office's products. LSX writes `.SHORT TERM /THROUGH THURSDAY/...` and the
+pattern wants `.SHORT TERM...`, so the qualifier between the name and the dots defeats it. It goes
+unnoticed because Key Messages was present in all 21 recent products sampled, so the first branch
+always wins. That is pre-existing and deliberately left alone — fixing it changes what the card
+*says*, which deserves its own review — but it means the clamp's real workload today is Key
+Messages length, and that fixing it would make the clamp matter more, not less.
 Unclamped it would push the radar and the temperature off a phone's first screen on precisely the
 days the discussion is worth reading, which is the mistake the paragraph above describes Storm Mode
 making with the Bottom Line.
