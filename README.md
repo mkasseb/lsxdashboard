@@ -93,7 +93,7 @@ All public-domain or openly licensed, all keyless.
 | `api.water.noaa.gov` (NWPS) | River gauge stages and crest forecasts |
 | `data.rcc-acis.org` | 1991–2020 normals, daily records, rankings, dry streaks |
 | Open-Meteo | Air quality, UV index, and the location geocoder |
-| NESDIS / GOES-19 | Satellite imagery |
+| `gibs.earthdata.nasa.gov` (WMTS) | GOES-19 ABI GeoColor satellite tiles, in the map's own projection |
 
 Basemap © CARTO & OpenStreetMap contributors.
 
@@ -207,57 +207,62 @@ words "record high" and "low", because a warm/cool colour pair says it in no cha
 and every credit — observation age, station, records station, AirNow — collects into one dimmer
 line that reads as a caption rather than a fifth row of data.
 
-Two things there are load-bearing. `body.no-radar`'s wide layout enumerates each *direct* child of
-`#current` by class; a new wrapper that isn't in that list doesn't merely go full width, it
-auto-places below `.cc-grid`'s row span and jumps out of DOM order. And the severity palettes
-(`uvLevel`, `aqiInfo`) are tuned for the dark panel and arrive as inline colours, so a light-mode
-`filter` darkens them as a group — at tile size, AQI "Moderate" on the light panel is otherwise
-1.3:1.
+One thing there is load-bearing: the severity palettes (`uvLevel`, `aqiInfo`) are tuned for the
+dark panel and arrive as inline colours, so a light-mode `filter` darkens them as a group — at tile
+size, AQI "Moderate" on the light panel is otherwise 1.3:1.
 
 **The hero row is a pair of stacks, but only on wide screens.** Left is the conditions card (+ AQI
-when it's notable); right is the radar. Below 1100px they stop being a pair and both go full width:
-at ~474px per column the left one still had to carry the reading, the metrics grid and the 24-hour
-chart while the right had only the radar, so they came out ~400px apart *and* both were cramped —
-a 438x246 radar and a 440px chart showing 6 hour labels. Stacking costs roughly the vertical space
-the hole wasted and gives both the full width instead: a 928x521 radar and 12 hour labels.
+when it's notable); right is the Sky card. Below 1100px they stop being a pair and both go full
+width: at ~474px per column the left one still had to carry the reading, the metrics grid and the
+24-hour chart while the right had only the map, so they came out ~400px apart *and* both were
+cramped — a 438x246 map and a 440px chart showing 6 hour labels. Stacking costs roughly the
+vertical space the hole wasted and gives both the full width instead: a 928x521 map and 12 hour
+labels.
 
-**The radar earns its slot.** Like the AQI card, it only appears when it has a story to tell:
-Storm Mode for a *radar-shaped* warning family, a tornado/severe watch, precipitation falling now
-(`data-wx`), or — inside the next 6 hours — a ≥40% rain chance or a thunderstorm mention carrying at
-least `THUNDER_MIN_POP` (25%). `radarWorthy()` in the source. Radar-shaped means `convective` or
-`flood` (`RADAR_FAMILIES`): those are the families you open a reflectivity map to find. Heat, wind,
-fire and winter warnings describe the air rather than echoes in it, so they engage Storm Mode's
-theme, banner and prime card but leave the radar slot to the conditions card — an Extreme Heat
-Warning shouldn't hoist a radar nobody came for. Falling snow still summons it through `data-wx`,
-which is the case a Winter Storm Warning would want it for. The probability floor on the thunder
-mention is the same idea one level down: NWS reserves "isolated" for 10–20% areal coverage and
-"scattered" for 30–50%, so an *Isolated Showers And Thunderstorms* hour at 17% carries the word
-without carrying the risk — and the map used to come up on a day the Bottom Line was calling dry.
-An hour with no probability at all still passes; unknown risk shouldn't hide the map. On a
-clear day the card (satellite tab included) is hidden, the conditions card takes the full row, and
-the 24-hour chart gets the whole width back — all ~24 hour labels, exactly the thing the hero
-merge had traded away. A rail button summons it by hand; the Hide button exists only on a
-hand-summoned card, since an auto-shown one would re-appear on the next update. While hidden it
-fetches no tiles (`refreshRadarLayer` returns early), and the show path re-renders the 24-hour
-chart, because the chart only re-measures on *window* resize and this toggle resizes its container
-without one.
+**The Sky card is permanent.** It used to earn its slot the way the AQI card does — shown only for
+a *radar-shaped* warning family, a tornado/severe watch, precipitation falling now, or a wet
+next-few-hours, with a rail button to summon it by hand on a calm day. That whole subsystem
+(`radarWorthy()`, `RADAR_FAMILIES`, `THUNDER_MIN_POP`, `body.no-radar`, the show/hide toggle and a
+second full-row layout for Current Conditions) is gone. The judgement it encoded was sound, but it
+was answering "is the sky worth a map right now?" — and the honest answer for a weather dashboard
+is *yes, that is what people came for*. Removing it also removed the only reason the page had two
+hero layouts, so there is now one arrangement to reason about instead of two.
 
-**When shown, the radar is a peek, not the product.** Its height comes from an `aspect-ratio`,
+One thing `radarWorthy()` was doing had to survive it, though — see the family gate below. Storm
+Mode's rules for this card were written when "Storm Mode is on" and "the map is on screen" were the
+same statement, because a dry warning engaged Storm Mode and never produced a card. Permanence
+broke that equivalence, so anything phrased as plain `body.storm` had to be re-examined.
+
+**Radar is a peek, not the product.** Its height comes from an `aspect-ratio`,
 never from leftover space. An earlier version stretched the map to match the left column, which made its size
 a side effect of how much content the conditions card happened to have — that is how it ended up
 660px tall on a calm day and *portrait* (0.67) at 1000px, the worst possible shape for weather that
 moves west to east. It is now 16:9 (4:3 on phones), so it is landscape at every width, with
-fullscreen a click away for the "where exactly, and when" case. Storm Mode widens it to 16:10 (1:1
-on phones): the page already knows when radar is the story, so the strip earns space back exactly
-then rather than being large all year for the few days it matters.
+fullscreen a click away for the "where exactly, and when" case.
+
+Storm Mode widens it to 16:10 (1:1 on phones) and tints its border in the family accent — but
+**only for `data-storm="convective"` or `"flood"`**, the two families with echoes to look at. That
+selector *is* the old `RADAR_FAMILIES` test, moved from JS into CSS off the attribute
+`setStormMode()` already writes. As a plain `body.storm` rule it would enlarge the map and tint it
+during an Extreme Heat Warning, taking space from the cards that actually matter for heat — which
+is the same mistake `radarWorthy()` existed to prevent, arriving through a different door once the
+card stopped disappearing. Heat, wind, fire and winter keep Storm Mode's theme, banner and prime
+card, and leave the map at its everyday size.
 
 **Fullscreen moves the card, not the map.** `body.radar-full` makes `#radarCard` fixed and
-full-viewport; the Leaflet instance, the loop, the warning polygons and the satellite tab are
+full-viewport; the Leaflet instance, the loop, the warning polygons and the layer toggles are
 untouched, so nothing needs re-initialising. Escape closes it, focus returns to whatever opened it,
 and body scroll is locked so a wheel gesture over the map can't scroll the page behind it. Leaflet
 is told to `invalidateSize()` twice — once immediately, once after the transition — or it renders
 tiles for the old viewport. A `ResizeObserver` on `#radar` covers the same hazard for Storm Mode's
 resize, which no window event announces.
+
+One non-obvious dependency: `body.radar-full` also has to clear the entrance animation on
+`.grid>.stack`. `cardIn` ends on `transform:none`, but `animation-fill-mode: both` keeps the
+animation's output applied forever after, and a *filled* transform still computes to a matrix
+rather than to `none` — which makes the stack the containing block for `position:fixed`
+descendants. Without that reset the fullscreen card resolves `inset:0` against its 824px column
+instead of the viewport and opens as a sliver.
 
 **The location search asks the geocoder several questions, not one.** Open-Meteo's geocoder does
 no fuzzy matching at all — a name that doesn't match the stored spelling character-for-character
@@ -352,22 +357,67 @@ changes town. Worse, it can appear broken on first load too: geolocation resolve
 `refreshAll()`, so the generation bumps, the in-flight fetch is discarded by its own `fresh()`
 guard, and nothing re-issues it.
 
-**Radar and satellite are one widget, two views.** They answer the same question at different
-scales, so they share `#radarCard` and a tab swaps which is visible. They are not layers on one
-map: the radar is a live WMS tile source, while NESDIS's GOES product is a fixed-extent sector
-*image*, not tiles, so it cannot be georeferenced under the radar without a different provider.
-Switching back to the radar calls `invalidateSize()` — Leaflet sized the map against a hidden
-container and would otherwise paint into a stale viewport.
+**Radar and satellite are one widget, stacked.** They answer the same question at different scales,
+so they share one Leaflet map: GOES cloud shield underneath, reflectivity inside it, warning
+polygons on top. They were two alternating *views* until the satellite source changed. NESDIS's
+sector product is a finished 600x600 JPEG in a fixed frame — nothing in it says where its corners
+are and its projection isn't the map's, so it could never be laid over the radar. NASA GIBS serves
+the same GOES-19 ABI GeoColor imagery as WMTS in EPSG:3857, which registers with the radar at every
+zoom and pan, and the tabs became independent layer toggles.
+
+Three details of that endpoint shape the code:
+
+- The path is `{TileMatrix}/{TileRow}/{TileCol}` — **z/y/x**, not Leaflet's usual z/x/y.
+- `GoogleMapsCompatible_Level7` provides z0–z7; z8+ answers HTTP 400. `maxNativeZoom: 7` lets
+  Leaflet upscale past that rather than request tiles that aren't there. Nothing is lost — ABI
+  GeoColor is 2 km data, and z7 is already finer than that.
+- Omitting the time segment resolves to the newest frame *and* answers `no-store`. A dated URL is
+  worse on both counts: the archive has gaps, so a computed "now minus latency" guess is a hard 404
+  that blanks the layer, and a dated URL is cacheable — the opposite of what a live panel wants.
+  Undated + `no-store` means a fresh layer object always fetches current pixels with no cache-buster.
+
+GeoColor is opaque, so it hides the basemap's geography. CARTO publishes the label half of the same
+basemap separately (`*_only_labels`), so the labels go back on *top* of the imagery rather than the
+imagery being made translucent, which would only turn both layers to mud.
+
+Reflectivity lives in its own Leaflet pane (`radarPane`, z-index 350 — above the tiles at 200,
+below the overlays at 400). The pane is for **stacking only**: a pane rather than another `zIndex`
+per layer, because the loop creates ~10 of them at runtime and they would all have to agree with
+whatever the satellite is using. Warning polygons deliberately do **not** toggle with reflectivity
+— someone who turns it off to read the cloud shield still needs to see where the warning is.
+
+**Off has to mean off the map, not hidden.** The first cut toggled the radar by setting
+`display:none` on its pane, which looks equivalent and isn't: a Leaflet layer that is merely
+invisible is still on the map, and `GridLayer` requests tiles for the current view on every
+`moveend` regardless of whether anything can see them. Measured, one pan across the state pulled
+~90 reflectivity tiles with the layer "off". `detachRadarLayers()` now removes the fallback layer
+and every pooled sweep and *clears* the pool — clears, because `buildRadarFrames()` only calls
+`addTo()` for timestamps it hasn't seen, so a pool of detached layers would be silently reused on
+the way back and draw nothing. Rebuilding costs one capabilities fetch, and those sweeps would be
+stale by then anyway.
+
+That teardown also disarms the Storm Mode autoplay for free — `updateRadarCtl()` starts the loop
+when a warning lands, and an empty frame list makes `radarFramesReady()` false. It still tests
+`skyOn.radar` explicitly, because that call site is the one moment the page is most inclined to
+start something on the visitor's behalf, and "don't animate a layer they switched off" shouldn't
+rest on a side effect two functions away.
+
+The satellite refresh swaps layers rather than calling `redraw()`, which drops every tile first and
+leaves a hole while replacements load: build the new layer, swap once it has painted. Both-layers-off
+is reachable by clicking but is never *restored* from `localStorage` — landing on a bare basemap
+with nothing on screen explaining why is a broken first impression.
 
 ## Known gaps
 
 - No `aria-expanded` on the expandable alert and forecast rows.
-- The hero pair (when the radar has earned its slot) still runs roughly 50-120px unequal at desktop
-  widths, since the left column's height is
-  content-driven and the radar's is fixed by its aspect ratio. (It was ~110-170px before the
-  conditions footer became a tile pair, which gave the left column back ~50-60px.) It is page-edge whitespace under the
-  radar rather than a framed hole. Growing the radar to close it is exactly the mistake that made
-  the map portrait in the first place, so it stays.
+- The hero pair still runs roughly 50-120px unequal at desktop widths, since the left column's
+  height is content-driven and the Sky card's is fixed by its aspect ratio. (It was ~110-170px
+  before the conditions footer became a tile pair, which gave the left column back ~50-60px.) It is
+  page-edge whitespace under the map rather than a framed hole. Growing the map to close it is
+  exactly the mistake that made it portrait in the first place, so it stays.
+- The satellite is a single "latest" frame; only the radar has a time loop. GIBS does expose a time
+  dimension, so a GOES loop is possible, but the archive's 10-minute slots have gaps that a frame
+  list would have to discover rather than compute.
 - The masonry positions cards absolutely after sorting by importance and height. `reorderMasonryDOM`
   re-syncs DOM order to visual order after each pack; it skips only if a card hosts an iframe
   (re-inserting reloads them), and nothing in the masonry does today.
