@@ -228,14 +228,26 @@ was answering "is the sky worth a map right now?" — and the honest answer for 
 is *yes, that is what people came for*. Removing it also removed the only reason the page had two
 hero layouts, so there is now one arrangement to reason about instead of two.
 
+One thing `radarWorthy()` was doing had to survive it, though — see the family gate below. Storm
+Mode's rules for this card were written when "Storm Mode is on" and "the map is on screen" were the
+same statement, because a dry warning engaged Storm Mode and never produced a card. Permanence
+broke that equivalence, so anything phrased as plain `body.storm` had to be re-examined.
+
 **Radar is a peek, not the product.** Its height comes from an `aspect-ratio`,
 never from leftover space. An earlier version stretched the map to match the left column, which made its size
 a side effect of how much content the conditions card happened to have — that is how it ended up
 660px tall on a calm day and *portrait* (0.67) at 1000px, the worst possible shape for weather that
 moves west to east. It is now 16:9 (4:3 on phones), so it is landscape at every width, with
-fullscreen a click away for the "where exactly, and when" case. Storm Mode widens it to 16:10 (1:1
-on phones): the page already knows when radar is the story, so the strip earns space back exactly
-then rather than being large all year for the few days it matters.
+fullscreen a click away for the "where exactly, and when" case.
+
+Storm Mode widens it to 16:10 (1:1 on phones) and tints its border in the family accent — but
+**only for `data-storm="convective"` or `"flood"`**, the two families with echoes to look at. That
+selector *is* the old `RADAR_FAMILIES` test, moved from JS into CSS off the attribute
+`setStormMode()` already writes. As a plain `body.storm` rule it would enlarge the map and tint it
+during an Extreme Heat Warning, taking space from the cards that actually matter for heat — which
+is the same mistake `radarWorthy()` existed to prevent, arriving through a different door once the
+card stopped disappearing. Heat, wind, fire and winter keep Storm Mode's theme, banner and prime
+card, and leave the map at its everyday size.
 
 **Fullscreen moves the card, not the map.** `body.radar-full` makes `#radarCard` fixed and
 full-viewport; the Leaflet instance, the loop, the warning polygons and the layer toggles are
@@ -369,11 +381,26 @@ basemap separately (`*_only_labels`), so the labels go back on *top* of the imag
 imagery being made translucent, which would only turn both layers to mud.
 
 Reflectivity lives in its own Leaflet pane (`radarPane`, z-index 350 — above the tiles at 200,
-below the overlays at 400). That is what makes "Radar off" a single style change: the loop keeps
-~10 pooled frames alive and cross-fades them *by opacity*, so hiding via opacity would give that
-property two meanings and the layer would reappear on the next sweep. Warning polygons deliberately
-do **not** toggle with it — someone who turns reflectivity off to read the cloud shield still needs
-to see where the warning is.
+below the overlays at 400). The pane is for **stacking only**: a pane rather than another `zIndex`
+per layer, because the loop creates ~10 of them at runtime and they would all have to agree with
+whatever the satellite is using. Warning polygons deliberately do **not** toggle with reflectivity
+— someone who turns it off to read the cloud shield still needs to see where the warning is.
+
+**Off has to mean off the map, not hidden.** The first cut toggled the radar by setting
+`display:none` on its pane, which looks equivalent and isn't: a Leaflet layer that is merely
+invisible is still on the map, and `GridLayer` requests tiles for the current view on every
+`moveend` regardless of whether anything can see them. Measured, one pan across the state pulled
+~90 reflectivity tiles with the layer "off". `detachRadarLayers()` now removes the fallback layer
+and every pooled sweep and *clears* the pool — clears, because `buildRadarFrames()` only calls
+`addTo()` for timestamps it hasn't seen, so a pool of detached layers would be silently reused on
+the way back and draw nothing. Rebuilding costs one capabilities fetch, and those sweeps would be
+stale by then anyway.
+
+That teardown also disarms the Storm Mode autoplay for free — `updateRadarCtl()` starts the loop
+when a warning lands, and an empty frame list makes `radarFramesReady()` false. It still tests
+`skyOn.radar` explicitly, because that call site is the one moment the page is most inclined to
+start something on the visitor's behalf, and "don't animate a layer they switched off" shouldn't
+rest on a side effect two functions away.
 
 The satellite refresh swaps layers rather than calling `redraw()`, which drops every tile first and
 leaves a hole while replacements load: build the new layer, swap once it has painted. Both-layers-off
