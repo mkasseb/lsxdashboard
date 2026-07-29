@@ -43,9 +43,12 @@ node tools/logic-tests.js     # the functions that decide something
 error in the inline script, an origin the CSP doesn't declare, an icon name with no `<symbol>`, and
 a missing or self-contradicting file at the site root.
 [`tools/logic-tests.js`](tools/logic-tests.js) covers the pure decision functions: `rangeRow()`,
-`alertLevel()` and `stormSubline()`. With no build step there is nothing to import from, so it
-lifts them out of `index.html` by name and runs them — which means a rename fails the suite loudly
-rather than leaving it silently testing nothing. Anything that paints is left to the eye.
+`alertLevel()`, `cardCmp()` and `coldVerdict()`. With no build step there is nothing to import
+from, so it lifts them out of `index.html` by name and runs them — which means a rename fails the
+suite loudly rather than leaving it silently testing nothing. Anything that paints is left to the
+eye. `cardCmp()` and `ALERT_SEV_RANK` sit at the top level of the script rather than inside
+`loadAlerts()` for exactly this reason: the order of the alert list is the one thing about that
+section a reader acts on, and it is asserted rather than eyeballed.
 
 CI runs both on every pull request.
 
@@ -148,6 +151,43 @@ other. The ramp ranks by the word, because that is what the reader is being aske
 lets CAP severity escalate (never demote) a step above it; a tornado warning is promoted outright,
 being the one event where the word and the stakes are not the same size. `--storm` is *not* part of
 this and stays: it answers "what kind of weather", which is a different question from "how bad".
+
+**But severity is not the sort key — location is.** The office issues for forty-odd counties and
+the reader is standing in one spot in them, so `cardCmp()` ranks coverage above level: an emergency
+leads from anywhere, then everything covering this location whatever its level, then everything
+else. It used to sort on level first, which reads right and isn't — `alertLevel()` promotes every
+Tornado Warning to `emergency`, so a tornado two counties away outranked a Severe Thunderstorm
+Warning genuinely overhead and took the lead banner's glow with it. Your Heat Advisory now sits
+above a distant Winter Storm Warning, which is the correct answer to "what should I look at".
+
+Coverage is decided by `alertCoversMe()`, which is two tests because NWS issues alerts two ways:
+storm-based warnings carry a polygon and get a real point-in-shape ray-cast (holes included), while
+watches and advisories carry `affectedZones` and get an exact match against the zone URLs `/points`
+hands us for this location. It returns *which* kind of match it was, so a badge can never claim
+more than the evidence supports — "your forecast zone is included" is a different statement from
+"you're inside this area", and NWS issues zone products against forecast zones rather than counties.
+If `/points` fails the whole thing fails **open**: coverage becomes unknowable, nothing is ranked
+down, and the list goes flat. A cluttered list is a much smaller failure than a hidden warning.
+
+**Grouping is by event *and* coverage.** NWS ships one record per zone group, so segments have to
+be consolidated or the list reads as a dozen copies of one storm — but consolidating on the event
+name alone did it too well. A Severe Thunderstorm Warning over this location and a different one
+three counties east arrived as one card, flagged as covering you, wearing the union of both county
+lists: the local storm described with geography that wasn't its own, and the distant one with no
+existence in the list at all. The same hazard can now hold a card here and a card elsewhere, and
+neither speaks for the other. The family fold (`FAMILY_CFG.merge`) is keyed the same way, and the
+two-way polygon↔card link on the radar carries a `data-scope` alongside the event name, because a
+name no longer identifies a card by itself.
+
+**The rest of the office's area stays on the page.** Alerts that don't cover this location sit
+below the local banners under one eyebrow, at one line each. They used to live behind a collapsed
+"N alerts elsewhere" disclosure, which answered "is anything out near me" with a number and made
+the reader tap to find out what. The rows are the *same* `.alert` banner as the local cards — the
+section only takes things away (the subline, some padding, some weight) and the existing head
+toggle puts them back — so there is one card renderer, not a compact one drifting away from a full
+one. The separation is structural rather than tonal: no tint, a thinner rail, smaller type, and
+deliberately no opacity. Dimmed text on a tinted rail is how the contrast work gets undone, and
+these are still watches and warnings for somebody.
 
 **The page spends colour like it is scarce.** Saturated colour means severity, and links are blue.
 That is the whole budget. Storm Mode used to ring three cards in the family accent while the banner
@@ -372,6 +412,14 @@ cold paint is the cheaper mistake.
 **Storm mode.** An active warning is classified into a family (convective / winter / flood / heat /
 wind / fire), which sets the accent colour, floats the most relevant card to the top of the layout,
 and rewrites the banner.
+
+*Which* warning is the one at the top of the sorted card list, read straight off `glist` after
+`cardCmp()` has ordered it. It used to walk the raw feature list in CAP-severity order and test for
+the word "warning" — a second severity opinion in a page whose whole alert design is that there is
+only one. The two could disagree (the ramp promotes a Tornado Warning that the office tagged merely
+`Severe`), and the page would then theme itself for one warning while a different one led the list.
+Reading the sorted list means the colour, the primed card and the lead banner are the same alert
+because they cannot be anything else.
 
 The banner's second line comes from the NWS instruction for *that* warning, via `stormSubline()`,
 not from a string keyed to the family — a family as broad as "winter" spans a blizzard and a frost
