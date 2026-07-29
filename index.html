@@ -366,12 +366,19 @@
      The Bottom Line can hold its rank through all of this because it is a pill row computed from
      live data — one or two lines that stay true minute to minute. Paragraphs of periodically
      issued prose are a different object, and they get a different rule.
-     Neither the 24h chart nor the radar needs its own hoist any more: both live inside a .stack,
-     and only direct grid children have an `order`. The two stacks share order -6 and fall back to
-     DOM order between them, which is already conditions-then-radar. */
+     The radar needs no hoist of its own: it lives inside a .stack, and only direct grid children
+     have an `order`. The two stacks share order -6 and fall back to DOM order between them, which
+     is already conditions-then-radar. */
   body.storm #alertsCard{order:-8}
   body.storm #callCard{order:-7}   /* directly under safety in every mode — never below the fold */
-  body.storm .stack{order:-6}      /* left: Now & Next 24 Hours + AQI · right: radar */
+  body.storm .stack{order:-6}      /* left: Now (+ AQI) · right: radar */
+  /* The 24h chart DOES need one, now that it is a band of its own rather than the lower half of the
+     conditions card. Without a rule it keeps order 0 and lands below the masonry — "what the next
+     day does" under every outlook on the page, during the one event where the question is live.
+     Ranked directly under the pair: once you know what is overhead, when it ends is the next thing
+     asked, and it outranks both a periodically-issued AFD and the deeper-context band. This also
+     keeps the calm-mode sequence (pair → next 24 hours → week ahead) intact under Storm Mode. */
+  body.storm #h24Card{order:-5}
   body.storm #afdCard{order:-2}    /* calm-weather rank does NOT carry here — see above */
   body.storm .masonry{order:-1}    /* prime card packs to its front */
   /* Storm Mode used to ring three cards in the accent colour while the banner above them glowed in
@@ -766,20 +773,15 @@
   .cc-sun .cs-sep{color:var(--muted)}
   .cc-today:empty{display:none}
 
-  /* The 24-hour chart, folded into the hero. It used to be its own full-width card below The Call;
-     merging removes a card's worth of chrome and puts "what's coming" against "what it is now".
-     The chart already measures its own container and thins its labels, so a narrower column costs
-     label density, not legibility. */
-  .cc-h24{margin-top:13px;padding-top:12px;border-top:1px solid var(--border)}
-  /* margin-top:0 because it is an <h3> now and the UA gives headings a top margin of their own. */
-  .cc-h24-lbl{font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:.9px;
-    color:var(--muted);margin:0 0 9px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
-  /* The band rail two inches above already names the place; repeating it here is noise. Kept in
-     the DOM (hidden) so the snapshot and clearLocationUI wiring for #h24loc stays untouched. */
-  .cc-h24-lbl #h24loc{display:none}
-  /* In a full-width card the "Now" pill is pushed to the far right as an anchor. In this column
-     that just strands it on a second row with a hole beside it — let it flow with the others. */
-  .cc-h24 .h24-pill.h24-now{margin-left:0}
+  /* The 24-hour chart is a full-width card of its own again — see the markup note for why it left
+     the conditions column. Nothing here sizes it: it measures #hourly24 and draws to that, so the
+     card only has to supply ordinary card chrome and get out of the way. The `.h24-now` pill goes
+     back to being right-anchored by its own rule below, which is what it was written for; the
+     override that let it flow inline existed only because the hero column was too narrow to anchor
+     anything against. The ≤480px rule still un-anchors it on a phone.
+     The band rail above still names the place, so #h24loc stays hidden here for the same reason it
+     was hidden before — present in the DOM so the snapshot and clearLocationUI wiring is untouched. */
+  #h24Card #h24loc{display:none}
 
   
   /* Daily */
@@ -1718,18 +1720,13 @@
 
   <!-- CURRENT -->
   <div class="stack col-4">
-    <!-- Now + next 24h in one card. #current and #hourly24 stay SIBLINGS rather than nesting the
-         chart inside #current: loadCurrent() rebuilds #current wholesale (including on failure),
-         which would take the chart down with it and break "every loader owns its failure". -->
+    <!-- Readings only. The 24-hour chart used to sit under here as a second sub-section; it is its
+         own band below the pair now (see #h24Card) because the page shell changed the arithmetic
+         this column is subject to. #current is still rebuilt wholesale by loadCurrent() on every
+         refresh and failure, so nothing that has to survive that may be nested inside it. -->
     <section class="card hero" id="currentCard">
-      <h2>Now &amp; Next 24 Hours <span class="link" id="ccStation">&mdash;</span></h2>
+      <h2>Now <span class="link" id="ccStation">&mdash;</span></h2>
       <div id="current"><div class="loading">Loading…</div></div>
-      <div class="cc-h24">
-        <!-- A real sub-section of the card, so a real heading: the chart under it is a different
-             question ("what happens next") from the readings above it ("what it is now"). -->
-        <h3 class="cc-h24-lbl">Next 24 hours <span id="h24loc"></span></h3>
-        <div id="hourly24"><div class="loading">Loading hourly…</div></div>
-      </div>
     </section>
     <!-- AQI — hidden unless air quality is actually notable (AQI > 100); the everyday reading
          lives as a one-line summary inside Current Conditions -->
@@ -1808,6 +1805,24 @@
     <div class="imgcap" id="rsCap"><span></span><span></span></div>
   </section>
   </div>
+
+  <!-- ── NEXT 24 HOURS — its own full-width band again.
+       This chart was folded into the conditions card to save a card's worth of chrome, and at the
+       time that was free: the page had no width ceiling, so the column it moved into was 617px at
+       1920 and the Sky card opposite grew tall enough to roughly match it. The shell cap removed
+       both halves of that. The column is now 456px at every desktop width — narrow enough that the
+       chart has to thin its hour labels — while the map, whose height follows its width, came back
+       to 503px and left the pair ~240px unequal with the whitespace under the map.
+       Full width answers both with one move: 24 points get ~58px each instead of ~19, and the pair
+       balances to within ~70px without touching the map's shape, which is the thing the Sky card's
+       aspect rules exist to protect. It sits BELOW the pair rather than between the two columns:
+       the band reads conditions-and-sky first, then what the next day does, then the week.
+       Still a sibling of #current rather than a child, for the same reason as before — loadCurrent()
+       rebuilds #current wholesale and would take the chart down with it. ── -->
+  <section class="card col-12" id="h24Card">
+    <h2>Next 24 hours <span id="h24loc"></span></h2>
+    <div id="hourly24"><div class="loading">Loading hourly…</div></div>
+  </section>
 
   <!-- ── THE WEEK AHEAD & DEEPER CONTEXT ── -->
   <div class="railhead col-12">
