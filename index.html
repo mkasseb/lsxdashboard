@@ -1645,6 +1645,10 @@
         <button type="button" id="radarPlay" aria-label="Play radar loop" title="Play the radar loop"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg>Loop</button>
         <input type="range" id="radarSlider" min="0" max="0" value="0" step="1" aria-label="Scrub radar time">
         <span class="rc-t" id="radarFrameTime"></span>
+        <!-- The .rc-load style has existed since the scrubber shipped with nothing behind it.
+             This is what it was for: a zoom makes every pooled frame refetch, and the loop holds
+             rather than stepping through blanks. Empty except while it is actually waiting. -->
+        <span class="rc-load" id="radarLoad"></span>
       </div>
       <!-- role="img" collapses the whole key to its aria-label on purpose: read linearly the tick
            words are "light heavy hail", which is noise. The label says the thing they mean. -->
@@ -2413,6 +2417,10 @@ function initRadarMap(){
     var rvRO=new ResizeObserver(function(){ if(rvMap) rvMap.invalidateSize(false); });
     rvRO.observe(el);
   }
+  /* zoomend, not zoomstart: the target zoom is only settled once the animation lands, and the
+     budget is a function of it. The surplus layers come off a beat after the gesture rather than
+     before it, which costs one round of tiles on the way out and saves every pan afterwards. */
+  rvMap.on("zoomend",rebuildRadarFramesForView);
   initRadarCtl();
   refreshRadarLayer();
   loadWarnPolygons(undefined);  // draw from cache if alerts already arrived
@@ -2432,11 +2440,36 @@ function initRadarMap(){
    the ~118 minutes the time dimension advertises. Thinning to fit keeps the number honest if NWS
    ever changes the cadence again; nothing downstream hard-codes a duration. */
 var RADAR_SPAN_MIN=60;
-var RADAR_N_DESK=15, RADAR_N_PHONE=8;
+/* The third budget is about ZOOM, not screen size, and it is the one that was missing. Every pooled
+   frame refetches on a view change, and at low zoom each GetMap covers far more ground — measured
+   against the live WMS, a median 5.9s per tile at z4 (p95 10.1s) against 120 requests for fifteen
+   frames, ~8 seconds before the set was whole again. The loop meanwhile kept stepping on its 450ms
+   timer onto frames whose tiles had not arrived, which paints nothing and reads as "the loop
+   broke". Detail is not what a z4 view is for anyway: seven frames still show an hour of motion at
+   synoptic scale, for roughly half the requests. */
+var RADAR_N_DESK=15, RADAR_N_PHONE=8, RADAR_N_WIDE=7, RADAR_WIDE_ZOOM=5;
 var radarFrames=[], radarPool={}, radarIdx=-1;
 var radarPlaying=false, radarTimer=null, radarUserPaused=false;
 function reducedMotion(){ return !!(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
-function radarFrameCount(){ return (window.innerWidth<=680)?RADAR_N_PHONE:RADAR_N_DESK; }
+function radarFrameCount(){
+  if(rvMap && rvMap.getZoom()<=RADAR_WIDE_ZOOM) return RADAR_N_WIDE;
+  return (window.innerWidth<=680)?RADAR_N_PHONE:RADAR_N_DESK;
+}
+/* The frame list is rebuilt on zoom, not only on the 4-minute refresh. A zoom-dependent budget that
+   waited for the next refresh would leave fifteen layers refetching across a continent-wide view
+   for up to four minutes — precisely the stampede the budget exists to prevent. Cached times rather
+   than a fresh capabilities fetch: this fires on a gesture, and the sweep list has not changed. */
+var radarTimesCache=[];
+function rebuildRadarFramesForView(){
+  if(!rvMap||!skyOn.radar||!radarTimesCache.length) return;
+  // Same budget as last time means pickRadarTimes returns the same set; touching the pool would
+  // tear down layers only to rebuild them identically.
+  if(pickRadarTimes(radarTimesCache).length===radarFrames.length) return;
+  var wasLatest=(radarIdx<0)||(radarIdx>=radarFrames.length-1);
+  buildRadarFrames(radarTimesCache);   // drops the surplus layers off the map along the way
+  showRadarFrame(wasLatest?radarFrames.length-1:Math.min(radarIdx,radarFrames.length-1));
+  updateRadarCtl();
+}
 /* Thin an hour of 2-minute sweeps down to a frame budget, on a grid anchored to the EPOCH.
    The epoch anchoring is the load-bearing part and it is not obvious. radarPool keys on the
    timestamp string, so pooling only pays off if a refresh asks for the same timestamps it asked
@@ -2587,8 +2620,36 @@ function setRadarBtn(){
   b.setAttribute("aria-label",(radarPlaying?"Pause radar loop":"Play radar loop")+of);
   b.title=span?("Play the last "+span+" minutes"):"Play the radar loop";
 }
+/* "Every frame has its tiles for the CURRENT view", which is a different question from _ready —
+   that flag is set by the first load ever and never cleared, so it stays true through a zoom that
+   has invalidated every tile behind it. Leaflet's own _loading is the live answer. */
+function radarFramesPainted(){
+  return radarFrames.length>1 && radarFrames.every(function(f){ return !f.layer._loading; });
+}
+var radarHoldSince=0, RADAR_HOLD_MAX=9000;
+function setRadarLoading(on){
+  var el=document.getElementById("radarLoad");
+  if(el) el.textContent=on?"loading frames…":"";
+}
 function radarStep(){
   if(!radarPlaying||!radarFrames.length) return;
+  /* A view change makes every pooled frame refetch at once. Advancing through frames whose tiles
+     have not landed draws blank sweeps at 450ms apiece, which looks like a broken loop rather than
+     a busy one — the bug report that prompted this was exactly that. Hold on the frame that IS
+     painted and say why.
+     Bounded, though: a frame that never finishes must not freeze the loop for good. Leaflet clears
+     _loading on tile ERRORS too, so this should not trigger in practice — it is here because
+     "should not" is not a guarantee to hand a control the visitor is watching. */
+  if(!radarFramesPainted()){
+    if(!radarHoldSince) radarHoldSince=Date.now();
+    if(Date.now()-radarHoldSince < RADAR_HOLD_MAX){
+      setRadarLoading(true);
+      radarTimer=setTimeout(radarStep,400);
+      return;
+    }
+  }
+  radarHoldSince=0;
+  setRadarLoading(false);
   var next=(radarIdx+1)%radarFrames.length;
   showRadarFrame(next);
   radarTimer=setTimeout(radarStep, next===radarFrames.length-1?1400:450);  // hold on the newest sweep
@@ -2602,6 +2663,7 @@ function radarPlayLoop(){
 function radarPauseLoop(){
   radarPlaying=false;
   if(radarTimer){ clearTimeout(radarTimer); radarTimer=null; }
+  radarHoldSince=0; setRadarLoading(false);   // nothing is waiting on tiles once nothing is stepping
   setRadarBtn();
   /* Playback skipped every sync on purpose; stopping is the moment the visitor started looking, so
      the satellite catches up to wherever they landed. */
@@ -2624,6 +2686,7 @@ function refreshRadarLayer(){
   fetchRadarTimes().then(function(times){
     var wasLatest=(radarIdx<0)||(radarIdx>=radarFrames.length-1);
     radarFallback=false;
+    radarTimesCache=times;   // lets a zoom re-pick the frame set without another capabilities fetch
     buildRadarFrames(times);
     if(nwsRadar&&rvMap.hasLayer(nwsRadar)) rvMap.removeLayer(nwsRadar);   // frames drive from here
     showRadarFrame(wasLatest?radarFrames.length-1:radarIdx);              // don't yank a scrubbing user to "now"
