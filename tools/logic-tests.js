@@ -38,10 +38,12 @@ const SUBJECT = new Function(`
   ${lift(/^function alertParas\(txt\)\{[\s\S]*?^\}/m, 'alertParas()')}
   ${lift(/^var LEVELS=\{[\s\S]*?^\};/m, 'LEVELS')}
   ${lift(/^function alertLevel\(p\)\{[\s\S]*?^\}/m, 'alertLevel()')}
+  ${lift(/^var ALERT_SEV_RANK=\{[\s\S]*?\};/m, 'ALERT_SEV_RANK')}
+  ${lift(/^function cardCmp\(a,b\)\{[\s\S]*?^\}/m, 'cardCmp()')}
   ${lift(/^var FAMILY_CFG=\{[\s\S]*?^\};/m, 'FAMILY_CFG')}
   ${lift(/^var LAYERS_MAX=\d+;/m, 'LAYERS_MAX')}
   ${lift(/^function coldVerdict\(nowT,mMin,cMin\)\{[\s\S]*?^\}/m, 'coldVerdict()')}
-  return { rangeMark, rangeRow, alertLevel, FAMILY_CFG, coldVerdict };
+  return { rangeMark, rangeRow, alertLevel, cardCmp, FAMILY_CFG, coldVerdict };
 `)();
 
 let failed = 0;
@@ -169,6 +171,64 @@ function check(name, actual, expected) {
     rank('Heat Watch') < rank('Heat Advisory'), true);
 }
 
+/* ============ cardCmp ============ */
+/* The order of the alert list, which is the one thing about this section a reader acts on. The rule
+   is: an emergency leads from anywhere, then everything covering THIS LOCATION, then everything
+   else — level inside each of those, CAP severity last.
+ *
+ * Level used to be the primary key, and that put a tornado warning two counties away above a severe
+ * thunderstorm warning genuinely overhead, because alertLevel() promotes every tornado warning to
+ * `emergency`. These assert the rule directly rather than by eye. */
+{
+  // Build the shape cardCmp reads off a glist entry: level, coverage, CAP severity.
+  const card = (event, hit, severity = 'Severe') => ({
+    ev: event, lv: SUBJECT.alertLevel({ event, severity }), hit, sev: severity,
+  });
+  // Sort a list and read back the event names — cardCmp is a comparator, so exercise it as one.
+  const order = (...cards) => cards.slice().sort(SUBJECT.cardCmp).map(c => c.ev);
+
+  const localStorm  = card('Severe Thunderstorm Warning', 'polygon');
+  const localHeat   = card('Heat Advisory', 'zone', 'Minor');
+  const awayTornado = card('Tornado Warning', false, 'Extreme');
+  const awayWinter  = card('Winter Storm Warning', false);
+  const awayHeat    = card('Heat Advisory', false, 'Minor');
+
+  // The exception, and it stays: a tornado emergency leads from anywhere. A page that files an
+  // active tornado below your heat advisory because its polygon hasn't reached you is not a
+  // weather page.
+  check('a distant emergency still leads', order(localStorm, awayTornado)[0], 'Tornado Warning');
+
+  // The rule the rest of the list follows. Both of these used to come out the other way round.
+  check('your warning outranks a distant warning',
+    order(awayWinter, localStorm), ['Severe Thunderstorm Warning', 'Winter Storm Warning']);
+  check('your ADVISORY outranks a distant WARNING',
+    order(awayWinter, localHeat), ['Heat Advisory', 'Winter Storm Warning']);
+
+  // Coverage having won, level orders within each half, and CAP severity breaks a tie under that.
+  check('level still orders what covers you',
+    order(localHeat, localStorm), ['Severe Thunderstorm Warning', 'Heat Advisory']);
+  check('CAP severity is the last word', SUBJECT.cardCmp(
+    card('Flood Warning', 'county', 'Severe'),
+    card('Flood Warning', 'county', 'Moderate'),
+  ) < 0, true);
+
+  // Within the emergencies, yours is still yours.
+  check('your emergency leads a distant one', SUBJECT.cardCmp(
+    card('Tornado Warning', 'polygon', 'Extreme'), awayTornado,
+  ) < 0, true);
+
+  // The full list, top to bottom — the shape a reader in a busy hour actually sees.
+  check('the whole order', order(awayHeat, awayWinter, localHeat, localStorm, awayTornado),
+    ['Tornado Warning', 'Severe Thunderstorm Warning', 'Heat Advisory',
+     'Winter Storm Warning', 'Heat Advisory']);
+
+  // A comparator that is not a total order sorts differently depending on input order, which shows
+  // up as a list that reshuffles itself between 60-second refreshes.
+  check('the order does not depend on the order it arrived in',
+    JSON.stringify(order(awayTornado, localStorm, awayWinter, localHeat, awayHeat)),
+    JSON.stringify(order(awayHeat, localHeat, awayWinter, localStorm, awayTornado)));
+}
+
 /* ============ FAMILY_CFG ============ */
 // Storm Mode's per-family presentation. The banner's second line used to live here too, as a
 // fallback sentence per family; it went when the banner dropped to one line — the alert card
@@ -235,4 +295,4 @@ if (failed) {
   console.error(`\n${failed} logic test(s) failed`);
   process.exit(1);
 }
-console.log('ok    logic: rangeMark, alertLevel, FAMILY_CFG and coldVerdict behave');
+console.log('ok    logic: rangeMark, alertLevel, cardCmp, FAMILY_CFG and coldVerdict behave');
