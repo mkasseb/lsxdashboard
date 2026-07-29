@@ -3153,8 +3153,25 @@ function loadAlerts(){
     setStormMode(warn);
     if(typeof tickCountdowns==="function") setTimeout(tickCountdowns,0);   // fill the new countdowns immediately
     if(feats.length===0){
+      /* The scope half earns its place: "no active alerts" without it invites the reader's next
+         question, which is "no alerts WHERE — my street, or the region?". This page treats that
+         distinction as real enough to build a whole fold around it ("N alerts elsewhere in the
+         LSX area"), so the all-clear should answer it too. feats is filtered by isLSX, so an
+         empty list means nothing is out anywhere the office covers — the strong claim, and the
+         reassuring one.
+         It used to say "NWS St. Louis county warning area." — the office's own term for that
+         region, and internal jargon (CWA) outside it: a bare noun phrase, hanging off the end of
+         a finished sentence, in which "county", "warning" and "area" each look like they might be
+         the noun. The region has a plain-English name that this page already uses about itself,
+         in the masthead: eastern Missouri and southwest Illinois. Same two lines on a phone,
+         measured — the jargon was not buying brevity either.
+         The words live in one span rather than sitting directly in the .calmrow flex, so the
+         sentence WRAPS instead of being dealt into columns. As two flex items the claim and its
+         scope were laid out side by side, which reads as a label beside a heading — fine when the
+         second half was a bare noun phrase, wrong once it became the tail of a sentence, since
+         the break landed mid-clause across the row's 10px gap. */
       card.classList.add("calm");
-      el.innerHTML='<div class="calmrow"><span class="cdot"></span>No active watches, warnings or advisories. <span class="cmut">NWS St. Louis county warning area.</span></div>';
+      el.innerHTML='<div class="calmrow"><span class="cdot"></span><span>No active watches, warnings or advisories <span class="cmut">anywhere in eastern Missouri or southwest Illinois.</span></span></div>';
       return;
     }
     card.classList.remove("calm");
