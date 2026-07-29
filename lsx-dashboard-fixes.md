@@ -9,8 +9,12 @@ vanilla JS, Leaflet as the only library, ~107KB transfer, ~1,260 DOM nodes.
 **Prime directive: do not break what's good.** No frameworks, no build step, no new
 runtime dependencies. Every fix below should be plain HTML/CSS/JS edits. Preserve the
 existing dark theme, card layout, `prefers-reduced-motion` support, aria-labels,
-`aria-expanded` accordion behavior, and the hidden-until-needed error fallbacks
-(e.g., the satellite "didn't load" message).
+`aria-expanded` accordion behavior, and the hidden-until-needed error fallbacks.
+
+> **Note (superseded):** the satellite is no longer an `<img>` with a "didn't load"
+> message. It is a NASA GIBS tile layer stacked under the radar on the same Leaflet
+> map, so it fails per-tile like any other layer. See the README's "Radar and
+> satellite are one widget, stacked".
 
 An audit was performed on 2026-07-27 with an Extreme Heat Warning active, which is
 useful context for the alert-card items below.
@@ -144,12 +148,14 @@ keep that. Add a `visibilitychange` listener that toggles a class on `<html>` (e
 `.tab-hidden { animation-play-state: paused }` scoped to the ambient animations) so
 a tab left open all day doesn't burn battery.
 
-### 3.2 Consolidate radar show/hide controls
-There is a top-of-page "Show radar & satellite" button AND a "Hide" button inside the
-Radar card header — two controls for one region's visibility state. Pick one pattern:
-either the card's own Hide/Show toggle, or the top button, and make the remaining
-control clearly reflect current state (e.g., label flips between Show/Hide). Ensure
-`aria-expanded`/`aria-controls` wiring on whichever control survives.
+### 3.2 Consolidate radar show/hide controls — RESOLVED
+There was a top-of-page "Show radar & satellite" button AND a "Hide" button inside the
+Radar card header — two controls for one region's visibility state.
+
+Resolved by removing the state rather than the second control: the Sky card is now
+permanent, so there is nothing to show or hide and both buttons are gone, along with
+`radarWorthy()` and `body.no-radar`. The card's two remaining controls are the Radar
+and Satellite **layer** toggles, which are `aria-pressed` buttons, not a tablist.
 
 ### 3.3 Review duplicated data across cards
 High/low, UV, and record values each appear in 3–4 places (Bottom Line, Now card,

@@ -69,6 +69,9 @@ NAV_ONLY = {
     "https://github.com",
     "https://gispub.epa.gov",
     "https://leafletjs.com",
+    # The satellite layer's attribution link. The TILES come from gibs.earthdata.nasa.gov, which is
+    # a different host and is declared in img-src; this one is only ever an <a href>.
+    "https://www.earthdata.nasa.gov",
     "https://open-meteo.com",
     "https://radar.weather.gov",
     "https://water.noaa.gov",
