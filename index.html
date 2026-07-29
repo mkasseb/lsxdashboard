@@ -174,7 +174,7 @@
      still exists (JS builds them by name, and restored snapshots carry those names), but now it
      only declares what genuinely differs: colour, weight, size. */
   .a2-chip,.a2-more,.a2-radar,.a2-me,.a2-zc,.call-pill,.h24-pill,.hz-chip,
-  .dr-pill,.cpc-pill,.rfcat,.qpfchip,.rail-act,.rs-full,.stn-tools button,.quicklinks a,.dr-none{
+  .dr-pill,.cpc-pill,.rfcat,.qpfchip,.rs-full,.stn-tools button,.quicklinks a,.dr-none{
     display:inline-flex;align-items:center;gap:6px;border-radius:var(--r-pill);
     font-family:inherit;line-height:1.35;text-align:left}
   /* The uppercase micro-label variant — a tag, not a chip. Shorter radius so it reads as a stamp.
@@ -183,7 +183,7 @@
   .rfcat{font-size:var(--fs-2xs);font-weight:800;text-transform:uppercase;
     letter-spacing:var(--ls-eyebrow);border-radius:var(--r-sm);padding:3px 8px}
   /* Members that are real controls keep a touch target; the rest are inert labels. */
-  .a2-more,.a2-radar,.rail-act,.rs-full,.stn-tools button{cursor:pointer;min-height:0}
+  .a2-more,.a2-radar,.rs-full,.stn-tools button{cursor:pointer;min-height:0}
 
   /* ===== Touch targets =====
      The base rule above gives every <button> a 44px min-height, and the line before this one takes
@@ -195,8 +195,8 @@
      Pointer-events are inherited, so it counts as part of its own control for hit-testing while
      being invisible to everything else. Where it overhangs, it overhangs county chips and heading
      text — inert things with no target of their own to lose. */
-  .card h2 a,.rs-tab,.rs-full,.a2-more,.a2-radar,.rail-act,.a2-elsewhere{position:relative}
-  .card h2 a::after,.rs-tab::after,.rs-full::after,.a2-more::after,.a2-radar::after,.rail-act::after,.a2-elsewhere::after{
+  .card h2 a,.rs-tab,.rs-full,.a2-more,.a2-radar,.a2-elsewhere{position:relative}
+  .card h2 a::after,.rs-tab::after,.rs-full::after,.a2-more::after,.a2-radar::after,.a2-elsewhere::after{
     content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
     width:100%;height:100%;min-width:44px;min-height:44px}
   /* Everything else that sets an icon beside a word. An .ic is 1em with no margin of its own, so
@@ -236,13 +236,8 @@
     white-space:nowrap;text-decoration:none}
   .jump a:hover,.jump a:focus-visible{color:var(--text);background:var(--chip);text-decoration:none}
   .jump a:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-  /* The radar card only exists when the weather has earned it, and a nav that lists a section the
-     page doesn't currently have is worse than a nav that's one item shorter. The link comes and
-     goes with the card it points at.
-     It would have been easy to make this link summon the radar instead — but that is a third
-     control for one piece of state (the rail's "Show radar & satellite" and the card's own Hide
-     are already two), and a <nav> link that changes what the page contains isn't navigation. */
-  body.no-radar .jump a[href="#radarCard"]{display:none}
+  /* The Sky card is permanent furniture now, so this entry is an ordinary anchor like the other
+     five — it used to come and go with a card the weather had to earn. */
   /* Every jump target clears the bar. On .card generally rather than the six ids, because the
      radar-polygon and "+N more" jumps land on cards too and were already landing a little high. */
   .card,#main{scroll-margin-top:calc(var(--jump-h) + 12px)}
@@ -358,6 +353,13 @@
     .grid>*:nth-child(5){animation-delay:.13s}
     .grid>*:nth-child(6){animation-delay:.16s}
     .grid>*:nth-child(n+7){animation-delay:.19s}
+    /* The entrance animation ends on `transform:none`, but `both` keeps the animation's fill
+       applied forever after — and a filled transform still computes to a matrix, not to `none`.
+       Any transform makes the element the containing block for `position:fixed` DESCENDANTS, so
+       the Sky card's fullscreen (`position:fixed;inset:0`) was resolving against this .stack
+       instead of the viewport and opening as a 824x24 sliver. Drop the finished animation while
+       fullscreen is up; it has already played, and everything behind the card is covered anyway. */
+    body.radar-full .grid>.stack{animation:none;transform:none}
   }
   .card{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--border);
     border-radius:var(--r-lg);padding:var(--sp-4);box-shadow:var(--shadow);min-width:0}
@@ -383,14 +385,10 @@
   .rail-s:empty{display:none}
   .railhead::after{content:"";flex:1 1 40px;height:1px;background:linear-gradient(90deg,var(--border),transparent)}
   /* Storm Mode drops the band rails: they are chrome, and the page has more urgent things to say
-     with the space. The first rail is the exception, because it carries the only control for the
-     radar's visibility — and hiding that in the one weather where the map matters most is how the
-     old two-button arrangement ended up with no control at all in Storm Mode. The rail survives,
-     stripped to its button; order matches .stack so it stays directly above the radar it toggles
-     rather than falling to the bottom of the reordered grid. */
+     with the space. The first rail used to be an exception — it carried the only control for the
+     sky panel's visibility, and that control could not be allowed to vanish in the one weather
+     where the map matters most. The panel is permanent now, so the rail is chrome like the rest. */
   body.storm .railhead{display:none}
-  body.storm .rail-now{display:flex;order:-6}
-  body.storm .rail-now .rail-t,body.storm .rail-now .rail-s,body.storm .rail-now::after{display:none}
   /* Let a long subtitle wrap on its own, but don't force the short ones (a place name) onto a
      second line — on a phone that costs a row of height for nothing. */
   @media(max-width:480px){.railhead{gap:4px 10px}.railhead::after{display:none}}
@@ -815,51 +813,11 @@
   .leaflet-tooltip.stn-tip:before{display:none}
   .imgfail{padding:22px;text-align:center;color:var(--muted);font-size:var(--fs-md);line-height:1.6}
 
-  /* ===== Conditional radar =====
-     The radar earns its slot the way the AQI card does: only when it has a story to tell. Clear
-     day → no radar, and the conditions card takes the full row (the 24-hour chart gets the whole
-     width back — the one real cost of the hero merge disappears exactly when radar isn't needed).
-     Rain, storms, snow, a watch/warning, or a wet next-few-hours → the strip appears on its own.
-     The rail button summons it by hand (satellite lives in this card too); the close button appears only on
-     a hand-summoned card, because an auto-shown one would just re-show on the next update. */
-  body.no-radar .grid>.stack.col-8{display:none}
-  body.no-radar .grid>.stack.col-4{grid-column:span 12}
-  @media(min-width:681px){
-    body.no-radar .cc-grid{grid-template-columns:repeat(3,1fr)}
-  }
-  /* A full-row calm card must not simply stretch its narrow-column layout — that gave a ~1700px
-     gradient bar and 500px metric tiles holding one number each. Use the width instead: reading
-     block and range on the left, the metrics beside them, the one-line context rows under both,
-     and the chart across the bottom. The card gets SHORTER as it gets wider. */
-  @media(min-width:861px){
-    body.no-radar #current{display:grid;grid-template-columns:minmax(300px,360px) 1fr;
-      column-gap:38px;align-items:start}
-    body.no-radar #current>*{grid-column:1/-1;min-width:0}
-    body.no-radar #current>.cc-main,body.no-radar #current>.cc-today,
-    body.no-radar #current>.cc-expo,
-    body.no-radar #current>.cc-ctx,body.no-radar #current>.stn{grid-column:1}
-    /* The span must match the number of column-1 children, or the metric grid centres against
-       phantom rows. UV and air quality now share one .cc-expo wrapper, so that count is five. */
-    body.no-radar #current>.cc-grid{grid-column:2;grid-row:1/span 6;align-self:center}
-  }
-  @media(min-width:861px) and (max-width:1100px){
-    body.no-radar .cc-grid{grid-template-columns:repeat(2,1fr)}
-  }
-  /* very wide: all six metrics on one row beside the reading */
-  @media(min-width:1600px){
-    body.no-radar .cc-grid{grid-template-columns:repeat(6,1fr)}
-  }
-  .rail-act{padding:5px 12px;font-size:var(--fs-xs);font-weight:700;
-    background:var(--inset);border:1px dashed var(--border);color:var(--accent);font-family:inherit;
-    cursor:pointer;line-height:1.3;white-space:nowrap}
-  .rail-act:hover{border-style:solid;border-color:var(--accent)}
-  /* Always on screen, in both states — it is the toggle, not a summon. Both marks ship in the
-     markup and CSS picks one, rather than JS rewriting a <use> href: it keeps the icon in lockstep
-     with the class that decides everything else, and it keeps both symbols visibly referenced
-     (tools/check.py fails on a sprite symbol nothing points at, and an href assembled at runtime
-     is exactly the kind of reference it cannot see). */
-  body.no-radar #radarPeek .ic-hide,
-  body:not(.no-radar) #radarPeek .ic-show{display:none}
+  /* The Sky card used to earn its slot the way the AQI card does — shown only for rain, storms,
+     snow, a watch/warning or a wet next-few-hours, with a rail button to summon it by hand. That
+     whole subsystem (radarWorthy(), body.no-radar, the show/hide toggle and the full-row "calm"
+     layout for Current Conditions) is gone: the sky is now permanent, so the hero band is always
+     conditions-on-the-left, sky-on-the-right and there is only one layout to reason about. */
 
   /* ===== Radar sizing: a peek, not the product =====
      Compact by default — enough to answer "is anything heading my way", with fullscreen a click
@@ -880,12 +838,15 @@
     cursor:pointer;text-transform:none;letter-spacing:0;line-height:1.3;white-space:nowrap}
   .rs-full:hover{color:var(--accent);border-color:var(--accent)}
   .rs-full:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  /* Expand when inline, close when fullscreen — the class that moves the card picks the mark. */
+  body.radar-full #rsFull .ic-show,
+  body:not(.radar-full) #rsFull .ic-hide{display:none}
   @media(max-width:600px){.rs-full .rsf-t{display:none}.rs-full{padding:5px 9px;font-size:var(--fs-md)}}
 
   /* ===== Radar fullscreen =====
      The card lifts out of the grid and covers the viewport. Nothing about the map changes, so the
-     loop, the polygons and the satellite tab all keep working — it simply gets the room to use
-     them. Body scroll is locked so a wheel gesture over the map can't scroll the page behind it. */
+     loop, the layer toggles and the warning polygons all keep working — it simply gets the room to
+     use them. Body scroll is locked so a wheel gesture over the map can't scroll the page behind it. */
   body.radar-full{overflow:hidden}
   body.radar-full #radarCard{
     position:fixed;inset:0;z-index:400;margin:0;border-radius:0;border:0;
@@ -900,24 +861,29 @@
   /* the tap-to-interact guard exists to stop mobile scroll-trapping; fullscreen has no page to trap */
   body.radar-full #radarCard .maplock{display:none}
 
-  /* ===== Radar / Satellite tabs ===== */
+  /* ===== Layer toggles =====
+     These were Radar/Satellite TABS — a tablist that swapped one view for the other. Satellite is
+     a real tile layer on the same map now, so the two aren't alternatives any more and a tablist
+     would be lying about the relationship: they stack. Same chip drawing, different semantics —
+     two independent <button aria-pressed>, and both can be on (the default) or off at once.
+     The dot is doing the work a tab's selected-background used to do. Colour alone would carry it
+     for most people, but "which of these two is on" is exactly the distinction that fails at AA
+     for a red-green viewer, so on/off differs in fill AND ring, not just hue. */
   .rs-tabs{display:inline-flex;gap:4px;background:var(--inset);border:1px solid var(--border);
     border-radius:var(--r-lg);padding:3px}
-  .rs-tab{min-height:0;padding:5px 13px;font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;
+  .rs-tab{min-height:0;padding:5px 11px;font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;
     letter-spacing:.7px;border:0;border-radius:13px;background:transparent;color:var(--muted);
-    font-family:inherit;cursor:pointer;line-height:1.3}
+    font-family:inherit;cursor:pointer;line-height:1.3;display:inline-flex;align-items:center;gap:6px}
+  .rs-tab::before{content:"";width:7px;height:7px;border-radius:50%;flex:0 0 auto;
+    background:transparent;box-shadow:inset 0 0 0 1.5px currentColor}
   .rs-tab:hover{color:var(--text);border-color:transparent}
   .rs-tab.on{background:var(--chip);color:var(--accent)}
+  .rs-tab.on::before{background:currentColor;box-shadow:none}
   .rs-tab:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-  /* Views alternate. The stretch rules give the card a flex column, so a shown view has to be a
-     flex child that can grow; [hidden] must still beat that. */
+  /* One view now, but the class stays: the fullscreen rules target it to make the map the flex
+     child that grows, and the card is still a flex column. */
   .rs-view{display:flex;flex-direction:column;min-width:0}
-  .rs-view[hidden]{display:none}
-  #rsSat .imgwrap{background:#000;align-items:center;justify-content:center}
-  /* The sector image is a fixed 600×600 frame, so it letterboxes rather than distorts or crops —
-     cropping a satellite sector would throw away the part of the region you're looking for. */
-  #rsSat #sat{width:100%;height:100%;object-fit:contain;display:block}
-  @media(max-width:480px){.rs-tab{padding:5px 10px;font-size:var(--fs-xs);letter-spacing:.4px}}
+  @media(max-width:480px){.rs-tab{padding:5px 9px;font-size:var(--fs-xs);letter-spacing:.4px;gap:5px}}
 
   /* Tap-to-interact overlay for map iframes (Fix 1 — kills mobile scroll-trap) */
   .maplock-wrap{position:relative}
@@ -958,8 +924,8 @@
      clock read exactly like a record from 1936. A number the eye can land on, then the detail.
      The value and sub-lines are phrases with <b> inside them and are deliberately NOT flex —
      flex promotes each text run to its own item and opens gaps mid-phrase ("burn ~ 29 min").
-     136px is not arbitrary: body.no-radar gives column 1 a minimum of 300px, and two tracks plus
-     the gap have to fit inside it or auto-fit silently stacks them on the commonest layout. */
+     136px is not arbitrary: the hero's left column is a third of the grid, and two tracks plus the
+     gap have to fit inside it at the narrowest desktop width or auto-fit silently stacks them. */
   .cc-expo{display:grid;grid-template-columns:repeat(auto-fit,minmax(136px,1fr));gap:10px;margin-top:12px}
   .cc-uv:empty,.aqi-mini:empty{display:none}
   .cc-expo .v{line-height:1.25}
@@ -1377,7 +1343,7 @@
   footer a{color:inherit;text-decoration:underline;text-underline-offset:2px}
 </style>
 </head>
-<body class="no-radar">
+<body>
 <!-- First focusable thing on the page, and deliberately ahead of the sprite so it stays that way.
      Everything between the top of the document and the dashboard is one header row and a search
      box, but a keyboard user still has to walk them on every visit. -->
@@ -1508,12 +1474,11 @@
      browser does that, and `scroll-margin-top` on the cards is what keeps a heading from landing
      underneath this bar. It has to be a direct child of <body>: a sticky element only sticks while
      its own containing block is on screen, so parking it inside <header> would unstick it the
-     moment the header scrolled away, which is the exact moment it becomes useful.
-     Radar is the one entry that comes and goes — see body.no-radar in the stylesheet. -->
+     moment the header scrolled away, which is the exact moment it becomes useful. -->
 <nav class="jump" id="jumpNav" aria-label="Jump to a section">
   <a href="#alertsCard">Alerts</a>
   <a href="#currentCard">Now</a>
-  <a href="#radarCard">Radar</a>
+  <a href="#radarCard">Sky</a>
   <a href="#forecastCard">7-Day</a>
   <a href="#riversCard">Rivers</a>
   <a href="#climateCard">Climate</a>
@@ -1551,14 +1516,6 @@
   <div class="railhead rail-now col-12">
     <span class="rail-t">Right now</span>
     <span class="rail-s" id="railNowSub"></span>
-    <!-- The ONE control for whether the sky panel is on screen. It has to live out here rather
-         than in the card's own header, for the reason that decided it: when the radar is hidden
-         the card does not exist, so a control inside it can never be the "Show". Label, icon and
-         aria-expanded all flip; syncRadarToggle() owns them. -->
-    <button type="button" class="rail-act" id="radarPeek" aria-controls="radarCard" aria-expanded="false"
-      ><svg class="ic ic-show" aria-hidden="true"><use href="#i-target"/></svg
-      ><svg class="ic ic-hide" aria-hidden="true"><use href="#i-close"/></svg
-      ><span id="radarPeekTxt">Show radar &amp; satellite</span></button>
   </div>
 
   <!-- CURRENT -->
@@ -1586,23 +1543,34 @@
     </section>
   </div>
 
-  <!-- SKY HERO — radar and satellite as two views of one widget.
+  <!-- SKY HERO — radar and satellite STACKED on one map.
        They answer the same question at different scales ("what is overhead, and what is heading
-       this way"), so they share a card and a tab swaps which one is showing. The radar is a live
-       zoomable WMS map; the satellite is NESDIS's fixed-extent sector image, not a tile source, so
-       these are alternating views rather than stacked layers on one map. -->
+       this way"), and the honest way to show that is one over the other: cloud shield from GOES,
+       reflectivity from the radar sitting inside it, so you can see the storm and the system that
+       is carrying it in a single glance. It used to be two alternating views because the satellite
+       was NESDIS's sector JPEG — a fixed-extent picture that cannot align with a pannable map. The
+       satellite is now NASA GIBS's GOES-East GeoColor tile layer, in the map's own projection, so
+       it registers with the radar at every zoom and pan and the tabs became layer toggles. -->
   <div class="stack col-8">
   <section class="card hero" id="radarCard">
     <h2>
-      <span class="rs-tabs" id="rsTabs" role="tablist" aria-label="Sky view">
-        <button type="button" class="rs-tab on" data-v="radar" role="tab" aria-selected="true">Radar</button>
-        <button type="button" class="rs-tab" data-v="sat" role="tab" aria-selected="false">Satellite</button>
+      <span class="rs-tabs" id="rsTabs" role="group" aria-label="Map layers">
+        <button type="button" class="rs-tab on" data-l="radar" aria-pressed="true">Radar</button>
+        <button type="button" class="rs-tab on" data-l="sat" aria-pressed="true">Satellite</button>
       </span>
       <span class="rs-right">
         <!-- "Hide" used to live here, next to Fullscreen. It was the other half of a toggle whose
              two halves sat a screen apart and disagreed about which word described the state; the
-             rail button above is that toggle now. -->
-        <button type="button" class="rs-full" id="rsFull" aria-expanded="false" aria-controls="rsRadar"><svg class="ic" aria-hidden="true"><use href="#i-expand"/></svg><span class="rsf-t">Fullscreen</span></button>
+             card is permanent now, so neither half exists. -->
+        <!-- Both marks ship in the markup and CSS picks one, rather than JS rewriting a <use>
+             href: it keeps the icon in lockstep with the class that decides everything else, and
+             it keeps both symbols visibly referenced (tools/check.py fails on a sprite symbol
+             nothing points at, and an href assembled at runtime is exactly the kind of reference
+             it cannot see). This used to be the rail toggle's trick; it outlived that button. -->
+        <button type="button" class="rs-full" id="rsFull" aria-expanded="false" aria-controls="rsRadar"
+          ><svg class="ic ic-show" aria-hidden="true"><use href="#i-expand"/></svg
+          ><svg class="ic ic-hide" aria-hidden="true"><use href="#i-close"/></svg
+          ><span class="rsf-t">Fullscreen</span></button>
         <span class="link" id="rsLink"><a href="https://radar.weather.gov/station/KLSX/standard" target="_blank" rel="noopener">Official KLSX ↗</a></span>
       </span>
     </h2>
@@ -1618,19 +1586,7 @@
         <span class="rc-t" id="radarFrameTime"></span>
       </div>
     </div>
-    <div class="rs-view" id="rsSat" hidden>
-      <div class="imgwrap">
-        <!-- Deliberately no src. The sector image is ~290 KB — the heaviest thing on the page by a
-             wide margin — and a hardcoded src had the browser fetching it at parse time, before the
-             page had decided whether this card is even shown, and then refreshImages() fetched the
-             same picture AGAIN under a cache-buster. refreshImages() is now the only thing that sets
-             src, and it fetches nothing while the card is hidden. An <img> with no src attribute
-             makes no request and fires no error event, so satFail stays a real-failure message. -->
-        <img id="sat" alt="GOES-19 Upper Mississippi Valley GeoColor" onerror="imgFail(this,'satFail')">
-        <div class="imgfail" id="satFail" style="display:none">Satellite image didn't load. <a href="https://www.star.nesdis.noaa.gov/GOES/sector.php?sat=G19&sector=umv" target="_blank" rel="noopener">Open GOES-East ↗</a></div>
-      </div>
-    </div>
-    <div class="imgcap" id="rsCap"><span>Official NOAA/NWS radar &middot; tap a <b>warning polygon</b> to jump to its alert &middot; basemap &copy; CARTO/OSM</span><span>auto-updates</span></div>
+    <div class="imgcap" id="rsCap"><span></span><span></span></div>
   </section>
   </div>
 
@@ -2053,8 +2009,9 @@ function renderHourly24(hrs){
     window.addEventListener("resize",function(){ clearTimeout(rt); rt=setTimeout(function(){ renderHourly24(); },150); });
   }
 }
-function imgFail(img,failId){img.style.display="none";var f=document.getElementById(failId);if(f)f.style.display="block";}
-function bust(url){return url+(url.indexOf("?")>=0?"&":"?")+"_t="+Date.now();}
+/* imgFail() and bust() lived here. Both existed for the NESDIS sector JPEG — the one <img> feed on
+   the page — and went with it: tile layers report failure per tile, and the satellite endpoint
+   answers `no-store`, so there is nothing left to hand-bust. */
 /* The sprite name to draw when the Meteocons CDN is unreachable. Coarser than wxName() on purpose:
    this is the degraded path, so it trades sleet-vs-snow precision for glyphs that stay legible at
    the 18-24px the failed <img> had reserved. */
@@ -2247,9 +2204,29 @@ function initMapLocks(){
   },{passive:true});
 }
 
-/* ============ RADAR (Official NWS via Leaflet + warning polygons) ============ */
+/* ============ SKY MAP (NWS radar + GOES satellite + warning polygons) ============ */
 var rvMap=null, rvBase=null, rvMarker=null, nwsRadar=null, warnLayer=null;
+var satLayer=null, satLabels=null;
 var NWS_WMS="https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows";
+/* NASA GIBS serves GOES-East GeoColor as WMTS in the map's own projection (EPSG:3857), which is
+   the whole reason the satellite can be a LAYER now instead of a separate view. The old source \u2014
+   NESDIS's `SECTOR/umv/GEOCOLOR/600x600.jpg` \u2014 is a finished picture in a fixed frame: nothing in
+   it says where its corners are, and its projection isn't the map's, so it could never be made to
+   sit on top of the radar. This is the same imagery, tiled and georeferenced.
+
+   Two details of the endpoint decide the code below:
+   \u00b7 The path is {TileMatrix}/{TileRow}/{TileCol} \u2014 i.e. z/y/x, NOT Leaflet's usual z/x/y order.
+   \u00b7 Leaving the time segment out ("\u2026/default/GoogleMapsCompatible_Level7/\u2026") resolves to the newest
+     frame GIBS has, and it answers `no-store`. Asking for an explicit timestamp is worse on both
+     counts: the archive has gaps (a missing 10-minute slot is a hard 404, so a computed "now minus
+     latency" guess would blank the layer), and a dated URL is cacheable, which is the opposite of
+     what a live panel wants. Undated + no-store means a fresh layer object always fetches current
+     pixels with no cache-buster in the URL. */
+var GIBS_SAT="https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/GOES-East_ABI_GeoColor/default/GoogleMapsCompatible_Level7/{z}/{y}/{x}.png";
+/* GoogleMapsCompatible_Level7 means levels 0\u20137 exist; z8 and beyond answer HTTP 400. maxNativeZoom
+   lets Leaflet upscale past that instead of requesting tiles that aren't there and leaving holes.
+   Nothing is lost by stopping at 7: ABI GeoColor is 2 km data, and z7 is already finer than that. */
+var SAT_MAX_NATIVE=7;
 function effectiveLight(){
   // data-theme always holds the resolved theme; the "auto" pref never reaches the DOM
   return document.documentElement.getAttribute("data-theme")==="light";
@@ -2259,7 +2236,20 @@ function baseUrl(){
     ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
     : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
 }
-function updateRadarBase(){ if(rvBase) rvBase.setUrl(baseUrl()); }
+/* GeoColor is opaque imagery: laid over the basemap it hides every state line and city name the
+   basemap was drawing, and a satellite view with no geography under it is a pretty picture you
+   can't locate yourself in. CARTO publishes the label half of the same basemap separately, so the
+   fix is to put the labels back on TOP of the imagery rather than to make the imagery translucent
+   (which just turns both layers to mud). Same origin as the basemap \u2014 no new CSP entry. */
+function labelUrl(){
+  return effectiveLight()
+    ? "https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png";
+}
+function updateRadarBase(){
+  if(rvBase) rvBase.setUrl(baseUrl());
+  if(satLabels) satLabels.setUrl(labelUrl());
+}
 function initRadarMap(){
   var el=document.getElementById("radar");
   if(typeof L==="undefined"||!el){
@@ -2267,12 +2257,28 @@ function initRadarMap(){
     return;
   }
   rvMap=L.map(el,{zoomControl:true,attributionControl:true,scrollWheelZoom:true,minZoom:4,maxZoom:12}).setView([current.lat,current.lon],7);
-  rvBase=L.tileLayer(baseUrl(),{subdomains:"abcd",maxZoom:12,
-    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> &middot; Radar &amp; warnings: <a href="https://www.weather.gov" target="_blank" rel="noopener">NOAA/NWS</a>'}).addTo(rvMap);
+  /* Reflectivity gets its own pane so "Radar off" is one style change instead of a negotiation
+     with the frame pool. The loop keeps ~10 stacked WMS layers alive and cross-fades them by
+     opacity; adding a second meaning to that opacity \u2014 off vs. not-the-current-frame \u2014 is how you
+     get a layer that reappears on the next sweep. The pane sits above the tiles (200) and below
+     the overlays (400), which is also exactly where it belongs visually: on the clouds, under the
+     warning polygons. Warnings deliberately do NOT toggle with it \u2014 someone who turns reflectivity
+     off to look at the cloud shield still needs to see where the warning is. */
+  rvMap.createPane("radarPane").style.zIndex=350;
+  rvBase=L.tileLayer(baseUrl(),{subdomains:"abcd",maxZoom:12,zIndex:1,
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> &middot; Radar &amp; warnings: <a href="https://www.weather.gov" target="_blank" rel="noopener">NOAA/NWS</a> &middot; Satellite: <a href="https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs" target="_blank" rel="noopener">NASA GIBS</a>/NOAA'}).addTo(rvMap);
+  satLayer=L.tileLayer(GIBS_SAT,{maxZoom:12,maxNativeZoom:SAT_MAX_NATIVE,zIndex:5,
+    attribution:'GOES-19 GeoColor'});
+  satLabels=L.tileLayer(labelUrl(),{subdomains:"abcd",maxZoom:12,zIndex:6});
+  /* Added straight away, not left for the catch in refreshRadarLayer(): the capabilities fetch
+     takes a moment, and this paints reflectivity NOW rather than showing an empty map until the
+     frame list resolves. The success path removes it once the pooled frames can drive. */
   nwsRadar=L.tileLayer.wms(NWS_WMS,{
-    layers:"conus_bref_qcd",format:"image/png",transparent:true,opacity:0.8,version:"1.3.0",zIndex:10
+    layers:"conus_bref_qcd",format:"image/png",transparent:true,opacity:0.8,version:"1.3.0",
+    pane:"radarPane"
   }).addTo(rvMap);
   rvMarker=L.circleMarker([current.lat,current.lon],{radius:5,color:"#4aa3ff",weight:2,fillColor:"#4aa3ff",fillOpacity:.9,interactive:false}).addTo(rvMap);
+  applySkyLayers(true);
   setTimeout(function(){ if(rvMap) rvMap.invalidateSize(); },250);
   /* The radar now stretches to whatever height the hero column ends up at, and that height moves
      as feeds land — not only on window resize, which is the only thing Leaflet watches by itself.
@@ -2314,7 +2320,7 @@ function buildRadarFrames(times){
     var lyr=radarPool[t];
     if(!lyr){
       lyr=L.tileLayer.wms(NWS_WMS,{layers:"conus_bref_qcd",format:"image/png",transparent:true,
-        version:"1.3.0",time:t,opacity:0,zIndex:10});
+        version:"1.3.0",time:t,opacity:0,pane:"radarPane"});
       lyr.on("load",function(){ lyr._ready=1; updateRadarCtl(); });
       lyr.addTo(rvMap);
       radarPool[t]=lyr;
@@ -2398,7 +2404,7 @@ function initRadarCtl(){
 }
 function refreshRadarLayer(){
   if(!rvMap) return;
-  if(document.body.classList.contains("no-radar")) return;   // hidden card fetches nothing; show refreshes
+  if(!skyOn.radar) return;   // layer switched off fetches nothing; applySkyLayers refreshes on the way back
   fetchRadarTimes().then(function(times){
     var wasLatest=(radarIdx<0)||(radarIdx>=radarFrames.length-1);
     buildRadarFrames(times);
@@ -2648,8 +2654,6 @@ function loadForecast(){
         smart.hourly=hrs;
         renderHourly24(hrs);
         var hl=document.getElementById("h24loc"); if(hl) hl.textContent=current.name.replace(" (home)","");
-        // smart.hourly just changed and radarWorthy() reads it — the radar slot must re-decide.
-        if(typeof updateRadarSlot==="function") updateRadarSlot();
         if(typeof renderTheCall==="function") renderTheCall();
       }
     });
@@ -2705,7 +2709,6 @@ function loadCurrent(){
       : "The weather station these readings come from";
     stEl.classList.add("has-hint");
     document.body.setAttribute("data-wx", wxGroup(desc,day));
-    if(typeof updateRadarSlot==="function") updateRadarSlot();   // precipitation observed → radar appears
     heroNow.temp=temp;   // where "now" sits inside today's range, once the 7-day has landed
     el.innerHTML='<div class="cc-main"><div class="cc-icon">'+wxImg(desc,day,64)+'</div><div>'
       +'<div class="cc-temp">'+(temp!=null?temp+"°":"—")+'</div><div class="cc-desc">'+esc(desc)+'</div>'
@@ -2805,16 +2808,6 @@ function loadAlerts(){
       warn=wp; break;
     }
     setStormMode(warn);
-    // Gate smart.warning by family: it feeds radarWorthy(), and a Heat or Winter Storm Warning
-    // shouldn't summon the radar by itself (falling snow already does via data-wx).
-    var warnFam=warn?eventFamily(warn.event):null;
-    smart.warning=!!warn&&!!RADAR_FAMILIES[warnFam];
-    smart.watch=feats.some(function(f){
-      var ev=(f.properties.event||"").toLowerCase();
-      if(ev.indexOf("tornado watch")<0&&ev.indexOf("severe thunderstorm watch")<0) return false;
-      return !localMode||!!alertCoversMe(f);   // a watch summons the radar only if it includes you
-    });
-    if(typeof updateRadarSlot==="function") updateRadarSlot();   // warning/watch just changed → radar re-decides
     if(typeof tickCountdowns==="function") setTimeout(tickCountdowns,0);   // fill the new countdowns immediately
     if(feats.length===0){
       card.classList.add("calm");
@@ -3095,12 +3088,6 @@ function eventFamily(ev){
   if(/wind|gale|storm warning|hurricane|tropical/.test(ev)) return "wind";
   return "convective"; // default treatment (red)
 }
-/* Which warning families put something ON the radar. Every family engages Storm Mode — theme,
-   banner, prime card — but only convection and flooding are things you go to a reflectivity map to
-   find. Heat, wind, fire and winter warnings describe the air, not echoes in it, so they leave the
-   radar slot to the conditions card. Falling snow still summons the radar by itself through
-   data-wx, which is the case a Winter Storm Warning would have wanted it for anyway. */
-var RADAR_FAMILIES={convective:1,flood:1};
 /* Per-family presentation: icon, the most-relevant card to float to the prime slot, and — where
    present — `merge`, which marks the family's products as foldable into one banner (its value
    names the hazard, for the reader of this table). A family carries `merge` only if its products
@@ -3131,12 +3118,10 @@ function setStormMode(warnProps){
     // Start the radar loop NOW — its autoplay gate only ran on tile-load / the 4-min refresh,
     // which could leave the loop parked for minutes right after a warning popped.
     if(typeof updateRadarCtl==="function") updateRadarCtl();
-    if(typeof updateRadarSlot==="function") updateRadarSlot();   // a live warning summons the radar
   }else{
     STORM_FAMILY=null; STORM_PRIME="obsCard";
     body.classList.remove("storm");
     body.removeAttribute("data-storm");
-    if(typeof updateRadarSlot==="function") updateRadarSlot();   // …and it may stand down with the warning
     [].forEach.call(document.querySelectorAll(".storm-prime"), function(e){ e.classList.remove("storm-prime"); });
   }
   // Class/attribute changes aren't watched by the masonry observer — repack explicitly so the
@@ -4554,155 +4539,113 @@ function loadStationPlot(){
     }
   }).catch(function(){});
 }
-/* The satellite fetches on the same contract as the radar layer: a hidden card downloads nothing,
-   and updateRadarSlot() refreshes on the hidden→shown edge. At ~290 KB for a card that is absent on
-   any ordinary day, that is the difference between the page's largest download and no download.
+/* ---- Sky layer toggles ----
+   Radar and satellite stack on one map now, and each button is an independent on/off. They were
+   TABS, which is the right control for two views that cannot coexist and the wrong one the moment
+   they can: a tablist tells a screen reader "pick exactly one of these", which stopped being true
+   when the satellite became a layer. Two <button aria-pressed> say what is actually on offer.
+   Both on is the default and the whole point of the card.
 
-   The stamp guards one specific collision. On a storm-mode cold load updateRadarSlot() reveals the
-   card from inside loadForecast()/loadAlerts(), and refreshAll() calls this the instant those same
-   loaders settle — two fetches milliseconds apart, which is precisely the waste that dropping the
-   hardcoded src was meant to end. NESDIS posts a new sector image every 5 minutes, so the second
-   copy would be the same picture anyway. The window sits far below that cadence on purpose: the
-   scheduler ticks every 30s and fires this at >=5min, so it can never swallow a scheduled refresh. */
-var SAT_DEDUPE_MS=30000, satAt=0;
-function refreshImages(){
-  if(document.body.classList.contains("no-radar")) return;   // hidden card fetches nothing; the reveal refreshes
-  var sat=document.getElementById("sat");
-  if(!sat) return;
-  // Ahead of the display reset, so a collapsed duplicate leaves a failed load showing its message.
-  if(satAt&&Date.now()-satAt<SAT_DEDUPE_MS) return;
-  satAt=Date.now();
-  sat.style.display="block"; var sf=document.getElementById("satFail"); if(sf)sf.style.display="none";
-  sat.src=bust("https://cdn.star.nesdis.noaa.gov/GOES19/ABI/SECTOR/umv/GEOCOLOR/600x600.jpg");
-}
+   A switched-off layer leaves the map rather than merely hiding, so it costs nothing: no tiles,
+   and for the radar no capabilities fetch either. Reflectivity is the exception in HOW it hides —
+   the loop keeps ~10 pooled frames alive and drives them by opacity, so giving opacity a second
+   meaning (off vs. not-the-current-frame) would have the layer reappear on the next sweep. It
+   toggles by its pane's display instead, and the pool is left alone. */
+var skyOn={radar:true, sat:true};
+var SKY_KEY="lsxSky_v1";
+try{
+  var _sk=JSON.parse(localStorage.getItem(SKY_KEY)||"null");
+  /* Both-off is a legal thing to click your way into but a broken thing to LAND on: the card would
+     restore as a bare basemap with nothing on screen explaining why. Persist it, don't restore it. */
+  if(_sk&&(_sk.radar||_sk.sat)){ skyOn.radar=!!_sk.radar; skyOn.sat=!!_sk.sat; }
+}catch(e){}
 
-/* ---- Radar / Satellite view switch ----
-   One card, two views. The radar keeps its loop scrubber and warning-polygon links; the satellite
-   is a plain image, so its controls and caption differ. Switching back to the radar has to poke
-   Leaflet: the map was sized for a hidden container and would otherwise render into a stale one. */
-var RS_VIEW="radar";
-var RS_META={
-  radar:{link:'<a href="https://radar.weather.gov/station/KLSX/standard" target="_blank" rel="noopener">Official KLSX ↗</a>',
-         cap:'Official NOAA/NWS radar &middot; tap a <b>warning polygon</b> to jump to its alert &middot; basemap &copy; CARTO/OSM',
-         note:'auto-updates'},
-  sat:  {link:'<a href="https://www.star.nesdis.noaa.gov/GOES/sector.php?sat=G19&amp;sector=umv" target="_blank" rel="noopener">GOES loop ↗</a>',
-         cap:'NESDIS GOES-19 GeoColor &middot; Upper Mississippi Valley sector',
-         note:'every 5 min'}
-};
-function setSkyView(v){
-  if(v!=="sat") v="radar";
-  RS_VIEW=v;
-  var isSat=(v==="sat");
-  var rr=document.getElementById("rsRadar"), rs=document.getElementById("rsSat");
-  if(rr) rr.hidden=isSat;
-  if(rs) rs.hidden=!isSat;
-  [].slice.call(document.querySelectorAll("#rsTabs .rs-tab")).forEach(function(b){
-    var on=(b.getAttribute("data-v")===v);
-    b.classList.toggle("on",on);
-    b.setAttribute("aria-selected",on?"true":"false");
-  });
-  var m=RS_META[v];
-  var lk=document.getElementById("rsLink"); if(lk) lk.innerHTML=m.link;
+/* The caption names what is actually drawn, so it can never promise a satellite that is switched
+   off. The ↗ link follows the same rule; radar wins when both are on, because the loop and the
+   warning polygons are its. */
+function syncSkyMeta(){
+  var lk=document.getElementById("rsLink");
+  if(lk) lk.innerHTML = skyOn.radar
+    ? '<a href="https://radar.weather.gov/station/KLSX/standard" target="_blank" rel="noopener">Official KLSX ↗</a>'
+    : '<a href="https://www.star.nesdis.noaa.gov/GOES/sector.php?sat=G19&amp;sector=umv" target="_blank" rel="noopener">GOES loop ↗</a>';
+  var bits=[];
+  if(skyOn.radar) bits.push('Official NOAA/NWS radar &middot; tap a <b>warning polygon</b> to jump to its alert');
+  if(skyOn.sat) bits.push('GOES-19 GeoColor via NASA GIBS');
+  if(!bits.length) bits.push('Both layers are off — the buttons above bring them back');
+  bits.push('basemap &copy; CARTO/OSM');
+  var note=skyOn.radar?'radar every ~4 min':(skyOn.sat?'satellite every ~10 min':'');
   var cap=document.getElementById("rsCap");
-  if(cap) cap.innerHTML='<span>'+m.cap+'</span><span>'+m.note+'</span>';
-  if(isSat){ radarPauseLoop(); }
-  else if(rvMap){ setTimeout(function(){ rvMap.invalidateSize(); },0); }
-  if(typeof scheduleMasonry==="function") scheduleMasonry();
+  if(cap) cap.innerHTML='<span>'+bits.join(' &middot; ')+'</span><span>'+note+'</span>';
+  [].slice.call(document.querySelectorAll("#rsTabs .rs-tab")).forEach(function(b){
+    var on=!!skyOn[b.getAttribute("data-l")];
+    b.classList.toggle("on",on);
+    b.setAttribute("aria-pressed",on?"true":"false");
+  });
+}
+function applySkyLayers(first){
+  syncSkyMeta();
+  if(!rvMap) return;
+  var pane=rvMap.getPane("radarPane");
+  if(pane) pane.style.display=skyOn.radar?"":"none";
+  if(!skyOn.radar) radarPauseLoop();
+  // The scrubber drives frames nobody can see; it goes with them. (Class-driven display otherwise
+  // — clearing the inline value hands it back to .radar-ctl.ready rather than forcing it open.)
+  var ctl=document.getElementById("radarCtl");
+  if(ctl) ctl.style.display=skyOn.radar?"":"none";
+  [[satLayer,skyOn.sat],[satLabels,skyOn.sat]].forEach(function(p){
+    if(!p[0]) return;
+    if(p[1]&&!rvMap.hasLayer(p[0])) p[0].addTo(rvMap);
+    else if(!p[1]&&rvMap.hasLayer(p[0])) rvMap.removeLayer(p[0]);
+  });
+  // Back on, the frame list is as stale as the switch-off left it — same edge the old hidden→shown
+  // reveal handled for the whole card.
+  if(!first&&skyOn.radar) refreshRadarLayer();
+}
+function setSkyLayer(name,on){
+  if(name!=="radar"&&name!=="sat") return;
+  skyOn[name]=!!on;
+  try{ localStorage.setItem(SKY_KEY,JSON.stringify(skyOn)); }catch(e){}
+  applySkyLayers(false);
 }
 document.addEventListener("click",function(e){
   var b=e.target.closest?e.target.closest("#rsTabs .rs-tab"):null;
-  if(b) setSkyView(b.getAttribute("data-v"));
+  if(!b) return;
+  var n=b.getAttribute("data-l");
+  setSkyLayer(n,!skyOn[n]);
 });
 
-/* ---- Conditional radar ----
-   The card is shown when the sky is a story and hidden when it isn't. "Worthy" means: Storm Mode
-   for a radar-shaped family (see RADAR_FAMILIES), a convective/flood warning or a tornado/severe
-   watch, precipitation falling now (data-wx), or — inside the next 6 hours — a ≥40% rain chance or
-   a thunderstorm mention that clears THUNDER_MIN_POP. I.e. every case where a visitor would
-   actually open a radar. A dry warning (heat, wind, fire) still gets the full Storm Mode treatment,
-   just not the radar. Manual show (the rail button) overrides a calm verdict but never suppresses a
-   stormy one; the close button only needs to exist for the manual case. */
-/* null = follow the weather; true/false = the visitor decided. It used to be a one-way boolean
-   that could only force the panel ON, which is why an auto-shown radar had no way to be dismissed
-   and why the "Hide" button could only exist on a hand-summoned one. */
-var radarPref=null, radarWasWorthy=false;
-/* How much rain chance a "thunderstorms" mention needs before it counts. NWS reserves "isolated"
-   for 10-20% areal coverage and "scattered" for 30-50%; 25 sits in the gap, so a slight-chance
-   afternoon doesn't summon the map while a genuinely unsettled one does. */
-var THUNDER_MIN_POP=25;
-function radarWorthy(){
-  /* Storm Mode on its own isn't the test — it engages for every warning family, including the dry
-     ones, so an Extreme Heat Warning used to hoist a radar nobody opened the page for. Ask what
-     KIND of storm it is; smart.warning is gated the same way, from the same table. */
-  if(document.body.classList.contains("storm")&&RADAR_FAMILIES[STORM_FAMILY]) return true;
-  if(smart.warning||smart.watch) return true;
-  var wx=document.body.getAttribute("data-wx");
-  if(wx==="rain"||wx==="storm"||wx==="snow") return true;
-  /* A 12-hour thunder lookout kept the radar up all night for storms still eight hours away, so
-     the scan moved to the same 6-hour window as the rain-chance check. Narrowing the window wasn't
-     enough on its own: an "Isolated Showers And Thunderstorms" hour carries the word at 17% while
-     the Bottom Line is still saying "no umbrella needed", and the map came up on an otherwise dry
-     day. The mention now has to clear THUNDER_MIN_POP as well. A missing probability still passes
-     — unknown risk shouldn't hide the map. */
-  var hrs=smart.hourly||[];
-  for(var i=0;i<Math.min(6,hrs.length);i++){
-    var pp=hrs[i].probabilityOfPrecipitation, pv=(pp&&pp.value!=null)?pp.value:null;
-    if(pv!=null&&pv>=40) return true;
-    if((pv==null||pv>=THUNDER_MIN_POP)&&/thunder|t-?storm/i.test(hrs[i].shortForecast||"")) return true;
+/* GIBS posts a new GeoColor frame every ~10 minutes, and Leaflet caches its tile <img>s in the DOM
+   — nothing re-fetches on its own. redraw() would do it, but it drops every tile first and leaves
+   a hole in the map while the replacements load. Build the new layer, swap once it has painted,
+   and the change is invisible. Old and new URLs are identical: the endpoint answers `no-store`, so
+   the browser really does re-request instead of serving the frame we already have, which is why
+   there is no cache-buster here. */
+function refreshSatLayer(){
+  if(!rvMap||!satLayer||!skyOn.sat) return;
+  var old=satLayer, swapped=false;
+  var next=L.tileLayer(GIBS_SAT,{maxZoom:12,maxNativeZoom:SAT_MAX_NATIVE,zIndex:5,
+    attribution:'GOES-19 GeoColor'});
+  function swap(){
+    if(swapped) return; swapped=true;
+    if(satLayer===old&&rvMap.hasLayer(old)) rvMap.removeLayer(old);
+    // A toggle-off mid-swap wins: never resurrect a layer the visitor just switched away from.
+    if(skyOn.sat) satLayer=next;
+    else if(rvMap.hasLayer(next)) rvMap.removeLayer(next);
   }
-  return false;
+  next.once("load",swap);
+  /* If every tile errors "load" never fires, and without this the old layer would stay pinned
+     behind a detached one forever. Swapping anyway makes the failure visible instead of leaving
+     an hour-old frame on screen looking current. */
+  setTimeout(swap,20000);
+  next.addTo(rvMap);
 }
-/* Keeps the single toggle telling the truth: the word and aria-expanded describe a card that may
-   have appeared on its own. The icon swaps in CSS off the same body class — see #radarPeek. */
-function syncRadarToggle(){
-  var b=document.getElementById("radarPeek"); if(!b) return;
-  var shown=!document.body.classList.contains("no-radar");
-  b.setAttribute("aria-expanded",shown?"true":"false");
-  var t=document.getElementById("radarPeekTxt");
-  if(t) t.textContent=(shown?"Hide":"Show")+" radar & satellite";
-}
-function updateRadarSlot(){
-  var worthy=radarWorthy();
-  /* Weather turning severe clears an earlier "hide". This is the safety property the old one-way
-     flag was protecting, said precisely: a decision made on a clear afternoon should not still be
-     suppressing the map when a warning lands, but it should absolutely survive the next refresh
-     on an afternoon that stays clear. Only the not-worthy → worthy EDGE resets it, so a visitor
-     who hides the radar during a storm keeps it hidden. */
-  if(worthy&&!radarWasWorthy) radarPref=null;
-  radarWasWorthy=worthy;
-  var show=(radarPref===null)?worthy:radarPref;
-  var wasHidden=document.body.classList.contains("no-radar");
-  document.body.classList.toggle("no-radar",!show);
-  syncRadarToggle();
-  if(show&&wasHidden){
-    // Leaflet initialised into a display:none container; give it real dimensions and fresh frames.
-    if(rvMap) setTimeout(function(){ if(rvMap) rvMap.invalidateSize(); },0);
-    if(typeof refreshRadarLayer==="function") refreshRadarLayer();
-    if(typeof refreshImages==="function") refreshImages();   // …and the satellite, which fetched nothing while hidden
-  }
-  if(show!==!wasHidden){
-    // The 24-hour chart re-measures only on WINDOW resize, but this toggle changes its container
-    // from full-row to a third of it (and back) with the window untouched — re-render, after the
-    // class change has actually laid out, or 24 labels get crammed into a 423px column.
-    setTimeout(function(){ if(typeof renderHourly24==="function") renderHourly24(); },0);
-  }
-  if(typeof scheduleMasonry==="function") scheduleMasonry();
-}
-document.addEventListener("click",function(e){
-  if(e.target.closest&&e.target.closest("#radarPeek")){
-    radarPref=document.body.classList.contains("no-radar");   // hidden → show, shown → hide
-    if(!radarPref) setRadarFull(false);                       // never leave fullscreen behind a hidden card
-    updateRadarSlot();
-  }
-});
-/* The jump nav needs no script: every link it shows points at a section that is on the page, and
-   the browser does the scrolling. The Radar entry hides itself with the card (body.no-radar in the
-   stylesheet) rather than being a link that summons it. */
+/* The jump nav needs no script: every link points at a section that is always on the page, and the
+   browser does the scrolling. */
 
-/* ---- Radar fullscreen ----
-   The inline radar is a peek; this is the "where exactly, and when" view. The card itself goes
-   fixed-position rather than cloning anything, so the Leaflet instance, the loop, the warning
-   polygons and the satellite tab survive the transition untouched — only the box changes size.
+/* ---- Sky fullscreen ----
+   The inline map is a peek; this is the "where exactly, and when" view. The card itself goes
+   fixed-position rather than cloning anything, so the Leaflet instance, the loop, the layer
+   toggles and the warning polygons survive the transition untouched — only the box changes size.
    Leaflet has to be told, twice: once when the layout has settled and once after the CSS
    transition, or it renders tiles for the old viewport. */
 var radarFull=false, radarFullPrevFocus=null;
@@ -4714,7 +4657,7 @@ function setRadarFull(on){
   if(btn){
     btn.setAttribute("aria-expanded",on?"true":"false");
     var t=btn.querySelector(".rsf-t"); if(t) t.textContent=on?"Close":"Fullscreen";
-    var i=btn.querySelector(".ic use"); if(i) i.setAttribute("href",on?"#i-close":"#i-expand");
+    // The icon is not swapped here — body.radar-full picks which of the button's two marks shows.
   }
   if(on){
     radarFullPrevFocus=document.activeElement;
@@ -5329,7 +5272,7 @@ function initLocation(){
 }
 
 // Shared forecast/hazard state, read by most renderers below.
-var smart={warning:false,watch:false,spcRisk:0,eroRisk:0,fireRisk:0,hourly:[]};
+var smart={spcRisk:0,eroRisk:0,fireRisk:0,hourly:[]};
 /* ============ SUN TIMES ============
    Outlived the card they were written for. Two callers: the hero's sun line (renderHeroToday) and
    the day/night variant of the current-conditions icon. fmtT/fmtDur serve the same line. */
@@ -5829,9 +5772,9 @@ function refreshAll(){
   dot.classList.remove("stale");label.textContent="Refreshing…";
   stampSched([loadAFD,loadAlerts,loadCurrent,loadForecast,loadRivers,loadAqi,loadSpc,loadCpc,loadQpf,
               loadHazards,loadDrought,loadClimate,loadClimateContext,loadUv,loadStationPlot,
-              refreshImages,saveSnapshotIdle]);
+              refreshSatLayer,saveSnapshotIdle]);
   Promise.allSettled([loadAFD(),loadAlerts(),loadCurrent(),loadForecast(),loadRivers(),loadAqi(),loadSpc(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),loadClimate(),loadClimateContext(),loadUv(),loadStationPlot()]).then(function(){
-    refreshImages();
+    refreshSatLayer();
     label.textContent="Refresh";
     document.getElementById("lastUpdate").textContent="Last updated "+new Date().toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"});
     snapSafeSeq=locSeq;  // the screen now matches `current`, so it is safe to snapshot
@@ -5888,6 +5831,11 @@ initLocationUI();
 initLocation();
 restoreSnapshot();   // paint the last good view NOW — before a single fetch (needs `current` from initLocation)
 initMapLocks();
+/* The caption and the toggles' pressed state ship EMPTY and are written by syncSkyMeta(), which
+   otherwise only runs via applySkyLayers() — and that is reached from initRadarMap(), which bails
+   before it if Leaflet never loaded. Call it here so a failed CDN leaves a card that still says
+   what it is, rather than a blank caption over the map's own "open the official radar" fallback. */
+syncSkyMeta();
 resolveRiskLayers();   // warm the layer-id lookup; loadSpc awaits this same memoised promise
 document.getElementById("daily").addEventListener("click",function(e){
   var row=e.target.closest(".day");
@@ -5895,7 +5843,10 @@ document.getElementById("daily").addEventListener("click",function(e){
 });
 document.getElementById("alerts").addEventListener("click",function(e){
   if(e.target.closest(".a2-radar")){       // jump to this alert's polygons on the radar
-    radarPref=true; if(typeof updateRadarSlot==="function") updateRadarSlot();  // can't jump to a hidden card
+    /* The card is always on the page now, so there is nothing to summon — but reflectivity may be
+       switched off, and jumping to a bare basemap to look at a warning is a poor landing. The
+       polygons draw either way; turning radar back on is what the visitor actually meant. */
+    if(!skyOn.radar) setSkyLayer("radar",true);
     var rc=e.target.closest(".alert");
     e.stopPropagation();
     if(rc) showAlertOnRadar(rc.getAttribute("data-evs")||rc.getAttribute("data-aid"));
@@ -5948,7 +5899,7 @@ var SCHED=[
   {fn:loadClimate,  every:6*60*60000},
   {fn:loadClimateContext, every:6*60*60000},
   {fn:loadUv,       every:60*60000},
-  {fn:refreshImages,every:5*60000},
+  {fn:refreshSatLayer,every:10*60000},   // GIBS posts GeoColor on a 10-minute cadence
   {fn:loadStationPlot,every:12*60000},
   {fn:refreshRadarLayer, every:4*60000},
   {fn:saveSnapshotIdle, every:5*60000}   // idle-deferred; the visibilitychange save stays sync
