@@ -611,7 +611,11 @@ with nothing on screen explaining why is a broken first impression.
   height is content-driven and the Sky card's is fixed by its aspect ratio. (It was ~110-170px
   before the conditions footer became a tile pair, which gave the left column back ~50-60px.) It is
   page-edge whitespace under the map rather than a framed hole. Growing the map to close it is
-  exactly the mistake that made it portrait in the first place, so it stays.
+  exactly the mistake that made it portrait in the first place, so it stays. That range used to be
+  a measurement taken at one width and quietly false at every other: the map's height scaled with
+  the viewport while the left column's did not, so the same gap opened to several hundred px on a
+  wide monitor. The page shell caps it — the map stops at ~503px from 1440 up — so the figure above
+  now holds across the range instead of describing a laptop only.
 - The satellite follows a *scrub* but does not *animate*. Stopping on a past radar frame re-points
   it to the matching moment; pressing Loop leaves it on the live frame. Preloading a parallel GOES
   stack is what a real satellite loop needs, and the cost is in the tiles — see below.

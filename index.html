@@ -123,6 +123,20 @@
     padding-left:calc(18px + env(safe-area-inset-left, 0px));
     min-height:100vh;transition:background .4s;
   }
+  /* ===== Page shell: the one decision the desktop layout never made =====
+     Every breakpoint in this file is a max-width. The page was drawn for a phone and each rule
+     narrows it further from there, which left desktop as the DEFAULT branch — not a design, just
+     what is left over when no phone rule matches, growing without limit. Measured at 2560: the grid
+     ran 2524px wide, the search box 2256px, and the jump bar spent 84% of its length on empty pill.
+     The shell cap is not a desktop-only rule and adds no breakpoint: it is arithmetically inert at
+     phone widths, where the column is already narrower than the ceiling, so the value never
+     applies. One layout still, no second set of rules to keep in sync, and the tablet range picks
+     up the same benefit on its way past. The page simply stops growing.
+     #wxbg is deliberately not in this list: it is position:fixed background weather and belongs to
+     the viewport, not to the column. */
+  :root{--maxw:1400px}   /* ≈ the 1440 viewport the hero pair and the 3-column masonry were tuned against */
+  header,main,footer{max-width:var(--maxw);margin-inline:auto}
+
   a{color:var(--accent);text-decoration:none}
   a:hover{text-decoration:underline}
 
@@ -242,6 +256,21 @@
      radar-polygon and "+N more" jumps land on cards too and were already landing a little high. */
   .card,#main{scroll-margin-top:calc(var(--jump-h) + 12px)}
   @media(max-width:480px){.jump a{padding:0 13px}}
+  /* Above phone widths the bar hugs its six links instead of ruling off a column it fills a
+     quarter of — at 1920 the links used 393px of an 1884px pill, and that empty stretch was the
+     loudest thing on the page. It aligns to the shell's LEFT edge rather than centring: the brand
+     above it and the grid below it both start there, and a pill centred between two edge-aligned
+     blocks reads as an accident. The left margin recomputes the shell's own gutter instead of
+     inheriting it, because a sticky element has to stay a direct child of <body> (see the markup
+     note) and therefore cannot sit inside a centring wrapper; below the shell width that term is 0.
+     Held above 680px on purpose. The slack this fixes is only worth fixing when it is vast — at
+     480px the bar runs 77px past its links, and a pill inset from cards that are all flush to the
+     column would look like a mistake rather than a decision. On a phone the bar stays full-width
+     and keeps scrolling exactly as it does today. */
+  @media(min-width:681px){
+    .jump{width:max-content;max-width:100%;
+      margin-left:max(0px, calc((100% - var(--maxw)) / 2));margin-right:auto}
+  }
 
   header .top{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:16px}
   /* In installed/standalone web-app mode iOS overlays the status bar — guarantee clearance */
@@ -898,6 +927,28 @@
      value so the map is landscape at every width instead of going portrait in narrow columns. */
   #radarCard .imgwrap{aspect-ratio:16/9}
   #radarCard #radar{height:100%}
+  /* The ratio fixes the SHAPE but not the SIZE, and height is what costs a reader the fold. The
+     shell cap already holds the map near the ~500px this was drawn at, but viewport HEIGHT is a
+     second axis a width cap cannot see: at 1366x768 the map still ran past the bottom of the
+     screen with the entire dashboard underneath it. The vh term is what does the work; 560px is
+     just the ceiling on a tall monitor. Clamping height against an unchanged width only widens the
+     ratio, which is the direction this card already wants — the note above is about never going
+     PORTRAIT, and a 1.9:1 strip is further from that, not nearer.
+     Held above 680px so the phone ratios (4/3, and 1/1 in a flood) are left exactly as they are:
+     62vh on a short handset would have clipped them, and the phone layout is the one that works.
+     Fullscreen is excluded because there the map is flex-filled with aspect-ratio off (below), and
+     a max-height is the single property able to break that. */
+  @media(min-width:681px){
+    body:not(.radar-full) #radarCard .imgwrap{max-height:min(560px, 62vh)}
+    /* Storm Mode's entire point is handing the map height back for the two families with echoes in
+       them, and the everyday ceiling was quietly taking that back on a short screen: at 1366x768 a
+       flood clamped to 476px, i.e. below the 16:9 it would have had on a calm day, so engaging
+       Storm Mode made the map SMALLER. A storm keeps a ceiling — nothing here should be unbounded
+       — just a looser one, high enough that the 16:10 lands untouched at every width the shell
+       allows and the clamp only bites on a genuinely short viewport. */
+    body.storm[data-storm="convective"]:not(.radar-full) #radarCard .imgwrap,
+    body.storm[data-storm="flood"]:not(.radar-full) #radarCard .imgwrap{max-height:min(640px, 74vh)}
+  }
   /* Storm Mode gives the map space back — but only for weather you'd open a map to FIND.
      This used to be a plain `body.storm` rule, and it could be, because radarWorthy() had already
      guaranteed the card was absent for the dry families: an Extreme Heat Warning engaged Storm
@@ -1360,7 +1411,12 @@
 
   /* Location bar */
   .locbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:16px}
-  .locsearch{position:relative;flex:1 1 240px;min-width:170px;margin:0}
+  /* Capped: this box takes a town name, not a paragraph, and letting it grow with the shell made a
+     2256px input at 2560. The cap sizes it to its longest realistic query rather than to whatever
+     room happens to be going. .locNow keeps its margin-left:auto below, so the current location
+     still sits at the shell's right edge instead of trailing the box. The cap also bounds .locsug,
+     which is absolutely positioned to this element's edges. */
+  .locsearch{position:relative;flex:1 1 240px;min-width:170px;max-width:520px;margin:0}
   .locsearch #locSearch{width:100%;background:var(--panel-2);color:var(--text);
     border:1px solid var(--border);border-radius:var(--r-md);padding:10px 14px;font-size:var(--fs-md);min-height:44px;font-family:inherit;box-sizing:border-box}
   .locsearch #locSearch:focus{outline:none;border-color:var(--accent)}
