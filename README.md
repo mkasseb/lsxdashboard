@@ -167,8 +167,8 @@ internals deliberately stay on explicit pixels: those values are tuned to SVG ge
 text system, and folding them into the type scale would be a category error.
 
 **The page is ordered by what a visitor came for.** Alerts first (in calm weather that card
-collapses to a single all-clear line), then the Bottom Line, then the hero band — "Now & Next 24
-Hours" on the left, radar on the right — then the forecast discussion, and finally the masonry.
+collapses to a single all-clear line), then the Bottom Line, then The Pulse, then the hero band —
+"Now & Next 24 Hours" on the left, radar on the right — and finally the masonry.
 The Bottom Line (né The Call; ids are still `callCard`/`callRow`) is the page reasoning on the
 visitor's behalf rather than handing them numbers: rain/storm windows, heat and cold, UV with a
 burn clock, wind, air quality, a temperature-crash warning, climate records — and one synthesized
@@ -180,6 +180,32 @@ drop below the hero under `body.storm`, on the theory that a live warning makes 
 advice — but that filed the plain-English read of the warning *under* a full-width hero band,
 a scroll away on a phone in exactly the conditions someone checks this page one-handed. The radar
 still leads the hero; the sentence explaining it just arrives first.
+
+**The Pulse rides directly behind it, and the clamp is what makes that affordable.** `#afdCard` is
+the same kind of card as the Bottom Line — one verdict computed by this page, one written by a
+human at NWS St. Louis — so the two reason together above the numbers. It used to sit below the
+hero under "the week ahead & deeper context", which mis-filed it twice: `extractAFD` reaches for
+Key Messages, then the Synopsis, then the **Short-Term Outlook**, all of which describe the next
+12–24 hours rather than the week, and the rank buried the forecaster's read of the day some
+2,000px down. But which of those three sections a given AFD carries is NWS's call, not ours — Key
+Messages is a few tight bullets, the Short-Term Outlook several dense paragraphs — so at this rank
+the card is collapsed to four lines of `--fs-md` with the rest behind "Read the full discussion".
+Unclamped it would push the radar and the temperature off a phone's first screen on precisely the
+days the discussion is worth reading, which is the mistake the paragraph above describes Storm Mode
+making with the Bottom Line.
+
+`syncAfdClamp()` decides whether the control exists at all by *measuring*, because whether anything
+is hidden depends on the section NWS sent and on how it wraps at this width — a "Read more" over
+fully visible prose is a lie about there being more. It measures with `.open` forced off and the
+clamp forced on (an expanded card has `max-height:none`, so every card would otherwise measure as
+short enough to need no button) and runs from three places: `renderAFD`, `restoreSnapshot`, and a
+debounced `resize`. It bails to no-clamp when the body and the button aren't both present, which
+covers `renderAFD`'s failure path and any snapshot predating this markup. The clamp is a
+`max-height`, not `-webkit-line-clamp` as `.ab-sub` uses: `display:-webkit-box` folds the `<p>`
+children into one box and takes the forecaster's paragraph breaks with them. The fade is a
+`mask-image` rather than a scrim, since the card's background is a gradient between two
+theme-dependent variables and an opaque overlay would have to guess a colour that is right in only
+one theme.
 
 `.railhead` labels name each band and hide under `body.storm`, where the grid reorders for urgency
 and a band label would lie about what follows it. Only *direct* grid children get an `order`, so
