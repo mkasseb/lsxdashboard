@@ -2,7 +2,7 @@
 """Pre-deploy checks for a repo with no build step.
 
 `index.html` is served to production byte-for-byte, so nothing between an edit and a
-visitor's browser would notice a mistake. These are the five mistakes worth catching
+visitor's browser would notice a mistake. These are the six mistakes worth catching
 mechanically:
 
   0. An unbalanced comment in the inline <style>. CSS has no nesting: the FIRST `*/`
@@ -10,6 +10,14 @@ mechanically:
      as live declarations and takes the next rule down with it. Nothing reports this —
      not the parser, not the console — the rule is simply gone, which in practice means
      a fix that was written, reviewed and merged silently does nothing.
+
+  0b. The same mistake in the MARKUP, which is louder and still shipped once. HTML
+     comments do not nest either, so appending a paragraph to a finished `<!-- ... -->`
+     puts that paragraph on the page as visible text with a stray `-->` after it — a
+     wall of prose above the fold, on a weather dashboard. The mirror case, a dropped
+     `-->`, swallows the next comment and everything between: a card leaves the page
+     with no error anywhere. Both are caught here, because check 0 caught neither and
+     CI stayed green through a deploy of the first one.
 
   1. A syntax error in an inline <script>. The whole application is one script block.
      A stray character doesn't degrade one card, it blanks the entire dashboard.
@@ -158,6 +166,78 @@ def check_style_comments(html):
 
     total = sum(len(m.group(1).splitlines()) for m in blocks)
     print("ok    css: %d inline <style> block(s), %d lines, comments balance" % (len(blocks), total))
+    return True
+
+
+def check_html_comments(html):
+    """Every `-->` in the markup closes a comment that was actually open.
+
+    The <style> check above, one function up, for the other half of the file — and for the
+    same failure, which is the one that actually happens. HTML comments do not nest either:
+    the FIRST `-->` ends the comment, so appending a paragraph to a finished `<!-- ... -->`
+    leaves that paragraph as VISIBLE PAGE TEXT with a stray `-->` printed after it. This is
+    louder than the CSS version (a wall of prose lands on the page, above the fold) and
+    somehow easier to miss in review, because the diff still reads like a comment.
+
+    <style> and <script> bodies are blanked first — `-->` inside a regex or a string there
+    is not a comment delimiter, and blanking keeps line numbers honest for the report.
+    """
+    def blank(m):
+        return m.group(0)[: m.start(1) - m.start(0)] + "\n" * m.group(1).count("\n") + m.group(0)[m.end(1) - m.start(0) :]
+
+    markup = INLINE_STYLE.sub(blank, html)
+    markup = INLINE_SCRIPT.sub(blank, markup)
+
+    stray, unterminated, nested, i, opened, open_line = [], [], [], 0, False, 0
+    while i < len(markup):
+        if markup.startswith("<!--", i):
+            if opened:
+                # Comments cannot nest, so a second `<!--` inside an open one is not a comment
+                # at all — it is the NEXT comment, and the `-->` that should have closed this
+                # one went missing. Everything between is being swallowed rather than shown,
+                # which is why it needs its own report: the symptom is markup that vanishes.
+                nested.append((open_line, markup.count("\n", 0, i) + 1))
+            else:
+                opened, open_line = True, markup.count("\n", 0, i) + 1
+            i += 4
+            continue
+        if markup.startswith("-->", i):
+            if not opened:
+                stray.append(markup.count("\n", 0, i) + 1)
+            opened = False
+            i += 3
+            continue
+        i += 1
+    if opened:
+        unterminated.append(open_line)
+
+    if stray or unterminated or nested:
+        lines = ["FAIL  html: comment delimiters don't balance in index.html:", ""]
+        lines += ["        index.html:%d  `-->` with no comment open" % n for n in stray]
+        lines += ["        index.html:%d  `<!--` opened here is never closed" % n for n in unterminated]
+        lines += [
+            "        index.html:%d  `<!--` opened here is still open at index.html:%d, where"
+            " another `<!--` begins" % (a, b)
+            for a, b in nested
+        ]
+        if stray:
+            lines += [
+                "",
+                "      A stray `-->` means the comment ended EARLIER than it looks: everything",
+                "      between that earlier `-->` and this one is rendering as text on the page,",
+                "      with the `-->` itself printed after it. Usually it means prose was appended",
+                "      to a comment that already ended — delete the earlier `-->`, don't add another.",
+            ]
+        if nested or unterminated:
+            lines += [
+                "",
+                "      A comment that swallows the next one has lost its `-->`. Nothing renders",
+                "      an error for that: the markup in between simply stops existing, so a card",
+                "      goes missing from the page with no other symptom.",
+            ]
+        return fail(lines)
+
+    print("ok    html: comments balance")
     return True
 
 
@@ -412,6 +492,7 @@ def main():
     served_html = html + (read(NOT_FOUND) if os.path.exists(NOT_FOUND) else "")
     results = [
         check_style_comments(html),
+        check_html_comments(html),
         check_inline_script_syntax(html),
         check_csp_covers_origins(served_html, headers_text),
         check_icons_resolve(html),
