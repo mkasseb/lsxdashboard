@@ -607,34 +607,27 @@ with nothing on screen explaining why is a broken first impression.
 ## Known gaps
 
 - No `aria-expanded` on the expandable alert and forecast rows.
-- The hero pair still runs roughly 50-120px unequal at desktop widths, since the left column's
-  height is content-driven and the Sky card's is fixed by its aspect ratio. (It was ~110-170px
-  before the conditions footer became a tile pair, which gave the left column back ~50-60px.) It is
-  page-edge whitespace under the map rather than a framed hole. Growing the map to close it is
-  exactly the mistake that made it portrait in the first place, so it stays.
+- The hero pair runs 53-80px unequal at desktop widths, with the Sky card the taller of the two now,
+  so the leftover sits at the foot of the reading column rather than under the map. Growing the map
+  to close it is still exactly the mistake its aspect rules exist to prevent: at 894px wide, tall
+  enough to match would be 1.2:1.
 
-  Re-measured against live data (calm evening, KSUS 84°, no active alerts, so the AQI card was
-  hidden and the left column was the conditions card alone) the range above did not reproduce, and
-  the number moves with the viewport rather than sitting still:
+  Any single figure for this is a figure at one width, because the map's height follows its width and
+  the reading column's does not — narrower even makes the column slightly taller as the text rewraps.
+  Measured against live data (calm evening, KSUS 84°, no active alerts, so the AQI card was hidden):
 
-  | shell | left column | Sky card | left taller by |
-  |------:|------------:|---------:|---------------:|
-  |  1330 |         860 |      592 |            268 |
-  |  1884 |         822 |      786 |             36 |
-  |  2524 |         868 |     1026 |    -158 (*map* taller) |
+  | shell | left column | Sky card | Sky taller by |
+  |------:|------------:|---------:|--------------:|
+  |  1330 |         539 |      592 |            53 |
+  |  1400 |         539 |      618 |            80 |
 
-  So it was ~36px at 1920 and ~268px at 1366, and past ~2000 it inverts. The map's height follows
-  its width; the reading column's does not, and narrower even makes it slightly taller as the text
-  rewraps. The page shell trades that variation for one figure at every width from 1440 up — the
-  left column 860 against a 618 Sky card, ~240px — which is more consistent but not smaller, and
-  larger than it was at 1920 before the cap. That is the standing cost of bounding the page: a
-  narrower shell means a shorter aspect-locked map with no matching reduction opposite it.
-
-  Sweeping `--maxw` from 1400 to 2000 does not close it (best ~160px, and the map stops growing at
-  1600 where its own max-height takes over), so the shell width is not the lever. The left column is
-  479px of observations plus a 308px 24-hour chart; that chart is essentially the entire gap. Moving
-  it out of the hero card — a full-width row of its own, where 24 points would stop having to thin
-  their labels into a 456px column — balances the pair to within ~70px without touching the map.
+  It was ~240px the other way until the 24-hour chart moved to its own full-width band, which took
+  321px off that column. Before the page shell it was not a fixed number at all: 1330 → left taller
+  by 268, 1884 → by 36, 2524 → *map* taller by 158. The cap traded that variation for one figure,
+  which is the standing cost of bounding the page — a narrower shell means a shorter aspect-locked
+  map with nothing opposite it shrinking to match. Sweeping `--maxw` from 1400 to 2000 does not help
+  (best ~160px, and past 1600 the map stops growing where its own max-height takes over), so shell
+  width is not a lever on this one.
 - The satellite follows a *scrub* but does not *animate*. Stopping on a past radar frame re-points
   it to the matching moment; pressing Loop leaves it on the live frame. Preloading a parallel GOES
   stack is what a real satellite loop needs, and the cost is in the tiles — see below.
