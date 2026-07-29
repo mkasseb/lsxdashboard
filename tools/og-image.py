@@ -137,8 +137,8 @@ def main():
     img.paste(m := logo(mark), (pad, top), m)
 
     x = pad + (mark + 34) * SS
-    d.text((x, top - 6 * SS), "LSX Weather", font=font(BOLD, 82), fill=TEXT)
-    d.text((x, top + 96 * SS), "Eastern Missouri and Southwest Illinois",
+    d.text((x, top - 6 * SS), "LSX Dashboard", font=font(BOLD, 82), fill=TEXT)
+    d.text((x, top + 96 * SS), "Eastern Missouri and Southwest Illinois Weather",
            font=font(MEDIUM, 34), fill=MUTED)
 
     d.text((pad, 372 * SS), "Live radar, watches and warnings,",

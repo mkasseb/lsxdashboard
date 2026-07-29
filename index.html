@@ -6,12 +6,12 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="LSX Weather">
+<meta name="apple-mobile-web-app-title" content="LSX Dashboard">
 <meta name="theme-color" content="#0a0e14">
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20100%20100%22%3E%3Cstyle%3E.bg%7Bfill%3A%231e63c9%7D%40media%28prefers-color-scheme%3Adark%29%7B.bg%7Bfill%3A%2316376b%7D%7D%3C%2Fstyle%3E%3Crect%20class%3D%22bg%22%20width%3D%22100%22%20height%3D%22100%22%20rx%3D%2222%22%2F%3E%3Cpath%20d%3D%22M59%2016%2033%2054.5h13.6L41%2084l26-38.5H53.4Z%22%20fill%3D%22%23ffcf3d%22%2F%3E%3C%2Fsvg%3E">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
-<title>LSX Weather — eastern Missouri &amp; southwest Illinois</title>
+<title>LSX Dashboard — eastern Missouri &amp; southwest Illinois weather</title>
 <script>(function(){try{var t=localStorage.getItem("lsxTheme")||"auto";if(t!=="light"&&t!=="dark")t=(window.matchMedia&&window.matchMedia("(prefers-color-scheme: light)").matches)?"light":"dark";document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin>
@@ -28,21 +28,21 @@
 <meta name="description" content="Live radar, active watches and warnings, 7-day forecasts and river gauges for the NWS St. Louis (LSX) area: eastern Missouri and southwest Illinois.">
 <link rel="canonical" href="https://lsxdashboard.com/">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="LSX Weather">
+<meta property="og:site_name" content="LSX Dashboard">
 <meta property="og:url" content="https://lsxdashboard.com/">
-<meta property="og:title" content="LSX Weather — eastern Missouri &amp; southwest Illinois">
+<meta property="og:title" content="LSX Dashboard — eastern Missouri &amp; southwest Illinois weather">
 <meta property="og:description" content="Live radar, active watches and warnings, 7-day forecasts and river gauges for the NWS St. Louis (LSX) area.">
 <meta property="og:image" content="https://lsxdashboard.com/og-image.png">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="LSX Weather — live radar, watches and warnings, 7-day forecast, river gauges and climate for eastern Missouri and southwest Illinois.">
+<meta property="og:image:alt" content="LSX Dashboard — live radar, watches and warnings, 7-day forecast, river gauges and climate for eastern Missouri and southwest Illinois.">
 <meta property="og:locale" content="en_US">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="LSX Weather — eastern Missouri &amp; southwest Illinois">
+<meta name="twitter:title" content="LSX Dashboard — eastern Missouri &amp; southwest Illinois weather">
 <meta name="twitter:description" content="Live radar, active watches and warnings, 7-day forecasts and river gauges for the NWS St. Louis (LSX) area.">
 <meta name="twitter:image" content="https://lsxdashboard.com/og-image.png">
-<meta name="twitter:image:alt" content="LSX Weather — live radar, watches and warnings, 7-day forecast, river gauges and climate for eastern Missouri and southwest Illinois.">
+<meta name="twitter:image:alt" content="LSX Dashboard — live radar, watches and warnings, 7-day forecast, river gauges and climate for eastern Missouri and southwest Illinois.">
 
 <!-- Leaflet CSS is only needed once a map initialises — load it non-blocking so the cached
      snapshot paints immediately instead of waiting on a third-party stylesheet. -->
@@ -1438,7 +1438,7 @@
 <div class="top">
   <div class="brand">
     <!-- No aria-label. It is prohibited on a bare <div> (no role for it to name), and it was
-         announcing "LSX Weather" a second time immediately before the <h1> that says it. The mark
+         announcing the brand a second time immediately before the <h1> that says it. The mark
          is decorative here: the inner <svg> is already aria-hidden. -->
     <div class="logo">
       <!-- The bolt is CUT OUT of the radar rather than laid on top of it. Stacked, the two read as
@@ -4763,7 +4763,7 @@ function loadAFD(){
 var LOC_KEY="lsxLoc";
 function saveLoc(l){ try{ localStorage.setItem(LOC_KEY,JSON.stringify({name:l.name,lat:l.lat,lon:l.lon,station:l.station||null})); }catch(e){} }
 function readLoc(){ try{ var s=localStorage.getItem(LOC_KEY); return s?JSON.parse(s):null; }catch(e){ return null; } }
-var TITLE_BASE="LSX Weather";
+var TITLE_BASE="LSX Dashboard";
 function updateLocNow(){
   var el=document.getElementById("locNow"); if(el) el.innerHTML=ic("pin")+esc(current.name);
   // A pinned tab should say WHOSE weather it is. Safe to write here rather than behind a
