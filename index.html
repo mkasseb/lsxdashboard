@@ -534,7 +534,11 @@
   .a2-elsehed::after{content:"";flex:1 1 auto;height:1px;background:var(--border)}
   .a2-elsen{order:1;font-size:var(--fs-2xs);font-weight:800;color:var(--muted);
     background:var(--chip);border-radius:var(--r-pill);padding:1px 8px;letter-spacing:0}
-  #alertsElse .alert{padding:9px 13px;margin-bottom:5px;border-left-width:4px;
+  /* Two IDs, and not for decoration: the level ramp near the bottom of this sheet is itself
+     ID-scoped (`#alerts .alert`) to beat the base rule, so a one-ID selector here ties it on
+     specificity and loses on source order — the rows kept the full 8% tint and the 45% border
+     while every other declaration below landed. Measured, not assumed. */
+  #alerts #alertsElse .alert{padding:9px 13px;margin-bottom:5px;border-left-width:4px;
     background:transparent;border-color:color-mix(in srgb,var(--lv) 30%,transparent);
     border-left-color:var(--lv);box-shadow:none}
   #alertsElse .alert .ab-title{font-size:var(--fs-md);font-weight:700}
