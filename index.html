@@ -765,11 +765,43 @@
     .leaflet-touch .leaflet-control-zoom a,.leaflet-control-zoom a{
       width:44px;height:44px;line-height:44px;font-size:20px}
   }
+  /* …and the map lock must not swallow them. `.maplock` sits above Leaflet's controls so its pill
+     can't be buried by the attribution (see there), but that one z-index would take the zoom
+     buttons with it — and the rule directly above exists to make those a 44px thumb target on
+     exactly the devices where the lock appears. Zooming is a discrete tap: it cannot run away with
+     the page scroll the way a drag can, which is the only thing the lock is defending. So the
+     top-left corner alone is lifted back over it. The corner is `pointer-events:none` and only the
+     control inside it is `auto`, so this re-exposes the buttons and not the 10px of margin around
+     them — a tap beside them still falls through and unlocks. The attribution corner stays at
+     Leaflet's own 1000, i.e. underneath, which was the whole point. */
+  #radar .leaflet-top.leaflet-left{z-index:1300}
   .radar-time{position:absolute;top:8px;right:8px;z-index:4;pointer-events:none;
     background:rgba(10,14,20,.82);color:#fff;border:1px solid rgba(255,255,255,.18);
     border-radius:var(--r-lg);padding:4px 11px;font-size:var(--fs-sm);font-weight:600;font-variant-numeric:tabular-nums}
   .radar-time:empty{display:none}
   .radar-time.past{background:rgba(255,176,32,.92);color:#141414;border-color:rgba(0,0,0,.2)}
+  /* Amber says "you scrubbed back", which is a state the visitor chose. Red says "what is on the
+     map is not now" — a dead feed or a stalled one — which is a state nobody chose and the only
+     one that can be mistaken for clear skies. Different cause, different colour. */
+  .radar-time.down{background:rgba(255,77,77,.94);color:#fff;border-color:rgba(0,0,0,.25)}
+  /* ===== Reflectivity key =====
+     The map painted a colour ramp and nothing on the page said what it meant. The stops below are
+     the SERVER's colours, sampled per-5-dBZ out of this layer's own GetLegendGraphic rather than
+     eyeballed, so the key cannot drift from what GeoServer actually draws. The scale runs 15→65
+     dBZ: below 15 is clutter and returns nothing anyone needs a key for, above 65 is off the top
+     of what falls on Missouri. Shown only while reflectivity is drawing — same rule the caption
+     follows, for the same reason. */
+  .rs-legend{display:none;align-items:center;gap:11px;margin-top:9px}
+  .rs-legend.on{display:flex}
+  .rl-t{flex:0 0 auto;font-size:var(--fs-xs);font-weight:700;color:var(--muted);
+    text-transform:uppercase;letter-spacing:.5px}
+  .rl-scale{position:relative;flex:1 1 auto;min-width:0}
+  .rl-bar{display:block;height:9px;border-radius:5px;border:1px solid var(--border);
+    background:linear-gradient(90deg,#54b3ab 0%,#30c556 10%,#10a214 20%,#0e6c0f 30%,#7b9509 40%,
+      #e1bb19 50%,#e1a519 60%,#c00c0c 70%,#9d0c0c 80%,#ddace9 90%,#dd6de9 100%)}
+  .rl-ticks{display:block;position:relative;height:15px;margin-top:3px}
+  .rl-ticks span{position:absolute;transform:translateX(-50%);font-size:var(--fs-xs);
+    font-weight:600;color:var(--muted);white-space:nowrap}
   /* Radar loop scrubber — sits BELOW the map so it never fights the maplock overlay for taps */
   .radar-ctl{display:none;align-items:center;gap:11px;margin-top:9px}
   .radar-ctl.ready{display:flex}
@@ -902,12 +934,22 @@
 
   /* Tap-to-interact overlay for map iframes (Fix 1 — kills mobile scroll-trap) */
   .maplock-wrap{position:relative}
-  .maplock{position:absolute;inset:0;z-index:3;display:flex;align-items:flex-end;justify-content:center;
-    padding-bottom:14px;cursor:pointer;background:linear-gradient(transparent 72%, rgba(10,14,20,.28))}
+  /* z-index has to clear LEAFLET's controls, not just the map. `.leaflet-top`/`.leaflet-bottom` sit
+     at 1000, and `#radar` sets no z-index of its own, so it never opens a stacking context to trap
+     them — the controls competed directly with this overlay and won. At z-index 3 the consequence
+     on a phone was specific and bad: the attribution bar wraps to three lines over a 236px-tall
+     map, lands exactly where a bottom-centred pill lands, and `elementFromPoint` on the middle of
+     "Tap to interact" returned the OpenStreetMap link. The affordance that says the map is
+     interactive was a link to openstreetmap.org. Above the controls, locked means locked —
+     including the zoom buttons, which used to poke through and work while the map said it was not
+     listening. The pill also clears the attribution outright now (26px, not 14px), so the two are
+     not merely correctly ordered but not overlapping. */
+  .maplock{position:absolute;inset:0;z-index:1200;display:flex;align-items:flex-end;justify-content:center;
+    padding-bottom:26px;cursor:pointer;background:linear-gradient(transparent 72%, rgba(10,14,20,.28))}
   .maplock-pill{background:rgba(10,14,20,.85);border:1px solid var(--border);border-radius:var(--r-pill);
     padding:9px 16px;font-size:var(--fs-md);font-weight:600;color:#fff;box-shadow:var(--shadow)}
   .maplock-wrap.unlocked .maplock{display:none}
-  .maplock-toggle{position:absolute;top:8px;right:8px;z-index:4;display:none;min-height:0;
+  .maplock-toggle{position:absolute;top:8px;right:8px;z-index:1201;display:none;min-height:0;
     background:rgba(10,14,20,.85);border:1px solid var(--border);border-radius:var(--r-pill);
     padding:7px 13px;font-size:var(--fs-sm);font-weight:600;color:var(--text);cursor:pointer}
   .maplock-wrap.unlocked .maplock-toggle{display:block}
@@ -1596,9 +1638,26 @@
         <div class="maplock"><button type="button" class="maplock-pill">Tap to interact</button></div>
       </div>
       <div class="radar-ctl" id="radarCtl">
-        <button type="button" id="radarPlay" aria-label="Play radar loop" title="Play the last ~30 minutes"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg>Loop</button>
+        <!-- No duration in the markup: setRadarBtn() writes the span the frame list ACTUALLY holds.
+             The hard-coded "~30 minutes" that used to live here overstated the loop at every width
+             — 18 minutes on a desktop, 10 on a phone — because the frame COUNT was fixed here while
+             the sweep cadence is NWS's to change. Nothing static can stay true about that number. -->
+        <button type="button" id="radarPlay" aria-label="Play radar loop" title="Play the radar loop"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg>Loop</button>
         <input type="range" id="radarSlider" min="0" max="0" value="0" step="1" aria-label="Scrub radar time">
         <span class="rc-t" id="radarFrameTime"></span>
+      </div>
+      <!-- role="img" collapses the whole key to its aria-label on purpose: read linearly the tick
+           words are "light heavy hail", which is noise. The label says the thing they mean. -->
+      <div class="rs-legend" id="rsLegend" role="img"
+           title="Radar reflectivity in dBZ — how hard it is coming down"
+           aria-label="Reflectivity key: green is light rain, yellow and red are heavy rain, pink and purple mean hail is likely.">
+        <span class="rl-t">Intensity</span>
+        <span class="rl-scale">
+          <span class="rl-bar"></span>
+          <!-- Positions are the real scale, not eyeballed spacing: the bar spans 15–65 dBZ, so a
+               label for D sits at (D−15)/50. light≈21, heavy≈45, hail≈59. -->
+          <span class="rl-ticks"><span style="left:12%">light</span><span style="left:60%">heavy</span><span style="left:88%">hail</span></span>
+        </span>
       </div>
     </div>
     <div class="imgcap" id="rsCap"><span></span><span></span></div>
@@ -2265,6 +2324,46 @@ function updateRadarBase(){
   if(rvBase) rvBase.setUrl(baseUrl());
   if(satLabels) satLabels.setUrl(labelUrl());
 }
+/* ---- Is the sky actually drawing? ---------------------------------------
+   A tile layer that fails leaves the basemap showing, and a bare basemap under this card is
+   exactly what a calm evening looks like. Every other feed on this page fails LOUDLY — the alert
+   list says so, the metrics show a dash — but a dead radar renders as "no precipitation", which is
+   the one wrong answer a weather dashboard must never give confidently. Nothing was watching:
+   `.imgfail` covers only the case where Leaflet itself never loaded.
+
+   Counting is PER LAYER, not per session, and that is the whole trick. A shared counter cannot
+   work here because the loop POOLS layers: on a refresh, fourteen frames are already painted and
+   silent (their tiles are cached <img>s that re-fire nothing), so a session counter reset each
+   cycle would see one new frame's failures against zero fresh successes and cry outage while the
+   map was drawing perfectly. Asking the newest layer about its OWN tiles has no such blind spot.
+
+   "Down" is deliberately strict — errors AND not one tile through. Radar tiles 404 at the edges of
+   the mosaic all the time, and a key that flickers to red on ordinary noise is worse than no key.
+   Panned somewhere the layer requests nothing, both counters stay 0 and nothing is claimed. */
+function bindSkyHealth(lyr){
+  if(!lyr||lyr._hb) return;
+  lyr._hb=1; lyr._ok=0; lyr._err=0;
+  lyr.on("tileload", function(){ lyr._ok++;  syncSkyHealth(); });
+  lyr.on("tileerror",function(){ lyr._err++; syncSkyHealth(); });
+}
+function layerDown(lyr){ return !!(lyr && lyr._err>0 && !lyr._ok); }
+/* The newest frame is the one the badge is talking about, so it is the one asked. With no frame
+   list (capabilities failed, or reflectivity just came back) the fallback layer is what's drawing. */
+function radarDown(){
+  if(!skyOn.radar) return false;
+  return radarFrames.length ? layerDown(radarFrames[radarFrames.length-1].layer) : layerDown(nwsRadar);
+}
+function satDown(){ return !!skyOn.sat && layerDown(satLayer); }
+/* Tile events fire per tile — dozens per pan — and both sinks below rewrite innerHTML. Redraw only
+   when the ANSWER changes, not when the evidence does. */
+var skyHealth={radar:null, sat:null};
+function syncSkyHealth(){
+  var r=radarDown(), s=satDown();
+  if(r===skyHealth.radar && s===skyHealth.sat) return;
+  skyHealth.radar=r; skyHealth.sat=s;
+  syncRadarBadge();
+  syncSkyMeta();
+}
 function initRadarMap(){
   var el=document.getElementById("radar");
   if(typeof L==="undefined"||!el){
@@ -2281,9 +2380,16 @@ function initRadarMap(){
      the cloud shield still needs to see where the warning is. */
   rvMap.createPane("radarPane").style.zIndex=350;
   rvBase=L.tileLayer(baseUrl(),{subdomains:"abcd",maxZoom:12,zIndex:1,
-    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> &middot; Radar &amp; warnings: <a href="https://www.weather.gov" target="_blank" rel="noopener">NOAA/NWS</a> &middot; Satellite: <a href="https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs" target="_blank" rel="noopener">NASA GIBS</a>/NOAA'}).addTo(rvMap);
-  satLayer=L.tileLayer(GIBS_SAT,{maxZoom:12,maxNativeZoom:SAT_MAX_NATIVE,zIndex:5,
-    attribution:'GOES-19 GeoColor'});
+    /* Only the BASEMAP is credited here. The NOAA and NASA lines used to ride along, and on a
+       375px phone the four of them wrapped to three lines — 46px over a 236px map, a fifth of the
+       picture, sitting on top of southern Missouri. They were never load-bearing: #rsCap under the
+       map names every source that is drawing, and the footer links all of them. CARTO and OSM stay
+       because their terms ask for a link on the map itself; NOAA imagery is public domain and NASA
+       GIBS asks for acknowledgement, which the caption gives. Every source is still credited on
+       the page — the credits just stopped being drawn over the weather. */
+    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>'}).addTo(rvMap);
+  satLayer=L.tileLayer(GIBS_SAT,{maxZoom:12,maxNativeZoom:SAT_MAX_NATIVE,zIndex:5});
+  bindSkyHealth(satLayer);
   satLabels=L.tileLayer(labelUrl(),{subdomains:"abcd",maxZoom:12,zIndex:6});
   /* Added straight away, not left for the catch in refreshRadarLayer(): the capabilities fetch
      takes a moment, and this paints reflectivity NOW rather than showing an empty map until the
@@ -2295,6 +2401,7 @@ function initRadarMap(){
     layers:"conus_bref_qcd",format:"image/png",transparent:true,opacity:0.8,version:"1.3.0",
     pane:"radarPane"
   });
+  bindSkyHealth(nwsRadar);
   if(skyOn.radar) nwsRadar.addTo(rvMap);
   rvMarker=L.circleMarker([current.lat,current.lon],{radius:5,color:"#4aa3ff",weight:2,fillColor:"#4aa3ff",fillOpacity:.9,interactive:false}).addTo(rvMap);
   applySkyLayers(true);
@@ -2316,11 +2423,56 @@ function initRadarMap(){
    opacity. Frames are POOLED by timestamp: a refresh reuses the layers it already
    has and only fetches the genuinely new sweep, instead of re-downloading the set.
    If the capabilities fetch fails we fall back to the plain "latest" layer. */
-var RADAR_N_DESK=10, RADAR_N_PHONE=6;
+/* How much history the loop should COVER, and separately how many frames we will spend covering
+   it. Two numbers, because the cadence is not ours to choose: NWS publishes conus_bref_qcd every
+   ~2 minutes today, and "the last N sweeps" silently means whatever that cadence happens to be.
+   Ten sweeps read as a 30-minute loop in the button's tooltip and measured 18 (10 on a phone,
+   at six) — long enough to prove a storm exists, far too short to show where it is going, which
+   is the only question a loop answers. An hour is the useful unit and 60 fits comfortably inside
+   the ~118 minutes the time dimension advertises. Thinning to fit keeps the number honest if NWS
+   ever changes the cadence again; nothing downstream hard-codes a duration. */
+var RADAR_SPAN_MIN=60;
+var RADAR_N_DESK=15, RADAR_N_PHONE=8;
 var radarFrames=[], radarPool={}, radarIdx=-1;
 var radarPlaying=false, radarTimer=null, radarUserPaused=false;
 function reducedMotion(){ return !!(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
 function radarFrameCount(){ return (window.innerWidth<=680)?RADAR_N_PHONE:RADAR_N_DESK; }
+/* Thin an hour of 2-minute sweeps down to a frame budget, on a grid anchored to the EPOCH.
+   The epoch anchoring is the load-bearing part and it is not obvious. radarPool keys on the
+   timestamp string, so pooling only pays off if a refresh asks for the same timestamps it asked
+   for last time. Striding backwards from "now" — the obvious implementation — fails exactly that
+   test: two fresh sweeps land, every stride lands two slots earlier, and all fifteen frames miss
+   the pool and re-download. Against a fixed grid the same wall-clock instants keep resolving to
+   the same sweeps, so a refresh costs the one genuinely new frame, which is what the pool was
+   built to do. Snapping is bounded to half a step so a gap in the archive drops a frame rather
+   than silently substituting a sweep from the wrong end of the window. */
+function pickRadarTimes(times){
+  var n=radarFrameCount();
+  if(times.length<=n) return times.slice();
+  var ms=times.map(function(t){ return +new Date(t); });
+  var newest=ms[ms.length-1], oldest=newest-RADAR_SPAN_MIN*60000;
+  var step=Math.max(1,Math.round(RADAR_SPAN_MIN/(n-1)))*60000, half=step/2;
+  var want=[], seen={};
+  for(var g=Math.floor(newest/step)*step; g>=oldest && want.length<n-1; g-=step){
+    var best=-1, bd=half;
+    for(var i=0;i<ms.length;i++){
+      var d=Math.abs(ms[i]-g);
+      if(d<=bd){ bd=d; best=i; }
+    }
+    // The newest sweep is appended below no matter what; picking it here too would spend a slot.
+    if(best>=0 && ms[best]!==newest && !seen[times[best]]){ seen[times[best]]=1; want.push(times[best]); }
+  }
+  want.push(times[times.length-1]);   // "now" is always present and always last — the scrubber's right edge is it
+  want.sort(function(a,b){ return new Date(a)-new Date(b); });
+  return want;
+}
+/* What the frame list actually spans, in minutes. Every duration shown to a visitor is derived
+   from this rather than asserted, which is the fix for a tooltip that spent two years describing
+   a loop the page was not building. */
+function radarSpanMin(){
+  if(radarFrames.length<2) return 0;
+  return Math.round((new Date(radarFrames[radarFrames.length-1].time)-new Date(radarFrames[0].time))/60000);
+}
 function fetchRadarTimes(){
   return fetch(NWS_WMS+"?service=WMS&version=1.3.0&request=GetCapabilities")
     .then(function(r){ if(!r.ok) throw new Error("caps "+r.status); return r.text(); })
@@ -2333,7 +2485,7 @@ function fetchRadarTimes(){
     });
 }
 function buildRadarFrames(times){
-  var want=times.slice(-radarFrameCount()), keep={};
+  var want=pickRadarTimes(times), keep={};
   radarFrames=want.map(function(t){
     keep[t]=1;
     var lyr=radarPool[t];
@@ -2341,6 +2493,7 @@ function buildRadarFrames(times){
       lyr=L.tileLayer.wms(NWS_WMS,{layers:"conus_bref_qcd",format:"image/png",transparent:true,
         version:"1.3.0",time:t,opacity:0,pane:"radarPane"});
       lyr.on("load",function(){ lyr._ready=1; updateRadarCtl(); });
+      bindSkyHealth(lyr);
       lyr.addTo(rvMap);
       radarPool[t]=lyr;
     }
@@ -2350,17 +2503,46 @@ function buildRadarFrames(times){
     if(!keep[t]){ if(rvMap.hasLayer(radarPool[t])) rvMap.removeLayer(radarPool[t]); delete radarPool[t]; }
   });
 }
+/* A sweep this old is not "now" no matter what the clock face says. Three missed cycles: the
+   scheduler re-reads the time dimension every 4 minutes, so anything past ~15 means the feed has
+   genuinely stalled rather than that one refresh was unlucky. */
+var RADAR_STALE_MIN=15;
+var radarFallback=false;   // capabilities failed; the plain "latest" layer is carrying the card
+/* One owner for the badge. It used to be written from two places that knew different things —
+   showRadarFrame() had the timestamp, the catch in refreshRadarLayer() had the failure — and
+   neither could say the thing that actually matters, which is whether what you are looking at is
+   current. Everything it needs is module state, so every caller just says "re-decide". */
+function syncRadarBadge(){
+  var lbl=document.getElementById("radarTime");
+  if(!lbl) return;
+  lbl.className="radar-time";
+  if(!skyOn.radar){ lbl.textContent=""; return; }
+  if(radarDown()){ lbl.textContent="radar unavailable"; lbl.classList.add("down"); return; }
+  if(!radarFrames.length){
+    // No frame list, but the fallback layer is painting: say it is live without inventing a time.
+    lbl.textContent=radarFallback?"latest sweep":"";
+    return;
+  }
+  var i=Math.max(0,Math.min(radarFrames.length-1,radarIdx));
+  var t=new Date(radarFrames[i].time), latest=(i===radarFrames.length-1);
+  var hhmm=t.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
+  var age=Math.round((Date.now()-new Date(radarFrames[radarFrames.length-1].time))/60000);
+  if(latest && age>=RADAR_STALE_MIN){
+    // The dangerous case: a real sweep, drawn correctly, quietly an hour out of date.
+    lbl.textContent="sweep "+hhmm+" · "+age+" min old";
+    lbl.classList.add("down");
+    return;
+  }
+  lbl.textContent=(latest?"sweep ":"")+hhmm;
+  if(!latest) lbl.classList.add("past");
+}
 function showRadarFrame(i){
   if(!radarFrames.length) return;
   i=Math.max(0,Math.min(radarFrames.length-1,i));
   radarIdx=i;
   radarFrames.forEach(function(f,k){ f.layer.setOpacity(k===i?0.8:0); });
   var t=new Date(radarFrames[i].time), latest=(i===radarFrames.length-1);
-  var lbl=document.getElementById("radarTime");
-  if(lbl){
-    lbl.textContent=(latest?"sweep ":"")+t.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
-    lbl.classList.toggle("past",!latest);
-  }
+  syncRadarBadge();
   var ft=document.getElementById("radarFrameTime");
   if(ft){
     var mins=Math.round((new Date(radarFrames[radarFrames.length-1].time)-t)/60000);
@@ -2382,6 +2564,7 @@ function updateRadarCtl(){
   }else{
     ctl.classList.remove("ready");
   }
+  setRadarBtn();   // the span the button advertises changes with the frame list, so re-derive it here
   /* During severe weather the loop is the point — start it automatically once frames are in
      (never against a reduced-motion preference, and never after the user hit pause).
      skyOn.radar is belt-and-braces rather than strictly required: detachRadarLayers() empties the
@@ -2395,8 +2578,13 @@ function updateRadarCtl(){
 function setRadarBtn(){
   var b=document.getElementById("radarPlay");
   if(!b) return;
+  /* The duration comes off the frame list every time rather than from a constant. A screen reader
+     gets it too — the tooltip is mouse-only, and "how far back does this go" is not a sighted-user
+     question. Before frames land there is no honest number, so it says nothing instead. */
+  var span=radarSpanMin(), of=span?(" — last "+span+" minutes"):"";
   b.innerHTML=radarPlaying?ic("pause")+"Pause":ic("play")+"Loop";
-  b.setAttribute("aria-label",radarPlaying?"Pause radar loop":"Play radar loop");
+  b.setAttribute("aria-label",(radarPlaying?"Pause radar loop":"Play radar loop")+of);
+  b.title=span?("Play the last "+span+" minutes"):"Play the radar loop";
 }
 function radarStep(){
   if(!radarPlaying||!radarFrames.length) return;
@@ -2431,18 +2619,28 @@ function refreshRadarLayer(){
   if(!skyOn.radar) return;   // layer switched off fetches nothing; applySkyLayers refreshes on the way back
   fetchRadarTimes().then(function(times){
     var wasLatest=(radarIdx<0)||(radarIdx>=radarFrames.length-1);
+    radarFallback=false;
     buildRadarFrames(times);
     if(nwsRadar&&rvMap.hasLayer(nwsRadar)) rvMap.removeLayer(nwsRadar);   // frames drive from here
     showRadarFrame(wasLatest?radarFrames.length-1:radarIdx);              // don't yank a scrubbing user to "now"
     updateRadarCtl();
   }).catch(function(){
     // No usable time list → behave exactly like the pre-loop dashboard: single latest layer, no fake time
+    radarFallback=true;
     if(nwsRadar){
       if(!rvMap.hasLayer(nwsRadar)) nwsRadar.addTo(rvMap);
       nwsRadar.setOpacity(0.8); nwsRadar.setParams({_t:Date.now()});
     }
-    var lbl=document.getElementById("radarTime"); if(lbl){ lbl.textContent=""; lbl.classList.remove("past"); }
-    var ctl=document.getElementById("radarCtl"); if(ctl) ctl.classList.remove("ready");
+    /* This used to blank the badge, which left a live map with nothing on it saying so — and left
+       a DEAD map looking identical. syncRadarBadge() distinguishes the two: "latest sweep" while
+       the fallback is painting, "radar unavailable" once its tiles start failing. Frames are NOT
+       cleared here: one unlucky capabilities fetch should not demolish a loop that is already
+       built and still current. If the outage persists the frames simply age, and the staleness
+       rule in syncRadarBadge() says so on its own.
+       updateRadarCtl() rather than dropping .ready by hand — with frames still standing the
+       scrubber is still meaningful, and unconditionally hiding it stranded a working loop. */
+    syncRadarBadge();
+    updateRadarCtl();
   });
 }
 function warnStyle(ev){
@@ -4602,13 +4800,24 @@ function syncSkyMeta(){
     ? '<a href="https://radar.weather.gov/station/KLSX/standard" target="_blank" rel="noopener">Official KLSX ↗</a>'
     : '<a href="https://www.star.nesdis.noaa.gov/GOES/sector.php?sat=G19&amp;sector=umv" target="_blank" rel="noopener">GOES loop ↗</a>';
   var bits=[];
-  if(skyOn.radar) bits.push('Official NOAA/NWS radar &middot; tap a <b>warning polygon</b> to jump to its alert');
-  if(skyOn.sat) bits.push('GOES-19 GeoColor via NASA GIBS');
+  /* "Names what is actually drawn" has to survive a layer that is switched ON and failing, or the
+     caption goes from honest to actively misleading — crediting NOAA for reflectivity nobody
+     received. A down layer says so where it used to advertise itself. */
+  if(skyOn.radar) bits.push(radarDown()
+    ? '<b>Radar unavailable</b> — NOAA is not serving reflectivity right now'
+    : 'Official NOAA/NWS radar &middot; tap a <b>warning polygon</b> to jump to its alert');
+  if(skyOn.sat) bits.push(satDown()
+    ? '<b>Satellite unavailable</b> — no GOES imagery from NASA GIBS right now'
+    : 'GOES-19 GeoColor via NASA GIBS');
   if(!bits.length) bits.push('Both layers are off — the buttons above bring them back');
   bits.push('basemap &copy; CARTO/OSM');
   var note=skyOn.radar?'radar every ~4 min':(skyOn.sat?'satellite every ~10 min':'');
   var cap=document.getElementById("rsCap");
   if(cap) cap.innerHTML='<span>'+bits.join(' &middot; ')+'</span><span>'+note+'</span>';
+  /* The key belongs to reflectivity, so it lives and dies with it — and it goes away when the
+     layer is down too, because a guide to colours the map is not painting is just clutter. */
+  var lg=document.getElementById("rsLegend");
+  if(lg) lg.classList.toggle("on", !!skyOn.radar && !radarDown());
   [].slice.call(document.querySelectorAll("#rsTabs .rs-tab")).forEach(function(b){
     var on=!!skyOn[b.getAttribute("data-l")];
     b.classList.toggle("on",on);
@@ -4629,8 +4838,11 @@ function detachRadarLayers(){
     delete radarPool[t];
   });
   radarFrames=[]; radarIdx=-1;
-  var lbl=document.getElementById("radarTime");
-  if(lbl){ lbl.textContent=""; lbl.classList.remove("past"); }
+  /* The pool is gone, so every per-layer tile tally went with it. Reset the cached verdict too, or
+     syncSkyHealth() compares against a stale "was down" and skips the redraw that clears the badge
+     when reflectivity comes back. */
+  radarFallback=false; skyHealth.radar=null;
+  syncRadarBadge();   // skyOn.radar is already false here, so this empties the badge
   updateRadarCtl();   // empty frame list drops .ready, so the scrubber can't outlive its frames
 }
 function applySkyLayers(first){
@@ -4677,14 +4889,17 @@ document.addEventListener("click",function(e){
 function refreshSatLayer(){
   if(!rvMap||!satLayer||!skyOn.sat) return;
   var old=satLayer, swapped=false;
-  var next=L.tileLayer(GIBS_SAT,{maxZoom:12,maxNativeZoom:SAT_MAX_NATIVE,zIndex:5,
-    attribution:'GOES-19 GeoColor'});
+  var next=L.tileLayer(GIBS_SAT,{maxZoom:12,maxNativeZoom:SAT_MAX_NATIVE,zIndex:5});
+  bindSkyHealth(next);   // satDown() asks whichever layer is current, and that is about to be this one
   function swap(){
     if(swapped) return; swapped=true;
     if(satLayer===old&&rvMap.hasLayer(old)) rvMap.removeLayer(old);
     // A toggle-off mid-swap wins: never resurrect a layer the visitor just switched away from.
     if(skyOn.sat) satLayer=next;
     else if(rvMap.hasLayer(next)) rvMap.removeLayer(next);
+    /* The verdict now refers to a different object with different tallies. Re-ask, or a caption
+       that said "unavailable" for the old layer never comes back when the new one paints. */
+    syncSkyHealth();
   }
   next.once("load",swap);
   /* If every tile errors "load" never fires, and without this the old layer would stay pinned

@@ -382,9 +382,68 @@ imagery being made translucent, which would only turn both layers to mud.
 
 Reflectivity lives in its own Leaflet pane (`radarPane`, z-index 350 — above the tiles at 200,
 below the overlays at 400). The pane is for **stacking only**: a pane rather than another `zIndex`
-per layer, because the loop creates ~10 of them at runtime and they would all have to agree with
+per layer, because the loop creates ~15 of them at runtime and they would all have to agree with
 whatever the satellite is using. Warning polygons deliberately do **not** toggle with reflectivity
 — someone who turns it off to read the cloud shield still needs to see where the warning is.
+
+**The loop targets a duration, not a sweep count.** It used to take `times.slice(-10)` and the Loop
+button's tooltip claimed "the last ~30 minutes". Measured against the live WMS, NWS publishes
+`conus_bref_qcd` on a **120-second** cadence and advertises 60 sweeps (~118 minutes), so ten sweeps
+was an 18-minute loop — and six, on a phone, was ten. Long enough to prove a storm exists, too short
+to show where it is going, which is the only question a loop answers. `RADAR_SPAN_MIN` (60) is now
+the target and `RADAR_N_DESK`/`RADAR_N_PHONE` are a frame *budget*; `pickRadarTimes()` thins the
+window to fit. Nothing hard-codes a duration any more — `radarSpanMin()` reads the built frame list
+and `setRadarBtn()` writes it into both the tooltip and the `aria-label`, so the number a visitor
+reads is the number of minutes on screen.
+
+The thinning grid is **anchored to the epoch, not to "now"**, and that is the part worth not
+undoing. `radarPool` keys on the timestamp string, so pooling only pays if a refresh asks for the
+timestamps it asked for last time. Striding backwards from the newest sweep — the obvious
+implementation — fails exactly that: two fresh sweeps land, every stride shifts two slots, and all
+fifteen frames miss the pool and re-download every four minutes. Against a fixed grid the same wall
+clock instants keep resolving to the same sweeps. Replayed over the archive, each refresh builds
+**one** new layer and reuses fourteen, so an hour-long loop costs the same per refresh as the
+18-minute one did.
+
+**A dead feed must not look like clear skies.** Every other feed on this page fails visibly, but a
+tile layer that fails leaves the basemap showing, and a bare basemap under this card is what a calm
+evening looks like — the one wrong answer a weather dashboard must never give confidently. Nothing
+was watching: `.imgfail` covers only the case where Leaflet itself never loaded. `bindSkyHealth()`
+now counts `tileload`/`tileerror` **per layer**, and that per-layer part is load-bearing: a shared
+counter cannot work alongside pooling, because on a refresh fourteen frames are already painted and
+silent (cached `<img>`s re-fire nothing), so a counter reset each cycle would read one new frame's
+failures against zero fresh successes and cry outage over a map that is drawing perfectly. The
+verdict is deliberately strict — errors *and* not one tile through — because radar tiles 404 at the
+mosaic's edges routinely, and a badge that flickers red on ordinary noise is worse than no badge.
+
+`syncRadarBadge()` is the single owner of that badge. It used to be written from two places that
+knew different things (`showRadarFrame()` had the timestamp, the `refreshRadarLayer()` catch had the
+failure) and neither could say the thing that matters: whether what you are looking at is current.
+It now distinguishes four states — current sweep, scrubbed back (amber), stalled, and down (red).
+Stalled is its own case because it is the dangerous one: a real sweep, drawn correctly, quietly
+`RADAR_STALE_MIN` minutes out of date reads as live to anyone who does not do arithmetic against the
+header clock. The caption follows the same rule it always did, naming what is actually drawn — which
+now has to include naming a layer that is switched on and failing, or it goes from honest to
+crediting NOAA for reflectivity nobody received.
+
+**The reflectivity key uses the server's own colours.** The map painted a ramp and nothing said what
+it meant. The gradient stops in `.rl-bar` were sampled per-5-dBZ out of this layer's
+`GetLegendGraphic` rather than eyeballed, so the key cannot drift from what GeoServer draws; the
+scale runs 15→65 dBZ and the tick words sit at their real positions, `(D−15)/50`. It is `role="img"`
+with an `aria-label`, because read linearly the ticks are "light heavy hail", which is noise. It
+hides when reflectivity is off *or* down — a guide to colours the map is not painting is clutter.
+
+**Only the basemap is credited on the map.** The NOAA and NASA lines used to ride along in the
+Leaflet attribution, and on a 375px phone all four wrapped to three lines: 46px over a 236px map, a
+fifth of the picture. They were never load-bearing — `#rsCap` names every source that is drawing and
+the footer links all of them — so CARTO and OSM stay (their terms ask for a link on the map itself)
+and the rest moved to the caption. The bar is one 15px line now. This also un-broke the map lock:
+`.maplock` sat at z-index 3 while Leaflet's control containers sit at 1000, and `#radar` sets no
+z-index so it never opens a stacking context to trap them. The controls won, the attribution landed
+exactly where a bottom-centred pill lands, and `elementFromPoint` on the middle of "Tap to interact"
+returned the OpenStreetMap link — the affordance announcing the map was interactive was a link to
+openstreetmap.org. The overlay now sits above the controls, so locked means locked (including the
+zoom buttons, which used to poke through and work while the map said it was not listening).
 
 **Off has to mean off the map, not hidden.** The first cut toggled the radar by setting
 `display:none` on its pane, which looks equivalent and isn't: a Leaflet layer that is merely
