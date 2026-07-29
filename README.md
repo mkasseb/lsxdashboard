@@ -463,6 +463,26 @@ request order and a slow early frame must not paint last.
 `gibs.earthdata.nasa.gov` now appears in **both** `img-src` and `connect-src`, which looks like a
 duplicate and is not: the tiles are images, the timestamp list is a fetch.
 
+**The frame budget answers to zoom, because tile cost does.** Every pooled frame refetches on a view
+change, and a low-zoom `GetMap` covers far more ground: measured against the live WMS, a median
+**5.9 s** per tile at z4 (p95 10.1 s), **120 requests** for fifteen frames, ~8 seconds before the set
+was whole again. The loop meanwhile kept stepping on its 450 ms timer onto frames whose tiles had not
+arrived — which paints nothing and reads as *the loop broke*. That is what it was: reported as "the
+satellite stops looping when I zoom out", and the satellite had nothing to do with it.
+
+Two changes. `radarFrameCount()` now returns `RADAR_N_WIDE` (7) at or below `RADAR_WIDE_ZOOM` (5) —
+detail is not what a continent-wide view is for, and the *span* is unaffected, so the loop still
+covers its hour, just in coarser steps. The budget is re-picked on `zoomend` from `radarTimesCache`
+rather than waiting for the next 4-minute refresh, which would have left fifteen layers thrashing
+across a z4 view for minutes. Measured after: **48 requests** instead of 120.
+
+And `radarStep()` holds rather than advancing through unpainted frames, showing `loading frames…` in
+the `.rc-load` slot — a style that had existed with no element behind it since the scrubber shipped.
+The hold tests Leaflet's `_loading`, not the frames' own `_ready`: `_ready` is set by the first load
+ever and never cleared, so it stays true through a zoom that has invalidated every tile behind it.
+The hold is bounded at `RADAR_HOLD_MAX` (9 s) so a frame that never settles cannot freeze the loop
+for good.
+
 **Only the basemap is credited on the map.** The NOAA and NASA lines used to ride along in the
 Leaflet attribution, and on a 375px phone all four wrapped to three lines: 46px over a 236px map, a
 fifth of the picture. They were never load-bearing — `#rsCap` names every source that is drawing and
