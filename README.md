@@ -433,6 +433,36 @@ scale runs 15→65 dBZ and the tick words sit at their real positions, `(D−15)
 with an `aria-label`, because read linearly the ticks are "light heavy hail", which is noise. It
 hides when reflectivity is off *or* down — a guide to colours the map is not painting is clutter.
 
+**The satellite follows the scrub, and the reason it does not follow playback is bytes.** Scrubbing
+the radar back an hour used to leave the cloud shield at "now" — the storm in the past and the
+system carrying it in the present, drawn as one picture, which is the exact thing stacking the two
+layers was supposed to prevent. `syncSatToRadar()` re-points the satellite to the newest GOES frame
+at or before the displayed radar moment.
+
+An earlier note in this file blamed the archive's gaps for there being no GOES time track at all.
+That was the wrong diagnosis. The gaps are real — measured across three hours, only 11 of 18 nominal
+10-minute slots existed, and a missing slot is a hard 404, so the moments must be **discovered**
+rather than computed. But discovery is cheap: `DescribeDomains` bounded to a few hours answers in
+~350 bytes. (Unbounded it returns the archive back to 2021, about 1 MB, which is presumably what
+made this look impractical.) Two details bite: the time is a segment of its own **after** the style
+(`…/GOES-East_ABI_GeoColor/default/{time}/GoogleMapsCompatible_Level7/…`) — putting it where
+`default` sits answers 400 for every tile — and the domain is a list of `START/END/PERIOD`
+*intervals*, which is how the gaps are encoded, so it has to be expanded before anything can snap
+to it.
+
+The real constraint is tile weight. Measured: a reflectivity tile is **1,980 bytes** (sparse,
+transparent), a GeoColor tile is **113,601 bytes** (opaque, full colour) — **57× bigger**. That one
+ratio explains the whole design: the radar keeps ~15 frames alive, the satellite keeps exactly
+**one**, and nothing preloads a parallel stack. It also decides the playback exemption — a GeoColor
+frame is ~450 KB for this map, and fetching that every 450 ms would stall the loop rather than
+enrich it. Playback therefore triggers no satellite work at all (verified: zero swaps, zero tile
+requests across a running loop); pausing syncs once to wherever the visitor stopped. A drag is
+coalesced behind a 180 ms timer and a swap generation counter, because tiles do not come back in
+request order and a slow early frame must not paint last.
+
+`gibs.earthdata.nasa.gov` now appears in **both** `img-src` and `connect-src`, which looks like a
+duplicate and is not: the tiles are images, the timestamp list is a fetch.
+
 **Only the basemap is credited on the map.** The NOAA and NASA lines used to ride along in the
 Leaflet attribution, and on a 375px phone all four wrapped to three lines: 46px over a 236px map, a
 fifth of the picture. They were never load-bearing — `#rsCap` names every source that is drawing and
@@ -474,9 +504,9 @@ with nothing on screen explaining why is a broken first impression.
   before the conditions footer became a tile pair, which gave the left column back ~50-60px.) It is
   page-edge whitespace under the map rather than a framed hole. Growing the map to close it is
   exactly the mistake that made it portrait in the first place, so it stays.
-- The satellite is a single "latest" frame; only the radar has a time loop. GIBS does expose a time
-  dimension, so a GOES loop is possible, but the archive's 10-minute slots have gaps that a frame
-  list would have to discover rather than compute.
+- The satellite follows a *scrub* but does not *animate*. Stopping on a past radar frame re-points
+  it to the matching moment; pressing Loop leaves it on the live frame. Preloading a parallel GOES
+  stack is what a real satellite loop needs, and the cost is in the tiles — see below.
 - The masonry positions cards absolutely after sorting by importance and height. `reorderMasonryDOM`
   re-syncs DOM order to visual order after each pack; it skips only if a card hosts an iframe
   (re-inserting reloads them), and nothing in the masonry does today.
