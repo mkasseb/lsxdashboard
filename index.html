@@ -336,7 +336,12 @@
      ramp had to compete with a border painted by family instead of by level. The ordering above is
      what actually does the work; these cards now just take a tinted hairline, and the banner keeps
      the glow to itself. */
-  body.storm #radarCard,body.storm .storm-prime{
+  /* Same family gate as the sizing rule below, for the same reason: the tint means "this card is
+     part of the event", which is a claim about convection and flooding, not about heat. The prime
+     card is picked per-family by FAMILY_CFG, so it needs no gate — it is always the right card. */
+  body.storm[data-storm="convective"] #radarCard,
+  body.storm[data-storm="flood"] #radarCard,
+  body.storm .storm-prime{
     border-color:rgba(var(--storm),.45);
   }
 
@@ -825,12 +830,22 @@
      value so the map is landscape at every width instead of going portrait in narrow columns. */
   #radarCard .imgwrap{aspect-ratio:16/9}
   #radarCard #radar{height:100%}
-  /* Storm Mode: the dashboard already knows when radar is the story, so the strip earns its space
-     back exactly then, instead of being large all year for the few days it matters. */
-  body.storm #radarCard .imgwrap{aspect-ratio:16/10}
+  /* Storm Mode gives the map space back — but only for weather you'd open a map to FIND.
+     This used to be a plain `body.storm` rule, and it could be, because radarWorthy() had already
+     guaranteed the card was absent for the dry families: an Extreme Heat Warning engaged Storm
+     Mode but never showed a radar, so "storm" and "radar-shaped" were the same thing here. Making
+     the card permanent broke that equivalence — the rule as written would enlarge the map to 16:10
+     (1:1 on phones) during a heat warning, taking the space from the cards that actually matter
+     for heat. The family test that radarWorthy() used to apply in JS now lives here in CSS, off
+     the same data-storm attribute: convective and flood, the two families with echoes to look at.
+     Heat, wind, fire and winter describe the air rather than echoes in it, so they keep Storm
+     Mode's theme, banner and prime card and leave the map at its everyday size. */
+  body.storm[data-storm="convective"] #radarCard .imgwrap,
+  body.storm[data-storm="flood"] #radarCard .imgwrap{aspect-ratio:16/10}
   @media(max-width:680px){
     #radarCard .imgwrap{aspect-ratio:4/3}
-    body.storm #radarCard .imgwrap{aspect-ratio:1/1}
+    body.storm[data-storm="convective"] #radarCard .imgwrap,
+    body.storm[data-storm="flood"] #radarCard .imgwrap{aspect-ratio:1/1}
   }
   .rs-right{display:inline-flex;align-items:center;gap:12px;margin-left:auto}
   .rs-full{padding:5px 11px;font-size:var(--fs-xs);font-weight:700;
@@ -2257,13 +2272,13 @@ function initRadarMap(){
     return;
   }
   rvMap=L.map(el,{zoomControl:true,attributionControl:true,scrollWheelZoom:true,minZoom:4,maxZoom:12}).setView([current.lat,current.lon],7);
-  /* Reflectivity gets its own pane so "Radar off" is one style change instead of a negotiation
-     with the frame pool. The loop keeps ~10 stacked WMS layers alive and cross-fades them by
-     opacity; adding a second meaning to that opacity \u2014 off vs. not-the-current-frame \u2014 is how you
-     get a layer that reappears on the next sweep. The pane sits above the tiles (200) and below
-     the overlays (400), which is also exactly where it belongs visually: on the clouds, under the
-     warning polygons. Warnings deliberately do NOT toggle with it \u2014 someone who turns reflectivity
-     off to look at the cloud shield still needs to see where the warning is. */
+  /* Reflectivity gets its own pane purely for STACKING (visibility is handled by adding and
+     removing the layers \u2014 see detachRadarLayers). It sits above the tiles at 200 and below the
+     overlays at 400, which is exactly where it belongs visually: on the clouds, under the warning
+     polygons. A pane rather than another zIndex on each layer, because the loop creates ~10 of
+     them at runtime and they would all have to agree with whatever the satellite is using.
+     Warnings deliberately do NOT toggle with reflectivity \u2014 someone who turns it off to look at
+     the cloud shield still needs to see where the warning is. */
   rvMap.createPane("radarPane").style.zIndex=350;
   rvBase=L.tileLayer(baseUrl(),{subdomains:"abcd",maxZoom:12,zIndex:1,
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> &middot; Radar &amp; warnings: <a href="https://www.weather.gov" target="_blank" rel="noopener">NOAA/NWS</a> &middot; Satellite: <a href="https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs" target="_blank" rel="noopener">NASA GIBS</a>/NOAA'}).addTo(rvMap);
@@ -2272,11 +2287,15 @@ function initRadarMap(){
   satLabels=L.tileLayer(labelUrl(),{subdomains:"abcd",maxZoom:12,zIndex:6});
   /* Added straight away, not left for the catch in refreshRadarLayer(): the capabilities fetch
      takes a moment, and this paints reflectivity NOW rather than showing an empty map until the
-     frame list resolves. The success path removes it once the pooled frames can drive. */
+     frame list resolves. The success path removes it once the pooled frames can drive.
+     Constructed either way, added only if reflectivity is on — addTo() starts fetching tiles the
+     moment it runs, and a visitor who left the layer off last time should not pay for a sweep the
+     next line would immediately take away again. */
   nwsRadar=L.tileLayer.wms(NWS_WMS,{
     layers:"conus_bref_qcd",format:"image/png",transparent:true,opacity:0.8,version:"1.3.0",
     pane:"radarPane"
-  }).addTo(rvMap);
+  });
+  if(skyOn.radar) nwsRadar.addTo(rvMap);
   rvMarker=L.circleMarker([current.lat,current.lon],{radius:5,color:"#4aa3ff",weight:2,fillColor:"#4aa3ff",fillOpacity:.9,interactive:false}).addTo(rvMap);
   applySkyLayers(true);
   setTimeout(function(){ if(rvMap) rvMap.invalidateSize(); },250);
@@ -2363,9 +2382,14 @@ function updateRadarCtl(){
   }else{
     ctl.classList.remove("ready");
   }
-  // During severe weather the loop is the point — start it automatically once frames are in
-  // (never against a reduced-motion preference, and never after the user hit pause).
-  if(document.body.classList.contains("storm") && !radarPlaying && !radarUserPaused
+  /* During severe weather the loop is the point — start it automatically once frames are in
+     (never against a reduced-motion preference, and never after the user hit pause).
+     skyOn.radar is belt-and-braces rather than strictly required: detachRadarLayers() empties the
+     frame list, so radarFramesReady() is already false while reflectivity is off. It is spelled
+     out because this runs from setStormMode(), i.e. the one moment the page is most inclined to
+     start things on the visitor's behalf, and "don't animate a layer they switched off" should not
+     depend on a side effect two functions away. */
+  if(skyOn.radar && document.body.classList.contains("storm") && !radarPlaying && !radarUserPaused
      && !reducedMotion() && radarFramesReady() && !document.hidden) radarPlayLoop();
 }
 function setRadarBtn(){
@@ -3077,7 +3101,10 @@ function loadAlerts(){
   });
 }
 // Classify an NWS event into a "family" so the dashboard can adapt its theme, prime card, and tone.
-var STORM_FAMILY=null, STORM_PRIME="obsCard";
+/* STORM_FAMILY used to sit beside this. Its only reader was radarWorthy(), which asked whether the
+   active family was one you'd open a radar for; the family is still needed for exactly that test,
+   but the test moved into CSS off the data-storm attribute setStormMode() already writes. */
+var STORM_PRIME="obsCard";
 function eventFamily(ev){
   ev=(ev||"").toLowerCase();
   if(/tornado|thunderstorm|special marine|dust storm|squall/.test(ev)) return "convective";
@@ -3109,7 +3136,7 @@ function setStormMode(warnProps){
   if(warnProps){
     var fam=eventFamily(warnProps.event);
     var cfg=FAMILY_CFG[fam]||FAMILY_CFG.convective;
-    STORM_FAMILY=fam; STORM_PRIME=cfg.prime;
+    STORM_PRIME=cfg.prime;
     body.classList.add("storm");
     body.setAttribute("data-storm", fam);
     // mark the event-relevant card so it gets the glow (and the masonry floats it to the front)
@@ -3119,7 +3146,7 @@ function setStormMode(warnProps){
     // which could leave the loop parked for minutes right after a warning popped.
     if(typeof updateRadarCtl==="function") updateRadarCtl();
   }else{
-    STORM_FAMILY=null; STORM_PRIME="obsCard";
+    STORM_PRIME="obsCard";
     body.classList.remove("storm");
     body.removeAttribute("data-storm");
     [].forEach.call(document.querySelectorAll(".storm-prime"), function(e){ e.classList.remove("storm-prime"); });
@@ -4549,8 +4576,14 @@ function loadStationPlot(){
    A switched-off layer leaves the map rather than merely hiding, so it costs nothing: no tiles,
    and for the radar no capabilities fetch either. Reflectivity is the exception in HOW it hides —
    the loop keeps ~10 pooled frames alive and drives them by opacity, so giving opacity a second
-   meaning (off vs. not-the-current-frame) would have the layer reappear on the next sweep. It
-   toggles by its pane's display instead, and the pool is left alone. */
+   meaning (off vs. not-the-current-frame) would have the layer reappear on the next sweep. It is
+   torn down instead — see detachRadarLayers().
+
+   Hiding is NOT enough for either layer, which is worth stating because the first cut of this got
+   it wrong: a Leaflet layer that is merely invisible is still on the map, and GridLayer requests
+   tiles for the current view on every moveend regardless of whether anything can see them. With
+   the radar pane set to display:none, one pan across the state still pulled ~90 reflectivity
+   tiles. Off has to mean off the map. */
 var skyOn={radar:true, sat:true};
 var SKY_KEY="lsxSky_v1";
 try{
@@ -4582,12 +4615,28 @@ function syncSkyMeta(){
     b.setAttribute("aria-pressed",on?"true":"false");
   });
 }
+/* Take reflectivity off the map completely: the fallback layer, every pooled sweep, and the loop
+   state that indexes them. The pool is CLEARED rather than parked, because buildRadarFrames() only
+   calls addTo() for timestamps it hasn't seen — a pool full of detached layers would be reused on
+   the way back and draw nothing. Rebuilding costs one capabilities fetch, and the sweeps would be
+   stale by then anyway. */
+function detachRadarLayers(){
+  radarPauseLoop();
+  if(!rvMap) return;
+  if(nwsRadar&&rvMap.hasLayer(nwsRadar)) rvMap.removeLayer(nwsRadar);
+  Object.keys(radarPool).forEach(function(t){
+    if(rvMap.hasLayer(radarPool[t])) rvMap.removeLayer(radarPool[t]);
+    delete radarPool[t];
+  });
+  radarFrames=[]; radarIdx=-1;
+  var lbl=document.getElementById("radarTime");
+  if(lbl){ lbl.textContent=""; lbl.classList.remove("past"); }
+  updateRadarCtl();   // empty frame list drops .ready, so the scrubber can't outlive its frames
+}
 function applySkyLayers(first){
   syncSkyMeta();
   if(!rvMap) return;
-  var pane=rvMap.getPane("radarPane");
-  if(pane) pane.style.display=skyOn.radar?"":"none";
-  if(!skyOn.radar) radarPauseLoop();
+  if(!skyOn.radar) detachRadarLayers();
   // The scrubber drives frames nobody can see; it goes with them. (Class-driven display otherwise
   // — clearing the inline value hands it back to .radar-ctl.ready rather than forcing it open.)
   var ctl=document.getElementById("radarCtl");
@@ -4597,9 +4646,14 @@ function applySkyLayers(first){
     if(p[1]&&!rvMap.hasLayer(p[0])) p[0].addTo(rvMap);
     else if(!p[1]&&rvMap.hasLayer(p[0])) rvMap.removeLayer(p[0]);
   });
-  // Back on, the frame list is as stale as the switch-off left it — same edge the old hidden→shown
-  // reveal handled for the whole card.
-  if(!first&&skyOn.radar) refreshRadarLayer();
+  /* Back on, everything reflectivity had was torn down, so rebuild. nwsRadar goes back first for
+     the same reason it is added at init: the capabilities fetch takes a moment, and this paints a
+     sweep NOW instead of leaving an empty map until the frame list resolves. refreshRadarLayer()
+     removes it again once the pooled frames can drive. */
+  if(!first&&skyOn.radar){
+    if(nwsRadar&&!rvMap.hasLayer(nwsRadar)) nwsRadar.addTo(rvMap);
+    refreshRadarLayer();
+  }
 }
 function setSkyLayer(name,on){
   if(name!=="radar"&&name!=="sat") return;
