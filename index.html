@@ -1565,8 +1565,8 @@
      the ic() helper in the script; tools/check.py fails the build if a name has no symbol here.
 
      The interface and generic-data marks below are drawn from, or closely after, Feather
-     (https://feathericons.com, © 2013-2023 Cole Bemis, MIT) — credited in the footer alongside
-     Meteocons. The weather-specific glyphs are original. -->
+     (https://feathericons.com, © 2013-2023 Cole Bemis, MIT) — credited in the README's licence
+     table alongside Meteocons, which the footer links. The weather-specific glyphs are original. -->
 <svg id="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></symbol>
@@ -1963,10 +1963,14 @@
 
 </main>
 
+<!-- Deliberately short. The canonical attribution table lives in the README's licence section now
+     that the repository is public; the footer keeps only what has to be on the page itself —
+     Open-Meteo's CC BY credit (its data renders in the page, not on a map with its own attribution
+     bar) and the severe-weather disclaimer. Basemap credits sit on each map, where CARTO's terms
+     ask for them. -->
 <footer>
-  Data: NOAA / National Weather Service (public domain) — api.weather.gov, official NWS radar (NOAA nowCOAST/GeoServer), SPC &amp; WPC &amp; CPC outlooks, NESDIS/GOES satellite, NWPS river gauges, climate normals via <a href="https://www.rcc-acis.org/" target="_blank" rel="noopener">NOAA RCC-ACIS</a>.<br>
-  U.S. Drought Monitor courtesy of the National Drought Mitigation Center (NDMC), NOAA &amp; USDA · drought outlooks by <a href="https://www.drought.gov/" target="_blank" rel="noopener">NIDIS / drought.gov</a>.<br>
-  Air quality &amp; geocoding by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (CC BY 4.0) · basemap © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> &amp; © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap contributors</a> · sky icons by <a href="https://github.com/basmilius/weather-icons" target="_blank" rel="noopener">Meteocons</a> (Bas Milius, MIT) · interface icons after <a href="https://feathericons.com/" target="_blank" rel="noopener">Feather</a> (Cole Bemis, MIT) · maps by <a href="https://leafletjs.com/" target="_blank" rel="noopener">Leaflet</a>.<br>
+  Data: NOAA / National Weather Service (public domain) · air quality &amp; geocoding by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (CC BY 4.0) · basemaps credited on each map.<br>
+  Open source under MIT — <a href="https://github.com/mkasseb/lsxdashboard" target="_blank" rel="noopener">github.com/mkasseb/lsxdashboard</a>, with full data &amp; icon credits in the <a href="https://github.com/mkasseb/lsxdashboard#license" target="_blank" rel="noopener">README</a>.<br>
   Not an official NWS product. During severe weather, always defer to official warnings &amp; a NOAA Weather Radio.<br>
   <span id="lastUpdate">&mdash;</span>
 </footer>
