@@ -319,6 +319,14 @@ function check(name, actual, expected) {
   check('fire skips the category tag', V(C.fire, 0, 2),
     { pri: 82, ico: 'fire', txt: 'Critical fire weather tomorrow (2/3)' });
 
+  // Winter (WSSI Overall Impact): rank 0 is "Winter Weather Area" — snow on the map, nothing to
+  // act on — and a Major day outranks the wet block's own wintry pill (93), which can only say
+  // "snow tonight", not how bad.
+  check('winter weather area alone stays quiet', V(C.wssi, 0, 0), null);
+  check('a major winter storm tomorrow speaks', V(C.wssi, 0, 3),
+    { pri: 96, ico: 'snow', txt: 'Major winter storm impacts tomorrow (3/4)' });
+  check('major winter outranks the wintry-mix pill', V(C.wssi, 3, 0).pri > 93, true);
+
   // The top of each scale exists and outranks the hourly rules it explains.
   check('an outbreak outranks the thunder pill', V(C.spc, 5, 5).pri > 95, true);
   check('high flood risk lands', V(C.ero, -1, 4),

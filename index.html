@@ -3947,14 +3947,15 @@ function loadAqi(){
   });
 }
 
-/* ============ RISK OUTLOOK (SPC storm + WPC flood, via NOAA ArcGIS) ============ */
+/* ============ RISK OUTLOOK (SPC storm + WPC flood/winter, via NOAA ArcGIS) ============ */
 var SPC_URL="https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/MapServer/";
 var ERO_URL="https://mapservices.weather.noaa.gov/vector/rest/services/hazards/wpc_precip_hazards/MapServer/";
 var FIRE_URL="https://mapservices.weather.noaa.gov/vector/rest/services/fire_weather/SPC_firewx/MapServer/";
+var WSSI_URL="https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/wpc_wssi/MapServer/";
 /* Layer ids drift when NOAA republishes these services — and a wrong id fails SILENTLY as
    "no risk" (each query's catch returns 0). Resolve ids by layer NAME at startup; the
    hardcoded values (verified against the live services, July 2026) are only the fallback. */
-var RISK_LAYERS={spc:[1,9,17], ero:[0,1,2], fireCat:[1,4], fireD3:{dry:7,wind:8}};
+var RISK_LAYERS={spc:[1,9,17], ero:[0,1,2], fireCat:[1,4], fireD3:{dry:7,wind:8}, wssi:[1,2]};
 /* Memoised and awaitable: loadSpc has to be able to WAIT for this. Each branch swallows its own
    failure, so the returned promise always fulfils — an unresolvable service just keeps its
    fallback ids. */
@@ -3982,6 +3983,11 @@ function resolveRiskLayers(){
     });
     if(cat[1]!=null&&cat[2]!=null) RISK_LAYERS.fireCat=[cat[1],cat[2]];
     if(d3.dry!=null&&d3.wind!=null) RISK_LAYERS.fireD3=d3;
+  }).catch(function(){}),
+  getJSON(WSSI_URL+"?f=json").then(function(d){
+    var ids={};
+    (d.layers||[]).forEach(function(l){ var m=/^Overall_Impact_Day_([12])$/i.exec(l.name||""); if(m) ids[m[1]]=l.id; });
+    if(ids[1]!=null&&ids[2]!=null) RISK_LAYERS.wssi=[ids[1],ids[2]];
   }).catch(function(){})
   ]);
   return _riskLayersP;
@@ -4076,6 +4082,20 @@ function eroQuery(layer){
     return rank;
   }).catch(function(){return 0;});
 }
+/* WSSI "Overall Impact" polygons carry a string `impact` field: WINTER WEATHER AREA (snow on
+   the map, nothing to act on — the TSTM of winter), then MINOR/MODERATE/MAJOR/EXTREME. Nested
+   polygons can all cover one point, so the strongest wins, same as spcQuery. */
+function wssiQuery(layer){
+  var RANK={minor:1,moderate:2,major:3,extreme:4};
+  return pointQuery(WSSI_URL,layer,"impact").then(function(d){
+    var rank=0;
+    (d.features||[]).forEach(function(f){
+      var v=String((f.attributes||{}).impact||"").toLowerCase();
+      if(RANK[v]) rank=Math.max(rank,RANK[v]);
+    });
+    return rank;
+  }).catch(function(){return 0;});   // isolate failure: one dead service ≠ blank matrix
+}
 function riskPill(info,denom){
   var fg=info.muted?"var(--muted)":textOn(info.bg);
   var bg=info.muted?"var(--inset)":info.bg;
@@ -4093,7 +4113,8 @@ function loadSpc(){
     if(!fresh()) return null;
     return Promise.all([spcQuery(RISK_LAYERS.spc[0]),spcQuery(RISK_LAYERS.spc[1]),spcQuery(RISK_LAYERS.spc[2]),
             eroQuery(RISK_LAYERS.ero[0]),eroQuery(RISK_LAYERS.ero[1]),eroQuery(RISK_LAYERS.ero[2]),
-            fireQuery(RISK_LAYERS.fireCat[0]),fireQuery(RISK_LAYERS.fireCat[1]),fireDay3Query()]);
+            fireQuery(RISK_LAYERS.fireCat[0]),fireQuery(RISK_LAYERS.fireCat[1]),fireDay3Query(),
+            wssiQuery(RISK_LAYERS.wssi[0]),wssiQuery(RISK_LAYERS.wssi[1])]);
   }).then(function(r){
     if(!r) return;             // stale generation — nothing to paint
     if(!fresh()) return;   // user moved while this was in flight
@@ -4101,8 +4122,10 @@ function loadSpc(){
     smart.eroRisk=r[3]||0;
     smart.fireRisk=r[6]||0;
     /* Day 1 AND day 2 for the Bottom Line: the matrix below paints day 2 and throws it away,
-       but tomorrow's outlook is exactly what the card's 24 hourly periods cannot see. */
-    callRisk={spc:[r[0]||0,r[1]||0], ero:[r[3]||0,r[4]||0], fire:[r[6]||0,r[7]||0]};
+       but tomorrow's outlook is exactly what the card's 24 hourly periods cannot see. WSSI is
+       Bottom Line-only — a Winter column in the matrix would sit empty most of the year. */
+    callRisk={spc:[r[0]||0,r[1]||0], ero:[r[3]||0,r[4]||0], fire:[r[6]||0,r[7]||0],
+              wssi:[r[9]||0,r[10]||0]};
     var days=["Today","Tomorrow","Day 3"];
     var html='<div class="spc-row rhead"><span></span><span class="rh">'+ic("storm")+'Storm</span><span class="rh">'+ic("flood")+'Flood</span><span class="rh">'+ic("fire")+'Fire</span></div>';
     for(var i=0;i<3;i++){
@@ -6284,7 +6307,14 @@ var OUTLOOK_CFG={
             "Widespread flash flooding expected"]},
   fire:{ico:"fire", den:3, pri:[0,51,82,94],
        cat:["","","",""],   // "Critical fire weather (Critical 2/3)" would say it twice
-       txt:["","Elevated fire weather","Critical fire weather","Extreme fire weather"]}
+       txt:["","Elevated fire weather","Critical fire weather","Extreme fire weather"]},
+  /* WPC's Winter Storm Severity Index (wssiQuery ranks its `impact` field 1–4). Major (96)
+     outranks the wet block's own wintry pill (93) for the same reason Moderate severe outranks
+     thunder: the hourly rules can say "snow tonight", only the desk can say how bad. */
+  wssi:{ico:"snow", den:4, pri:[0,61,89,96,99],
+       cat:["","","","",""],   // "Minor winter impacts (Minor 1/4)" would say it twice
+       txt:["","Minor winter impacts","Moderate winter impacts","Major winter storm impacts",
+            "Extreme winter storm impacts"]}
 };
 function outlookVerdict(cfg,l0,l1){
   var lv=Math.max(l0||0,l1||0);
@@ -6388,7 +6418,8 @@ function renderTheCall(){
   if(callRisk){
     [outlookVerdict(OUTLOOK_CFG.spc, spcRisk(callRisk.spc[0]).lvl, spcRisk(callRisk.spc[1]).lvl),
      outlookVerdict(OUTLOOK_CFG.ero, eroRisk(callRisk.ero[0]).lvl, eroRisk(callRisk.ero[1]).lvl),
-     outlookVerdict(OUTLOOK_CFG.fire, fireRisk(callRisk.fire[0]).lvl, fireRisk(callRisk.fire[1]).lvl)
+     outlookVerdict(OUTLOOK_CFG.fire, fireRisk(callRisk.fire[0]).lvl, fireRisk(callRisk.fire[1]).lvl),
+     outlookVerdict(OUTLOOK_CFG.wssi, callRisk.wssi[0], callRisk.wssi[1])   // wssiQuery ranks are already levels
     ].forEach(function(v){ if(v) push(v.pri,v.ico,v.txt); });
   }
   /* — windows-open vs. AC night (dew point is the honest comfort test) —
