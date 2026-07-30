@@ -123,6 +123,20 @@
     padding-left:calc(18px + env(safe-area-inset-left, 0px));
     min-height:100vh;transition:background .4s;
   }
+  /* ===== Page shell: the one decision the desktop layout never made =====
+     Every breakpoint in this file is a max-width. The page was drawn for a phone and each rule
+     narrows it further from there, which left desktop as the DEFAULT branch — not a design, just
+     what is left over when no phone rule matches, growing without limit. Measured at 2560: the grid
+     ran 2524px wide, the search box 2256px, and the jump bar spent 84% of its length on empty pill.
+     The shell cap is not a desktop-only rule and adds no breakpoint: it is arithmetically inert at
+     phone widths, where the column is already narrower than the ceiling, so the value never
+     applies. One layout still, no second set of rules to keep in sync, and the tablet range picks
+     up the same benefit on its way past. The page simply stops growing.
+     #wxbg is deliberately not in this list: it is position:fixed background weather and belongs to
+     the viewport, not to the column. */
+  :root{--maxw:1400px}   /* ≈ the 1440 viewport the hero pair and the 3-column masonry were tuned against */
+  header,main,footer{max-width:var(--maxw);margin-inline:auto}
+
   a{color:var(--accent);text-decoration:none}
   a:hover{text-decoration:underline}
 
@@ -242,6 +256,21 @@
      radar-polygon and "+N more" jumps land on cards too and were already landing a little high. */
   .card,#main{scroll-margin-top:calc(var(--jump-h) + 12px)}
   @media(max-width:480px){.jump a{padding:0 13px}}
+  /* Above phone widths the bar hugs its six links instead of ruling off a column it fills a
+     quarter of — at 1920 the links used 393px of an 1884px pill, and that empty stretch was the
+     loudest thing on the page. It aligns to the shell's LEFT edge rather than centring: the brand
+     above it and the grid below it both start there, and a pill centred between two edge-aligned
+     blocks reads as an accident. The left margin recomputes the shell's own gutter instead of
+     inheriting it, because a sticky element has to stay a direct child of <body> (see the markup
+     note) and therefore cannot sit inside a centring wrapper; below the shell width that term is 0.
+     Held above 680px on purpose. The slack this fixes is only worth fixing when it is vast — at
+     480px the bar runs 77px past its links, and a pill inset from cards that are all flush to the
+     column would look like a mistake rather than a decision. On a phone the bar stays full-width
+     and keeps scrolling exactly as it does today. */
+  @media(min-width:681px){
+    .jump{width:max-content;max-width:100%;
+      margin-left:max(0px, calc((100% - var(--maxw)) / 2));margin-right:auto}
+  }
 
   header .top{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:16px}
   /* In installed/standalone web-app mode iOS overlays the status bar — guarantee clearance */
@@ -337,12 +366,19 @@
      The Bottom Line can hold its rank through all of this because it is a pill row computed from
      live data — one or two lines that stay true minute to minute. Paragraphs of periodically
      issued prose are a different object, and they get a different rule.
-     Neither the 24h chart nor the radar needs its own hoist any more: both live inside a .stack,
-     and only direct grid children have an `order`. The two stacks share order -6 and fall back to
-     DOM order between them, which is already conditions-then-radar. */
+     The radar needs no hoist of its own: it lives inside a .stack, and only direct grid children
+     have an `order`. The two stacks share order -6 and fall back to DOM order between them, which
+     is already conditions-then-radar. */
   body.storm #alertsCard{order:-8}
   body.storm #callCard{order:-7}   /* directly under safety in every mode — never below the fold */
-  body.storm .stack{order:-6}      /* left: Now & Next 24 Hours + AQI · right: radar */
+  body.storm .stack{order:-6}      /* left: Now (+ AQI) · right: radar */
+  /* The 24h chart DOES need one, now that it is a band of its own rather than the lower half of the
+     conditions card. Without a rule it keeps order 0 and lands below the masonry — "what the next
+     day does" under every outlook on the page, during the one event where the question is live.
+     Ranked directly under the pair: once you know what is overhead, when it ends is the next thing
+     asked, and it outranks both a periodically-issued AFD and the deeper-context band. This also
+     keeps the calm-mode sequence (pair → next 24 hours → week ahead) intact under Storm Mode. */
+  body.storm #h24Card{order:-5}
   body.storm #afdCard{order:-2}    /* calm-weather rank does NOT carry here — see above */
   body.storm .masonry{order:-1}    /* prime card packs to its front */
   /* Storm Mode used to ring three cards in the accent colour while the banner above them glowed in
@@ -445,6 +481,28 @@
      came out ~400px apart — and both were cramped: a 438x246 radar and a 440px chart. Stacking them
      costs about the same vertical space the hole did, and both get the full width instead. */
   @media(max-width:1100px){.grid>.stack{grid-column:span 12}}
+  /* …and the leftover goes to the READING column, which is the direction that costs nothing.
+     The pair is two independently-sized things: the left column's height is content-driven, the
+     Sky card's is its width over an aspect ratio. Since the shell cap the Sky card is the taller
+     of the two — 103px at a 1400 shell on a calm evening with no AQI card — and that showed as a
+     notch under the readings, a card stopping well short of its neighbour with page background in
+     the corner between them.
+     So the column fills the row and the readings spread into it. The note above still holds and is
+     not being walked back: the MAP does not stretch, because letting it absorb leftover height is
+     exactly what made it portrait at 1000px. This is that same rule read the other way round — of
+     the two cards, the one whose height is nobody's decision is the one that gives.
+     space-between rather than growing a block. The tiles are the obvious candidate and the wrong
+     one: a taller .cc-item does not fill, it parks its label and value at the top of a bigger box,
+     so 103px buys six small holes in place of one big one (measured — 88px tiles against 76px
+     expo tiles beneath them, and the proportion goes with it). Spreading the sections already
+     there is the one distribution that reads as a card with room rather than a card with a hole.
+     No breakpoint, and inert wherever the pair is not a pair: below 1101px both stacks span all 12
+     columns and own their rows, so the row height IS the stack height and there is nothing to
+     stretch to. If the readings ever run taller than the map — a longer payload, or the AQI card
+     earning its slot — free space is zero and space-between distributes nothing. */
+  .grid>.stack.col-4{align-self:stretch}
+  #currentCard{flex:1;display:flex;flex-direction:column}
+  #current{flex:1;display:flex;flex-direction:column;justify-content:space-between}
 
   /* ===== Phone polish (≤480px): prevent any crowding/overflow ===== */
   /* never let a stray wide element create a horizontal scrollbar */
@@ -737,20 +795,15 @@
   .cc-sun .cs-sep{color:var(--muted)}
   .cc-today:empty{display:none}
 
-  /* The 24-hour chart, folded into the hero. It used to be its own full-width card below The Call;
-     merging removes a card's worth of chrome and puts "what's coming" against "what it is now".
-     The chart already measures its own container and thins its labels, so a narrower column costs
-     label density, not legibility. */
-  .cc-h24{margin-top:13px;padding-top:12px;border-top:1px solid var(--border)}
-  /* margin-top:0 because it is an <h3> now and the UA gives headings a top margin of their own. */
-  .cc-h24-lbl{font-size:var(--fs-xs);font-weight:800;text-transform:uppercase;letter-spacing:.9px;
-    color:var(--muted);margin:0 0 9px;display:flex;align-items:baseline;justify-content:space-between;gap:8px}
-  /* The band rail two inches above already names the place; repeating it here is noise. Kept in
-     the DOM (hidden) so the snapshot and clearLocationUI wiring for #h24loc stays untouched. */
-  .cc-h24-lbl #h24loc{display:none}
-  /* In a full-width card the "Now" pill is pushed to the far right as an anchor. In this column
-     that just strands it on a second row with a hole beside it — let it flow with the others. */
-  .cc-h24 .h24-pill.h24-now{margin-left:0}
+  /* The 24-hour chart is a full-width card of its own again — see the markup note for why it left
+     the conditions column. Nothing here sizes it: it measures #hourly24 and draws to that, so the
+     card only has to supply ordinary card chrome and get out of the way. The `.h24-now` pill goes
+     back to being right-anchored by its own rule below, which is what it was written for; the
+     override that let it flow inline existed only because the hero column was too narrow to anchor
+     anything against. The ≤480px rule still un-anchors it on a phone.
+     The band rail above still names the place, so #h24loc stays hidden here for the same reason it
+     was hidden before — present in the DOM so the snapshot and clearLocationUI wiring is untouched. */
+  #h24Card #h24loc{display:none}
 
   
   /* Daily */
@@ -785,8 +838,11 @@
   .imgwrap{position:relative;border-radius:10px;overflow:hidden;background:#000;border:1px solid var(--border)}
   .imgwrap img{width:100%;display:block}
   .frame{width:100%;border:0;display:block;background:#0b0f16}
-  #radar{height:480px}
-  @media(max-width:680px){#radar{height:340px}}
+  /* No height for #radar here. It had `480px`, and `340px` under 680, and neither ever applied:
+     `#radarCard #radar` below is two ids against one and wins at every width, in every mode, so
+     the map's height has come from its wrapper's aspect ratio for as long as that rule has
+     existed. A dead declaration that looks like the one in charge is worse than none — the next
+     person to change the map's height would have edited these. */
   /* Leaflet map + radar overlays */
   #radar.leaflet-container{background:#0b0f16;font-family:inherit}
   /* Leaflet ships its attribution as #0078A8 on a white pill — 3.4:1, and the one piece of text on
@@ -898,6 +954,39 @@
      value so the map is landscape at every width instead of going portrait in narrow columns. */
   #radarCard .imgwrap{aspect-ratio:16/9}
   #radarCard #radar{height:100%}
+  /* The ratio fixes the SHAPE but not the SIZE, and height is what costs a reader the fold. The
+     shell cap already holds the map near the ~500px this was drawn at, but viewport HEIGHT is a
+     second axis a width cap cannot see: at 1366x768 the map still ran past the bottom of the
+     screen with the entire dashboard underneath it. The vh term is what does the work; 560px is
+     just the ceiling on a tall monitor. Clamping height against an unchanged width only widens the
+     ratio, which is the direction this card already wants — the note above is about never going
+     PORTRAIT, and a 1.9:1 strip is further from that, not nearer.
+     The gate is BOTH axes, and it has to be: 62vh is a height rule, so gating it on width alone
+     handed it the one class of device it was never written for. Every current iPhone in landscape
+     is wider than 680 — 812 through 932 — with only 375 to 430 of height under it, and the clamp
+     read that as a short desktop. Measured at 844x390 it cut the map to 774x242: a 3.2:1 slit,
+     which on a square-ish CWA crops the northern and southern counties out of the picture
+     entirely. Rotating a phone to landscape IS the request for a bigger map, and a width-only
+     gate answered it by halving one.
+     600px of height separates the two cases with room to spare on either side — landscape
+     handsets top out near 430, landscape tablets start near 744 — and the viewport this rule was
+     written for, 1366x768, sits comfortably inside it. Below that height the phone ratios (4/3,
+     and 1/1 in a flood) and the everyday 16:9 are all left exactly as they are, which does mean
+     the map runs past a landscape fold. So does the portrait one, and scrolling to a map you
+     turned the phone sideways to see is the cheaper of the two costs.
+     Fullscreen is excluded because there the map is flex-filled with aspect-ratio off (below), and
+     a max-height is the single property able to break that. */
+  @media(min-width:681px) and (min-height:600px){
+    body:not(.radar-full) #radarCard .imgwrap{max-height:min(560px, 62vh)}
+    /* Storm Mode's entire point is handing the map height back for the two families with echoes in
+       them, and the everyday ceiling was quietly taking that back on a short screen: at 1366x768 a
+       flood clamped to 476px, i.e. below the 16:9 it would have had on a calm day, so engaging
+       Storm Mode made the map SMALLER. A storm keeps a ceiling — nothing here should be unbounded
+       — just a looser one, high enough that the 16:10 lands untouched at every width the shell
+       allows and the clamp only bites on a genuinely short viewport. */
+    body.storm[data-storm="convective"]:not(.radar-full) #radarCard .imgwrap,
+    body.storm[data-storm="flood"]:not(.radar-full) #radarCard .imgwrap{max-height:min(640px, 74vh)}
+  }
   /* Storm Mode gives the map space back — but only for weather you'd open a map to FIND.
      This used to be a plain `body.storm` rule, and it could be, because radarWorthy() had already
      guaranteed the card was absent for the dry families: an Extreme Heat Warning engaged Storm
@@ -1184,12 +1273,16 @@
     border:1px solid var(--border);padding:8px 15px;font-size:var(--fs-md);color:var(--text)}
   .quicklinks a:hover{border-color:var(--accent);text-decoration:none}
 
-  /* Next 24 Hours hero */
+  /* Next 24 Hours — a full-width band of its own, not the foot of the hero column any more */
   #hourly24 .h24-sum{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
   .h24-pill{background:var(--inset);border:1px solid var(--border);padding:6px 13px;font-size:var(--fs-sm);font-weight:500;color:var(--muted)}
   .h24-pill b{color:var(--text);font-weight:700;margin-left:3px;font-variant-numeric:tabular-nums}
   .h24-pill.h24-now{margin-left:auto;background:var(--chip)}
-  /* Integrated full-width hourly chart */
+  /* The chart itself. renderHourly24() emits width/height attributes alongside the viewBox, and
+     these two rules are what override them — so a snapshot drawn at one width scales to fit when
+     it is restored at another rather than overflowing the card. That matters more since the chart
+     moved: the container went from ~456px in the hero column to ~1366px here, so a desktop
+     snapshot restored on a phone is now a genuine four-fold mismatch until live data re-renders. */
   .h24-wrap{position:relative;width:100%}
   .h24-svg{display:block;width:100%;height:auto}
   .h24-svg text{font-family:inherit}
@@ -1360,7 +1453,12 @@
 
   /* Location bar */
   .locbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:16px}
-  .locsearch{position:relative;flex:1 1 240px;min-width:170px;margin:0}
+  /* Capped: this box takes a town name, not a paragraph, and letting it grow with the shell made a
+     2256px input at 2560. The cap sizes it to its longest realistic query rather than to whatever
+     room happens to be going. .locNow keeps its margin-left:auto below, so the current location
+     still sits at the shell's right edge instead of trailing the box. The cap also bounds .locsug,
+     which is absolutely positioned to this element's edges. */
+  .locsearch{position:relative;flex:1 1 240px;min-width:170px;max-width:520px;margin:0}
   .locsearch #locSearch{width:100%;background:var(--panel-2);color:var(--text);
     border:1px solid var(--border);border-radius:var(--r-md);padding:10px 14px;font-size:var(--fs-md);min-height:44px;font-family:inherit;box-sizing:border-box}
   .locsearch #locSearch:focus{outline:none;border-color:var(--accent)}
@@ -1662,18 +1760,13 @@
 
   <!-- CURRENT -->
   <div class="stack col-4">
-    <!-- Now + next 24h in one card. #current and #hourly24 stay SIBLINGS rather than nesting the
-         chart inside #current: loadCurrent() rebuilds #current wholesale (including on failure),
-         which would take the chart down with it and break "every loader owns its failure". -->
+    <!-- Readings only. The 24-hour chart used to sit under here as a second sub-section; it is its
+         own band below the pair now (see #h24Card) because the page shell changed the arithmetic
+         this column is subject to. #current is still rebuilt wholesale by loadCurrent() on every
+         refresh and failure, so nothing that has to survive that may be nested inside it. -->
     <section class="card hero" id="currentCard">
-      <h2>Now &amp; Next 24 Hours <span class="link" id="ccStation">&mdash;</span></h2>
+      <h2>Now <span class="link" id="ccStation">&mdash;</span></h2>
       <div id="current"><div class="loading">Loading…</div></div>
-      <div class="cc-h24">
-        <!-- A real sub-section of the card, so a real heading: the chart under it is a different
-             question ("what happens next") from the readings above it ("what it is now"). -->
-        <h3 class="cc-h24-lbl">Next 24 hours <span id="h24loc"></span></h3>
-        <div id="hourly24"><div class="loading">Loading hourly…</div></div>
-      </div>
     </section>
     <!-- AQI — hidden unless air quality is actually notable (AQI > 100); the everyday reading
          lives as a one-line summary inside Current Conditions -->
@@ -1752,6 +1845,24 @@
     <div class="imgcap" id="rsCap"><span></span><span></span></div>
   </section>
   </div>
+
+  <!-- ── NEXT 24 HOURS — its own full-width band again.
+       This chart was folded into the conditions card to save a card's worth of chrome, and at the
+       time that was free: the page had no width ceiling, so the column it moved into was 617px at
+       1920 and the Sky card opposite grew tall enough to roughly match it. The shell cap removed
+       both halves of that. The column is now 456px at every desktop width — narrow enough that the
+       chart has to thin its hour labels — while the map, whose height follows its width, came back
+       to 503px and left the pair ~240px unequal with the whitespace under the map.
+       Full width answers both with one move: 24 points get ~58px each instead of ~19, and the pair
+       balances to within ~70px without touching the map's shape, which is the thing the Sky card's
+       aspect rules exist to protect. It sits BELOW the pair rather than between the two columns:
+       the band reads conditions-and-sky first, then what the next day does, then the week.
+       Still a sibling of #current rather than a child, for the same reason as before — loadCurrent()
+       rebuilds #current wholesale and would take the chart down with it. ── -->
+  <section class="card col-12" id="h24Card">
+    <h2>Next 24 hours <span id="h24loc"></span></h2>
+    <div id="hourly24"><div class="loading">Loading hourly…</div></div>
+  </section>
 
   <!-- ── THE WEEK AHEAD & DEEPER CONTEXT ── -->
   <div class="railhead col-12">
