@@ -646,3 +646,47 @@ with nothing on screen explaining why is a broken first impression.
   re-syncs DOM order to visual order after each pack; it skips only if a card hosts an iframe
   (re-inserting reloads them), and nothing in the masonry does today.
 - `saveSnapshot()` serialises synchronously on `visibilitychange`.
+
+## Contributing
+
+The scope is the LSX County Warning Area. A change that generalises the dashboard to an arbitrary
+US location is a different project — most of what makes this one useful (the CWA's own zones, the
+river gauges that matter here, `climStation()`'s search radius) is tuned to eastern Missouri and
+southwest Illinois.
+
+Both checks run on every pull request and must pass:
+
+```bash
+python3 tools/check.py        # syntax, CSP origins, icon names, root files
+node tools/logic-tests.js     # the functions that decide something
+```
+
+Adding a feed means adding its origin to `connect-src` in [`_headers`](_headers), or the fetch is
+blocked in production and works fine locally — `tools/check.py` fails until you do. Anything that
+only paints is reviewed by eye; there is no snapshot suite to update.
+
+## License
+
+[MIT](LICENSE) for everything original to this repository — [`index.html`](index.html), the scripts
+in [`tools/`](tools), and the weather-specific glyphs in the inline sprite.
+
+Everything that came from somewhere else keeps its own terms. MIT's one condition is that the
+copyright notice travels with the work, which is why the first two names below also appear in the
+page footer rather than only here:
+
+| Component | Terms |
+|---|---|
+| [Meteocons](https://github.com/basmilius/weather-icons) sky icons | MIT, © Bas Milius |
+| Interface & generic data glyphs, drawn from or after [Feather](https://feathericons.com) | MIT, © 2013–2023 Cole Bemis |
+| [Leaflet](https://leafletjs.com) 1.9.4 | BSD-2-Clause |
+| NWS/NOAA feeds — `api.weather.gov`, NCEP, NWPS, SPC/WPC/CPC, NESDIS/GOES | Public domain, as U.S. government work |
+| NASA GIBS GOES-19 ABI tiles | Public domain |
+| Open-Meteo air quality, UV & geocoding | CC BY 4.0 |
+| [RCC-ACIS](https://www.rcc-acis.org/) normals, records & rankings | Open access |
+| CARTO basemap tiles | CARTO terms; underlying data © OpenStreetMap contributors, ODbL |
+
+**The warranty disclaimer is load-bearing, not boilerplate.** This is a weather page, and the `AS IS`
+clause is the reason a fork is the forker's problem: a stale copy still serving last week's warnings
+during a severe event is the failure this project can neither detect nor control. The footer line —
+*not an official NWS product; during severe weather defer to official warnings and a NOAA Weather
+Radio* — applies to every copy, and forks are asked to keep it intact.
