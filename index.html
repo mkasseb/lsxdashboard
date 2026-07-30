@@ -481,6 +481,28 @@
      came out ~400px apart — and both were cramped: a 438x246 radar and a 440px chart. Stacking them
      costs about the same vertical space the hole did, and both get the full width instead. */
   @media(max-width:1100px){.grid>.stack{grid-column:span 12}}
+  /* …and the leftover goes to the READING column, which is the direction that costs nothing.
+     The pair is two independently-sized things: the left column's height is content-driven, the
+     Sky card's is its width over an aspect ratio. Since the shell cap the Sky card is the taller
+     of the two — 103px at a 1400 shell on a calm evening with no AQI card — and that showed as a
+     notch under the readings, a card stopping well short of its neighbour with page background in
+     the corner between them.
+     So the column fills the row and the readings spread into it. The note above still holds and is
+     not being walked back: the MAP does not stretch, because letting it absorb leftover height is
+     exactly what made it portrait at 1000px. This is that same rule read the other way round — of
+     the two cards, the one whose height is nobody's decision is the one that gives.
+     space-between rather than growing a block. The tiles are the obvious candidate and the wrong
+     one: a taller .cc-item does not fill, it parks its label and value at the top of a bigger box,
+     so 103px buys six small holes in place of one big one (measured — 88px tiles against 76px
+     expo tiles beneath them, and the proportion goes with it). Spreading the sections already
+     there is the one distribution that reads as a card with room rather than a card with a hole.
+     No breakpoint, and inert wherever the pair is not a pair: below 1101px both stacks span all 12
+     columns and own their rows, so the row height IS the stack height and there is nothing to
+     stretch to. If the readings ever run taller than the map — a longer payload, or the AQI card
+     earning its slot — free space is zero and space-between distributes nothing. */
+  .grid>.stack.col-4{align-self:stretch}
+  #currentCard{flex:1;display:flex;flex-direction:column}
+  #current{flex:1;display:flex;flex-direction:column;justify-content:space-between}
 
   /* ===== Phone polish (≤480px): prevent any crowding/overflow ===== */
   /* never let a stray wide element create a horizontal scrollbar */
