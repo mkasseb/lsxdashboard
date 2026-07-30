@@ -4100,6 +4100,9 @@ function loadSpc(){
     smart.spcRisk=r[0]||0;
     smart.eroRisk=r[3]||0;
     smart.fireRisk=r[6]||0;
+    /* Day 1 AND day 2 for the Bottom Line: the matrix below paints day 2 and throws it away,
+       but tomorrow's outlook is exactly what the card's 24 hourly periods cannot see. */
+    callRisk={spc:[r[0]||0,r[1]||0], ero:[r[3]||0,r[4]||0], fire:[r[6]||0,r[7]||0]};
     var days=["Today","Tomorrow","Day 3"];
     var html='<div class="spc-row rhead"><span></span><span class="rh">'+ic("storm")+'Storm</span><span class="rh">'+ic("flood")+'Flood</span><span class="rh">'+ic("fire")+'Fire</span></div>';
     for(var i=0;i<3;i++){
@@ -4110,9 +4113,12 @@ function loadSpc(){
         +'</div>';
     }
     el.innerHTML=html;
+    if(typeof renderTheCall==="function") renderTheCall();   // outlook levels can add/remove a verdict pill
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
     el.innerHTML='<div class="empty">Risk outlooks unavailable. <a href="https://www.spc.noaa.gov/products/outlook/day1otlk.html" target="_blank" rel="noopener">Open SPC \u2197</a> \u00b7 <a href="https://www.spc.noaa.gov/products/fire_wx/" target="_blank" rel="noopener">Fire \u2197</a></div>';
+    callRisk=null;                                           // never let a stale outlook keep a pill alive
+    if(typeof renderTheCall==="function") renderTheCall();
   });
 }
 
@@ -5629,7 +5635,7 @@ function resetLocationState(){
   uv={now:null, peak:null, daily:{}};
   smart.hourly=[]; smart.days=[];
   heroNow.temp=null;   // the old city's reading must not mark the new city's range
-  aqiState={val:null, pm:null, err:false}; callAqi=null;
+  aqiState={val:null, pm:null, err:false}; callAqi=null; callRisk=null;
   userZones={county:"",forecast:"",fire:""};
   renderHourly24._hrs=null; loadForecast._paint=null;
 }
@@ -6214,10 +6220,12 @@ function renderUvNow(){
       +sub.join('</span> <span class="ex-sep">·</span> <span class="ex-b">')+'</span>':'')+'</div>';
 }
 /* ============ BOTTOM LINE (né The Call — plain-English verdicts from data on hand) ============
-   Rules fire off the next ~24 hourly periods (smart.hourly) + the latest AQI. Each verdict
-   has a priority; the top 4 render. The rain/umbrella call always exists, so the strip is
-   never empty once the hourly feed has loaded. */
+   Rules fire off the next ~24 hourly periods (smart.hourly) + the latest AQI + the SPC/WPC
+   outlook levels (callRisk, fed by loadSpc). Each verdict has a priority; the top 4 render.
+   The rain/umbrella call always exists, so the strip is never empty once the hourly feed has
+   loaded. */
 var callAqi=null;
+var callRisk=null;   // {spc:[d1,d2], ero:[d1,d2], fire:[d1,d2]} — raw dn/rank values from loadSpc
 function hrWord(d){ return d.toLocaleTimeString([], {hour:"numeric"}).replace(/\s/g,"").toLowerCase(); }
 /* The same clock word, plus the day when it isn't today. The Bottom Line reasons over a 24-hour
    window, so a bare "near 1pm" read at 8pm was describing TOMORROW afternoon in a voice that
@@ -6252,6 +6260,38 @@ function coldVerdict(nowT,mMin,cMin){
   if(nowT!=null&&nowT>=55&&cMin!=null&&cMin<=LAYERS_MAX&&nowT-cMin>=18) return "falling";
   if(mMin!=null&&mMin<=45) return "cold";
   return null;
+}
+/* Which outlook pill a hazard family earns, if any — the decision on its own, so it can be
+   tested without a DOM. `l0`/`l1` are today's and tomorrow's category LEVELS (spcRisk/eroRisk/
+   fireRisk .lvl, not raw dn), so "no risk" (-1) and SPC's "General Storms" (0) both fall out
+   of the same `<1` gate.
+
+   One pill per hazard family: the card holds four slots, and two flood pills would say less
+   than one. The stronger day speaks; a tie reads "today and tomorrow" — dropping the weaker
+   day is fine because the outlook matrix below still shows every cell.
+
+   Priorities sit ON PURPOSE around the hourly pills: an SPC Moderate (97) outranks the wet
+   block's own thunderstorm pill (95) because "widespread severe storms" is the why behind it,
+   but a Marginal (59) must not push "Rain likely" (60) off a quiet card. */
+var OUTLOOK_CFG={
+  spc:{ico:"storm", den:5, pri:[0,59,80,90,97,99],
+       cat:["","Marginal Risk","Slight Risk","Enhanced Risk","Moderate Risk","High Risk"],
+       txt:["","Isolated severe storms possible","Severe storms possible","Severe storms likely",
+            "Widespread severe storms expected","Severe weather outbreak expected"]},
+  ero:{ico:"flood", den:4, pri:[0,44,79,91,98],
+       cat:["","Marginal Risk","Slight Risk","Moderate Risk","High Risk"],
+       txt:["","Isolated flash flooding possible","Flash flooding possible","Flash flooding likely",
+            "Widespread flash flooding expected"]},
+  fire:{ico:"fire", den:3, pri:[0,51,82,94],
+       cat:["","","",""],   // "Critical fire weather (Critical 2/3)" would say it twice
+       txt:["","Elevated fire weather","Critical fire weather","Extreme fire weather"]}
+};
+function outlookVerdict(cfg,l0,l1){
+  var lv=Math.max(l0||0,l1||0);
+  if(lv<1) return null;
+  var day=(l0===lv&&l1===lv)?"today and tomorrow":(l0===lv?"today":"tomorrow");
+  var tag=(cfg.cat[lv]?cfg.cat[lv]+" ":"")+lv+"/"+cfg.den;
+  return {pri:cfg.pri[lv], ico:cfg.ico, txt:cfg.txt[lv]+" "+day+" ("+tag+")"};
 }
 function renderTheCall(){
   var card=document.getElementById("callCard"), row=document.getElementById("callRow");
@@ -6340,6 +6380,17 @@ function renderTheCall(){
   }
   // — air quality (fed by loadAqi) —
   if(callAqi!=null&&callAqi>100) push(75,"air","Poor air quality (AQI "+callAqi+") — sensitive groups should limit exertion");
+  /* — the outlook desks: SPC severe, WPC flash flood, SPC fire (fed by loadSpc) —
+     The hourly rules above can only see ~24 hours, and only what a PoP number admits. The
+     outlooks say WHY a day is dangerous — hail, tornadoes, flash flooding — and say it for
+     tomorrow AFTERNOON before a single hourly period can reach it: a Friday outbreak is
+     invisible to a Thursday-lunch window that ends at 1pm Friday. */
+  if(callRisk){
+    [outlookVerdict(OUTLOOK_CFG.spc, spcRisk(callRisk.spc[0]).lvl, spcRisk(callRisk.spc[1]).lvl),
+     outlookVerdict(OUTLOOK_CFG.ero, eroRisk(callRisk.ero[0]).lvl, eroRisk(callRisk.ero[1]).lvl),
+     outlookVerdict(OUTLOOK_CFG.fire, fireRisk(callRisk.fire[0]).lvl, fireRisk(callRisk.fire[1]).lvl)
+    ].forEach(function(v){ if(v) push(v.pri,v.ico,v.txt); });
+  }
   /* — windows-open vs. AC night (dew point is the honest comfort test) —
      The contiguous run from the first night hour, not every night-shaped hour in the window: as a
      filter, at 3am this matched THIS morning's small hours and tomorrow evening's alike, so "low
