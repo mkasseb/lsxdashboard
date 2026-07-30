@@ -112,7 +112,7 @@ Two icon sets, both MIT:
   thermometers, UV, air) are original to this project.
 
 Both licences are the MIT licence, which asks that the copyright notice travel with the work — hence
-the two names above and the credit line in the page footer.
+the two names above and in the [licence table](#license) below, which the page footer links.
 
 ## How it fits together
 
@@ -599,7 +599,8 @@ for good.
 **Only the basemap is credited on the map.** The NOAA and NASA lines used to ride along in the
 Leaflet attribution, and on a 375px phone all four wrapped to three lines: 46px over a 236px map, a
 fifth of the picture. They were never load-bearing — `#rsCap` names every source that is drawing and
-the footer links all of them — so CARTO and OSM stay (their terms ask for a link on the map itself)
+the [licence table](#license) lists all of them — so CARTO and OSM stay (their terms ask for a link
+on the map itself)
 and the rest moved to the caption. The bar is one 15px line now. This also un-broke the map lock:
 `.maplock` sat at z-index 3 while Leaflet's control containers sit at 1000, and `#radar` sets no
 z-index so it never opens a stacking context to trap them. The controls won, the attribution landed
@@ -670,9 +671,12 @@ only paints is reviewed by eye; there is no snapshot suite to update.
 [MIT](LICENSE) for everything original to this repository — [`index.html`](index.html), the scripts
 in [`tools/`](tools), and the weather-specific glyphs in the inline sprite.
 
-Everything that came from somewhere else keeps its own terms. MIT's one condition is that the
-copyright notice travels with the work, which is why the first two names below also appear in the
-page footer rather than only here:
+Everything that came from somewhere else keeps its own terms. This table is the canonical credits
+list — the page footer links here instead of repeating it, and keeps on the page only what has to
+be there: Open-Meteo's CC BY attribution (its data renders in the page itself) and the basemap
+credit on each map, where CARTO's terms ask for it. MIT's one condition is that the copyright
+notice travels with the work, which this table and [`LICENSE`](LICENSE) satisfy now that the
+repository is public:
 
 | Component | Terms |
 |---|---|
