@@ -208,7 +208,8 @@ text system, and folding them into the type scale would be a category error.
 
 **The page is ordered by what a visitor came for.** Alerts first (in calm weather that card
 collapses to a single all-clear line), then the Bottom Line, then The Pulse, then the hero band —
-"Now & Next 24 Hours" on the left, radar on the right — and finally the masonry.
+"Now" on the left, the Sky card on the right — then the next 24 hours in a full-width band of its
+own, and finally the masonry.
 The Bottom Line (né The Call; ids are still `callCard`/`callRow`) is the page reasoning on the
 visitor's behalf rather than handing them numbers: rain/storm windows, heat and cold, UV with a
 burn clock, wind, air quality, a temperature-crash warning, climate records — and one synthesized
@@ -262,18 +263,29 @@ because it is a pill row computed from live data, one or two lines that stay tru
 — paragraphs of periodically issued prose are a different object and get a different rule.
 
 `.railhead` labels name each band and hide under `body.storm`, where the grid reorders for urgency
-and a band label would lie about what follows it. Only *direct* grid children get an `order`, so
-cards that live inside a `.stack` (the 24-hour chart, the radar) ride up with the stack rather than
-carrying their own — a rule worth remembering, because an `order` on a nested card is silently a
-no-op.
+and a band label would lie about what follows it. Only *direct* grid children get an `order`, so the
+radar, which lives inside a `.stack`, rides up with the stack rather than carrying its own — a rule
+worth remembering, because an `order` on a nested card is silently a no-op.
 
-**The hero card is two loaders in one card.** `#current` (the reading, today's range with "now"
-marked inside it, sun times) and `#hourly24` (the 24-hour chart) are *siblings* inside
-`#currentCard`, never nested. `loadCurrent()` rebuilds `#current` wholesale — including on failure
-— so nesting the chart inside it would let a dead observation feed take the forecast chart down
-with it, breaking the rule below. The chart measures its own container and thins its labels, so it
-survives the narrower column; it shows ~6 hour labels there against ~24 at full width, with
-per-hour detail still available on hover.
+The 24-hour chart is the cautionary half of that same rule. Nested inside the conditions card it
+needed no `order` and had none; moving it to a band of its own made it a direct grid child, where
+the absence of one is not inherited but `order:0` — and it landed *below the entire masonry* under
+Storm Mode, putting "what the next day does" under every outlook on the page during the one event
+where the question is live. `#h24Card` carries an explicit `-5` for that reason. Promoting a card
+out of a stack is exactly when to check whether it now needs a rank it never used to.
+
+**The 24-hour chart is never nested inside `#current`.** It has its own full-width card (`#h24Card`)
+below the hero pair; it previously sat inside `#currentCard` as a *sibling* of `#current`, which was
+a different arrangement of the same constraint. `loadCurrent()` rebuilds `#current` wholesale —
+including on failure — so nesting the chart inside it would let a dead observation feed take the
+forecast chart down with it, breaking the rule below. Wherever the chart lives next, it does not
+live in there.
+
+The chart measures its own container and thins its labels to fit: all 24 hour labels at full width,
+12 when the layout stacks below 1100px, with per-hour detail on hover at every size. Worth knowing
+that the threshold it switches compact geometry at is 680px of *container*, not of viewport — in the
+hero column it was 617px before the page shell and 456px after, so a desktop was drawing the phone's
+chart. That, rather than the whitespace, is what moving it out actually fixed.
 
 **UV and air quality are tiles beside the metric grid, not inside it.** They answer the same
 question as each other — how much is this going to cost me to be outside — so they sit together in
@@ -293,11 +305,15 @@ size, AQI "Moderate" on the light panel is otherwise 1.3:1.
 
 **The hero row is a pair of stacks, but only on wide screens.** Left is the conditions card (+ AQI
 when it's notable); right is the Sky card. Below 1100px they stop being a pair and both go full
-width: at ~474px per column the left one still had to carry the reading, the metrics grid and the
-24-hour chart while the right had only the map, so they came out ~400px apart *and* both were
-cramped — a 438x246 map and a 440px chart showing 6 hour labels. Stacking costs roughly the
-vertical space the hole wasted and gives both the full width instead: a 928x521 map and 12 hour
-labels.
+width. Forcing the pair back on at 1024x768 to measure what keeping it would cost: a 619x348 map
+beside a 319px reading column, against a 954px map and the full 988px to the readings when stacked.
+
+Width is the whole argument now, and it did not use to be. The original note leaned on the columns
+also coming out ~400px unequal, but the 24-hour chart moving to its own band took that much off the
+left column, and the forced pair at 1024 lands 59px apart. Cramping stands on its own: neither a
+619px map nor a 319px reading column is doing its job at that size. Note also that the map's height
+below the breakpoint is whatever the 62vh ceiling allows rather than a fixed number — 476px at 768
+tall — so widths are the comparison that stays true across viewports.
 
 **The reading column gives; the map doesn't.** The two halves are sized by different rules — the
 conditions card's height is whatever its content comes to, the Sky card's is its width over an
