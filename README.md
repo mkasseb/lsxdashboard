@@ -1,4 +1,4 @@
-# LSX Weather
+# LSX Dashboard
 
 A one-page weather dashboard for the **NWS St. Louis (LSX) County Warning Area** — eastern Missouri
 and southwest Illinois. Alerts, radar, forecasts, river gauges, and climate context for a location
