@@ -1977,7 +1977,13 @@
   integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
 <script>
 /* ============ CONFIG ============ */
-var DEFAULT_LOC={name:"Lake St. Louis, MO", lat:38.7975, lon:-90.7855, station:"KSUS"};
+/* Two decimals on purpose — this ships in a public file, and four put the default inside a
+   ~10 m box around one address. Nothing downstream reads finer: /points snaps to a ~2.5 km
+   forecast grid, the zone and county come from point-in-polygon against boundaries that are
+   miles across, `station` is pinned to KSUS explicitly rather than found by distance, and
+   climStation() rounds to one decimal before it searches. Don't restore precision here to
+   "fix" a wrong forecast — at this granularity the grid cell is the same one. */
+var DEFAULT_LOC={name:"Lake St. Louis, MO", lat:38.80, lon:-90.79, station:"KSUS"};
 var RIVERS = [
   {name:"Mississippi at St. Louis",  id:"EADM7"},
   {name:"Missouri at St. Charles",   id:"SCLM7"},
