@@ -299,6 +299,15 @@ cramped — a 438x246 map and a 440px chart showing 6 hour labels. Stacking cost
 vertical space the hole wasted and gives both the full width instead: a 928x521 map and 12 hour
 labels.
 
+**The reading column gives; the map doesn't.** The two halves are sized by different rules — the
+conditions card's height is whatever its content comes to, the Sky card's is its width over an
+aspect ratio — so they never naturally agree. Since the page shell the Sky card is the taller of the
+two, and the difference showed as a notch under the readings: 103px at a 1400 shell on a calm
+evening. The left column stretches to the row now and the readings spread into it. Growing the *map*
+to close it is the mistake its aspect rules exist to prevent (at 894px wide, tall enough to match is
+1.2:1), and growing the metric tiles instead only relocates the hole into them — a taller tile parks
+its label at the top of a bigger box, so 103px buys six small holes in place of one big one.
+
 **The Sky card is permanent.** It used to earn its slot the way the AQI card does — shown only for
 a *radar-shaped* warning family, a tornado/severe watch, precipitation falling now, or a wet
 next-few-hours, with a rail button to summon it by hand on a calm day. That whole subsystem
@@ -607,27 +616,13 @@ with nothing on screen explaining why is a broken first impression.
 ## Known gaps
 
 - No `aria-expanded` on the expandable alert and forecast rows.
-- The hero pair runs 53-80px unequal at desktop widths, with the Sky card the taller of the two now,
-  so the leftover sits at the foot of the reading column rather than under the map. Growing the map
-  to close it is still exactly the mistake its aspect rules exist to prevent: at 894px wide, tall
-  enough to match would be 1.2:1.
-
-  Any single figure for this is a figure at one width, because the map's height follows its width and
-  the reading column's does not — narrower even makes the column slightly taller as the text rewraps.
-  Measured against live data (calm evening, KSUS 84°, no active alerts, so the AQI card was hidden):
-
-  | shell | left column | Sky card | Sky taller by |
-  |------:|------------:|---------:|--------------:|
-  |  1330 |         539 |      592 |            53 |
-  |  1400 |         539 |      618 |            80 |
-
-  It was ~240px the other way until the 24-hour chart moved to its own full-width band, which took
-  321px off that column. Before the page shell it was not a fixed number at all: 1330 → left taller
-  by 268, 1884 → by 36, 2524 → *map* taller by 158. The cap traded that variation for one figure,
-  which is the standing cost of bounding the page — a narrower shell means a shorter aspect-locked
-  map with nothing opposite it shrinking to match. Sweeping `--maxw` from 1400 to 2000 does not help
-  (best ~160px, and past 1600 the map stops growing where its own max-height takes over), so shell
-  width is not a lever on this one.
+- The hero pair only bottom-aligns in one direction. The reading column stretches to meet the Sky
+  card, so the ordinary case is flush — but when the AQI card earns its slot the left column becomes
+  the taller of the two, free space goes to zero, and the leftover reappears under the map. How much
+  depends on what the AQI card is carrying. Stretching the map to absorb it is the one thing that
+  stays off the table, since its height is an aspect ratio rather than a number looking for a value:
+  that is how it ended up portrait at 1000px the first time. Page-edge whitespace under a map reads
+  as margin rather than a framed hole, which is why this direction is the acceptable one.
 - The satellite follows a *scrub* but does not *animate*. Stopping on a past radar frame re-points
   it to the matching moment; pressing Loop leaves it on the live frame. Preloading a parallel GOES
   stack is what a real satellite loop needs, and the cost is in the tiles — see below.
