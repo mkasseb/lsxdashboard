@@ -6248,7 +6248,7 @@ function renderUvNow(){
    The rain/umbrella call always exists, so the strip is never empty once the hourly feed has
    loaded. */
 var callAqi=null;
-var callRisk=null;   // {spc:[d1,d2], ero:[d1,d2], fire:[d1,d2]} — raw dn/rank values from loadSpc
+var callRisk=null;   // {spc, ero, fire, wssi}, each [day1,day2] — raw dn/rank values from loadSpc
 function hrWord(d){ return d.toLocaleTimeString([], {hour:"numeric"}).replace(/\s/g,"").toLowerCase(); }
 /* The same clock word, plus the day when it isn't today. The Bottom Line reasons over a 24-hour
    window, so a bare "near 1pm" read at 8pm was describing TOMORROW afternoon in a voice that
