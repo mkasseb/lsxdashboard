@@ -43,7 +43,9 @@ const SUBJECT = new Function(`
   ${lift(/^var FAMILY_CFG=\{[\s\S]*?^\};/m, 'FAMILY_CFG')}
   ${lift(/^var LAYERS_MAX=\d+;/m, 'LAYERS_MAX')}
   ${lift(/^function coldVerdict\(nowT,mMin,cMin\)\{[\s\S]*?^\}/m, 'coldVerdict()')}
-  return { rangeMark, rangeRow, alertLevel, cardCmp, FAMILY_CFG, coldVerdict };
+  ${lift(/^var OUTLOOK_CFG=\{[\s\S]*?^\};/m, 'OUTLOOK_CFG')}
+  ${lift(/^function outlookVerdict\(cfg,l0,l1\)\{[\s\S]*?^\}/m, 'outlookVerdict()')}
+  return { rangeMark, rangeRow, alertLevel, cardCmp, FAMILY_CFG, coldVerdict, OUTLOOK_CFG, outlookVerdict };
 `)();
 
 let failed = 0;
@@ -291,8 +293,51 @@ function check(name, actual, expected) {
   check('freezing morning with no ahead-low', V(40, 30, null), 'freezing');
 }
 
+/* ============ outlookVerdict ============ */
+// Which outlook pill a hazard family earns. Inputs are category LEVELS for today and tomorrow
+// (spcRisk/eroRisk/fireRisk .lvl), so -1 means "no risk" and SPC's 0 means "General Storms".
+{
+  const V = SUBJECT.outlookVerdict, C = SUBJECT.OUTLOOK_CFG;
+
+  // The gap this closes: a Slight Risk for TOMORROW afternoon, invisible to the 24-hour hourly
+  // window, must still make the card — that is the whole point of reading the outlook desks.
+  check('slight risk tomorrow speaks', V(C.spc, -1, 2),
+    { pri: 80, ico: 'storm', txt: 'Severe storms possible tomorrow (Slight Risk 2/5)' });
+
+  // Non-hazards stay quiet: no outlook at all, and SPC's "General Storms" (thunder without
+  // severe potential) — the wet-block pill already covers plain storms.
+  check('no risk either day is no pill', V(C.spc, -1, -1), null);
+  check('general storms is not a hazard', V(C.spc, 0, 0), null);
+
+  // One pill per family: the stronger day speaks, a tie reads as one span.
+  check('the stronger day wins', V(C.spc, 3, 2),
+    { pri: 90, ico: 'storm', txt: 'Severe storms likely today (Enhanced Risk 3/5)' });
+  check('a tie merges the days', V(C.ero, 2, 2),
+    { pri: 79, ico: 'flood', txt: 'Flash flooding possible today and tomorrow (Slight Risk 2/4)' });
+
+  // Fire categories already name themselves — no "(Critical 2/3)" saying it twice.
+  check('fire skips the category tag', V(C.fire, 0, 2),
+    { pri: 82, ico: 'fire', txt: 'Critical fire weather tomorrow (2/3)' });
+
+  // Winter (WSSI Overall Impact): rank 0 is "Winter Weather Area" — snow on the map, nothing to
+  // act on — and a Major day outranks the wet block's own wintry pill (93), which can only say
+  // "snow tonight", not how bad.
+  check('winter weather area alone stays quiet', V(C.wssi, 0, 0), null);
+  check('a major winter storm tomorrow speaks', V(C.wssi, 0, 3),
+    { pri: 96, ico: 'snow', txt: 'Major winter storm impacts tomorrow (3/4)' });
+  check('major winter outranks the wintry-mix pill', V(C.wssi, 3, 0).pri > 93, true);
+
+  // The top of each scale exists and outranks the hourly rules it explains.
+  check('an outbreak outranks the thunder pill', V(C.spc, 5, 5).pri > 95, true);
+  check('high flood risk lands', V(C.ero, -1, 4),
+    { pri: 98, ico: 'flood', txt: 'Widespread flash flooding expected tomorrow (High Risk 4/4)' });
+
+  // Missing inputs must not throw or invent a verdict.
+  check('undefined levels are no pill', V(C.spc, undefined, undefined), null);
+}
+
 if (failed) {
   console.error(`\n${failed} logic test(s) failed`);
   process.exit(1);
 }
-console.log('ok    logic: rangeMark, alertLevel, cardCmp, FAMILY_CFG and coldVerdict behave');
+console.log('ok    logic: rangeMark, alertLevel, cardCmp, FAMILY_CFG, coldVerdict and outlookVerdict behave');

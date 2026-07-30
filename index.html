@@ -3947,14 +3947,15 @@ function loadAqi(){
   });
 }
 
-/* ============ RISK OUTLOOK (SPC storm + WPC flood, via NOAA ArcGIS) ============ */
+/* ============ RISK OUTLOOK (SPC storm + WPC flood/winter, via NOAA ArcGIS) ============ */
 var SPC_URL="https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/SPC_wx_outlks/MapServer/";
 var ERO_URL="https://mapservices.weather.noaa.gov/vector/rest/services/hazards/wpc_precip_hazards/MapServer/";
 var FIRE_URL="https://mapservices.weather.noaa.gov/vector/rest/services/fire_weather/SPC_firewx/MapServer/";
+var WSSI_URL="https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/wpc_wssi/MapServer/";
 /* Layer ids drift when NOAA republishes these services — and a wrong id fails SILENTLY as
    "no risk" (each query's catch returns 0). Resolve ids by layer NAME at startup; the
    hardcoded values (verified against the live services, July 2026) are only the fallback. */
-var RISK_LAYERS={spc:[1,9,17], ero:[0,1,2], fireCat:[1,4], fireD3:{dry:7,wind:8}};
+var RISK_LAYERS={spc:[1,9,17], ero:[0,1,2], fireCat:[1,4], fireD3:{dry:7,wind:8}, wssi:[1,2]};
 /* Memoised and awaitable: loadSpc has to be able to WAIT for this. Each branch swallows its own
    failure, so the returned promise always fulfils — an unresolvable service just keeps its
    fallback ids. */
@@ -3982,6 +3983,11 @@ function resolveRiskLayers(){
     });
     if(cat[1]!=null&&cat[2]!=null) RISK_LAYERS.fireCat=[cat[1],cat[2]];
     if(d3.dry!=null&&d3.wind!=null) RISK_LAYERS.fireD3=d3;
+  }).catch(function(){}),
+  getJSON(WSSI_URL+"?f=json").then(function(d){
+    var ids={};
+    (d.layers||[]).forEach(function(l){ var m=/^Overall_Impact_Day_([12])$/i.exec(l.name||""); if(m) ids[m[1]]=l.id; });
+    if(ids[1]!=null&&ids[2]!=null) RISK_LAYERS.wssi=[ids[1],ids[2]];
   }).catch(function(){})
   ]);
   return _riskLayersP;
@@ -4076,6 +4082,20 @@ function eroQuery(layer){
     return rank;
   }).catch(function(){return 0;});
 }
+/* WSSI "Overall Impact" polygons carry a string `impact` field: WINTER WEATHER AREA (snow on
+   the map, nothing to act on — the TSTM of winter), then MINOR/MODERATE/MAJOR/EXTREME. Nested
+   polygons can all cover one point, so the strongest wins, same as spcQuery. */
+function wssiQuery(layer){
+  var RANK={minor:1,moderate:2,major:3,extreme:4};
+  return pointQuery(WSSI_URL,layer,"impact").then(function(d){
+    var rank=0;
+    (d.features||[]).forEach(function(f){
+      var v=String((f.attributes||{}).impact||"").toLowerCase();
+      if(RANK[v]) rank=Math.max(rank,RANK[v]);
+    });
+    return rank;
+  }).catch(function(){return 0;});   // isolate failure: one dead service ≠ blank matrix
+}
 function riskPill(info,denom){
   var fg=info.muted?"var(--muted)":textOn(info.bg);
   var bg=info.muted?"var(--inset)":info.bg;
@@ -4093,13 +4113,19 @@ function loadSpc(){
     if(!fresh()) return null;
     return Promise.all([spcQuery(RISK_LAYERS.spc[0]),spcQuery(RISK_LAYERS.spc[1]),spcQuery(RISK_LAYERS.spc[2]),
             eroQuery(RISK_LAYERS.ero[0]),eroQuery(RISK_LAYERS.ero[1]),eroQuery(RISK_LAYERS.ero[2]),
-            fireQuery(RISK_LAYERS.fireCat[0]),fireQuery(RISK_LAYERS.fireCat[1]),fireDay3Query()]);
+            fireQuery(RISK_LAYERS.fireCat[0]),fireQuery(RISK_LAYERS.fireCat[1]),fireDay3Query(),
+            wssiQuery(RISK_LAYERS.wssi[0]),wssiQuery(RISK_LAYERS.wssi[1])]);
   }).then(function(r){
     if(!r) return;             // stale generation — nothing to paint
     if(!fresh()) return;   // user moved while this was in flight
     smart.spcRisk=r[0]||0;
     smart.eroRisk=r[3]||0;
     smart.fireRisk=r[6]||0;
+    /* Day 1 AND day 2 for the Bottom Line: the matrix below paints day 2 and throws it away,
+       but tomorrow's outlook is exactly what the card's 24 hourly periods cannot see. WSSI is
+       Bottom Line-only — a Winter column in the matrix would sit empty most of the year. */
+    callRisk={spc:[r[0]||0,r[1]||0], ero:[r[3]||0,r[4]||0], fire:[r[6]||0,r[7]||0],
+              wssi:[r[9]||0,r[10]||0]};
     var days=["Today","Tomorrow","Day 3"];
     var html='<div class="spc-row rhead"><span></span><span class="rh">'+ic("storm")+'Storm</span><span class="rh">'+ic("flood")+'Flood</span><span class="rh">'+ic("fire")+'Fire</span></div>';
     for(var i=0;i<3;i++){
@@ -4110,9 +4136,12 @@ function loadSpc(){
         +'</div>';
     }
     el.innerHTML=html;
+    if(typeof renderTheCall==="function") renderTheCall();   // outlook levels can add/remove a verdict pill
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
     el.innerHTML='<div class="empty">Risk outlooks unavailable. <a href="https://www.spc.noaa.gov/products/outlook/day1otlk.html" target="_blank" rel="noopener">Open SPC \u2197</a> \u00b7 <a href="https://www.spc.noaa.gov/products/fire_wx/" target="_blank" rel="noopener">Fire \u2197</a></div>';
+    callRisk=null;                                           // never let a stale outlook keep a pill alive
+    if(typeof renderTheCall==="function") renderTheCall();
   });
 }
 
@@ -5629,7 +5658,7 @@ function resetLocationState(){
   uv={now:null, peak:null, daily:{}};
   smart.hourly=[]; smart.days=[];
   heroNow.temp=null;   // the old city's reading must not mark the new city's range
-  aqiState={val:null, pm:null, err:false}; callAqi=null;
+  aqiState={val:null, pm:null, err:false}; callAqi=null; callRisk=null;
   userZones={county:"",forecast:"",fire:""};
   renderHourly24._hrs=null; loadForecast._paint=null;
 }
@@ -6214,14 +6243,16 @@ function renderUvNow(){
       +sub.join('</span> <span class="ex-sep">·</span> <span class="ex-b">')+'</span>':'')+'</div>';
 }
 /* ============ BOTTOM LINE (né The Call — plain-English verdicts from data on hand) ============
-   Rules fire off the next ~18 hourly periods (smart.hourly) + the latest AQI. Each verdict
-   has a priority; the top 4 render. The rain/umbrella call always exists, so the strip is
-   never empty once the hourly feed has loaded. */
+   Rules fire off the next ~24 hourly periods (smart.hourly) + the latest AQI + the SPC/WPC
+   outlook levels (callRisk, fed by loadSpc). Each verdict has a priority; the top 4 render.
+   The rain/umbrella call always exists, so the strip is never empty once the hourly feed has
+   loaded. */
 var callAqi=null;
+var callRisk=null;   // {spc, ero, fire, wssi}, each [day1,day2] — raw dn/rank values from loadSpc
 function hrWord(d){ return d.toLocaleTimeString([], {hour:"numeric"}).replace(/\s/g,"").toLowerCase(); }
-/* The same clock word, plus the day when it isn't today. The Bottom Line reasons over an 18-hour
+/* The same clock word, plus the day when it isn't today. The Bottom Line reasons over a 24-hour
    window, so a bare "near 1pm" read at 8pm was describing TOMORROW afternoon in a voice that
-   sounds like this afternoon. Eighteen hours can only reach tomorrow, never further. */
+   sounds like this afternoon. Twenty-four hours can only reach tomorrow, never further. */
 function whenWord(d){
   var w=hrWord(d);
   return d.getDate()===new Date().getDate()?w:w+" tomorrow";
@@ -6253,12 +6284,51 @@ function coldVerdict(nowT,mMin,cMin){
   if(mMin!=null&&mMin<=45) return "cold";
   return null;
 }
+/* Which outlook pill a hazard family earns, if any — the decision on its own, so it can be
+   tested without a DOM. `l0`/`l1` are today's and tomorrow's category LEVELS (spcRisk/eroRisk/
+   fireRisk .lvl, not raw dn), so "no risk" (-1) and SPC's "General Storms" (0) both fall out
+   of the same `<1` gate.
+
+   One pill per hazard family: the card holds four slots, and two flood pills would say less
+   than one. The stronger day speaks; a tie reads "today and tomorrow" — dropping the weaker
+   day is fine because the outlook matrix below still shows every cell.
+
+   Priorities sit ON PURPOSE around the hourly pills: an SPC Moderate (97) outranks the wet
+   block's own thunderstorm pill (95) because "widespread severe storms" is the why behind it,
+   but a Marginal (59) must not push "Rain likely" (60) off a quiet card. */
+var OUTLOOK_CFG={
+  spc:{ico:"storm", den:5, pri:[0,59,80,90,97,99],
+       cat:["","Marginal Risk","Slight Risk","Enhanced Risk","Moderate Risk","High Risk"],
+       txt:["","Isolated severe storms possible","Severe storms possible","Severe storms likely",
+            "Widespread severe storms expected","Severe weather outbreak expected"]},
+  ero:{ico:"flood", den:4, pri:[0,44,79,91,98],
+       cat:["","Marginal Risk","Slight Risk","Moderate Risk","High Risk"],
+       txt:["","Isolated flash flooding possible","Flash flooding possible","Flash flooding likely",
+            "Widespread flash flooding expected"]},
+  fire:{ico:"fire", den:3, pri:[0,51,82,94],
+       cat:["","","",""],   // "Critical fire weather (Critical 2/3)" would say it twice
+       txt:["","Elevated fire weather","Critical fire weather","Extreme fire weather"]},
+  /* WPC's Winter Storm Severity Index (wssiQuery ranks its `impact` field 1–4). Major (96)
+     outranks the wet block's own wintry pill (93) for the same reason Moderate severe outranks
+     thunder: the hourly rules can say "snow tonight", only the desk can say how bad. */
+  wssi:{ico:"snow", den:4, pri:[0,61,89,96,99],
+       cat:["","","","",""],   // "Minor winter impacts (Minor 1/4)" would say it twice
+       txt:["","Minor winter impacts","Moderate winter impacts","Major winter storm impacts",
+            "Extreme winter storm impacts"]}
+};
+function outlookVerdict(cfg,l0,l1){
+  var lv=Math.max(l0||0,l1||0);
+  if(lv<1) return null;
+  var day=(l0===lv&&l1===lv)?"today and tomorrow":(l0===lv?"today":"tomorrow");
+  var tag=(cfg.cat[lv]?cfg.cat[lv]+" ":"")+lv+"/"+cfg.den;
+  return {pri:cfg.pri[lv], ico:cfg.ico, txt:cfg.txt[lv]+" "+day+" ("+tag+")"};
+}
 function renderTheCall(){
   var card=document.getElementById("callCard"), row=document.getElementById("callRow");
   if(!card||!row) return;
   var hrs=smart.hourly;
   if(!hrs||hrs.length<6){ card.classList.remove("has"); return; }
-  var n=Math.min(18,hrs.length), i, pills=[];
+  var n=Math.min(24,hrs.length), i, pills=[];
   function push(pri,ico,txt){ pills.push({pri:pri,ico:ico,txt:txt}); }
   var H=[];
   for(i=0;i<n;i++){
@@ -6278,7 +6348,7 @@ function renderTheCall(){
     if(wet0<0 && H[i].pop>=40) wet0=i;
     if(wet0>=0 && wetEnd<0 && i>wet0 && H[i].pop<30) wetEnd=i;
   }
-  /* Thunder and wintry are read from the wet BLOCK, not from anywhere in the 18-hour window.
+  /* Thunder and wintry are read from the wet BLOCK, not from anywhere in the 24-hour window.
      Scanning the whole window let a thunderstorm flagged for 9pm relabel an unrelated morning
      rain block as "Thunderstorms likely ~9am–noon" — a forecast nobody issued, in the one pill
      that outranks everything else on the card. */
@@ -6287,10 +6357,16 @@ function renderTheCall(){
     if(H[i].pop>=30 && H[i].wint) hasWintry=true;
   }
   if(wet0<0){
-    var endLbl=(H[n-1].d.getDate()!==new Date().getDate())?"into tomorrow":("through "+hrWord(H[n-1].d));
-    push(40,"sun","No rain expected "+endLbl+(maxPop>=25?" (peak chance "+maxPop+"%)":""));
+    /* "through 6am tomorrow", never "into tomorrow": the all-clear can only vouch for the hours
+       it scanned, and the vague phrase read as a verdict on tomorrow itself — printed, once, one
+       hour before an 87%-chance morning storm just past the window's edge. */
+    push(40,"sun","No rain expected through "+whenWord(H[n-1].d)+(maxPop>=25?" (peak chance "+maxPop+"%)":""));
   }else{
-    var span=(wet0===0?"now":"~"+whenWord(H[wet0].d))+(wetEnd>wet0?"–"+whenWord(H[wetEnd].d):" on");
+    /* Open-ended blocks lead with "from", not a trailing " on": "~9pm on" scanned fine, but the
+       24-hour window routinely starts a block tomorrow, and "~7am tomorrow on" did not. */
+    var span=(wetEnd>wet0)
+      ?(wet0===0?"now":"~"+whenWord(H[wet0].d))+"–"+whenWord(H[wetEnd].d)
+      :(wet0===0?"now":"from ~"+whenWord(H[wet0].d));
     // a second round after the first block clears?
     var wet2=-1;
     if(wetEnd>0){ for(i=wetEnd;i<n;i++){ if(H[i].pop>=40){ wet2=i; break; } } }
@@ -6334,6 +6410,18 @@ function renderTheCall(){
   }
   // — air quality (fed by loadAqi) —
   if(callAqi!=null&&callAqi>100) push(75,"air","Poor air quality (AQI "+callAqi+") — sensitive groups should limit exertion");
+  /* — the outlook desks: SPC severe, WPC flash flood, SPC fire (fed by loadSpc) —
+     The hourly rules above can only see ~24 hours, and only what a PoP number admits. The
+     outlooks say WHY a day is dangerous — hail, tornadoes, flash flooding — and say it for
+     tomorrow AFTERNOON before a single hourly period can reach it: a Friday outbreak is
+     invisible to a Thursday-lunch window that ends at 1pm Friday. */
+  if(callRisk){
+    [outlookVerdict(OUTLOOK_CFG.spc, spcRisk(callRisk.spc[0]).lvl, spcRisk(callRisk.spc[1]).lvl),
+     outlookVerdict(OUTLOOK_CFG.ero, eroRisk(callRisk.ero[0]).lvl, eroRisk(callRisk.ero[1]).lvl),
+     outlookVerdict(OUTLOOK_CFG.fire, fireRisk(callRisk.fire[0]).lvl, fireRisk(callRisk.fire[1]).lvl),
+     outlookVerdict(OUTLOOK_CFG.wssi, callRisk.wssi[0], callRisk.wssi[1])   // wssiQuery ranks are already levels
+    ].forEach(function(v){ if(v) push(v.pri,v.ico,v.txt); });
+  }
   /* — windows-open vs. AC night (dew point is the honest comfort test) —
      The contiguous run from the first night hour, not every night-shaped hour in the window: as a
      filter, at 3am this matched THIS morning's small hours and tomorrow evening's alike, so "low
