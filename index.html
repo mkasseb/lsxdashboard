@@ -6214,14 +6214,14 @@ function renderUvNow(){
       +sub.join('</span> <span class="ex-sep">·</span> <span class="ex-b">')+'</span>':'')+'</div>';
 }
 /* ============ BOTTOM LINE (né The Call — plain-English verdicts from data on hand) ============
-   Rules fire off the next ~18 hourly periods (smart.hourly) + the latest AQI. Each verdict
+   Rules fire off the next ~24 hourly periods (smart.hourly) + the latest AQI. Each verdict
    has a priority; the top 4 render. The rain/umbrella call always exists, so the strip is
    never empty once the hourly feed has loaded. */
 var callAqi=null;
 function hrWord(d){ return d.toLocaleTimeString([], {hour:"numeric"}).replace(/\s/g,"").toLowerCase(); }
-/* The same clock word, plus the day when it isn't today. The Bottom Line reasons over an 18-hour
+/* The same clock word, plus the day when it isn't today. The Bottom Line reasons over a 24-hour
    window, so a bare "near 1pm" read at 8pm was describing TOMORROW afternoon in a voice that
-   sounds like this afternoon. Eighteen hours can only reach tomorrow, never further. */
+   sounds like this afternoon. Twenty-four hours can only reach tomorrow, never further. */
 function whenWord(d){
   var w=hrWord(d);
   return d.getDate()===new Date().getDate()?w:w+" tomorrow";
@@ -6258,7 +6258,7 @@ function renderTheCall(){
   if(!card||!row) return;
   var hrs=smart.hourly;
   if(!hrs||hrs.length<6){ card.classList.remove("has"); return; }
-  var n=Math.min(18,hrs.length), i, pills=[];
+  var n=Math.min(24,hrs.length), i, pills=[];
   function push(pri,ico,txt){ pills.push({pri:pri,ico:ico,txt:txt}); }
   var H=[];
   for(i=0;i<n;i++){
@@ -6278,7 +6278,7 @@ function renderTheCall(){
     if(wet0<0 && H[i].pop>=40) wet0=i;
     if(wet0>=0 && wetEnd<0 && i>wet0 && H[i].pop<30) wetEnd=i;
   }
-  /* Thunder and wintry are read from the wet BLOCK, not from anywhere in the 18-hour window.
+  /* Thunder and wintry are read from the wet BLOCK, not from anywhere in the 24-hour window.
      Scanning the whole window let a thunderstorm flagged for 9pm relabel an unrelated morning
      rain block as "Thunderstorms likely ~9am–noon" — a forecast nobody issued, in the one pill
      that outranks everything else on the card. */
@@ -6287,10 +6287,16 @@ function renderTheCall(){
     if(H[i].pop>=30 && H[i].wint) hasWintry=true;
   }
   if(wet0<0){
-    var endLbl=(H[n-1].d.getDate()!==new Date().getDate())?"into tomorrow":("through "+hrWord(H[n-1].d));
-    push(40,"sun","No rain expected "+endLbl+(maxPop>=25?" (peak chance "+maxPop+"%)":""));
+    /* "through 6am tomorrow", never "into tomorrow": the all-clear can only vouch for the hours
+       it scanned, and the vague phrase read as a verdict on tomorrow itself — printed, once, one
+       hour before an 87%-chance morning storm just past the window's edge. */
+    push(40,"sun","No rain expected through "+whenWord(H[n-1].d)+(maxPop>=25?" (peak chance "+maxPop+"%)":""));
   }else{
-    var span=(wet0===0?"now":"~"+whenWord(H[wet0].d))+(wetEnd>wet0?"–"+whenWord(H[wetEnd].d):" on");
+    /* Open-ended blocks lead with "from", not a trailing " on": "~9pm on" scanned fine, but the
+       24-hour window routinely starts a block tomorrow, and "~7am tomorrow on" did not. */
+    var span=(wetEnd>wet0)
+      ?(wet0===0?"now":"~"+whenWord(H[wet0].d))+"–"+whenWord(H[wetEnd].d)
+      :(wet0===0?"now":"from ~"+whenWord(H[wet0].d));
     // a second round after the first block clears?
     var wet2=-1;
     if(wetEnd>0){ for(i=wetEnd;i<n;i++){ if(H[i].pop>=40){ wet2=i; break; } } }
