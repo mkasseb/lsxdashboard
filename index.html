@@ -936,11 +936,22 @@
      just the ceiling on a tall monitor. Clamping height against an unchanged width only widens the
      ratio, which is the direction this card already wants — the note above is about never going
      PORTRAIT, and a 1.9:1 strip is further from that, not nearer.
-     Held above 680px so the phone ratios (4/3, and 1/1 in a flood) are left exactly as they are:
-     62vh on a short handset would have clipped them, and the phone layout is the one that works.
+     The gate is BOTH axes, and it has to be: 62vh is a height rule, so gating it on width alone
+     handed it the one class of device it was never written for. Every current iPhone in landscape
+     is wider than 680 — 812 through 932 — with only 375 to 430 of height under it, and the clamp
+     read that as a short desktop. Measured at 844x390 it cut the map to 774x242: a 3.2:1 slit,
+     which on a square-ish CWA crops the northern and southern counties out of the picture
+     entirely. Rotating a phone to landscape IS the request for a bigger map, and a width-only
+     gate answered it by halving one.
+     600px of height separates the two cases with room to spare on either side — landscape
+     handsets top out near 430, landscape tablets start near 744 — and the viewport this rule was
+     written for, 1366x768, sits comfortably inside it. Below that height the phone ratios (4/3,
+     and 1/1 in a flood) and the everyday 16:9 are all left exactly as they are, which does mean
+     the map runs past a landscape fold. So does the portrait one, and scrolling to a map you
+     turned the phone sideways to see is the cheaper of the two costs.
      Fullscreen is excluded because there the map is flex-filled with aspect-ratio off (below), and
      a max-height is the single property able to break that. */
-  @media(min-width:681px){
+  @media(min-width:681px) and (min-height:600px){
     body:not(.radar-full) #radarCard .imgwrap{max-height:min(560px, 62vh)}
     /* Storm Mode's entire point is handing the map height back for the two families with echoes in
        them, and the everyday ceiling was quietly taking that back on a short screen: at 1366x768 a
@@ -1237,12 +1248,16 @@
     border:1px solid var(--border);padding:8px 15px;font-size:var(--fs-md);color:var(--text)}
   .quicklinks a:hover{border-color:var(--accent);text-decoration:none}
 
-  /* Next 24 Hours hero */
+  /* Next 24 Hours — a full-width band of its own, not the foot of the hero column any more */
   #hourly24 .h24-sum{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
   .h24-pill{background:var(--inset);border:1px solid var(--border);padding:6px 13px;font-size:var(--fs-sm);font-weight:500;color:var(--muted)}
   .h24-pill b{color:var(--text);font-weight:700;margin-left:3px;font-variant-numeric:tabular-nums}
   .h24-pill.h24-now{margin-left:auto;background:var(--chip)}
-  /* Integrated full-width hourly chart */
+  /* The chart itself. renderHourly24() emits width/height attributes alongside the viewBox, and
+     these two rules are what override them — so a snapshot drawn at one width scales to fit when
+     it is restored at another rather than overflowing the card. That matters more since the chart
+     moved: the container went from ~456px in the hero column to ~1366px here, so a desktop
+     snapshot restored on a phone is now a genuine four-fold mismatch until live data re-renders. */
   .h24-wrap{position:relative;width:100%}
   .h24-svg{display:block;width:100%;height:auto}
   .h24-svg text{font-family:inherit}
