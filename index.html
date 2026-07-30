@@ -838,8 +838,11 @@
   .imgwrap{position:relative;border-radius:10px;overflow:hidden;background:#000;border:1px solid var(--border)}
   .imgwrap img{width:100%;display:block}
   .frame{width:100%;border:0;display:block;background:#0b0f16}
-  #radar{height:480px}
-  @media(max-width:680px){#radar{height:340px}}
+  /* No height for #radar here. It had `480px`, and `340px` under 680, and neither ever applied:
+     `#radarCard #radar` below is two ids against one and wins at every width, in every mode, so
+     the map's height has come from its wrapper's aspect ratio for as long as that rule has
+     existed. A dead declaration that looks like the one in charge is worse than none — the next
+     person to change the map's height would have edited these. */
   /* Leaflet map + radar overlays */
   #radar.leaflet-container{background:#0b0f16;font-family:inherit}
   /* Leaflet ships its attribution as #0078A8 on a white pill — 3.4:1, and the one piece of text on
