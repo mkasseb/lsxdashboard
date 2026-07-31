@@ -2593,7 +2593,6 @@ var RADAR_SPAN_MIN=60;
 var RADAR_N_DESK=15, RADAR_N_PHONE=8, RADAR_N_WIDE=7, RADAR_WIDE_ZOOM=5;
 var radarFrames=[], radarPool={}, radarIdx=-1;
 var radarPlaying=false, radarTimer=null, radarUserPaused=false;
-function reducedMotion(){ return !!(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
 function radarFrameCount(){
   if(rvMap && rvMap.getZoom()<=RADAR_WIDE_ZOOM) return RADAR_N_WIDE;
   return (window.innerWidth<=680)?RADAR_N_PHONE:RADAR_N_DESK;
@@ -3406,8 +3405,8 @@ var ALERT_SEV_RANK={Extreme:0,Severe:1,Moderate:2,Minor:3,Unknown:4};
 /* ===== The card order: what is over YOU leads =====
    Level used to be the primary key, which sounds right and reads wrong. alertLevel() promotes every
    Tornado Warning to `emergency`, so a tornado two counties away sorted above a Severe Thunderstorm
-   Warning genuinely over the reader's roof — and took the lead banner's glow with it. The reader is
-   standing in one place; the first thing they see should be about that place.
+   Warning genuinely over the reader's roof. The reader is standing in one place; the first thing
+   they see should be about that place.
 
    So coverage outranks level, with exactly one exception above it: a real emergency leads from
    anywhere. Storm-based warnings are polygons drawn around where a storm is GOING and are re-issued
@@ -3664,9 +3663,7 @@ function loadAlerts(){
     glist.forEach(function(g){ if(g.away) awayN++; else mineN++; });
 
     /* No summary chips: each banner names its own event in its own colour, which is everything
-       the chips used to say. The lead banner is the first card that is actually YOURS, not one
-       from the elsewhere list. */
-    var leadIdx=0; while(leadIdx<glist.length&&glist[leadIdx].away) leadIdx++;
+       the chips used to say. */
 
     var cardHTMLs=glist.map(function(g,gi){
       var fam=eventFamily(g.ev), fcfg=FAMILY_CFG[fam]||FAMILY_CFG.convective;
@@ -3798,7 +3795,7 @@ function loadAlerts(){
          link — lives in the drawer OUTSIDE it. */
       var drawerId="a2more-"+gi, wasOpen=!!openIds[aid+"|"+scope];
       return '<div class="alert lv-'+g.lv.k+(g.hit?' hits-me':'')+(wasOpen?' open':'')
-        +(gi===leadIdx?' lead':'')+'" data-aid="'+aid+'"'+(scope?' data-scope="'+scope+'"':'')
+        +'" data-aid="'+aid+'"'+(scope?' data-scope="'+scope+'"':'')
         /* The map resolves polygons↔cards by event name, and a folded card answers to ALL of its
            products. Two cards can now share a name — the local one and the one elsewhere — so the
            name alone no longer identifies a card; data-scope is the second half of the key, and

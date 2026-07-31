@@ -158,7 +158,7 @@ the reader is standing in one spot in them, so `cardCmp()` ranks coverage above 
 leads from anywhere, then everything covering this location whatever its level, then everything
 else. It used to sort on level first, which reads right and isn't — `alertLevel()` promotes every
 Tornado Warning to `emergency`, so a tornado two counties away outranked a Severe Thunderstorm
-Warning genuinely overhead and took the lead banner's glow with it. Your Heat Advisory now sits
+Warning genuinely overhead. Your Heat Advisory now sits
 above a distant Winter Storm Warning, which is the correct answer to "what should I look at".
 
 Coverage is decided by `alertCoversMe()`, which is two tests because NWS issues alerts two ways:
