@@ -2695,6 +2695,7 @@ function initRadarMap(){
   refreshRadarLayer();
   loadWarnPolygons(undefined);  // draw from cache if alerts already arrived
   drawMcdPolygons();            // same deal for any mesoscale discussion that beat the map here
+  drawWatchPolygons();          // …and any watch fills
 }
 /* ---- RADAR LOOP ----------------------------------------------------------
    The WMS advertises ~2 h of past sweeps in its time dimension, and honours a
@@ -3027,6 +3028,84 @@ function loadRadar(){  // recenter on location change
   if(rvMarker) rvMarker.setLatLng([current.lat,current.lon]);
 }
 
+/* ===== Convective watches on the radar =====
+   Watches arrive from api.weather.gov with geometry:null — they're zone-based, which is why the
+   warning layer has never had anything to draw for one. The event-driven WWA map service carries
+   the same products WITH their county polygons, so the alerts feed stays the one source of truth
+   for WHETHER a watch is out (and owns the card a tap jumps to) and the map service only supplies
+   the shapes. Convective watches only (TO/SV): a Flash Flood or Winter Storm Watch runs a day or
+   more and would shade the whole map for its whole life — the radar is a storm map, and the SPC
+   watch box is the thing it was missing. */
+var WWA_URL="https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/";
+/* The region the radar practically shows at its zoom range. The query is envelope-clipped so a
+   ten-watch outbreak on the Plains doesn't ship its every county here; the cost is that panning
+   far outside the CWA runs out of watch fills, same as it runs out of relevant warnings. */
+var WWA_ENV="-96.5,34,-85,43";
+var watchFeats=[], watchKey="", watchAt=0, watchLayer=null;
+function isWatchEvent(ev){
+  ev=(ev||"").toLowerCase();
+  return ev.indexOf("tornado watch")>=0||ev.indexOf("severe thunderstorm watch")>=0;
+}
+function watchStyle(ev){
+  /* radar.weather.gov's colours, so a reader coming from the official map keeps their bearings:
+     tornado watch yellow, severe thunderstorm watch pink. Fill-only — the product is county-based,
+     and stroking it would draw every internal county line; the warnings stay the crisp ones. */
+  if((ev||"").toLowerCase().indexOf("tornado")>=0) return {stroke:false,fillColor:"#ffe14d",fillOpacity:.16};
+  return {stroke:false,fillColor:"#db7093",fillOpacity:.16};
+}
+// Whether the card's "Show on radar" button has something to frame — the watch analogue of isMappedAlert.
+function watchOnRadar(ev){
+  return isWatchEvent(ev)&&watchFeats.some(function(f){ return ((f.properties||{}).prod_type||"")===ev; });
+}
+function loadWatchPolygons(feats){
+  var active=(feats||[]).filter(function(f){ return isWatchEvent((f.properties||{}).event); });
+  if(!active.length){
+    watchFeats=[]; watchKey=""; drawWatchPolygons();   // the all-clear must clear the map too
+    return;
+  }
+  /* Gated on the alert list, throttled on its ids: the alerts poll runs every minute, but a
+     watch's shape only changes when the SET of watches does — same ids within 10 minutes means
+     the counties on screen are still the counties. */
+  var key=active.map(function(f){ return (f.properties&&f.properties.id)||f.id||""; }).sort().join("|");
+  if(key===watchKey&&watchFeats.length&&Date.now()-watchAt<10*60000) return;
+  resolveRiskLayers().then(function(){
+    return getJSON(WWA_URL+RISK_LAYERS.wwa+"/query?where="+encodeURIComponent("sig='A' AND phenom IN ('TO','SV')")
+      +"&geometry="+WWA_ENV+"&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects"
+      +"&outFields=prod_type,ends,expiration&returnGeometry=true&geometryPrecision=3&f=geojson");
+  }).then(function(fc){
+    var now=Date.now();
+    watchFeats=((fc&&fc.features)||[]).filter(function(f){
+      var p=f.properties||{};
+      var end=Date.parse(p.ends||p.expiration||"")||0;
+      return f.geometry&&(!end||end>now);   // the service can hold a cancelled watch briefly
+    });
+    watchKey=key; watchAt=now;
+    drawWatchPolygons();
+  }).catch(function(){});   // keep whatever is drawn; the alert LIST is the safety-critical view
+}
+function drawWatchPolygons(){
+  if(!rvMap) return;
+  if(watchLayer){ rvMap.removeLayer(watchLayer); watchLayer=null; }
+  if(!watchFeats.length) return;
+  try{
+    watchLayer=L.geoJSON({type:"FeatureCollection",features:watchFeats.map(normFeature)},{
+      style:function(f){ return watchStyle((f.properties||{}).prod_type); },
+      pane:"overlayPane",
+      onEachFeature:function(f,layer){
+        var ev=(f.properties&&f.properties.prod_type)||"Watch";
+        layer.bindTooltip(esc(ev)+" — tap for details",{className:"stn-tip",direction:"top",sticky:true});
+        layer.on("click",function(e){
+          if(e.originalEvent) e.originalEvent.stopPropagation();
+          /* No scope: the county under the tap doesn't say which of the event's two possible
+             cards this is, and findAlertCard's no-scope fallback already prefers the local one. */
+          focusAlertCard(ev,null);
+        });
+      }
+    }).addTo(rvMap);
+    watchLayer.bringToBack();   // fills under every outline: warnings and MDs both out-rank a watch shade
+  }catch(e){ watchLayer=null; }
+}
+
 /* ===== Two-way linking between the radar polygons and the alert cards =====
    The list groups by event type AND coverage (all "Severe Thunderstorm Warning" segments that
    cover this location share one card; the ones that don't share another), while the map draws one
@@ -3071,6 +3150,12 @@ function showAlertOnRadar(ev,scope){
     if(!isMappedAlert(f) || evs.indexOf((f.properties&&f.properties.event)||"")<0) return false;
     if(!scope) return true;
     return (scope==="here")===!!alertCoversMe(f);
+  });
+  /* Watches live in their own cache: zone-based products have no geometry in lastWarnFeats, and
+     their county fills are what the button should frame. Scope is dropped on purpose — a watch is
+     one product, and framing all of it beats framing the LSX slice of it. */
+  if(!feats.length) feats=watchFeats.filter(function(f){
+    return evs.indexOf((f.properties&&f.properties.prod_type)||"")>=0;
   });
   if(!feats.length) return;
   if(flashTimer){ clearTimeout(flashTimer); flashTimer=null; }
@@ -3525,6 +3610,7 @@ function loadAlerts(){
     if(!fresh()) return;   // user moved while this was in flight
     if(typeof markFresh==="function") markFresh();  // alerts are the safety-critical feed — only THEY count as "fresh"
     loadWarnPolygons(data.features||[]);  // one fetch feeds both list and map
+    loadWatchPolygons(data.features||[]); // …and decides whether the watch fills are worth fetching
     function isLSX(f){
       var p=f.properties||{};
       var aw=(p.parameters&&p.parameters.AWIPSidentifier&&p.parameters.AWIPSidentifier[0])||"";
@@ -3631,7 +3717,7 @@ function loadAlerts(){
       return {ev:ev,here:grp.here,segs:segs,best:best,sev:best.properties.severity,
               lv:alertLevel(best.properties),
               latest:latest,earliest:earliest,counties:counties,hit:hit,
-              mapped:segs.some(isMappedAlert)};   // only offer "show on radar" if it IS on the radar
+              mapped:segs.some(isMappedAlert)||watchOnRadar(ev)};   // only offer "show on radar" if it IS on the radar
     });
     glist.sort(cardCmp);
 
@@ -4124,7 +4210,7 @@ var MCD_URL="https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/
 /* Layer ids drift when NOAA republishes these services — and a wrong id fails SILENTLY as
    "no risk" (each query's catch returns 0). Resolve ids by layer NAME at startup; the
    hardcoded values (verified against the live services, July 2026) are only the fallback. */
-var RISK_LAYERS={spc:[1,9,17], ero:[0,1,2], fireCat:[1,4], fireD3:{dry:7,wind:8}, wssi:[1,2], mcd:0};
+var RISK_LAYERS={spc:[1,9,17], ero:[0,1,2], fireCat:[1,4], fireD3:{dry:7,wind:8}, wssi:[1,2], mcd:0, wwa:1};
 /* Memoised and awaitable: loadSpc has to be able to WAIT for this. Each branch swallows its own
    failure, so the returned promise always fulfils — an unresolvable service just keeps its
    fallback ids. */
@@ -4160,6 +4246,9 @@ function resolveRiskLayers(){
   }).catch(function(){}),
   getJSON(MCD_URL+"?f=json").then(function(d){
     (d.layers||[]).forEach(function(l){ if(/Mesoscale Discussion/i.test(l.name||"")) RISK_LAYERS.mcd=l.id; });
+  }).catch(function(){}),
+  getJSON(WWA_URL+"?f=json").then(function(d){
+    (d.layers||[]).forEach(function(l){ if(/^WatchesWarnings$/i.test(l.name||"")) RISK_LAYERS.wwa=l.id; });
   }).catch(function(){})
   ]);
   return _riskLayersP;
@@ -5663,7 +5752,7 @@ function syncSkyMeta(){
      received. A down layer says so where it used to advertise itself. */
   if(skyOn.radar) bits.push(radarDown()
     ? '<b>Radar unavailable</b> — NOAA is not serving reflectivity right now'
-    : 'Official NOAA/NWS radar &middot; tap a <b>warning polygon</b> to jump to its alert');
+    : 'Official NOAA/NWS radar &middot; tap a <b>warning or watch</b> to jump to its alert');
   /* A pinned satellite says WHICH moment it is showing. Left as the plain credit it would quietly
      claim to be current while displaying an hour-old cloud shield — the same lie the radar badge's
      stale state exists to prevent, arriving through the other layer. */

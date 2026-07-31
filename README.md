@@ -92,7 +92,7 @@ All public-domain or openly licensed, all keyless.
 |---|---|
 | `api.weather.gov` | Forecast, hourly, station obs, active alerts, AFD + mesoscale discussion text, county zones |
 | `opengeo.ncep.noaa.gov` (WMS) | Official NWS radar, including the time dimension driving the loop |
-| `mapservices.weather.noaa.gov` | SPC convective + fire outlooks and mesoscale discussion polygons, WPC excessive rainfall, CPC 6–10/8–14 day, CPC hazards & drought, WPC QPF |
+| `mapservices.weather.noaa.gov` | SPC convective + fire outlooks and mesoscale discussion polygons, convective watch county fills, WPC excessive rainfall, CPC 6–10/8–14 day, CPC hazards & drought, WPC QPF |
 | `api.water.noaa.gov` (NWPS) | River gauge stages and crest forecasts |
 | `data.rcc-acis.org` | 1991–2020 normals, daily records, rankings, dry streaks |
 | Open-Meteo | Air quality, UV index, and the location geocoder |
