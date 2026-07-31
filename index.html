@@ -835,10 +835,11 @@
   .tbar .tfill{position:absolute;top:0;bottom:0;border-radius:4px;min-width:8px}
   .day .dt{font-weight:700;font-variant-numeric:tabular-nums;font-size:var(--fs-md);white-space:nowrap;text-align:right}
   .day .dt .lo{font-weight:600;margin-right:5px}
-  /* The missing-low dash on a cap-tail row (day period issued, night not yet) — sits in the .lo
-     slot with the .lo spacing so the high doesn't shift left and read as the row's only number
-     being a low. Muted + help cursor per the ccGap convention: the gap is NWS's, and the title
-     (plus the .sr twin, for readers who can't hover) says so. */
+  /* The missing-low dash on a day-only row — only reachable when the feed itself runs short of
+     seven whole days (see the pairing loop). Sits in the .lo slot with the .lo spacing so the
+     high doesn't shift left and read as the row's only number being a low. Muted + help cursor
+     per the ccGap convention: the gap is NWS's, and the title (plus the .sr twin, for readers
+     who can't hover) says so. */
   .day .dt .dt-na{font-weight:600;margin-right:5px;color:var(--muted);cursor:help}
   .day .chev{font-size:var(--fs-sm);color:var(--muted);text-align:center;transition:transform .2s}
   .day-item.open .chev{transform:rotate(180deg)}
@@ -3102,13 +3103,16 @@ function loadForecast(){
       var f=res[0], h=res[1];
       var hByDate=h?hourlyByDate(h.properties.periods):{};
       var ps=f.properties.periods.slice(0,15);
-      /* Pair day + night periods into single calendar days. After sunset the feed leads with a
-         night-only "Tonight", and a flat 7-row cap spent a slot on it — every evening the card
-         quietly dropped the last daytime period and showed a 6-day "7-Day Forecast", with the
-         seventh day already fetched and discarded. An eighth row when the list opens on a night
-         keeps every full day; paintDays already draws a final day-with-no-night row. */
-      var days=[], i=0, cap=(ps.length&&!ps[0].isDaytime)?8:7;
-      while(i<ps.length && days.length<cap){
+      /* Pair day + night periods into single calendar days — seven rows, capped ON PURPOSE.
+         After sunset the feed leads with a night-only "Tonight" and ends on a day-only tail
+         (a Thursday with a high and no low — its night isn't issued yet, and the forecast grid
+         holds nothing to recover one from: minTemperature and even the hourly temperature
+         series stop at the same edge). An eighth row carrying that tail was tried and read as
+         broken — a lone high and a dash where every other row shows a pair — so the tail stays
+         dropped: Tonight plus six full days, and the seventh day arrives whole in the morning.
+         The day-with-no-night rendering below survives for a feed that is genuinely short. */
+      var days=[], i=0;
+      while(i<ps.length && days.length<7){
         var p=ps[i];
         if(p.isDaytime){
           var n=(i+1<ps.length && !ps[i+1].isDaytime)?ps[i+1]:null;
@@ -3180,13 +3184,14 @@ function loadForecast(){
            humidity claim and lets feels-like fall through to the temperature itself. */
         var full=!!(hrec&&hrec.lastH>=18);
         var rh=full?hrec.rh:null;
-        /* The cap-tail row: a day period whose night hasn't been issued. This is the DATA's edge,
-           not a fetch that failed — the twice-daily product ends on a daytime period, and (checked
-           against the live grid) forecastGridData's minTemperature and even its hourly temperature
-           series stop at that same edge, so there is no honest low to recover from anywhere. What
-           must not happen is a silent blank: on every other row that slot holds a number, so an
-           empty one reads as "we forgot", when the truth is "NWS hasn't said yet". Same doctrine
-           as ccGap on the conditions card — a dash that says whose gap it is. */
+        /* A day period whose night hasn't been issued. The 7-row cap normally leaves the feed's
+           day-only tail on the floor (see the pairing loop), so this fires only when the feed
+           itself comes up short of seven whole days — rare, but a real NWS failure mode. When it
+           does, the missing low is the DATA's edge, not a fetch that failed, and there is no
+           honest number to recover (the grid's minTemperature stops at the same edge). What must
+           not happen is a silent blank: on every other row that slot holds a number, so an empty
+           one reads as "we forgot", when the truth is "NWS hasn't said yet". Same doctrine as
+           ccGap on the conditions card — a dash that says whose gap it is. */
         var noNight=!!(d.day&&!d.night);
         var detail="";
         if(d.day)   detail+='<p class="dd-text"><b>Day</b>'+esc(d.day.detailedForecast||d.day.shortForecast)+'</p>';
