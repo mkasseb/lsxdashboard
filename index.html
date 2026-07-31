@@ -835,6 +835,11 @@
   .tbar .tfill{position:absolute;top:0;bottom:0;border-radius:4px;min-width:8px}
   .day .dt{font-weight:700;font-variant-numeric:tabular-nums;font-size:var(--fs-md);white-space:nowrap;text-align:right}
   .day .dt .lo{font-weight:600;margin-right:5px}
+  /* The missing-low dash on a cap-tail row (day period issued, night not yet) — sits in the .lo
+     slot with the .lo spacing so the high doesn't shift left and read as the row's only number
+     being a low. Muted + help cursor per the ccGap convention: the gap is NWS's, and the title
+     (plus the .sr twin, for readers who can't hover) says so. */
+  .day .dt .dt-na{font-weight:600;margin-right:5px;color:var(--muted);cursor:help}
   .day .chev{font-size:var(--fs-sm);color:var(--muted);text-align:center;transition:transform .2s}
   .day-item.open .chev{transform:rotate(180deg)}
   .day-detail{display:none;padding:0 12px 12px;border-top:1px solid var(--border)}
@@ -3175,9 +3180,18 @@ function loadForecast(){
            humidity claim and lets feels-like fall through to the temperature itself. */
         var full=!!(hrec&&hrec.lastH>=18);
         var rh=full?hrec.rh:null;
+        /* The cap-tail row: a day period whose night hasn't been issued. This is the DATA's edge,
+           not a fetch that failed — the twice-daily product ends on a daytime period, and (checked
+           against the live grid) forecastGridData's minTemperature and even its hourly temperature
+           series stop at that same edge, so there is no honest low to recover from anywhere. What
+           must not happen is a silent blank: on every other row that slot holds a number, so an
+           empty one reads as "we forgot", when the truth is "NWS hasn't said yet". Same doctrine
+           as ccGap on the conditions card — a dash that says whose gap it is. */
+        var noNight=!!(d.day&&!d.night);
         var detail="";
         if(d.day)   detail+='<p class="dd-text"><b>Day</b>'+esc(d.day.detailedForecast||d.day.shortForecast)+'</p>';
         if(d.night) detail+='<p class="dd-text"><b>Night</b>'+esc(d.night.detailedForecast||d.night.shortForecast)+'</p>';
+        else if(noNight) detail+='<p class="dd-text"><b>Night</b>Not issued yet — the NWS forecast currently ends with the '+esc(d.name)+' daytime period. The overnight low arrives in a later forecast package.</p>';
         // The date beside the name: "Friday" is ambiguous by day five of a seven-day list, and
         // NWS sometimes swaps a holiday name in ("Independence Day") that says even less about
         // where in the week it falls. Visually it's the muted "8/1"; a screen reader gets the
@@ -3195,7 +3209,9 @@ function loadForecast(){
             // Weight and colour say which number is the low; a screen reader hearing "68° 85°"
             // gets neither, and this row reads low-first — the reverse of the order most
             // forecasts have taught people to expect. The clipped words say it outright.
-            +'<div class="dt">'+(lo!=null?'<span '+tvAttr(lo,"lo")+'><span class="sr">Low </span>'+lo+'°</span>':'')
+            +'<div class="dt">'+(lo!=null?'<span '+tvAttr(lo,"lo")+'><span class="sr">Low </span>'+lo+'°</span>'
+              :(noNight?'<span class="dt-na" title="No low yet — NWS hasn\'t issued '+esc(d.name)+' Night">'
+                +'<span class="sr">Low not yet forecast</span><span aria-hidden="true">—</span></span>':''))
               +(hi!=null?'<span '+tvAttr(hi)+'><span class="sr">High </span>'+hi+'°</span>':'')+'</div>'
             +'<div class="chev" aria-hidden="true">▾</div>'
           +'</button>'
