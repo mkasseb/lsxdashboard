@@ -1299,6 +1299,17 @@
   .mcd{background:var(--inset);border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);
     border-left:4px solid var(--warn);border-radius:var(--r-md);padding:10px 12px;margin-bottom:10px}
   .mcd.hits{border-left-width:7px}   /* the same extra weight the alert banners give "covers you" */
+  /* Local vs elsewhere — the alert list's split, at strip scale. The MD over the reader keeps the
+     full banner above; one that's out for the CWA but not this point demotes the way the compact
+     #alertsElse rows do: fill dropped, edge thinned, pill quieted to a chip. The summary is the
+     line the compact row gives up — the Full discussion link is what asks for it. */
+  .mcd.away{background:transparent;padding:8px 11px;
+    border-color:color-mix(in srgb,var(--warn) 25%,transparent);
+    border-left:3px solid color-mix(in srgb,var(--warn) 55%,transparent)}
+  .mcd.away .mcd-sum{display:none}
+  .mcd.away .mcd-pill,:root[data-theme="light"] .mcd.away .mcd-pill{background:var(--chip);color:var(--text)}
+  .mcd.away .mcd-head .ic{color:var(--muted)}
+  .mcd.away .mcd-foot .mcd-me{color:var(--muted)}
   .mcd-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .mcd-head .ic{flex:0 0 auto;color:var(--warn)}
   .mcd-t{font-size:var(--fs-md);font-weight:700}
@@ -4396,7 +4407,7 @@ function renderMcd(list){
   if(el) el.innerHTML=lastMcds.map(function(m){
     var d=m.d, until=mcdUntil(m.end);
     var scope=m.hits?HIT_TEXT.polygon:"Elsewhere in the St. Louis area";
-    return '<div class="mcd'+(m.hits?' hits':'')+'">'
+    return '<div class="mcd '+(m.hits?'hits':'away')+'">'
       +'<div class="mcd-head">'+ic("storm")
       +'<span class="mcd-t">Mesoscale Discussion #'+m.num+'</span>'
       +(until?'<span class="mcd-when">'+esc(until)+'</span>':'')
