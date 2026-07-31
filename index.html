@@ -374,6 +374,7 @@
      have an `order`. The two stacks share order -6 and fall back to DOM order between them, which
      is already conditions-then-radar. */
   body.storm #alertsCard{order:-8}
+  body.storm #mcd{order:-8}        /* same rank as the banners it annotates; the tie breaks by DOM order */
   body.storm #callCard{order:-7}   /* directly under safety in every mode — never below the fold */
   body.storm .stack{order:-6}      /* left: Now (+ AQI) · right: radar */
   /* The 24h chart DOES need one, now that it is a band of its own rather than the lower half of the
@@ -1291,6 +1292,42 @@
   .spc-pill{font-size:var(--fs-xs);font-weight:600;padding:5px 8px;border-radius:var(--r-pill);text-align:center;
     white-space:normal;line-height:1.25;overflow-wrap:anywhere}
 
+  /* SPC mesoscale discussion — the "next 1–3 hours" strip, riding the top of the grid directly
+     under the alert banners and dressed as their peer: same standing-on-the-page tint, radius and
+     shadow, with --warn as its ring the way a banner wears its level colour. Absent almost
+     always: #mcd stays empty except while SPC has a discussion out that names LSX or covers the
+     reader's point, and display:none takes the empty grid row (and its gap) with it. */
+  #mcd:empty{display:none}
+  .mcd{background:var(--inset);border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);
+    border-left:4px solid var(--warn);border-radius:var(--r-lg);padding:11px 14px;margin-bottom:8px;
+    box-shadow:var(--shadow)}
+  .mcd:last-child{margin-bottom:0}
+  .mcd.hits{border-left-width:7px}   /* the same extra weight the alert banners give "covers you" */
+  /* Local vs elsewhere — the alert list's split, at strip scale. The MD over the reader keeps the
+     full banner above; one that's out for the CWA but not this point demotes the way the compact
+     #alertsElse rows do: fill dropped, edge thinned, pill quieted to a chip. The summary is the
+     line the compact row gives up — the Full discussion link is what asks for it. */
+  .mcd.away{background:transparent;padding:8px 11px;
+    border-color:color-mix(in srgb,var(--warn) 25%,transparent);
+    border-left:3px solid color-mix(in srgb,var(--warn) 55%,transparent)}
+  .mcd.away .mcd-sum{display:none}
+  .mcd.away .mcd-pill,:root[data-theme="light"] .mcd.away .mcd-pill{background:var(--chip);color:var(--text)}
+  .mcd.away .mcd-head .ic{color:var(--muted)}
+  .mcd.away .mcd-foot .mcd-me{color:var(--muted)}
+  .mcd-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .mcd-head .ic{flex:0 0 auto;color:var(--warn)}
+  .mcd-t{font-size:var(--fs-md);font-weight:700}
+  .mcd-when{font-size:var(--fs-sm);color:var(--muted);font-weight:600;margin-left:auto;white-space:nowrap}
+  /* Pill text colour is theme-split by hand: the pill is the one place --warn is a BACKGROUND,
+     and the variable swings from bright amber (dark theme) to deep brown (light) — no single
+     ink survives both, and textOn() can't read a CSS variable. */
+  .mcd-pill{display:inline-block;font-size:var(--fs-xs);font-weight:700;padding:3px 10px;
+    border-radius:var(--r-pill);background:var(--warn);color:#141414;margin-top:7px}
+  :root[data-theme="light"] .mcd-pill{color:#fff}
+  .mcd-sum{font-size:var(--fs-md);line-height:1.5;margin-top:6px}
+  .mcd-foot{font-size:var(--fs-sm);color:var(--muted);margin-top:6px}
+  .mcd-foot .mcd-me{font-weight:600;color:var(--warn)}
+
   /* CPC leanings */
   .cpc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .cpc-item{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px}
@@ -1741,6 +1778,15 @@
     <h2>Active Watches, Warnings &amp; Advisories — <span id="alertsScope">LSX</span></h2>
     <div id="alerts"><div class="loading">Loading alerts…</div></div>
   </section>
+
+  <!-- MESOSCALE DISCUSSION — SPC's short-fused note that severe weather (usually a watch) is
+       expected in the next 1–3 hours. It rides directly under the alert banners because that is
+       what it is: the step between an outlook and a watch, and during the hour it exists it can
+       be the most decision-relevant thing on the page. It started life inside the Risk Outlook
+       card down in the masonry, where "watch likely within the hour" sat below the fold behind
+       three rows of day-scale pills. Empty — and therefore invisible — almost always; loadMcd()
+       owns it. -->
+  <div id="mcd" class="col-12"></div>
 
   <!-- BOTTOM LINE (id stays callCard) — plain-English verdicts computed client-side from the
        hourly forecast, UV, AQI and climate context. The page reasoning on the visitor's behalf,
@@ -2660,6 +2706,8 @@ function initRadarMap(){
   initRadarCtl();
   refreshRadarLayer();
   loadWarnPolygons(undefined);  // draw from cache if alerts already arrived
+  drawMcdPolygons();            // same deal for any mesoscale discussion that beat the map here
+  drawWatchPolygons();          // …and any watch fills
 }
 /* ---- RADAR LOOP ----------------------------------------------------------
    The WMS advertises ~2 h of past sweeps in its time dimension, and honours a
@@ -2992,6 +3040,118 @@ function loadRadar(){  // recenter on location change
   if(rvMarker) rvMarker.setLatLng([current.lat,current.lon]);
 }
 
+/* ===== Convective watches on the radar =====
+   Watches arrive from api.weather.gov with geometry:null — they're zone-based, which is why the
+   warning layer has never had anything to draw for one. The event-driven WWA map service carries
+   the same products WITH their county polygons, so the alerts feed stays the one source of truth
+   for WHETHER a watch is out (and owns the card a tap jumps to) and the map service only supplies
+   the shapes. Convective watches only (TO/SV): a Flash Flood or Winter Storm Watch runs a day or
+   more and would shade the whole map for its whole life — the radar is a storm map, and the SPC
+   watch box is the thing it was missing. */
+var WWA_URL="https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/";
+/* The region the radar practically shows at its zoom range. The watch query is envelope-clipped
+   so a ten-watch outbreak on the Plains doesn't ship its every county here, and loadMcd uses the
+   same box to budget its text fetches; the cost is that panning far outside the CWA runs out of
+   watch fills, same as it runs out of relevant warnings. */
+var WWA_ENV={xmin:-96.5,ymin:34,xmax:-85,ymax:43};
+/* Bounding-box overlap, deliberately generous: a geometry whose bbox clips the envelope counts
+   even if its actual shape misses, because this test only ever DROPS things — a false keep costs
+   one wasted text fetch, a false drop is a severe-weather product silently gone. */
+function geomTouchesEnv(geom,env){
+  var bb=[Infinity,Infinity,-Infinity,-Infinity];
+  (function walk(c){
+    if(typeof c[0]==="number"){
+      if(c[0]<bb[0])bb[0]=c[0]; if(c[0]>bb[2])bb[2]=c[0];
+      if(c[1]<bb[1])bb[1]=c[1]; if(c[1]>bb[3])bb[3]=c[1];
+    } else c.forEach(walk);
+  })(geom&&geom.coordinates||[]);
+  return bb[0]<=env.xmax&&bb[2]>=env.xmin&&bb[1]<=env.ymax&&bb[3]>=env.ymin;
+}
+var watchFeats=[], watchKey="", watchAt=0, watchLayer=null;
+function isWatchEvent(ev){
+  ev=(ev||"").toLowerCase();
+  return ev.indexOf("tornado watch")>=0||ev.indexOf("severe thunderstorm watch")>=0;
+}
+function watchStyle(ev){
+  /* radar.weather.gov's colours, so a reader coming from the official map keeps their bearings:
+     tornado watch yellow, severe thunderstorm watch pink. Fill-only — the product is county-based,
+     and stroking it would draw every internal county line; the warnings stay the crisp ones. */
+  if((ev||"").toLowerCase().indexOf("tornado")>=0) return {stroke:false,fillColor:"#ffe14d",fillOpacity:.16};
+  return {stroke:false,fillColor:"#db7093",fillOpacity:.16};
+}
+// Whether the card's "Show on radar" button has something to frame — the watch analogue of isMappedAlert.
+function watchOnRadar(ev){
+  return isWatchEvent(ev)&&watchFeats.some(function(f){ return ((f.properties||{}).prod_type||"")===ev; });
+}
+function loadWatchPolygons(feats){
+  var active=(feats||[]).filter(function(f){ return isWatchEvent((f.properties||{}).event); });
+  if(!active.length){
+    watchFeats=[]; watchKey=""; drawWatchPolygons();   // the all-clear must clear the map too
+    return;
+  }
+  /* Gated on the alert list, throttled on its ids: the alerts poll runs every minute, but a
+     watch's shape only changes when the SET of watches does — same ids within 10 minutes means
+     the counties on screen are still the counties. */
+  var key=active.map(function(f){ return (f.properties&&f.properties.id)||f.id||""; }).sort().join("|");
+  if(key===watchKey&&watchFeats.length&&Date.now()-watchAt<10*60000) return;
+  // Which watch TYPES the alert list vouches for right now — the service's ingest can lag the
+  // feed by minutes, and this is what keeps a just-cancelled Tornado Watch's counties from
+  // riding along with a Severe Thunderstorm Watch that really is out.
+  var vouched={};
+  active.forEach(function(f){ vouched[(f.properties||{}).event]=1; });
+  var before=watchEvSet();
+  resolveRiskLayers().then(function(){
+    return getJSON(WWA_URL+RISK_LAYERS.wwa+"/query?where="+encodeURIComponent("sig='A' AND phenom IN ('TO','SV')")
+      +"&geometry="+WWA_ENV.xmin+","+WWA_ENV.ymin+","+WWA_ENV.xmax+","+WWA_ENV.ymax
+      +"&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects"
+      +"&outFields=prod_type,ends,expiration&returnGeometry=true&geometryPrecision=3&f=geojson");
+  }).then(function(fc){
+    var now=Date.now();
+    watchFeats=((fc&&fc.features)||[]).filter(function(f){
+      var p=f.properties||{};
+      var end=Date.parse(p.ends||p.expiration||"")||0;
+      return f.geometry&&(!end||end>now)     // the service can hold a cancelled watch briefly
+        &&vouched[p.prod_type];              // …and only types the live alert list stands behind
+    });
+    watchKey=key; watchAt=now;
+    drawWatchPolygons();
+    /* The list renders its "Show on radar" buttons from watchOnRadar(), which was still false
+       while these fills were in flight — without this, the first render after a watch is issued
+       goes a minute buttonless. One re-render when drawability actually changed closes the
+       window, and the id throttle above is what keeps the round trip from ever looping. */
+    if(watchEvSet()!==before) loadAlerts();
+  }).catch(function(){});   // keep whatever is drawn; the alert LIST is the safety-critical view
+}
+// The drawable watch types, as a comparable key — order-free so a re-fetch that reshuffles
+// records doesn't read as a change.
+function watchEvSet(){
+  var s={};
+  watchFeats.forEach(function(f){ s[(f.properties||{}).prod_type||""]=1; });
+  return Object.keys(s).sort().join("|");
+}
+function drawWatchPolygons(){
+  if(!rvMap) return;
+  if(watchLayer){ rvMap.removeLayer(watchLayer); watchLayer=null; }
+  if(!watchFeats.length) return;
+  try{
+    watchLayer=L.geoJSON({type:"FeatureCollection",features:watchFeats.map(normFeature)},{
+      style:function(f){ return watchStyle((f.properties||{}).prod_type); },
+      pane:"overlayPane",
+      onEachFeature:function(f,layer){
+        var ev=(f.properties&&f.properties.prod_type)||"Watch";
+        layer.bindTooltip(esc(ev)+" — tap for details",{className:"stn-tip",direction:"top",sticky:true});
+        layer.on("click",function(e){
+          if(e.originalEvent) e.originalEvent.stopPropagation();
+          /* No scope: the county under the tap doesn't say which of the event's two possible
+             cards this is, and findAlertCard's no-scope fallback already prefers the local one. */
+          focusAlertCard(ev,null);
+        });
+      }
+    }).addTo(rvMap);
+    watchLayer.bringToBack();   // fills under every outline: warnings and MDs both out-rank a watch shade
+  }catch(e){ watchLayer=null; }
+}
+
 /* ===== Two-way linking between the radar polygons and the alert cards =====
    The list groups by event type AND coverage (all "Severe Thunderstorm Warning" segments that
    cover this location share one card; the ones that don't share another), while the map draws one
@@ -3036,6 +3196,12 @@ function showAlertOnRadar(ev,scope){
     if(!isMappedAlert(f) || evs.indexOf((f.properties&&f.properties.event)||"")<0) return false;
     if(!scope) return true;
     return (scope==="here")===!!alertCoversMe(f);
+  });
+  /* Watches live in their own cache: zone-based products have no geometry in lastWarnFeats, and
+     their county fills are what the button should frame. Scope is dropped on purpose — a watch is
+     one product, and framing all of it beats framing the LSX slice of it. */
+  if(!feats.length) feats=watchFeats.filter(function(f){
+    return evs.indexOf((f.properties&&f.properties.prod_type)||"")>=0;
   });
   if(!feats.length) return;
   if(flashTimer){ clearTimeout(flashTimer); flashTimer=null; }
@@ -3490,6 +3656,7 @@ function loadAlerts(){
     if(!fresh()) return;   // user moved while this was in flight
     if(typeof markFresh==="function") markFresh();  // alerts are the safety-critical feed — only THEY count as "fresh"
     loadWarnPolygons(data.features||[]);  // one fetch feeds both list and map
+    loadWatchPolygons(data.features||[]); // …and decides whether the watch fills are worth fetching
     function isLSX(f){
       var p=f.properties||{};
       var aw=(p.parameters&&p.parameters.AWIPSidentifier&&p.parameters.AWIPSidentifier[0])||"";
@@ -3596,7 +3763,7 @@ function loadAlerts(){
       return {ev:ev,here:grp.here,segs:segs,best:best,sev:best.properties.severity,
               lv:alertLevel(best.properties),
               latest:latest,earliest:earliest,counties:counties,hit:hit,
-              mapped:segs.some(isMappedAlert)};   // only offer "show on radar" if it IS on the radar
+              mapped:segs.some(isMappedAlert)||watchOnRadar(ev)};   // only offer "show on radar" if it IS on the radar
     });
     glist.sort(cardCmp);
 
@@ -4085,10 +4252,11 @@ var SPC_URL="https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/
 var ERO_URL="https://mapservices.weather.noaa.gov/vector/rest/services/hazards/wpc_precip_hazards/MapServer/";
 var FIRE_URL="https://mapservices.weather.noaa.gov/vector/rest/services/fire_weather/SPC_firewx/MapServer/";
 var WSSI_URL="https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/wpc_wssi/MapServer/";
+var MCD_URL="https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/spc_mesoscale_discussion/MapServer/";
 /* Layer ids drift when NOAA republishes these services — and a wrong id fails SILENTLY as
    "no risk" (each query's catch returns 0). Resolve ids by layer NAME at startup; the
    hardcoded values (verified against the live services, July 2026) are only the fallback. */
-var RISK_LAYERS={spc:[1,9,17], ero:[0,1,2], fireCat:[1,4], fireD3:{dry:7,wind:8}, wssi:[1,2]};
+var RISK_LAYERS={spc:[1,9,17], ero:[0,1,2], fireCat:[1,4], fireD3:{dry:7,wind:8}, wssi:[1,2], mcd:0, wwa:1};
 /* Memoised and awaitable: loadSpc has to be able to WAIT for this. Each branch swallows its own
    failure, so the returned promise always fulfils — an unresolvable service just keeps its
    fallback ids. */
@@ -4121,6 +4289,12 @@ function resolveRiskLayers(){
     var ids={};
     (d.layers||[]).forEach(function(l){ var m=/^Overall_Impact_Day_([12])$/i.exec(l.name||""); if(m) ids[m[1]]=l.id; });
     if(ids[1]!=null&&ids[2]!=null) RISK_LAYERS.wssi=[ids[1],ids[2]];
+  }).catch(function(){}),
+  getJSON(MCD_URL+"?f=json").then(function(d){
+    (d.layers||[]).forEach(function(l){ if(/Mesoscale Discussion/i.test(l.name||"")) RISK_LAYERS.mcd=l.id; });
+  }).catch(function(){}),
+  getJSON(WWA_URL+"?f=json").then(function(d){
+    (d.layers||[]).forEach(function(l){ if(/^WatchesWarnings$/i.test(l.name||"")) RISK_LAYERS.wwa=l.id; });
   }).catch(function(){})
   ]);
   return _riskLayersP;
@@ -4275,6 +4449,170 @@ function loadSpc(){
     el.innerHTML='<div class="empty">Risk outlooks unavailable. <a href="https://www.spc.noaa.gov/products/outlook/day1otlk.html" target="_blank" rel="noopener">Open SPC \u2197</a> \u00b7 <a href="https://www.spc.noaa.gov/products/fire_wx/" target="_blank" rel="noopener">Fire \u2197</a></div>';
     callRisk=null;                                           // never let a stale outlook keep a pill alive
     if(typeof renderTheCall==="function") renderTheCall();
+  });
+}
+
+/* ============ SPC MESOSCALE DISCUSSIONS ============ */
+/* The gap the outlook matrix can't see: a Mesoscale Discussion is SPC's short-fused note that
+   severe weather — usually a watch — is expected in the next 1–3 hours, issued hours after the
+   day's categorical outlook and expired again by evening. Two feeds, both on origins the page
+   already talks to. The polygon service says which MDs are ACTIVE right now (and where); the
+   SWOMCD text product carries everything the strip actually says — the concerning line, the
+   watch probability, the summary, and the ATTN list of offices, which is the same relevance
+   test the alert list applies with isLSX(). */
+function parseMcd(text){
+  var t=String(text||"").replace(/\r/g,"");
+  var num=/Mesoscale Discussion (\d+)/i.exec(t);
+  if(!num) return null;   // not recognisably an MD → drop it, never paint half a strip
+  function para(re){ var m=re.exec(t); return m?m[1].replace(/\s*\n\s*/g," ").trim():""; }
+  var valid=/Valid\s+\d{6}Z?\s*-\s*(\d{6})Z/.exec(t);
+  var prob=/Probability of Watch Issuance\s*\.\.\.\s*(\d+)\s*percent/i.exec(t);
+  // Blank-line terminated so the LAT...LON block can't leak in; length===3 keeps only WFO ids.
+  var am=/ATTN\.\.\.WFO\.\.\.([\s\S]*?)(?:\n\s*\n|\s*$)/.exec(t);
+  return {
+    num:+num[1],
+    areas:para(/Areas affected\s*\.\.\.([\s\S]*?)\n\s*\n/),
+    concerning:para(/Concerning\s*\.\.\.([^\n]*)/),
+    validEnd:valid?valid[1]:null,
+    prob:prob?+prob[1]:null,   // watch-issued MDs have no probability line: null, never 0
+    summary:para(/SUMMARY\s*\.\.\.([\s\S]*?)\n\s*\n/),
+    attn:am?am[1].split(/[^A-Z]+/).filter(function(s){ return s.length===3; }):[]
+  };
+}
+/* "Valid 311913Z - 312115Z" carries no month or year. Anchor the end stamp to the product's
+   issuance time and pick the month that lands it nearest — an MD lives at most six hours, so a
+   stamp that computes ~15+ days away is the day field wrapping a month boundary, not a two-week
+   discussion. Pure and testable, because month/year rollover is exactly the edge a July 31st or
+   December 31st product would exercise silently. */
+function mcdValidEnd(v,refMs){
+  var m=/^(\d\d)(\d\d)(\d\d)$/.exec(String(v||""));
+  if(!m||!refMs) return null;
+  var ref=new Date(refMs);
+  var d=Date.UTC(ref.getUTCFullYear(),ref.getUTCMonth(),+m[1],+m[2],+m[3]);
+  if(d-refMs>15*86400000)      d=Date.UTC(ref.getUTCFullYear(),ref.getUTCMonth()-1,+m[1],+m[2],+m[3]);
+  else if(refMs-d>15*86400000) d=Date.UTC(ref.getUTCFullYear(),ref.getUTCMonth()+1,+m[1],+m[2],+m[3]);
+  return d;
+}
+function mcdPill(d){
+  var t=(d.concerning||"").replace(/\.\.\./g," · ").replace(/·\s*$/,"").trim();
+  if(!t) t="Severe potential";
+  if(d.prob!=null) t+=" · "+d.prob+"%";
+  return t;
+}
+function mcdUntil(end){
+  if(!end) return "";
+  var d=new Date(end);
+  var t=d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+  // an MD can run past local midnight; a bare "1:15 AM" would read as nineteen hours ago
+  if(d.toDateString()!==new Date().toDateString()) t=d.toLocaleDateString([],{weekday:"short"})+" "+t;
+  return "until "+t;
+}
+var lastMcds=[], mcdLayer=null;
+/* Mirrors loadWarnPolygons' shape for the same reason it has one: the map may not exist yet when
+   the first fetch lands (Leaflet is deferred), so initRadarMap redraws from this cache on its own. */
+function drawMcdPolygons(){
+  if(!rvMap) return;
+  if(mcdLayer){ rvMap.removeLayer(mcdLayer); mcdLayer=null; }
+  if(!lastMcds.length) return;
+  try{
+    mcdLayer=L.geoJSON({type:"FeatureCollection",features:lastMcds.map(function(m){
+      return {type:"Feature",geometry:m.geom,properties:{num:m.num,pill:mcdPill(m.d)}};
+    })},{
+      // dashed on purpose: this outline is guidance about the next couple of hours, and it must
+      // read as a different kind of thing from the solid polygons that are warnings
+      style:{color:"#ffb020",weight:2,dashArray:"6 4",fillColor:"#ffb020",fillOpacity:.06},
+      pane:"overlayPane",
+      onEachFeature:function(f,layer){
+        layer.bindTooltip(esc("Mesoscale Discussion #"+f.properties.num+" — "+f.properties.pill),
+          {className:"stn-tip",direction:"top",sticky:true});
+        layer.on("click",function(e){
+          if(e.originalEvent) e.originalEvent.stopPropagation();
+          var rc=document.getElementById("riskCard");
+          if(rc){ try{ rc.scrollIntoView({behavior:"smooth",block:"center"}); }catch(err){ rc.scrollIntoView(); } }
+        });
+      }
+    }).addTo(rvMap);
+    mcdLayer.bringToBack();   // under the warnings: a watch-likely outline must never cover a warning
+  }catch(e){ mcdLayer=null; }
+}
+function renderMcd(list){
+  lastMcds=list||[];
+  lastMcds.sort(function(a,b){ return (b.hits?1:0)-(a.hits?1:0) || b.num-a.num; });
+  var el=document.getElementById("mcd");
+  if(el) el.innerHTML=lastMcds.map(function(m){
+    var d=m.d, until=mcdUntil(m.end);
+    var scope=m.hits?HIT_TEXT.polygon:"Elsewhere in the St. Louis area";
+    return '<div class="mcd '+(m.hits?'hits':'away')+'">'
+      +'<div class="mcd-head">'+ic("storm")
+      +'<span class="mcd-t">Mesoscale Discussion #'+m.num+'</span>'
+      +(until?'<span class="mcd-when">'+esc(until)+'</span>':'')
+      +'</div>'
+      +'<span class="mcd-pill">'+esc(mcdPill(d))+'</span>'
+      +(d.summary?'<div class="mcd-sum">'+esc(d.summary)+'</div>':'')
+      +'<div class="mcd-foot"><span class="mcd-me"'+(d.areas?' title="'+esc(d.areas)+'"':'')+'>'+scope+'</span> · '
+      +'<a class="link" href="https://www.spc.noaa.gov/products/md/md'+m.num+'.html" target="_blank" rel="noopener">Full discussion ↗</a></div>'
+      +'</div>';
+  }).join("");
+  drawMcdPolygons();
+}
+function loadMcd(){
+  var fresh=locGuard();
+  return resolveRiskLayers().then(function(){
+    return getJSON(MCD_URL+RISK_LAYERS.mcd+"/query?where=1%3D1&outFields=name&returnGeometry=true&f=geojson");
+  }).then(function(fc){
+    /* Regional pre-filter BEFORE the fetch budget is set. An MD can only name LSX in its ATTN
+       line (or cover the saved point) if its polygon reaches this region, so distant actives
+       contribute nothing — but in a national outbreak they inflate the count that decides how
+       many texts to fetch, and a nearby MD's text crowded past the cap by ten Plains MDs is a
+       silent false negative on a severe-weather surface. geomTouchesEnv only ever over-keeps. */
+    var feats=((fc&&fc.features)||[]).filter(function(f){
+      return f.geometry&&/MD\s*\d+/i.test((f.properties&&f.properties.name)||"")
+        &&geomTouchesEnv(f.geometry,WWA_ENV);
+    });
+    if(!feats.length){ if(fresh()) renderMcd([]); return; }
+    /* The polygons say which MDs are ACTIVE; only the text products know who they're FOR. The
+       product list is newest-first but NATIONAL, so a regional MD's text can sit arbitrarily deep
+       when the Plains are issuing over it — no fixed fetch count is safe. Walk the list in small
+       chunks instead, stopping the moment every regional number has its text: the usual day pays
+       one chunk, an outbreak walks only as deep as it must, and the list's own length (20) is the
+       hard ceiling either way. */
+    var need={};
+    feats.forEach(function(f){ need[+(/MD\s*(\d+)/i.exec(f.properties.name)[1])]=1; });
+    var byNum={};
+    return getJSON(API+"/products?type=SWO&location=MCD&limit=20",LD).then(function(list){
+      var g=(list&&list["@graph"])||[], i=0;
+      function satisfied(){ return Object.keys(need).every(function(n){ return byNum[n]; }); }
+      function chunkNext(){
+        if(i>=g.length||satisfied()) return null;
+        var batch=g.slice(i,i+4); i+=4;
+        return Promise.all(batch.map(function(p){
+          return getJSON(p["@id"],LD).then(function(prod){
+            var d=parseMcd(prod&&prod.productText);
+            // newest-first walk: the first text seen for a number is the current one
+            if(d&&!(d.num in byNum)){ d.issued=Date.parse(prod.issuanceTime)||0; byNum[d.num]=d; }
+          }).catch(function(){});   // one dead text ≠ no strip; the polygon still speaks
+        })).then(chunkNext);
+      }
+      return chunkNext();
+    }).catch(function(){}).then(function(){
+      if(!fresh()) return;
+      var out=[];
+      feats.forEach(function(f){
+        var num=+(/MD\s*(\d+)/i.exec(f.properties.name)[1]);
+        var d=byNum[num]||{num:num,areas:"",concerning:"",validEnd:null,prob:null,summary:"",attn:[],issued:0};
+        var hits=!!ptInGeometry(current.lon,current.lat,f.geometry);
+        if(!hits&&d.attn.indexOf("LSX")<0) return;   // a discussion three states away is not this page's business
+        var end=d.validEnd?mcdValidEnd(d.validEnd,d.issued):null;
+        if(end&&end<=Date.now()) return;   // the service can hold an expired MD briefly past its window
+        out.push({num:num,geom:f.geometry,hits:hits,end:end,d:d});
+      });
+      renderMcd(out);
+    });
+  }).catch(function(e){
+    if(isAbort(e)||!fresh()) return;
+    /* A failed refresh must not read as "the discussion ended": keep what's already painted until
+       its own valid time retires it. (An MD whose window never parsed rides until a fetch succeeds.) */
+    renderMcd(lastMcds.filter(function(m){ return !m.end||m.end>Date.now(); }));
   });
 }
 
@@ -5473,7 +5811,7 @@ function syncSkyMeta(){
      received. A down layer says so where it used to advertise itself. */
   if(skyOn.radar) bits.push(radarDown()
     ? '<b>Radar unavailable</b> — NOAA is not serving reflectivity right now'
-    : 'Official NOAA/NWS radar &middot; tap a <b>warning polygon</b> to jump to its alert');
+    : 'Official NOAA/NWS radar &middot; tap a <b>warning or watch</b> to jump to its alert');
   /* A pinned satellite says WHICH moment it is showing. Left as the plain credit it would quietly
      claim to be current while displaying an hour-old cloud shield — the same lie the radar badge's
      stale state exists to prevent, arriving through the other layer. */
@@ -5870,6 +6208,7 @@ function resetLocationState(){
   smart.hourly=[]; smart.days=[];
   heroNow.temp=null;   // the old city's reading must not mark the new city's range
   aqiState={val:null, pm:null, err:false}; callAqi=null; callRisk=null;
+  lastMcds=[];   // "inside this area" was ray-cast against the OLD point; loadMcd re-answers
   userZones={county:"",forecast:"",fire:""};
   renderHourly24._hrs=null; loadForecast._paint=null;
 }
@@ -5880,7 +6219,7 @@ function clearLocationUI(){
   load("current"); load("daily","Loading forecast\u2026"); load("hourly24","Loading hourly\u2026");
   load("cnGrid","Loading departures\u2026"); load("spc","Loading outlook\u2026");
   load("hazards","Loading hazards\u2026"); load("cpc","Loading outlooks\u2026");
-  ["cnCtx","cnSrc","ccCtx","ccUv","aqi","aqiMini","callRow","qpf7","h24loc","spcLoc"].forEach(function(id){
+  ["cnCtx","cnSrc","ccCtx","ccUv","aqi","aqiMini","callRow","qpf7","h24loc","spcLoc","mcd"].forEach(function(id){
     var e=document.getElementById(id); if(e) e.innerHTML="";
   });
   ["drNow","drMonth","drSeason"].forEach(function(id){
@@ -5889,6 +6228,7 @@ function clearLocationUI(){
   var cc=document.getElementById("callCard"); if(cc) cc.classList.remove("has");
   var aq=document.getElementById("aqiCard"); if(aq) aq.classList.remove("show");
   var cs=document.getElementById("cnStation"); if(cs) cs.textContent="\u2026";
+  drawMcdPolygons();   // lastMcds was just reset; take the old place's outline off the map with it
   if(typeof scheduleMasonry==="function") scheduleMasonry();
 }
 function setLocation(loc,opts){
@@ -5901,7 +6241,7 @@ function setLocation(loc,opts){
   clearLocationUI();
   updateLocNow();
   if(opts.save) saveLoc(loc);
-  var jobs=[loadForecast(),loadAqi(),loadSpc(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),
+  var jobs=[loadForecast(),loadAqi(),loadSpc(),loadMcd(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),
             loadClimate(),loadAlerts(),loadClimateContext(),loadUv()];
   loadRadar();
   if(loc.station){ jobs.push(loadCurrent()); }
@@ -6762,6 +7102,7 @@ var SNAP_PARTS=[
   {id:"aqi",      ttl:3*3600000},
   {id:"spc",      ttl:6*3600000},
   {id:"spcLoc",   ttl:6*3600000},
+  {id:"mcd",      ttl:15*60000},     // an MD lives 1–3 h; restore only when nearly current
   {id:"cpc",      ttl:24*3600000},
   {id:"hazards",  ttl:24*3600000},
   {id:"cnToday",  ttl:12*3600000},
@@ -6926,10 +7267,10 @@ function stampSched(fns){
 function refreshAll(){
   var dot=document.getElementById("statusDot"), label=document.getElementById("refreshLabel");
   dot.classList.remove("stale");label.textContent="Refreshing…";
-  stampSched([loadAFD,loadAlerts,loadCurrent,loadForecast,loadRivers,loadAqi,loadSpc,loadCpc,loadQpf,
+  stampSched([loadAFD,loadAlerts,loadCurrent,loadForecast,loadRivers,loadAqi,loadSpc,loadMcd,loadCpc,loadQpf,
               loadHazards,loadDrought,loadClimate,loadClimateContext,loadUv,loadStationPlot,
               refreshSatLayer,saveSnapshotIdle]);
-  Promise.allSettled([loadAFD(),loadAlerts(),loadCurrent(),loadForecast(),loadRivers(),loadAqi(),loadSpc(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),loadClimate(),loadClimateContext(),loadUv(),loadStationPlot()]).then(function(){
+  Promise.allSettled([loadAFD(),loadAlerts(),loadCurrent(),loadForecast(),loadRivers(),loadAqi(),loadSpc(),loadMcd(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),loadClimate(),loadClimateContext(),loadUv(),loadStationPlot()]).then(function(){
     refreshSatLayer();
     label.textContent="Refresh";
     document.getElementById("lastUpdate").textContent="Last updated "+new Date().toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"});
@@ -7044,6 +7385,7 @@ var SCHED=[
   {fn:loadRivers,   every:15*60000},
   {fn:loadAqi,      every:20*60000},
   {fn:loadSpc,      every:30*60000},
+  {fn:loadMcd,      every:5*60000},    // an MD lives 1–3 h; the outlook cadence would sleep through one
   {fn:loadCpc,      every:60*60000},
   {fn:loadQpf,      every:60*60000},
   {fn:loadHazards,  every:60*60000},
