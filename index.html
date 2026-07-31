@@ -156,6 +156,10 @@
   .leaflet-tooltip.stn-tip .stn-nm{display:block;font-weight:400;color:var(--muted);
     font-size:11px;margin-top:2px;line-height:1.35}
   .leaflet-tooltip.stn-tip .stn-rd{display:block;margin-top:4px}
+  /* ...and says WHEN, because "latest" is a promise the API doesn't keep — a wedged ASOS serves
+     its last report for hours. This line is what qualifies every number above it. */
+  .leaflet-tooltip.stn-tip .stn-when{display:block;font-weight:400;color:var(--muted);
+    font-size:11px;margin-top:4px}
 
   /* ===== Temperature as text =====
      The ramp's HUE is the data; its lightness is only how the data is made readable, and the two
@@ -927,6 +931,11 @@
   /* Station Plot map + station-model markers */
   .stnmap{width:100%;height:360px;border-radius:12px;overflow:hidden;background:var(--chip)}
   .stn-divicon{background:none;border:none}
+  /* The focusable element is the zero-size divIcon anchor, so a default outline has no pixels
+     to paint on — the ring goes on the value chip, matching the is-hi treatment but in accent
+     so "focused" and "extreme" stay two different statements. */
+  .stn-divicon:focus{outline:none}
+  .stn-divicon:focus-visible .stn2-v{box-shadow:0 0 0 2px var(--accent),0 1px 5px rgba(0,0,0,.5)}
   /* One metric at a time: a colour-coded value chip with the station's identity under it.
      Three stacked numbers per site was unreadable the moment two stations sat close together. */
   .stn2{display:flex;flex-direction:column;align-items:center;line-height:1;width:54px;margin-left:-27px;margin-top:-14px}
@@ -940,6 +949,10 @@
   .stn2-w{display:inline-flex;align-items:center;gap:2px}
   .stn2-arrow{display:inline-block;font-weight:900;font-size:12px}
   .stn2.is-hi .stn2-v{box-shadow:0 0 0 2px var(--text),0 1px 5px rgba(0,0,0,.5)}
+  /* A stale ob (>2 hr — see loadStationPlot) keeps its place on the map — an old temperature
+     still beats a hole — but at less than full standing, and it can't win an extremes chip.
+     The tooltip's when-line says how old it actually is. */
+  .stn2.is-old{opacity:.45}
   /* metric switcher */
   .stn-tools{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px}
   /* These four read as buttons and are the card's primary control, so they take the full 44px
@@ -2141,7 +2154,12 @@ function wxGroup(desc,day){
    carrying dark text and need 62% to stay above 4.5:1 at the blue and red ends of the ramp. The
    HUE — the part that actually encodes the value — is identical, which is what the station plot
    used to get wrong by keeping its own 7-bucket scale. */
-function tHue(t){ return Math.round(225-225*Math.max(0,Math.min(1,(t-15)/(95-15)))); }
+/* The domain is −10…95°F. It ran 15–95 for years, which handed every cold-snap reading the same
+   terminal blue — the station plot's whole job is regional spread, and it went monochrome exactly
+   the week that spread was the story. −10 covers a modern St. Louis outbreak; whatever undershoots
+   it still clamps. The ENDPOINT hues (225 and 0) are untouched, so the 52%/62% lightness contrast
+   tuning below still holds — mid-range temps just sit a shade warmer than they used to. */
+function tHue(t){ return Math.round(225-225*Math.max(0,Math.min(1,(t+10)/(95+10)))); }
 function tCol(t){ return "hsl("+tHue(t)+",78%,52%)"; }    // strokes, gradients, marks
 function tChip(t){ return "hsl("+tHue(t)+",78%,62%)"; }   // filled chips that carry dark text
 /* Temperature as a NUMBER you read, rather than a stroke you look at. tCol()'s 52% lightness is
@@ -5204,33 +5222,53 @@ function stnMarkerHTML(o,mode,isExtreme){
   if(v==null) return null;
   var id=o.id.replace(/^K/,""), col=stnColor(v,mode), inner;
   if(mode==="wind"){
-    inner=(v>0&&o.windDir!=null)
-      ? '<span class="stn2-w"><span class="stn2-arrow" style="transform:rotate('+((o.windDir+180)%360)+'deg)">↑</span>'+v+'</span>'
+    /* Speed without a direction is a VRB wind, not a calm one — METAR files VRB05KT when the
+       direction is wandering, and the API hands that over as speed with a null direction. The
+       chip shows the speed arrowless; only a true zero gets to say calm. */
+    inner=(v>0)
+      ? '<span class="stn2-w">'+(o.windDir!=null?'<span class="stn2-arrow" style="transform:rotate('+((o.windDir+180)%360)+'deg)">↑</span>':'')+v+'</span>'
       : "calm";
   }else{
     inner=v+"°";
   }
-  return '<div class="stn2'+(isExtreme?" is-hi":"")+'" style="--c:'+col+'">'
+  return '<div class="stn2'+(isExtreme?" is-hi":"")+(o.stale?" is-old":"")+'" style="--c:'+col+'">'
     +'<div class="stn2-v">'+inner+'</div><div class="stn2-id">'+esc(id)+'</div></div>';
 }
-/* Code, then the place, then the readings — three lines rather than one run, because the name is
-   the part a stranger needs and burying it mid-sentence between "KSTL" and "93° temp" would leave
-   it as hard to find as it was to guess. */
-function stnTip(o){
-  var nm=stnName(o.id), b=[];
+/* Code, then the place, then the readings, then WHEN — stacked lines rather than one run, because
+   the name is the part a stranger needs and burying it mid-sentence between "KSTL" and "93° temp"
+   would leave it as hard to find as it was to guess. The when-line is the qualifier for everything
+   above it, and "stale" is the tooltip's word for a marker the map has already dimmed. */
+/* One builder for the readings list, because it now has two readers: the hover/focus tooltip and
+   the marker's aria-label. Two copies of "what counts as a reading" would drift the first time
+   one of them learned a new field. */
+function stnReadings(o){
+  var b=[];
   if(o.tempF!=null) b.push(o.tempF+"° temp");
   if(o.feelsF!=null&&o.tempF!=null&&Math.abs(o.feelsF-o.tempF)>=2) b.push("feels "+o.feelsF+"°");
   if(o.dewF!=null) b.push(o.dewF+"° dew");
   if(o.rh!=null) b.push(o.rh+"% RH");
-  if(o.windMph!=null) b.push(o.windMph>0?(degToCompass(o.windDir)+" "+o.windMph+" mph"):"calm");
+  // A moving wind with no direction is VRB, not calm — the compass part simply goes unsaid.
+  if(o.windMph!=null) b.push(o.windMph>0?((o.windDir!=null?degToCompass(o.windDir)+" ":"")+o.windMph+" mph"):"calm");
   if(o.gustMph!=null&&o.gustMph>0) b.push("gusts "+o.gustMph);
+  return b;
+}
+function stnAria(o){
+  var nm=stnName(o.id);
+  return o.id+(nm?", "+nm:"")+": "+stnReadings(o).join(", ")
+    +(o.ts?", observed "+timeAgo(o.ts)+(o.stale?" (stale)":""):"");
+}
+function stnTip(o){
+  var nm=stnName(o.id), b=stnReadings(o);
   return '<b>'+esc(o.id)+'</b>'
     +(nm?'<span class="stn-nm">'+esc(nm)+'</span>':'')
-    +(b.length?'<span class="stn-rd">'+b.join(" · ")+'</span>':'');
+    +(b.length?'<span class="stn-rd">'+b.join(" · ")+'</span>':'')
+    +(o.ts?'<span class="stn-when">'+(o.stale?"stale · ":"")+"observed "+timeAgo(o.ts)+'</span>':'');
 }
 function renderStnExtremes(){
   var el=document.getElementById("stnEx"); if(!el) return;
-  var list=stnObs.filter(function(o){ return o&&stnValue(o,stnMode)!=null; });
+  // Stale obs plot (dimmed) but don't compete: "Warmest" from a three-hour-old reading is a
+  // record of when the station broke, not of where it is hottest now.
+  var list=stnObs.filter(function(o){ return o&&!o.stale&&stnValue(o,stnMode)!=null; });
   if(!list.length){ el.innerHTML=""; return; }
   function best(dir){
     var b=null;
@@ -5243,17 +5281,26 @@ function renderStnExtremes(){
   var hi=best(1), lo=best(-1), chips=[], unit=(stnMode==="wind")?" mph":"°";
   function chip(lbl,o){ if(o) chips.push('<span class="sx"><b>'+lbl+'</b> '+esc(o.id.replace(/^K/,""))+" "+stnValue(o,stnMode)+unit+'</span>'); }
   if(stnMode==="wind"){
+    /* Only the windy end is a story here, so only hi competes for the marker ring — lo used to
+       ride along into stnExtremeIds and put a ring on the calmest station that no chip ever
+       explained. And "Windiest SUS 0 mph" on a still evening is the superlative outliving the
+       thing it measures: a max of zero means calm IS the regional fact, so one chip says that. */
+    lo=null;
+    if(hi&&stnValue(hi,stnMode)===0){ hi=null; chips.push('<span class="sx">all stations calm</span>'); }
     chip("Windiest",hi);
-    var g=null; stnObs.forEach(function(o){ if(o&&o.gustMph!=null&&(!g||o.gustMph>g.gustMph)) g=o; });
+    var g=null; stnObs.forEach(function(o){ if(o&&!o.stale&&o.gustMph!=null&&(!g||o.gustMph>g.gustMph)) g=o; });
     if(g&&g.gustMph>0) chips.push('<span class="sx"><b>Top gust</b> '+esc(g.id.replace(/^K/,""))+" "+g.gustMph+' mph</span>');
   }else if(stnMode==="dew"){
     chip("Muggiest",hi); chip("Driest",lo);
   }else{
-    chip("Warmest",hi); chip("Coolest",lo);
+    // "Warmest" is a claim about air temperature, and in Feels mode that isn't what's ranked.
+    var fl=(stnMode==="feels");
+    chip(fl?"Feels hottest":"Warmest",hi); chip(fl?"Feels coolest":"Coolest",lo);
     var spread=stnValue(hi,stnMode)-stnValue(lo,stnMode);
     if(spread>0) chips.push('<span class="sx"><b>Spread</b> '+spread+'°</span>');
   }
-  chips.push('<span class="sx sx-n">'+list.length+' stations</span>');
+  var staleN=0; stnObs.forEach(function(o){ if(o&&o.stale) staleN++; });
+  chips.push('<span class="sx sx-n">'+list.length+' stations'+(staleN?' · '+staleN+' stale':'')+'</span>');
   el.innerHTML=chips.join("");
   stnExtremeIds=[hi&&hi.id, lo&&lo.id];
 }
@@ -5262,19 +5309,33 @@ function renderStationLayer(){
   if(!stnMap||typeof L==="undefined") return;
   renderStnExtremes();                                  // sets stnExtremeIds, so markers can highlight them
   if(stnLayer){ stnMap.removeLayer(stnLayer); stnLayer=null; }
-  var markers=[];
+  var pairs=[];
   stnObs.forEach(function(o){
     if(!o) return;
     var html=stnMarkerHTML(o,stnMode,stnExtremeIds.indexOf(o.id)>=0);
     if(!html) return;
     var m=L.marker([o.lat,o.lon],{
       icon:L.divIcon({className:"stn-divicon",html:html,iconSize:[0,0],iconAnchor:[0,0]}),
-      keyboard:false, riseOnHover:true
+      keyboard:true, riseOnHover:true
     });
     m.bindTooltip(stnTip(o),{className:"stn-tip",direction:"top",offset:[0,-16],sticky:false});
-    markers.push(m);
+    pairs.push({m:m,o:o});
   });
-  stnLayer=L.layerGroup(markers).addTo(stnMap);
+  stnLayer=L.layerGroup(pairs.map(function(p){ return p.m; })).addTo(stnMap);
+  /* keyboard:true above makes the chips tabbable, but that is only half a keyboard path —
+     Leaflet 1.9's focus-opens-the-tooltip accessibility never fires for divIcon markers
+     (verified against 1.9.4), so Tab landed on a chip and learned nothing. The two halves are
+     wired by hand: the tooltip for eyes on focus, and an aria-label carrying the same facts for
+     a screen reader, which won't reliably read a floating tooltip it isn't described by. This
+     runs after addTo() because getElement() has nothing to return before the icon exists.
+     The focus ring is CSS's problem: see .stn-divicon:focus-visible. */
+  pairs.forEach(function(p){
+    var el=p.m.getElement&&p.m.getElement(); if(!el) return;
+    el.setAttribute("role","img");
+    el.setAttribute("aria-label",stnAria(p.o));
+    el.addEventListener("focus",function(){ p.m.openTooltip(); });
+    el.addEventListener("blur",function(){ p.m.closeTooltip(); });
+  });
 }
 function initStnTools(){
   var t=document.getElementById("stnTools"); if(!t) return;
@@ -5307,6 +5368,17 @@ function initStationMap(){
   // no loadStationPlot() here — refreshAll() runs right after init and fetches the obs once
 }
 function updateStationBase(){ if(stnBase) stnBase.setUrl(baseUrl()); }
+/* Staleness cutoffs. /observations/latest never admits how old "latest" is — a wedged ASOS keeps
+   serving its final report, and it plotted here with the same standing as a five-minute-old ob,
+   eligible to win "Warmest". Two hours (a missed hourly cycle, plus slack for the specials-only
+   quiet stretches) demotes an ob to stale: still drawn, but dimmed and barred from the extremes.
+   Six hours removes it — by then the number is trivia about the station, not weather. */
+var STN_STALE_MS=2*60*60000, STN_DEAD_MS=6*60*60000;
+/* Last good ob per station. api.weather.gov throws intermittent 5xx, and catch→null traded a
+   ten-minute-old reading for a hole in the map until the next 12-minute cycle. A failed fetch
+   now falls back to this cache; the cutoffs above are what keep the fallback honest — a cached
+   ob ages into stale and then off the map exactly like a served one. */
+var _stnLast={};
 function loadStationPlot(){
   if(!stnMap||typeof L==="undefined") return Promise.resolve();
   var c2f=function(c){return (c==null)?null:Math.round(c*9/5+32);};
@@ -5316,23 +5388,47 @@ function loadStationPlot(){
       var tempF=c2f(p.temperature&&p.temperature.value), dewF=c2f(p.dewpoint&&p.dewpoint.value);
       var mph=(p.windSpeed&&p.windSpeed.value!=null)?Math.round(p.windSpeed.value*0.621371):null;
       var rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?Math.round(p.relativeHumidity.value):rhFromTd(tempF,dewF);
-      return {id:s.id,lat:s.lat,lon:s.lon,
+      var o={id:s.id,lat:s.lat,lon:s.lon,
         tempF:tempF, dewF:dewF, rh:rh,
         feelsF:feelsLikeF(tempF,rh,mph),
         windDir:(p.windDirection&&p.windDirection.value!=null)?Math.round(p.windDirection.value):null,
         windMph:mph,
         gustMph:(p.windGust&&p.windGust.value!=null)?Math.round(p.windGust.value*0.621371):null,
         ts:p.timestamp||null};
-    }).catch(function(){return null;});
+      if(o.ts) _stnLast[s.id]=o;   // an ob with no timestamp could never age out — don't cache it
+      return o;
+    }).catch(function(){ return _stnLast[s.id]||null; });
   });
   return Promise.all(jobs).then(function(list){
-    stnObs=list;
+    var now=Date.now();
+    stnObs=list.map(function(o){
+      if(!o) return null;
+      var t=o.ts?(Date.parse(o.ts)||0):0;
+      if(t&&now-t>STN_DEAD_MS){ delete _stnLast[o.id]; return null; }
+      o.stale=!!t&&(now-t>STN_STALE_MS);
+      return o;
+    });
     renderStationLayer();
     var age=document.getElementById("stnAge");
     if(age){
-      var newest=0;
-      list.forEach(function(o){ if(o&&o.ts){ var t=Date.parse(o.ts)||0; if(t>newest) newest=t; } });
-      age.textContent=newest?("obs "+timeAgo(new Date(newest).toISOString())):"tap a station for detail";
+      /* The stamp used to show the NEWEST ob — the one number that can't indict the map, since a
+         single fresh station vouched for fourteen. The OLDEST fresh ob is the honest summary:
+         every full-strength marker is at most that old. Stale ones get counted, not averaged in. */
+      var oldest=0, staleN=0, plotted=0;
+      stnObs.forEach(function(o){
+        if(!o) return;
+        plotted++;
+        if(o.stale){ staleN++; return; }
+        var t=o.ts?(Date.parse(o.ts)||0):0;
+        if(t&&(!oldest||t<oldest)) oldest=t;
+      });
+      var parts=[];
+      if(oldest) parts.push("obs "+timeAgo(new Date(oldest).toISOString()));
+      if(staleN) parts.push(staleN+" stale");
+      /* Fifteen fetches all failing is a statement, not a blank — without it the card is a bare
+         basemap quietly implying a stationless region rather than an unreachable API. */
+      age.textContent=plotted?(parts.join(" · ")||"tap a station for detail")
+                            :"no obs — NWS API isn't answering";
     }
   }).catch(function(){});
 }
