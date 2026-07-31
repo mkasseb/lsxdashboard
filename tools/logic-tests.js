@@ -236,15 +236,14 @@ function check(name, actual, expected) {
 }
 
 /* ============ FAMILY_CFG ============ */
-// Storm Mode's per-family presentation. The banner's second line used to live here too, as a
-// fallback sentence per family; it went when the banner dropped to one line — the alert card
+// Per-family presentation for the alert banners. The banner's second line used to live here too,
+// as a fallback sentence per family; it went when the banner dropped to one line — the alert card
 // directly beneath it now carries the NWS instruction itself, so the banner was saying the same
-// thing twice within a screen. What survives is what Storm Mode still routes on.
+// thing twice within a screen. What survives is what the banners still route on: the icon and
+// the fold list.
 {
-  const VALID_PRIME = new Set(['obsCard', 'riversCard', 'riskCard']);
   for (const [fam, cfg] of Object.entries(SUBJECT.FAMILY_CFG)) {
     check(`${fam} names an icon`, typeof cfg.ico === 'string' && cfg.ico.length > 0, true);
-    check(`${fam} primes a card that exists`, VALID_PRIME.has(cfg.prime), true);
     // The dead `sub` key must not creep back: the banner has nowhere to put it.
     check(`${fam} carries no banner subline`, 'sub' in cfg, false);
   }

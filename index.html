@@ -68,9 +68,9 @@
     --bg:#0a0e14;--panel:#131924;--panel-2:#1a2231;--border:#243044;
     /* --muted was #8a97a8 and --accent #4aa3ff. Both cleared 4.5:1 on the page and on a card, and
        both missed on the lightest surface the page actually builds: a --chip pill sitting on an
-       --inset row inside a card, with Storm Mode's warm wash under all of it. That stack lands
-       around rgb(63,63,69), and it is where the Radar/Satellite tab label and the alert card's
-       "2 zone groups" live. Both are set from the worst case, not the flattering one. */
+       --inset row inside a card. That stack lands around rgb(63,63,69), and it is where the
+       Radar/Satellite tab label and the alert card's "2 zone groups" live. Both are set from the
+       worst case, not the flattering one. */
     --text:#e6edf5;--muted:#a7b4c6;--accent:#6bb4ff;--good:#3ecf8e;--h24night:rgba(120,140,255,.08);
     --warn:#ffb020;--sev:#ff7a2f;--danger:#ff4d4d;
     --shadow:0 6px 24px rgba(0,0,0,.4);
@@ -306,100 +306,6 @@
   .dot{width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 8px var(--good)}
   .dot.stale{background:var(--warn);box-shadow:0 0 8px var(--warn)}
 
-  /* ===== Storm Mode emphasis =====
-     There was a full-width banner above this card that said the hazard's name and when it ends.
-     The alert card says both, in its own headline, with the tier badge and the zone match and the
-     guidance beside them — so the banner had become a louder copy of the line beneath it. What it
-     really contributed was WEIGHT: a wash of the event's colour at the top of the page saying
-     today is not a normal day. That weight belongs to the card carrying the information.
-     The weight is all OUTSIDE the text: a ring and a glow, no background tint. The banner could
-     wash itself in the event's colour because the only thing written on it was one line of --text;
-     this card carries muted metadata, accent links and tier badges, and a .16 storm tint lifted its
-     surfaces far enough to drop --muted to 3.78:1, --accent to 3.63 and --sev to 3.05. Border and
-     box-shadow sit outside every one of those backdrops, so the card can shout without moving a
-     single contrast ratio.
-     It breathes, as the banner did. stormPulse does both halves of what that looked like at once:
-     a ring that expands and fades (the flash) and a halo that swells with it (the glow). Both are
-     box-shadow, i.e. outside the card, so the animation cannot touch a contrast ratio either.
-     The static box-shadow below is not decoration — it is what remains when the animation is
-     switched off for reduced motion, so the card still reads as the urgent one. */
-  @keyframes stormPulse{
-    0%,100%{box-shadow:0 0 0 0 rgba(var(--storm),.55),0 0 30px 2px rgba(var(--storm),.26),var(--shadow)}
-    50%    {box-shadow:0 0 0 10px rgba(var(--storm),0),0 0 46px 7px rgba(var(--storm),.42),var(--shadow)}
-  }
-  /* The glow lives on the LEAD banner now, not the section: #alertsCard is chrome-less in banner
-     mode, so it has no box to ring. One breathing thing at a time still holds — the #alerts id in
-     this selector outweighs `.alert.lv-emergency`'s own pulse, so an emergency that IS the lead
-     runs stormPulse alone, not two rings on two clocks. */
-  body.storm #alerts .alert.lead{
-    border-color:rgba(var(--storm),.8);
-    box-shadow:0 0 0 3px rgba(var(--storm),.22),0 0 30px 2px rgba(var(--storm),.30),var(--shadow);
-    animation:stormPulse 1.9s ease-in-out infinite;
-  }
-  @media (prefers-reduced-motion: reduce){body.storm #alerts .alert.lead{animation:none}}
-  /* Event-aware storm accent (--storm = R,G,B). Default convective red; families override below. */
-  body.storm{--storm:255,45,85; background:radial-gradient(1200px 600px at 80% -10%, rgba(var(--storm),.10), transparent),var(--bg)}
-  body.storm[data-storm="winter"]{--storm:122,150,245}   /* icy blue-violet */
-  body.storm[data-storm="flood"]{--storm:38,166,154}      /* flood teal */
-  body.storm[data-storm="heat"]{--storm:255,120,40}       /* heat orange */
-  body.storm[data-storm="wind"]{--storm:140,152,176}      /* wind slate */
-  body.storm[data-storm="fire"]{--storm:255,94,30}        /* fire orange-red */
-  body.storm[data-storm="convective"]{--storm:255,45,85}  /* severe/tornado red */
-  /* Storm Mode EMPHASIZES the critical cards (glow + explicit ordering). Every grid child gets an
-     order here — hoisting only alerts/radar/masonry shoved Current Conditions and the 24-hour
-     chart below the entire masonry band, and left a 4-col gutter beside the radar (its row
-     partner, the Current stack, wasn't lifted with it). Storm order: alerts → Bottom Line →
-     current+radar → The Pulse → masonry with the event's prime card packed first.
-     The Bottom Line holds the rank it has in calm weather — directly under safety — rather than
-     sliding under the hero. It used to rank below the radar on the theory that a live warning
-     makes the map outrank advice, but that put the one card that says what to DO about the
-     warning under a full-width hero band, i.e. a scroll away on a phone in exactly the weather
-     someone is checking the page one-handed. The radar is still the first thing in the hero;
-     the plain-English read of it just gets there first.
-     THE PULSE IS THE ONE CARD WHOSE RANK IS CONDITIONAL, and the contrast with the line above is
-     the point. In calm weather it sits second, beside the Bottom Line, because the two are the
-     same kind of card. Here it drops back under the hero, for two reasons that agree:
-     · Measured. Storm Mode is exactly when everything above the hero is already tall — a glowing
-       lead banner instead of the one-line all-clear, and a Bottom Line full of pills. Even
-       clamped to two lines, The Pulse put the radar at 832px on an 844px phone: twelve pixels of
-       the map, during a Tornado Warning, on the page someone opened to find the storm.
-     · On the merits. An AFD is a scheduled prose product issued a few times a day, so during a
-       fast-moving warning it was very likely written BEFORE the event it is being read about.
-       The warning is live and the radar is live; the discussion is the only thing here that
-       isn't, and that is the moment it should yield rather than the moment it should lead.
-     The Bottom Line can hold its rank through all of this because it is a pill row computed from
-     live data — one or two lines that stay true minute to minute. Paragraphs of periodically
-     issued prose are a different object, and they get a different rule.
-     The radar needs no hoist of its own: it lives inside a .stack, and only direct grid children
-     have an `order`. The two stacks share order -6 and fall back to DOM order between them, which
-     is already conditions-then-radar. */
-  body.storm #alertsCard{order:-8}
-  body.storm #mcd{order:-8}        /* same rank as the banners it annotates; the tie breaks by DOM order */
-  body.storm #callCard{order:-7}   /* directly under safety in every mode — never below the fold */
-  body.storm .stack{order:-6}      /* left: Now (+ AQI) · right: radar */
-  /* The 24h chart DOES need one, now that it is a band of its own rather than the lower half of the
-     conditions card. Without a rule it keeps order 0 and lands below the masonry — "what the next
-     day does" under every outlook on the page, during the one event where the question is live.
-     Ranked directly under the pair: once you know what is overhead, when it ends is the next thing
-     asked, and it outranks both a periodically-issued AFD and the deeper-context band. This also
-     keeps the calm-mode sequence (pair → next 24 hours → week ahead) intact under Storm Mode. */
-  body.storm #h24Card{order:-5}
-  body.storm #afdCard{order:-2}    /* calm-weather rank does NOT carry here — see above */
-  body.storm .masonry{order:-1}    /* prime card packs to its front */
-  /* Storm Mode used to ring three cards in the accent colour while the banner above them glowed in
-     the same colour — a warning arrived as four concentric halos, and the alert card's own severity
-     ramp had to compete with a border painted by family instead of by level. The ordering above is
-     what actually does the work; these cards now just take a tinted hairline, and the banner keeps
-     the glow to itself. */
-  /* Same family gate as the sizing rule below, for the same reason: the tint means "this card is
-     part of the event", which is a claim about convection and flooding, not about heat. The prime
-     card is picked per-family by FAMILY_CFG, so it needs no gate — it is always the right card. */
-  body.storm[data-storm="convective"] #radarCard,
-  body.storm[data-storm="flood"] #radarCard,
-  body.storm .storm-prime{
-    border-color:rgba(var(--storm),.45);
-  }
-
   .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;align-items:start}
   /* First-paint entrance. Deliberately shallow and short — the point is that the page assembles
      itself rather than snapping into being, not that anyone waits for it. Masonry children are
@@ -436,19 +342,13 @@
   /* ===== Band rails =====
      Twenty-odd cards at identical visual weight read as a data dump. Naming the bands gives the
      scroll a spine — "Right now", "Next 24 hours", "The week ahead" — so a first-time visitor can
-     tell what they're looking at without reading every card title. Storm Mode reorders the grid
-     for urgency, at which point band labels would lie about what follows them, so they hide. */
+     tell what they're looking at without reading every card title. */
   .railhead{display:flex;align-items:baseline;gap:12px;margin:10px 2px 0;flex-wrap:wrap}
   .railhead:first-child{margin-top:0}
   .rail-t{flex:0 0 auto}
   .rail-s{font-size:var(--fs-sm);color:var(--muted);font-weight:400}
   .rail-s:empty{display:none}
   .railhead::after{content:"";flex:1 1 40px;height:1px;background:linear-gradient(90deg,var(--border),transparent)}
-  /* Storm Mode drops the band rails: they are chrome, and the page has more urgent things to say
-     with the space. The first rail used to be an exception — it carried the only control for the
-     sky panel's visibility, and that control could not be allowed to vanish in the one weather
-     where the map matters most. The panel is permanent now, so the rail is chrome like the rest. */
-  body.storm .railhead{display:none}
   /* Let a long subtitle wrap on its own, but don't force the short ones (a place name) onto a
      second line — on a phone that costs a row of height for nothing. */
   @media(max-width:480px){.railhead{gap:4px 10px}.railhead::after{display:none}}
@@ -528,7 +428,7 @@
   .ab-hx{flex:1 1 auto;min-width:0}
   .ab-title{display:block;font-weight:800;font-size:var(--fs-lg);line-height:1.3}
   /* The second line stays --text, not --muted: it sits on the level tint, and dimmed text on a
-     tinted surface is precisely the contrast failure the storm work measured and backed out of. */
+     tinted surface is a measured contrast failure. */
   .ab-sub{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
     margin-top:3px;font-size:var(--fs-sm);font-weight:400;color:var(--text);line-height:1.45}
   .ab-head .a-chev{color:var(--muted);margin-top:3px;flex:0 0 auto}
@@ -1013,31 +913,9 @@
      a max-height is the single property able to break that. */
   @media(min-width:681px) and (min-height:600px){
     body:not(.radar-full) #radarCard .imgwrap{max-height:min(560px, 62vh)}
-    /* Storm Mode's entire point is handing the map height back for the two families with echoes in
-       them, and the everyday ceiling was quietly taking that back on a short screen: at 1366x768 a
-       flood clamped to 476px, i.e. below the 16:9 it would have had on a calm day, so engaging
-       Storm Mode made the map SMALLER. A storm keeps a ceiling — nothing here should be unbounded
-       — just a looser one, high enough that the 16:10 lands untouched at every width the shell
-       allows and the clamp only bites on a genuinely short viewport. */
-    body.storm[data-storm="convective"]:not(.radar-full) #radarCard .imgwrap,
-    body.storm[data-storm="flood"]:not(.radar-full) #radarCard .imgwrap{max-height:min(640px, 74vh)}
   }
-  /* Storm Mode gives the map space back — but only for weather you'd open a map to FIND.
-     This used to be a plain `body.storm` rule, and it could be, because radarWorthy() had already
-     guaranteed the card was absent for the dry families: an Extreme Heat Warning engaged Storm
-     Mode but never showed a radar, so "storm" and "radar-shaped" were the same thing here. Making
-     the card permanent broke that equivalence — the rule as written would enlarge the map to 16:10
-     (1:1 on phones) during a heat warning, taking the space from the cards that actually matter
-     for heat. The family test that radarWorthy() used to apply in JS now lives here in CSS, off
-     the same data-storm attribute: convective and flood, the two families with echoes to look at.
-     Heat, wind, fire and winter describe the air rather than echoes in it, so they keep Storm
-     Mode's theme, banner and prime card and leave the map at its everyday size. */
-  body.storm[data-storm="convective"] #radarCard .imgwrap,
-  body.storm[data-storm="flood"] #radarCard .imgwrap{aspect-ratio:16/10}
   @media(max-width:680px){
     #radarCard .imgwrap{aspect-ratio:4/3}
-    body.storm[data-storm="convective"] #radarCard .imgwrap,
-    body.storm[data-storm="flood"] #radarCard .imgwrap{aspect-ratio:1/1}
   }
   .rs-right{display:inline-flex;align-items:center;gap:12px;margin-left:auto}
   .rs-full{padding:5px 11px;font-size:var(--fs-xs);font-weight:700;
@@ -1444,13 +1322,6 @@
      the whole reason this exists) kept animating while everything else stopped. Uniform rather
      than only on #wxbg, so the next rule written as a shorthand doesn't quietly reopen the hole. */
   html.tab-hidden .logo .lg-sweep,
-  /* The lead banner's pulse is scoped to body.storm for the same reason the alerts CARD once
-     was: an element whose `animation` slot can be reassigned to a one-shot must never be
-     pausable outside the state that gives it the looping animation, or a state change while
-     hidden freezes the one-shot at its `from` frame — this page shipped exactly that bug once
-     (#alertsCard, opacity:0, invisible card) before the pause was scoped. Banners aren't grid
-     children, so they have no cardIn to freeze; the scope is cheap insurance all the same. */
-  html.tab-hidden body.storm #alerts .alert.lead,
   html.tab-hidden .alert.lv-emergency,
   html.tab-hidden .snapbar .sb-spin,
   html.tab-hidden #wxbg::after,
@@ -1565,12 +1436,7 @@
      that was never at risk, and cutting the forecaster off mid-sentence to do it.
      It was sized, originally, against multi-paragraph Short-Term prose — which extractAFD cannot
      actually produce (see the note above #afdCard). A guard built for an input that never
-     arrives.
-     The case for re-adding it would have to come from the other direction: this card only sits
-     at rank 3 in CALM weather, which is exactly when the space above the hero is at its minimum
-     — a one-line all-clear and a few pills. The moment a warning makes that space expensive,
-     body.storm has already moved this card below the hero. So the door a clamp would guard is
-     one Storm Mode closes first. */
+     arrives. */
   /* ===== Responsive overrides (kept last so they win over base rules) ===== */
   @media(max-width:480px){
     /* Was `html,body`. The <body> half silently disabled position:sticky at exactly the width
@@ -1790,9 +1656,8 @@
 
   <!-- BOTTOM LINE (id stays callCard) — plain-English verdicts computed client-side from the
        hourly forecast, UV, AQI and climate context. The page reasoning on the visitor's behalf,
-       so it sits directly under the alerts: safety first, then what today actually means.
-       That rank holds in every mode — Storm Mode re-orders the grid around it rather than
-       past it, so this card is on the first screen whatever the weather is doing. -->
+       so it sits directly under the alerts: safety first, then what today actually means,
+       on the first screen whatever the weather is doing. -->
   <section class="card col-12" id="callCard">
     <div class="callrow" id="callRow"></div>
   </section>
@@ -1811,12 +1676,6 @@
        up to 200px, and cutting the forecaster off mid-sentence, to buy room nothing needed. The
        reasoning behind that removal is kept in the CSS beside the styles, so it does not come
        back by default.
-       This rank is CALM-WEATHER ONLY. `body.storm #afdCard` sends the card back under the hero,
-       because a warning makes the alert and the radar live while this card is still whatever the
-       office wrote hours ago — and because measured against a real lead banner it left twelve
-       pixels of radar on an 844px phone. See the Storm Mode block in the CSS. That is also why
-       full length is affordable: the only time this card sits second is the time the space above
-       the hero is cheapest.
        (Worth knowing if you change extractAFD: its Synopsis and Short-Term fallbacks currently
        match NOTHING on this office's products — LSX writes `.SHORT TERM /THROUGH THURSDAY/...`
        and the pattern wants `.SHORT TERM...`. It goes unnoticed because Key Messages was present
@@ -2400,8 +2259,8 @@ function wxFallback(text,day){
    ramp instead.
 
    So: rank by the WORD, because that is what the reader is being asked to act on, and let CAP
-   severity escalate — never demote — a step above it. `--storm` family accents stay separate on
-   purpose: those answer "what kind of weather", which is a different question from "how bad". */
+   severity escalate — never demote — a step above it. The event FAMILY (eventFamily) stays a
+   separate axis on purpose: it answers "what kind of weather", not "how bad". */
 var LEVELS={
   emergency:{k:"emergency", label:"Emergency", rank:0},
   warning:  {k:"warning",   label:"Warning",   rank:1},
@@ -2734,7 +2593,6 @@ var RADAR_SPAN_MIN=60;
 var RADAR_N_DESK=15, RADAR_N_PHONE=8, RADAR_N_WIDE=7, RADAR_WIDE_ZOOM=5;
 var radarFrames=[], radarPool={}, radarIdx=-1;
 var radarPlaying=false, radarTimer=null, radarUserPaused=false;
-function reducedMotion(){ return !!(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
 function radarFrameCount(){
   if(rvMap && rvMap.getZoom()<=RADAR_WIDE_ZOOM) return RADAR_N_WIDE;
   return (window.innerWidth<=680)?RADAR_N_PHONE:RADAR_N_DESK;
@@ -2883,15 +2741,6 @@ function updateRadarCtl(){
     ctl.classList.remove("ready");
   }
   setRadarBtn();   // the span the button advertises changes with the frame list, so re-derive it here
-  /* During severe weather the loop is the point — start it automatically once frames are in
-     (never against a reduced-motion preference, and never after the user hit pause).
-     skyOn.radar is belt-and-braces rather than strictly required: detachRadarLayers() empties the
-     frame list, so radarFramesReady() is already false while reflectivity is off. It is spelled
-     out because this runs from setStormMode(), i.e. the one moment the page is most inclined to
-     start things on the visitor's behalf, and "don't animate a layer they switched off" should not
-     depend on a side effect two functions away. */
-  if(skyOn.radar && document.body.classList.contains("storm") && !radarPlaying && !radarUserPaused
-     && !reducedMotion() && radarFramesReady() && !document.hidden) radarPlayLoop();
 }
 function setRadarBtn(){
   var b=document.getElementById("radarPlay");
@@ -3548,7 +3397,7 @@ function loadCurrent(){
   });
 }
 
-/* ============ ALERTS + STORM MODE (Fix 2 + Fix 4) ============ */
+/* ============ ALERTS (Fix 2) ============ */
 /* CAP's own severity field, ranked. It is the LAST tiebreaker in the card order below and the only
    thing that decides which segment of a group speaks for it — never the primary sort, because it
    disagrees with the event name often enough that alertLevel() exists to arbitrate. */
@@ -3556,8 +3405,8 @@ var ALERT_SEV_RANK={Extreme:0,Severe:1,Moderate:2,Minor:3,Unknown:4};
 /* ===== The card order: what is over YOU leads =====
    Level used to be the primary key, which sounds right and reads wrong. alertLevel() promotes every
    Tornado Warning to `emergency`, so a tornado two counties away sorted above a Severe Thunderstorm
-   Warning genuinely over the reader's roof — and took the lead banner's glow with it. The reader is
-   standing in one place; the first thing they see should be about that place.
+   Warning genuinely over the reader's roof. The reader is standing in one place; the first thing
+   they see should be about that place.
 
    So coverage outranks level, with exactly one exception above it: a real emergency leads from
    anywhere. Storm-based warnings are polygons drawn around where a storm is GOING and are re-issued
@@ -3685,7 +3534,6 @@ function loadAlerts(){
     if(scope) scope.textContent=localMode?place:"LSX";
     if(typeof tickCountdowns==="function") setTimeout(tickCountdowns,0);   // fill the new countdowns immediately
     if(feats.length===0){
-      setStormMode(null);
       /* The scope half earns its place: "no active alerts" without it invites the reader's next
          question, which is "no alerts WHERE — my street, or the region?". This page treats that
          distinction as real enough to give "elsewhere in the St. Louis area" its own list below
@@ -3814,27 +3662,8 @@ function loadAlerts(){
     var mineN=0, awayN=0;
     glist.forEach(function(g){ if(g.away) awayN++; else mineN++; });
 
-    /* ---- Storm Mode follows the card list, by construction ----
-       This used to walk the raw feature list in CAP-severity order and test for the word "warning",
-       which is a second severity opinion in a page whose whole alert design is that there is only
-       one (see alertLevel). The two could disagree — a Tornado Warning is promoted to `emergency`
-       by the ramp but sorts merely Severe if the office tagged it that way — and the page would
-       then theme itself for one warning while a different one led the list. Reading the sorted
-       glist instead means the colour, the primed card and the lead banner are the same alert
-       because they cannot be anything else. `away` is already computed, so the old "covers me or is
-       an emergency" test comes along with it. */
-    var warn=null;
-    for(var i=0;i<glist.length;i++){
-      if(glist[i].away) continue;
-      if(glist[i].lv.rank>LEVELS.warning.rank) continue;   // emergencies and warnings only
-      warn=(glist[i].best&&glist[i].best.properties)||null; break;
-    }
-    setStormMode(warn);
-
     /* No summary chips: each banner names its own event in its own colour, which is everything
-       the chips used to say. The lead banner — the first card that is actually YOURS, not one from
-       the elsewhere list — carries the storm glow, since the section around it no longer has a box. */
-    var leadIdx=0; while(leadIdx<glist.length&&glist[leadIdx].away) leadIdx++;
+       the chips used to say. */
 
     var cardHTMLs=glist.map(function(g,gi){
       var fam=eventFamily(g.ev), fcfg=FAMILY_CFG[fam]||FAMILY_CFG.convective;
@@ -3966,7 +3795,7 @@ function loadAlerts(){
          link — lives in the drawer OUTSIDE it. */
       var drawerId="a2more-"+gi, wasOpen=!!openIds[aid+"|"+scope];
       return '<div class="alert lv-'+g.lv.k+(g.hit?' hits-me':'')+(wasOpen?' open':'')
-        +(gi===leadIdx?' lead':'')+'" data-aid="'+aid+'"'+(scope?' data-scope="'+scope+'"':'')
+        +'" data-aid="'+aid+'"'+(scope?' data-scope="'+scope+'"':'')
         /* The map resolves polygons↔cards by event name, and a folded card answers to ALL of its
            products. Two cards can now share a name — the local one and the one elsewhere — so the
            name alone no longer identifies a card; data-scope is the second half of the key, and
@@ -4026,11 +3855,7 @@ function loadAlerts(){
     paintAlerts(el,'<div class="empty">Couldn\'t load alerts. <a href="https://www.weather.gov/lsx/" target="_blank" rel="noopener">Check weather.gov/lsx ↗</a></div>');
   });
 }
-// Classify an NWS event into a "family" so the dashboard can adapt its theme, prime card, and tone.
-/* STORM_FAMILY used to sit beside this. Its only reader was radarWorthy(), which asked whether the
-   active family was one you'd open a radar for; the family is still needed for exactly that test,
-   but the test moved into CSS off the data-storm attribute setStormMode() already writes. */
-var STORM_PRIME="obsCard";
+// Classify an NWS event into a "family" so the alert banners can pick an icon and fold tiers.
 function eventFamily(ev){
   ev=(ev||"").toLowerCase();
   if(/tornado|thunderstorm|special marine|dust storm|squall/.test(ev)) return "convective";
@@ -4041,46 +3866,22 @@ function eventFamily(ev){
   if(/wind|gale|storm warning|hurricane|tropical/.test(ev)) return "wind";
   return "convective"; // default treatment (red)
 }
-/* Per-family presentation: icon, the most-relevant card to float to the prime slot, and — where
-   present — `merge`, which marks the family's products as foldable into one banner (its value
-   names the hazard, for the reader of this table). A family carries `merge` only if its products
-   are graduated TIERS of one hazard: an Extreme Heat Warning and a Heat Advisory are the same air
-   at different strengths, and NWS even writes them as one text ("For the Extreme Heat Warning...
-   For the Heat Advisory..."). It is deliberately absent from convective and flood — a Tornado
-   Warning and a Severe Thunderstorm Watch share a family without being the same hazard, and a
-   Flash Flood Warning is not a tier of a river Flood Warning. */
+/* Per-family presentation: icon, and — where present — `merge`, which marks the family's products
+   as foldable into one banner (its value names the hazard, for the reader of this table). A family
+   carries `merge` only if its products are graduated TIERS of one hazard: an Extreme Heat Warning
+   and a Heat Advisory are the same air at different strengths, and NWS even writes them as one
+   text ("For the Extreme Heat Warning... For the Heat Advisory..."). It is deliberately absent
+   from convective and flood — a Tornado Warning and a Severe Thunderstorm Watch share a family
+   without being the same hazard, and a Flash Flood Warning is not a tier of a river Flood
+   Warning. */
 var FAMILY_CFG={
-  convective:{ico:"storm",   prime:"obsCard"},
-  winter:    {ico:"snow",    prime:"obsCard",    merge:"Winter weather"},
-  flood:     {ico:"flood",   prime:"riversCard"},
-  heat:      {ico:"heat",    prime:"obsCard",    merge:"Heat"},
-  wind:      {ico:"wind",    prime:"obsCard",    merge:"Wind"},
-  fire:      {ico:"fire",    prime:"riskCard",   merge:"Fire weather"}
+  convective:{ico:"storm"},
+  winter:    {ico:"snow",    merge:"Winter weather"},
+  flood:     {ico:"flood"},
+  heat:      {ico:"heat",    merge:"Heat"},
+  wind:      {ico:"wind",    merge:"Wind"},
+  fire:      {ico:"fire",    merge:"Fire weather"}
 };
-function setStormMode(warnProps){
-  var body=document.body;
-  if(warnProps){
-    var fam=eventFamily(warnProps.event);
-    var cfg=FAMILY_CFG[fam]||FAMILY_CFG.convective;
-    STORM_PRIME=cfg.prime;
-    body.classList.add("storm");
-    body.setAttribute("data-storm", fam);
-    // mark the event-relevant card so it gets the glow (and the masonry floats it to the front)
-    [].forEach.call(document.querySelectorAll(".storm-prime"), function(e){ e.classList.remove("storm-prime"); });
-    var pc=document.getElementById(cfg.prime); if(pc) pc.classList.add("storm-prime");
-    // Start the radar loop NOW — its autoplay gate only ran on tile-load / the 4-min refresh,
-    // which could leave the loop parked for minutes right after a warning popped.
-    if(typeof updateRadarCtl==="function") updateRadarCtl();
-  }else{
-    STORM_PRIME="obsCard";
-    body.classList.remove("storm");
-    body.removeAttribute("data-storm");
-    [].forEach.call(document.querySelectorAll(".storm-prime"), function(e){ e.classList.remove("storm-prime"); });
-  }
-  // Class/attribute changes aren't watched by the masonry observer — repack explicitly so the
-  // prime card floats up (or settles back) the moment a warning starts or clears.
-  if(typeof scheduleMasonry==="function") scheduleMasonry();
-}
 
 /* ============ RIVERS ============ */
 function catInfo(cat){
@@ -7066,8 +6867,8 @@ function renderTheCall(){
    Honesty rules, since this is weather data:
      · every card carries a TTL — the alert list expires after 15 min and simply isn't restored
        after that, so a stale "all clear" can never sit on screen during a warning;
-     · storm mode and the warning banner are NEVER restored — those assert something about RIGHT
-       NOW, so they only ever come from a live fetch;
+     · the warning banner is NEVER restored — it asserts something about RIGHT NOW, so it only
+       ever comes from a live fetch;
      · a snapshot is only reused for the same location it was taken at;
      · while restored content is showing, a bar names the exact snapshot time. */
 /* The key carries a version because a snapshot is RESTORED MARKUP, not data: it is painted under
@@ -7445,7 +7246,6 @@ function layoutMasonry(){
   var cards=[].slice.call(m.children).filter(function(c){return c.classList.contains("card");});
   if(!cards.length) return;
   m.classList.add("mready");
-  var storm=document.body.classList.contains("storm");
   // Pass 1a: set every card's width (all WRITES together)…
   var data=cards.map(function(c){
     var span=c.classList.contains("wide")?Math.min(2,cols):1;
@@ -7461,7 +7261,6 @@ function layoutMasonry(){
   // Explicit widget hierarchy: lower rank = more important = packed higher.
   //  (Alerts/Pulse/Current/Radar/Hourly are fixed heroes above this masonry.)
   function tier(id){
-    if(storm && id===(window.STORM_PRIME||"obsCard")) return 0;   // storms: the event-relevant card jumps to the very top
     var RANK={
       forecastCard:1,   // 7-day forecast — most-checked product
       riskCard:2,       // severe storm/flood/fire risk
@@ -7577,7 +7376,7 @@ function scheduleMasonry(){ if(_masonryRAF) cancelAnimationFrame(_masonryRAF); _
 // Recompute on load, resize, image loads, and after any data refresh repaints a card
 window.addEventListener("resize", scheduleMasonry);
 window.addEventListener("load", function(){ scheduleMasonry(); setTimeout(scheduleMasonry,500); setTimeout(scheduleMasonry,1500); });
-// class only: catches expand/collapse + storm-prime height changes; the engine's own style writes
+// class only: catches expand/collapse height changes; the engine's own style writes
 // are filtered out (no loop). Hoisted so reorderMasonryDOM can disconnect it — moving children
 // fires childList records, which would otherwise re-enter layout forever.
 var _mObs=null, _mObsOpts={childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:["class"]};
