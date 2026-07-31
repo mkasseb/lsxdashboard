@@ -3049,10 +3049,24 @@ function loadRadar(){  // recenter on location change
    more and would shade the whole map for its whole life — the radar is a storm map, and the SPC
    watch box is the thing it was missing. */
 var WWA_URL="https://mapservices.weather.noaa.gov/eventdriven/rest/services/WWA/watch_warn_adv/MapServer/";
-/* The region the radar practically shows at its zoom range. The query is envelope-clipped so a
-   ten-watch outbreak on the Plains doesn't ship its every county here; the cost is that panning
-   far outside the CWA runs out of watch fills, same as it runs out of relevant warnings. */
-var WWA_ENV="-96.5,34,-85,43";
+/* The region the radar practically shows at its zoom range. The watch query is envelope-clipped
+   so a ten-watch outbreak on the Plains doesn't ship its every county here, and loadMcd uses the
+   same box to budget its text fetches; the cost is that panning far outside the CWA runs out of
+   watch fills, same as it runs out of relevant warnings. */
+var WWA_ENV={xmin:-96.5,ymin:34,xmax:-85,ymax:43};
+/* Bounding-box overlap, deliberately generous: a geometry whose bbox clips the envelope counts
+   even if its actual shape misses, because this test only ever DROPS things — a false keep costs
+   one wasted text fetch, a false drop is a severe-weather product silently gone. */
+function geomTouchesEnv(geom,env){
+  var bb=[Infinity,Infinity,-Infinity,-Infinity];
+  (function walk(c){
+    if(typeof c[0]==="number"){
+      if(c[0]<bb[0])bb[0]=c[0]; if(c[0]>bb[2])bb[2]=c[0];
+      if(c[1]<bb[1])bb[1]=c[1]; if(c[1]>bb[3])bb[3]=c[1];
+    } else c.forEach(walk);
+  })(geom&&geom.coordinates||[]);
+  return bb[0]<=env.xmax&&bb[2]>=env.xmin&&bb[1]<=env.ymax&&bb[3]>=env.ymin;
+}
 var watchFeats=[], watchKey="", watchAt=0, watchLayer=null;
 function isWatchEvent(ev){
   ev=(ev||"").toLowerCase();
@@ -3080,20 +3094,40 @@ function loadWatchPolygons(feats){
      the counties on screen are still the counties. */
   var key=active.map(function(f){ return (f.properties&&f.properties.id)||f.id||""; }).sort().join("|");
   if(key===watchKey&&watchFeats.length&&Date.now()-watchAt<10*60000) return;
+  // Which watch TYPES the alert list vouches for right now — the service's ingest can lag the
+  // feed by minutes, and this is what keeps a just-cancelled Tornado Watch's counties from
+  // riding along with a Severe Thunderstorm Watch that really is out.
+  var vouched={};
+  active.forEach(function(f){ vouched[(f.properties||{}).event]=1; });
+  var before=watchEvSet();
   resolveRiskLayers().then(function(){
     return getJSON(WWA_URL+RISK_LAYERS.wwa+"/query?where="+encodeURIComponent("sig='A' AND phenom IN ('TO','SV')")
-      +"&geometry="+WWA_ENV+"&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects"
+      +"&geometry="+WWA_ENV.xmin+","+WWA_ENV.ymin+","+WWA_ENV.xmax+","+WWA_ENV.ymax
+      +"&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects"
       +"&outFields=prod_type,ends,expiration&returnGeometry=true&geometryPrecision=3&f=geojson");
   }).then(function(fc){
     var now=Date.now();
     watchFeats=((fc&&fc.features)||[]).filter(function(f){
       var p=f.properties||{};
       var end=Date.parse(p.ends||p.expiration||"")||0;
-      return f.geometry&&(!end||end>now);   // the service can hold a cancelled watch briefly
+      return f.geometry&&(!end||end>now)     // the service can hold a cancelled watch briefly
+        &&vouched[p.prod_type];              // …and only types the live alert list stands behind
     });
     watchKey=key; watchAt=now;
     drawWatchPolygons();
+    /* The list renders its "Show on radar" buttons from watchOnRadar(), which was still false
+       while these fills were in flight — without this, the first render after a watch is issued
+       goes a minute buttonless. One re-render when drawability actually changed closes the
+       window, and the id throttle above is what keeps the round trip from ever looping. */
+    if(watchEvSet()!==before) loadAlerts();
   }).catch(function(){});   // keep whatever is drawn; the alert LIST is the safety-critical view
+}
+// The drawable watch types, as a comparable key — order-free so a re-fetch that reshuffles
+// records doesn't read as a change.
+function watchEvSet(){
+  var s={};
+  watchFeats.forEach(function(f){ s[(f.properties||{}).prod_type||""]=1; });
+  return Object.keys(s).sort().join("|");
 }
 function drawWatchPolygons(){
   if(!rvMap) return;
@@ -4526,28 +4560,42 @@ function loadMcd(){
   return resolveRiskLayers().then(function(){
     return getJSON(MCD_URL+RISK_LAYERS.mcd+"/query?where=1%3D1&outFields=name&returnGeometry=true&f=geojson");
   }).then(function(fc){
+    /* Regional pre-filter BEFORE the fetch budget is set. An MD can only name LSX in its ATTN
+       line (or cover the saved point) if its polygon reaches this region, so distant actives
+       contribute nothing — but in a national outbreak they inflate the count that decides how
+       many texts to fetch, and a nearby MD's text crowded past the cap by ten Plains MDs is a
+       silent false negative on a severe-weather surface. geomTouchesEnv only ever over-keeps. */
     var feats=((fc&&fc.features)||[]).filter(function(f){
-      return f.geometry&&/MD\s*\d+/i.test((f.properties&&f.properties.name)||"");
+      return f.geometry&&/MD\s*\d+/i.test((f.properties&&f.properties.name)||"")
+        &&geomTouchesEnv(f.geometry,WWA_ENV);
     });
     if(!feats.length){ if(fresh()) renderMcd([]); return; }
     /* The polygons say which MDs are ACTIVE; only the text products know who they're FOR. The
-       product list is newest-first and MD numbers are sequential, so the active ones sit at the
-       top — fetch just enough texts to cover them, with slack for an update in between. Capped:
-       in a ten-MD national outbreak the tail few may go untexted, and those still show (by
-       polygon hit) or drop (no ATTN to test) exactly as the fallbacks below decide. */
-    return getJSON(API+"/products?type=SWO&location=MCD&limit="+Math.min(feats.length+3,10),LD).then(function(list){
-      var g=(list&&list["@graph"])||[];
-      return Promise.all(g.map(function(p){
-        return getJSON(p["@id"],LD).then(function(prod){
-          var d=parseMcd(prod&&prod.productText);
-          if(d) d.issued=Date.parse(prod.issuanceTime)||0;
-          return d;
-        }).catch(function(){ return null; });   // one dead text ≠ no strip; the polygon still speaks
-      }));
-    }).catch(function(){ return []; }).then(function(texts){
+       product list is newest-first but NATIONAL, so a regional MD's text can sit arbitrarily deep
+       when the Plains are issuing over it — no fixed fetch count is safe. Walk the list in small
+       chunks instead, stopping the moment every regional number has its text: the usual day pays
+       one chunk, an outbreak walks only as deep as it must, and the list's own length (20) is the
+       hard ceiling either way. */
+    var need={};
+    feats.forEach(function(f){ need[+(/MD\s*(\d+)/i.exec(f.properties.name)[1])]=1; });
+    var byNum={};
+    return getJSON(API+"/products?type=SWO&location=MCD&limit=20",LD).then(function(list){
+      var g=(list&&list["@graph"])||[], i=0;
+      function satisfied(){ return Object.keys(need).every(function(n){ return byNum[n]; }); }
+      function chunkNext(){
+        if(i>=g.length||satisfied()) return null;
+        var batch=g.slice(i,i+4); i+=4;
+        return Promise.all(batch.map(function(p){
+          return getJSON(p["@id"],LD).then(function(prod){
+            var d=parseMcd(prod&&prod.productText);
+            // newest-first walk: the first text seen for a number is the current one
+            if(d&&!(d.num in byNum)){ d.issued=Date.parse(prod.issuanceTime)||0; byNum[d.num]=d; }
+          }).catch(function(){});   // one dead text ≠ no strip; the polygon still speaks
+        })).then(chunkNext);
+      }
+      return chunkNext();
+    }).catch(function(){}).then(function(){
       if(!fresh()) return;
-      var byNum={};
-      (texts||[]).forEach(function(d){ if(d&&!(d.num in byNum)) byNum[d.num]=d; });   // newest wins
       var out=[];
       feats.forEach(function(f){
         var num=+(/MD\s*(\d+)/i.exec(f.properties.name)[1]);

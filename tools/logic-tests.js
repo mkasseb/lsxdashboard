@@ -47,8 +47,9 @@ const SUBJECT = new Function(`
   ${lift(/^function outlookVerdict\(cfg,l0,l1\)\{[\s\S]*?^\}/m, 'outlookVerdict()')}
   ${lift(/^function parseMcd\(text\)\{[\s\S]*?^\}/m, 'parseMcd()')}
   ${lift(/^function mcdValidEnd\(v,refMs\)\{[\s\S]*?^\}/m, 'mcdValidEnd()')}
+  ${lift(/^function geomTouchesEnv\(geom,env\)\{[\s\S]*?^\}/m, 'geomTouchesEnv()')}
   return { rangeMark, rangeRow, alertLevel, cardCmp, FAMILY_CFG, coldVerdict, OUTLOOK_CFG, outlookVerdict,
-           parseMcd, mcdValidEnd };
+           parseMcd, mcdValidEnd, geomTouchesEnv };
 `)();
 
 let failed = 0;
@@ -413,8 +414,35 @@ LAT...LON   38759474 39039367 39299179 39519038
   check('mcdValidEnd missing issuance', V('312115', 0), null);
 }
 
+/* ============ geomTouchesEnv ============ */
+// The regional pre-filter in front of loadMcd's text budget. It only ever DROPS products, so the
+// cases that matter are the ones where dropping would be wrong.
+{
+  const T = SUBJECT.geomTouchesEnv;
+  const env = { xmin: -96.5, ymin: 34, xmax: -85, ymax: 43 };
+  const poly = coords => ({ type: 'Polygon', coordinates: [coords] });
+
+  check('geomTouchesEnv polygon inside the box',
+    T(poly([[-91, 38], [-90, 38], [-90, 39], [-91, 39], [-91, 38]]), env), true);
+  check('geomTouchesEnv polygon overlapping an edge',
+    T(poly([[-98, 38], [-95, 38], [-95, 39], [-98, 39], [-98, 38]]), env), true);
+  check('geomTouchesEnv polygon fully west of the box',
+    T(poly([[-105, 38], [-102, 38], [-102, 39], [-105, 39], [-105, 38]]), env), false);
+  // A shape LARGER than the box on every side still touches it — the bbox test must not require
+  // any vertex to fall inside.
+  check('geomTouchesEnv polygon containing the box',
+    T(poly([[-110, 25], [-70, 25], [-70, 50], [-110, 50], [-110, 25]]), env), true);
+  check('geomTouchesEnv MultiPolygon with one distant and one local part',
+    T({ type: 'MultiPolygon', coordinates: [
+      [[[-120, 40], [-118, 40], [-118, 42], [-120, 42], [-120, 40]]],
+      [[[-91, 38], [-90, 38], [-90, 39], [-91, 39], [-91, 38]]],
+    ] }, env), true);
+  check('geomTouchesEnv empty geometry never matches',
+    T({ type: 'Polygon', coordinates: [] }, env), false);
+}
+
 if (failed) {
   console.error(`\n${failed} logic test(s) failed`);
   process.exit(1);
 }
-console.log('ok    logic: rangeMark, alertLevel, cardCmp, FAMILY_CFG, coldVerdict, outlookVerdict, parseMcd and mcdValidEnd behave');
+console.log('ok    logic: rangeMark, alertLevel, cardCmp, FAMILY_CFG, coldVerdict, outlookVerdict, parseMcd, mcdValidEnd and geomTouchesEnv behave');
