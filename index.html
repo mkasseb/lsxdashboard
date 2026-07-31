@@ -374,6 +374,7 @@
      have an `order`. The two stacks share order -6 and fall back to DOM order between them, which
      is already conditions-then-radar. */
   body.storm #alertsCard{order:-8}
+  body.storm #mcd{order:-8}        /* same rank as the banners it annotates; the tie breaks by DOM order */
   body.storm #callCard{order:-7}   /* directly under safety in every mode — never below the fold */
   body.storm .stack{order:-6}      /* left: Now (+ AQI) · right: radar */
   /* The 24h chart DOES need one, now that it is a band of its own rather than the lower half of the
@@ -1291,13 +1292,16 @@
   .spc-pill{font-size:var(--fs-xs);font-weight:600;padding:5px 8px;border-radius:var(--r-pill);text-align:center;
     white-space:normal;line-height:1.25;overflow-wrap:anywhere}
 
-  /* SPC mesoscale discussion — the "next 1–3 hours" strip above the day matrix. Absent almost
+  /* SPC mesoscale discussion — the "next 1–3 hours" strip, riding the top of the grid directly
+     under the alert banners and dressed as their peer: same standing-on-the-page tint, radius and
+     shadow, with --warn as its ring the way a banner wears its level colour. Absent almost
      always: #mcd stays empty except while SPC has a discussion out that names LSX or covers the
-     reader's point, so the empty state hides itself rather than spending a row explaining that
-     the quietest fact on the card is quiet. */
+     reader's point, and display:none takes the empty grid row (and its gap) with it. */
   #mcd:empty{display:none}
   .mcd{background:var(--inset);border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);
-    border-left:4px solid var(--warn);border-radius:var(--r-md);padding:10px 12px;margin-bottom:10px}
+    border-left:4px solid var(--warn);border-radius:var(--r-lg);padding:11px 14px;margin-bottom:8px;
+    box-shadow:var(--shadow)}
+  .mcd:last-child{margin-bottom:0}
   .mcd.hits{border-left-width:7px}   /* the same extra weight the alert banners give "covers you" */
   /* Local vs elsewhere — the alert list's split, at strip scale. The MD over the reader keeps the
      full banner above; one that's out for the CWA but not this point demotes the way the compact
@@ -1775,6 +1779,15 @@
     <div id="alerts"><div class="loading">Loading alerts…</div></div>
   </section>
 
+  <!-- MESOSCALE DISCUSSION — SPC's short-fused note that severe weather (usually a watch) is
+       expected in the next 1–3 hours. It rides directly under the alert banners because that is
+       what it is: the step between an outlook and a watch, and during the hour it exists it can
+       be the most decision-relevant thing on the page. It started life inside the Risk Outlook
+       card down in the masonry, where "watch likely within the hour" sat below the fold behind
+       three rows of day-scale pills. Empty — and therefore invisible — almost always; loadMcd()
+       owns it. -->
+  <div id="mcd" class="col-12"></div>
+
   <!-- BOTTOM LINE (id stays callCard) — plain-English verdicts computed client-side from the
        hourly forecast, UV, AQI and climate context. The page reasoning on the visitor's behalf,
        so it sits directly under the alerts: safety first, then what today actually means.
@@ -1947,7 +1960,6 @@
       <h2>Risk Outlook
         <a class="link" href="https://www.spc.noaa.gov/products/outlook/day1otlk.html" target="_blank" rel="noopener">Maps ↗</a>
       </h2>
-      <div id="mcd"></div>
       <div id="spc"><div class="loading">Loading outlook…</div></div>
       <div class="imgcap"><span id="spcLoc">SPC &middot; WPC</span><span>storm &middot; flood</span></div>
     </section>
@@ -4508,7 +4520,6 @@ function renderMcd(list){
       +'</div>';
   }).join("");
   drawMcdPolygons();
-  if(typeof scheduleMasonry==="function") scheduleMasonry();
 }
 function loadMcd(){
   var fresh=locGuard();
