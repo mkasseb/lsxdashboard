@@ -149,8 +149,9 @@ on CAP `severity` and `alertTier()` on the word in the event name. They disagree
 Flood Advisory can carry severity `Severe` — so a card would arrive tinted by one and tagged by the
 other. The ramp ranks by the word, because that is what the reader is being asked to act on, and
 lets CAP severity escalate (never demote) a step above it; a tornado warning is promoted outright,
-being the one event where the word and the stakes are not the same size. `--storm` is *not* part of
-this and stays: it answers "what kind of weather", which is a different question from "how bad".
+being the one event where the word and the stakes are not the same size. The event *family*
+(`eventFamily`) is *not* part of this and stays a separate axis: it answers "what kind of
+weather", which is a different question from "how bad".
 
 **But severity is not the sort key — location is.** The office issues for forty-odd counties and
 the reader is standing in one spot in them, so `cardCmp()` ranks coverage above level: an emergency
@@ -190,11 +191,8 @@ deliberately no opacity. Dimmed text on a tinted rail is how the contrast work g
 these are still watches and warnings for somebody.
 
 **The page spends colour like it is scarce.** Saturated colour means severity, and links are blue.
-That is the whole budget. Storm Mode used to ring three cards in the family accent while the banner
-above them glowed in the same colour, so a warning arrived as four concentric halos and the alert
-card's own severity ramp had to compete with a border painted by family rather than by level — the
-banner keeps the glow now and the cards take a tinted hairline. Countdowns moved off `--accent` for
-the same reason: rendered in the link colour, "23h 16m left" read as something you could click.
+That is the whole budget. Countdowns moved off `--accent` for exactly that reason: rendered in the
+link colour, "23h 16m left" read as something you could click.
 
 **Type carries the hierarchy.** Sizes come from `--fs-*`, radii from `--r-*`, spacing from `--sp-*`.
 There were 23 distinct font sizes and 19 pill classes that each defined their own geometry from
@@ -215,12 +213,7 @@ visitor's behalf rather than handing them numbers: rain/storm windows, heat and 
 burn clock, wind, air quality, a temperature-crash warning, climate records — and one synthesized
 verdict that scores every daylight hour on comfort, rain risk and wind to name the best two-hour
 window to be outside, spoken only when the day has adversity worth dodging. It ranks directly
-under safety, and that rank is not conditional: Storm Mode re-orders every other band around it
-but leaves it second, so the card is on the first screen whatever the weather is doing. It used to
-drop below the hero under `body.storm`, on the theory that a live warning makes the radar outrank
-advice — but that filed the plain-English read of the warning *under* a full-width hero band,
-a scroll away on a phone in exactly the conditions someone checks this page one-handed. The radar
-still leads the hero; the sentence explaining it just arrives first.
+under safety, so the card is on the first screen whatever the weather is doing.
 
 **The Pulse rides directly behind it in calm weather, at full length.** `#afdCard` is the same kind
 of card as the Bottom Line — one verdict computed by this page, one written by a human at NWS
@@ -237,9 +230,7 @@ layout the card runs 151–365px (median 304), putting the top of `#currentCard`
 881px — so on a 912px phone the hero is on the first screen in every one of them, clamped or not.
 The clamp was hiding up to 200px, and cutting the forecaster off mid-sentence, to buy room nothing
 needed. It had been sized against multi-paragraph Short-Term prose, which is an input this card has
-never actually been handed (see below). Full length is affordable for a structural reason too: the
-only time this card sits second is calm weather, which is exactly when the space above the hero is
-cheapest — a one-line all-clear and a few pills.
+never actually been handed (see below).
 
 One thing to know before touching `extractAFD`: its Synopsis and Short-Term fallbacks currently
 match **nothing** on this office's products. LSX writes `.SHORT TERM /THROUGH THURSDAY/...` and the
@@ -249,30 +240,9 @@ always wins. That is pre-existing and deliberately left alone — fixing it chan
 *says*, which deserves its own review. It is also the input the clamp was built for, so if it is
 ever fixed, re-measure before reaching for one again.
 
-**That rank is calm-weather only — The Pulse is the one card here whose rank is conditional**, and
-the contrast with the Bottom Line is deliberate. `body.storm #afdCard{order:-2}` puts it back under
-the hero band, for two reasons that agree. Measured: Storm Mode is exactly when everything above the
-hero is already tall — a glowing lead banner in place of the one-line all-clear, and a Bottom Line
-full of pills — and even clamped to two lines The Pulse left the radar at 832px on an 844px phone,
-twelve visible pixels of map during a Tornado Warning (and it is no longer clamped at all). On the
-merits: an AFD is a scheduled prose
-product issued a few times a day, so during a fast-moving warning it was very likely written
-*before* the event being read about. The warning is live and the radar is live; the discussion is
-the only thing in that band that isn't. The Bottom Line can hold its rank through all of this
-because it is a pill row computed from live data, one or two lines that stay true minute to minute
-— paragraphs of periodically issued prose are a different object and get a different rule.
-
-`.railhead` labels name each band and hide under `body.storm`, where the grid reorders for urgency
-and a band label would lie about what follows it. Only *direct* grid children get an `order`, so the
-radar, which lives inside a `.stack`, rides up with the stack rather than carrying its own — a rule
-worth remembering, because an `order` on a nested card is silently a no-op.
-
-The 24-hour chart is the cautionary half of that same rule. Nested inside the conditions card it
-needed no `order` and had none; moving it to a band of its own made it a direct grid child, where
-the absence of one is not inherited but `order:0` — and it landed *below the entire masonry* under
-Storm Mode, putting "what the next day does" under every outlook on the page during the one event
-where the question is live. `#h24Card` carries an explicit `-5` for that reason. Promoting a card
-out of a stack is exactly when to check whether it now needs a rank it never used to.
+`.railhead` labels name each band — "Right now", "Next 24 hours", "The week ahead" — so the scroll
+has a spine. The grid renders in DOM order (no card carries a CSS `order`), so the sequence above
+is exactly the source order of `index.html`.
 
 **The 24-hour chart is never nested inside `#current`.** It has its own full-width card (`#h24Card`)
 below the hero pair; it previously sat inside `#currentCard` as a *sibling* of `#current`, which was
@@ -333,11 +303,6 @@ was answering "is the sky worth a map right now?" — and the honest answer for 
 is *yes, that is what people came for*. Removing it also removed the only reason the page had two
 hero layouts, so there is now one arrangement to reason about instead of two.
 
-One thing `radarWorthy()` was doing had to survive it, though — see the family gate below. Storm
-Mode's rules for this card were written when "Storm Mode is on" and "the map is on screen" were the
-same statement, because a dry warning engaged Storm Mode and never produced a card. Permanence
-broke that equivalence, so anything phrased as plain `body.storm` had to be re-examined.
-
 **Radar is a peek, not the product.** Its height comes from an `aspect-ratio`,
 never from leftover space. An earlier version stretched the map to match the left column, which made its size
 a side effect of how much content the conditions card happened to have — that is how it ended up
@@ -345,22 +310,13 @@ a side effect of how much content the conditions card happened to have — that 
 moves west to east. It is now 16:9 (4:3 on phones), so it is landscape at every width, with
 fullscreen a click away for the "where exactly, and when" case.
 
-Storm Mode widens it to 16:10 (1:1 on phones) and tints its border in the family accent — but
-**only for `data-storm="convective"` or `"flood"`**, the two families with echoes to look at. That
-selector *is* the old `RADAR_FAMILIES` test, moved from JS into CSS off the attribute
-`setStormMode()` already writes. As a plain `body.storm` rule it would enlarge the map and tint it
-during an Extreme Heat Warning, taking space from the cards that actually matter for heat — which
-is the same mistake `radarWorthy()` existed to prevent, arriving through a different door once the
-card stopped disappearing. Heat, wind, fire and winter keep Storm Mode's theme, banner and prime
-card, and leave the map at its everyday size.
-
 **Fullscreen moves the card, not the map.** `body.radar-full` makes `#radarCard` fixed and
 full-viewport; the Leaflet instance, the loop, the warning polygons and the layer toggles are
 untouched, so nothing needs re-initialising. Escape closes it, focus returns to whatever opened it,
 and body scroll is locked so a wheel gesture over the map can't scroll the page behind it. Leaflet
 is told to `invalidateSize()` twice — once immediately, once after the transition — or it renders
-tiles for the old viewport. A `ResizeObserver` on `#radar` covers the same hazard for Storm Mode's
-resize, which no window event announces.
+tiles for the old viewport. A `ResizeObserver` on `#radar` covers the same hazard for any
+container-driven resize, which no window event announces.
 
 One non-obvious dependency: `body.radar-full` also has to clear the entrance animation on
 `.grid>.stack`. `cardIn` ends on `transform:none`, but `animation-fill-mode: both` keeps the
@@ -426,39 +382,13 @@ different station is attributed by name. Suppression beats false precision.
 
 **Instant paint.** Each refresh serialises the rendered HTML of ~22 cards into `localStorage`, so a
 return visit paints a full dashboard before any network request. Each card carries its own TTL
-(alerts expire after 15 minutes; drought after 48 hours). Storm mode and the warning banner are
-*never* restored, because they assert something about right now.
+(alerts expire after 15 minutes; drought after 48 hours). The warning banner is *never* restored,
+because it asserts something about right now.
 
 A snapshot is restored *markup*, painted under whatever stylesheet ships today — so reshaping a
 card's DOM means bumping `SNAP_KEY`. Skip it and every returning visitor gets one visibly wrong
 first paint: yesterday's elements picking up today's rules with none of today's structure. One
 cold paint is the cheaper mistake.
-
-**Storm mode.** An active warning is classified into a family (convective / winter / flood / heat /
-wind / fire), which sets the accent colour, floats the most relevant card to the top of the layout,
-and rewrites the banner.
-
-*Which* warning is the one at the top of the sorted card list, read straight off `glist` after
-`cardCmp()` has ordered it. It used to walk the raw feature list in CAP-severity order and test for
-the word "warning" — a second severity opinion in a page whose whole alert design is that there is
-only one. The two could disagree (the ramp promotes a Tornado Warning that the office tagged merely
-`Severe`), and the page would then theme itself for one warning while a different one led the list.
-Reading the sorted list means the colour, the primed card and the lead banner are the same alert
-because they cannot be anything else.
-
-The banner's second line comes from the NWS instruction for *that* warning, via `stormSubline()`,
-not from a string keyed to the family — a family as broad as "winter" spans a blizzard and a frost
-advisory, and one sentence cannot be useful for both. `FAMILY_CFG.sub` is the fallback, and three
-things send it there: a product with no instruction, one written entirely in upper case (legacy
-all-caps products; the alert card has room to show those, the banner does not), and one that opens
-by defining itself — *"A Red Flag Warning means critical fire weather conditions…"* is true and no
-use to someone deciding what to do in the next minute. Sentences are taken whole up to a budget,
-because the useful first sentence of a tornado instruction is "TAKE COVER NOW!" and on its own that
-is an alarm without an instruction.
-
-The line before this one used to narrate the page's own layout — *"Regional feels-like moved up"* —
-which says nothing about the weather and only parses for someone who saw the page **before** the
-warning fired. The banner has one job: what this means and what to do about it.
 
 **Adding a card** means touching five places: the markup, the `RANK` map in `layoutMasonry`'s
 `tier()`, `SNAP_PARTS`, the `SCHED` table, and `clearLocationUI`/`resetLocationState`.
@@ -618,12 +548,6 @@ and every pooled sweep and *clears* the pool — clears, because `buildRadarFram
 `addTo()` for timestamps it hasn't seen, so a pool of detached layers would be silently reused on
 the way back and draw nothing. Rebuilding costs one capabilities fetch, and those sweeps would be
 stale by then anyway.
-
-That teardown also disarms the Storm Mode autoplay for free — `updateRadarCtl()` starts the loop
-when a warning lands, and an empty frame list makes `radarFramesReady()` false. It still tests
-`skyOn.radar` explicitly, because that call site is the one moment the page is most inclined to
-start something on the visitor's behalf, and "don't animate a layer they switched off" shouldn't
-rest on a side effect two functions away.
 
 The satellite refresh swaps layers rather than calling `redraw()`, which drops every tile first and
 leaves a hole while replacements load: build the new layer, swap once it has painted. Both-layers-off
