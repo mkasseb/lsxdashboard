@@ -45,7 +45,10 @@ const SUBJECT = new Function(`
   ${lift(/^function coldVerdict\(nowT,mMin,cMin\)\{[\s\S]*?^\}/m, 'coldVerdict()')}
   ${lift(/^var OUTLOOK_CFG=\{[\s\S]*?^\};/m, 'OUTLOOK_CFG')}
   ${lift(/^function outlookVerdict\(cfg,l0,l1\)\{[\s\S]*?^\}/m, 'outlookVerdict()')}
-  return { rangeMark, rangeRow, alertLevel, cardCmp, FAMILY_CFG, coldVerdict, OUTLOOK_CFG, outlookVerdict };
+  ${lift(/^function parseMcd\(text\)\{[\s\S]*?^\}/m, 'parseMcd()')}
+  ${lift(/^function mcdValidEnd\(v,refMs\)\{[\s\S]*?^\}/m, 'mcdValidEnd()')}
+  return { rangeMark, rangeRow, alertLevel, cardCmp, FAMILY_CFG, coldVerdict, OUTLOOK_CFG, outlookVerdict,
+           parseMcd, mcdValidEnd };
 `)();
 
 let failed = 0;
@@ -336,8 +339,82 @@ function check(name, actual, expected) {
   check('undefined levels are no pill', V(C.spc, undefined, undefined), null);
 }
 
+/* ============ parseMcd ============ */
+// One SPC mesoscale discussion text → the fields the risk card's strip renders. The sample is
+// MD 1810 (2026-07-31), abridged mid-discussion; the line structure is the real product's.
+{
+  const MD = `ACUS11 KWNS 311914
+SWOMCD
+SPC MCD 311913
+MOZ000-ILZ000-312115-
+
+Mesoscale Discussion 1810
+NWS Storm Prediction Center Norman OK
+0213 PM CDT Fri Jul 31 2026
+
+Areas affected...much of central/eastern Missouri into western
+Illinois
+
+Concerning...Severe potential...Watch likely
+
+Valid 311913Z - 312115Z
+
+Probability of Watch Issuance...80 percent
+
+SUMMARY...Potential for damaging wind and a couple of tornadoes to
+increase through the afternoon/evening.
+
+DISCUSSION...Air mass recovery is ongoing across portions of western
+and central Missouri behind morning thunderstorm activity.
+
+..Thornton/Mosier.. 07/31/2026
+
+ATTN...WFO...PAH...LSX...DVN...SGF...EAX...
+
+LAT...LON   38759474 39039367 39299179 39519038
+`;
+  const p = SUBJECT.parseMcd(MD);
+  check('parseMcd number', p.num, 1810);
+  check('parseMcd concerning line', p.concerning, 'Severe potential...Watch likely');
+  check('parseMcd watch probability', p.prob, 80);
+  check('parseMcd valid-end stamp', p.validEnd, '312115');
+  // The LSX membership test the loader applies — and the LAT...LON block after the blank line
+  // must NOT leak into the office list as "LAT"/"LON".
+  check('parseMcd ATTN offices', p.attn, ['PAH', 'LSX', 'DVN', 'SGF', 'EAX']);
+  check('parseMcd summary joins wrapped lines', p.summary,
+    'Potential for damaging wind and a couple of tornadoes to increase through the afternoon/evening.');
+  check('parseMcd areas affected', p.areas, 'much of central/eastern Missouri into western Illinois');
+
+  // A watch-issued MD swaps the probability line for the watch number. prob must be null — the
+  // strip renders 0 as "0%", which would claim SPC said a watch is ruled out.
+  const W = MD.replace('Concerning...Severe potential...Watch likely',
+                       'Concerning...Severe Thunderstorm Watch 479...')
+              .replace('Probability of Watch Issuance...80 percent\n\n', '');
+  const pw = SUBJECT.parseMcd(W);
+  check('parseMcd watch-issued concerning', pw.concerning, 'Severe Thunderstorm Watch 479...');
+  check('parseMcd watch-issued has no probability', pw.prob, null);
+
+  // Not an MD at all → null, never a half-parsed object for the renderer to paint.
+  check('parseMcd rejects a non-MD product', SUBJECT.parseMcd('THUNDERSTORM OUTLOOK NARRATIVE'), null);
+}
+
+/* ============ mcdValidEnd ============ */
+// "Valid ...Z - 312115Z" has no month or year; the issuance time supplies both, and the day
+// field wrapping a month boundary is the case that would fail silently on exactly one night.
+{
+  const V = SUBJECT.mcdValidEnd;
+  const issued = Date.UTC(2026, 6, 31, 19, 13);   // MD 1810's own issuance
+  check('mcdValidEnd same day', V('312115', issued), Date.UTC(2026, 6, 31, 21, 15));
+  check('mcdValidEnd crosses midnight into a new month',
+    V('010115', Date.UTC(2026, 6, 31, 23, 13)), Date.UTC(2026, 7, 1, 1, 15));
+  check('mcdValidEnd crosses into a new year',
+    V('010030', Date.UTC(2026, 11, 31, 23, 0)), Date.UTC(2027, 0, 1, 0, 30));
+  check('mcdValidEnd malformed stamp', V('21Z', issued), null);
+  check('mcdValidEnd missing issuance', V('312115', 0), null);
+}
+
 if (failed) {
   console.error(`\n${failed} logic test(s) failed`);
   process.exit(1);
 }
-console.log('ok    logic: rangeMark, alertLevel, cardCmp, FAMILY_CFG, coldVerdict and outlookVerdict behave');
+console.log('ok    logic: rangeMark, alertLevel, cardCmp, FAMILY_CFG, coldVerdict, outlookVerdict, parseMcd and mcdValidEnd behave');

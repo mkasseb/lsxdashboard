@@ -1291,6 +1291,28 @@
   .spc-pill{font-size:var(--fs-xs);font-weight:600;padding:5px 8px;border-radius:var(--r-pill);text-align:center;
     white-space:normal;line-height:1.25;overflow-wrap:anywhere}
 
+  /* SPC mesoscale discussion — the "next 1–3 hours" strip above the day matrix. Absent almost
+     always: #mcd stays empty except while SPC has a discussion out that names LSX or covers the
+     reader's point, so the empty state hides itself rather than spending a row explaining that
+     the quietest fact on the card is quiet. */
+  #mcd:empty{display:none}
+  .mcd{background:var(--inset);border:1px solid color-mix(in srgb,var(--warn) 40%,transparent);
+    border-left:4px solid var(--warn);border-radius:var(--r-md);padding:10px 12px;margin-bottom:10px}
+  .mcd.hits{border-left-width:7px}   /* the same extra weight the alert banners give "covers you" */
+  .mcd-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .mcd-head .ic{flex:0 0 auto;color:var(--warn)}
+  .mcd-t{font-size:var(--fs-md);font-weight:700}
+  .mcd-when{font-size:var(--fs-sm);color:var(--muted);font-weight:600;margin-left:auto;white-space:nowrap}
+  /* Pill text colour is theme-split by hand: the pill is the one place --warn is a BACKGROUND,
+     and the variable swings from bright amber (dark theme) to deep brown (light) — no single
+     ink survives both, and textOn() can't read a CSS variable. */
+  .mcd-pill{display:inline-block;font-size:var(--fs-xs);font-weight:700;padding:3px 10px;
+    border-radius:var(--r-pill);background:var(--warn);color:#141414;margin-top:7px}
+  :root[data-theme="light"] .mcd-pill{color:#fff}
+  .mcd-sum{font-size:var(--fs-md);line-height:1.5;margin-top:6px}
+  .mcd-foot{font-size:var(--fs-sm);color:var(--muted);margin-top:6px}
+  .mcd-foot .mcd-me{font-weight:600;color:var(--warn)}
+
   /* CPC leanings */
   .cpc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .cpc-item{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--r-md);padding:10px 12px}
@@ -1914,6 +1936,7 @@
       <h2>Risk Outlook
         <a class="link" href="https://www.spc.noaa.gov/products/outlook/day1otlk.html" target="_blank" rel="noopener">Maps ↗</a>
       </h2>
+      <div id="mcd"></div>
       <div id="spc"><div class="loading">Loading outlook…</div></div>
       <div class="imgcap"><span id="spcLoc">SPC &middot; WPC</span><span>storm &middot; flood</span></div>
     </section>
@@ -2660,6 +2683,7 @@ function initRadarMap(){
   initRadarCtl();
   refreshRadarLayer();
   loadWarnPolygons(undefined);  // draw from cache if alerts already arrived
+  drawMcdPolygons();            // same deal for any mesoscale discussion that beat the map here
 }
 /* ---- RADAR LOOP ----------------------------------------------------------
    The WMS advertises ~2 h of past sweeps in its time dimension, and honours a
@@ -4085,10 +4109,11 @@ var SPC_URL="https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/
 var ERO_URL="https://mapservices.weather.noaa.gov/vector/rest/services/hazards/wpc_precip_hazards/MapServer/";
 var FIRE_URL="https://mapservices.weather.noaa.gov/vector/rest/services/fire_weather/SPC_firewx/MapServer/";
 var WSSI_URL="https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/wpc_wssi/MapServer/";
+var MCD_URL="https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/spc_mesoscale_discussion/MapServer/";
 /* Layer ids drift when NOAA republishes these services — and a wrong id fails SILENTLY as
    "no risk" (each query's catch returns 0). Resolve ids by layer NAME at startup; the
    hardcoded values (verified against the live services, July 2026) are only the fallback. */
-var RISK_LAYERS={spc:[1,9,17], ero:[0,1,2], fireCat:[1,4], fireD3:{dry:7,wind:8}, wssi:[1,2]};
+var RISK_LAYERS={spc:[1,9,17], ero:[0,1,2], fireCat:[1,4], fireD3:{dry:7,wind:8}, wssi:[1,2], mcd:0};
 /* Memoised and awaitable: loadSpc has to be able to WAIT for this. Each branch swallows its own
    failure, so the returned promise always fulfils — an unresolvable service just keeps its
    fallback ids. */
@@ -4121,6 +4146,9 @@ function resolveRiskLayers(){
     var ids={};
     (d.layers||[]).forEach(function(l){ var m=/^Overall_Impact_Day_([12])$/i.exec(l.name||""); if(m) ids[m[1]]=l.id; });
     if(ids[1]!=null&&ids[2]!=null) RISK_LAYERS.wssi=[ids[1],ids[2]];
+  }).catch(function(){}),
+  getJSON(MCD_URL+"?f=json").then(function(d){
+    (d.layers||[]).forEach(function(l){ if(/Mesoscale Discussion/i.test(l.name||"")) RISK_LAYERS.mcd=l.id; });
   }).catch(function(){})
   ]);
   return _riskLayersP;
@@ -4275,6 +4303,157 @@ function loadSpc(){
     el.innerHTML='<div class="empty">Risk outlooks unavailable. <a href="https://www.spc.noaa.gov/products/outlook/day1otlk.html" target="_blank" rel="noopener">Open SPC \u2197</a> \u00b7 <a href="https://www.spc.noaa.gov/products/fire_wx/" target="_blank" rel="noopener">Fire \u2197</a></div>';
     callRisk=null;                                           // never let a stale outlook keep a pill alive
     if(typeof renderTheCall==="function") renderTheCall();
+  });
+}
+
+/* ============ SPC MESOSCALE DISCUSSIONS ============ */
+/* The gap the outlook matrix can't see: a Mesoscale Discussion is SPC's short-fused note that
+   severe weather — usually a watch — is expected in the next 1–3 hours, issued hours after the
+   day's categorical outlook and expired again by evening. Two feeds, both on origins the page
+   already talks to. The polygon service says which MDs are ACTIVE right now (and where); the
+   SWOMCD text product carries everything the strip actually says — the concerning line, the
+   watch probability, the summary, and the ATTN list of offices, which is the same relevance
+   test the alert list applies with isLSX(). */
+function parseMcd(text){
+  var t=String(text||"").replace(/\r/g,"");
+  var num=/Mesoscale Discussion (\d+)/i.exec(t);
+  if(!num) return null;   // not recognisably an MD → drop it, never paint half a strip
+  function para(re){ var m=re.exec(t); return m?m[1].replace(/\s*\n\s*/g," ").trim():""; }
+  var valid=/Valid\s+\d{6}Z?\s*-\s*(\d{6})Z/.exec(t);
+  var prob=/Probability of Watch Issuance\s*\.\.\.\s*(\d+)\s*percent/i.exec(t);
+  // Blank-line terminated so the LAT...LON block can't leak in; length===3 keeps only WFO ids.
+  var am=/ATTN\.\.\.WFO\.\.\.([\s\S]*?)(?:\n\s*\n|\s*$)/.exec(t);
+  return {
+    num:+num[1],
+    areas:para(/Areas affected\s*\.\.\.([\s\S]*?)\n\s*\n/),
+    concerning:para(/Concerning\s*\.\.\.([^\n]*)/),
+    validEnd:valid?valid[1]:null,
+    prob:prob?+prob[1]:null,   // watch-issued MDs have no probability line: null, never 0
+    summary:para(/SUMMARY\s*\.\.\.([\s\S]*?)\n\s*\n/),
+    attn:am?am[1].split(/[^A-Z]+/).filter(function(s){ return s.length===3; }):[]
+  };
+}
+/* "Valid 311913Z - 312115Z" carries no month or year. Anchor the end stamp to the product's
+   issuance time and pick the month that lands it nearest — an MD lives at most six hours, so a
+   stamp that computes ~15+ days away is the day field wrapping a month boundary, not a two-week
+   discussion. Pure and testable, because month/year rollover is exactly the edge a July 31st or
+   December 31st product would exercise silently. */
+function mcdValidEnd(v,refMs){
+  var m=/^(\d\d)(\d\d)(\d\d)$/.exec(String(v||""));
+  if(!m||!refMs) return null;
+  var ref=new Date(refMs);
+  var d=Date.UTC(ref.getUTCFullYear(),ref.getUTCMonth(),+m[1],+m[2],+m[3]);
+  if(d-refMs>15*86400000)      d=Date.UTC(ref.getUTCFullYear(),ref.getUTCMonth()-1,+m[1],+m[2],+m[3]);
+  else if(refMs-d>15*86400000) d=Date.UTC(ref.getUTCFullYear(),ref.getUTCMonth()+1,+m[1],+m[2],+m[3]);
+  return d;
+}
+function mcdPill(d){
+  var t=(d.concerning||"").replace(/\.\.\./g," · ").replace(/·\s*$/,"").trim();
+  if(!t) t="Severe potential";
+  if(d.prob!=null) t+=" · "+d.prob+"%";
+  return t;
+}
+function mcdUntil(end){
+  if(!end) return "";
+  var d=new Date(end);
+  var t=d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+  // an MD can run past local midnight; a bare "1:15 AM" would read as nineteen hours ago
+  if(d.toDateString()!==new Date().toDateString()) t=d.toLocaleDateString([],{weekday:"short"})+" "+t;
+  return "until "+t;
+}
+var lastMcds=[], mcdLayer=null;
+/* Mirrors loadWarnPolygons' shape for the same reason it has one: the map may not exist yet when
+   the first fetch lands (Leaflet is deferred), so initRadarMap redraws from this cache on its own. */
+function drawMcdPolygons(){
+  if(!rvMap) return;
+  if(mcdLayer){ rvMap.removeLayer(mcdLayer); mcdLayer=null; }
+  if(!lastMcds.length) return;
+  try{
+    mcdLayer=L.geoJSON({type:"FeatureCollection",features:lastMcds.map(function(m){
+      return {type:"Feature",geometry:m.geom,properties:{num:m.num,pill:mcdPill(m.d)}};
+    })},{
+      // dashed on purpose: this outline is guidance about the next couple of hours, and it must
+      // read as a different kind of thing from the solid polygons that are warnings
+      style:{color:"#ffb020",weight:2,dashArray:"6 4",fillColor:"#ffb020",fillOpacity:.06},
+      pane:"overlayPane",
+      onEachFeature:function(f,layer){
+        layer.bindTooltip(esc("Mesoscale Discussion #"+f.properties.num+" — "+f.properties.pill),
+          {className:"stn-tip",direction:"top",sticky:true});
+        layer.on("click",function(e){
+          if(e.originalEvent) e.originalEvent.stopPropagation();
+          var rc=document.getElementById("riskCard");
+          if(rc){ try{ rc.scrollIntoView({behavior:"smooth",block:"center"}); }catch(err){ rc.scrollIntoView(); } }
+        });
+      }
+    }).addTo(rvMap);
+    mcdLayer.bringToBack();   // under the warnings: a watch-likely outline must never cover a warning
+  }catch(e){ mcdLayer=null; }
+}
+function renderMcd(list){
+  lastMcds=list||[];
+  lastMcds.sort(function(a,b){ return (b.hits?1:0)-(a.hits?1:0) || b.num-a.num; });
+  var el=document.getElementById("mcd");
+  if(el) el.innerHTML=lastMcds.map(function(m){
+    var d=m.d, until=mcdUntil(m.end);
+    var scope=m.hits?HIT_TEXT.polygon:"Elsewhere in the St. Louis area";
+    return '<div class="mcd'+(m.hits?' hits':'')+'">'
+      +'<div class="mcd-head">'+ic("storm")
+      +'<span class="mcd-t">Mesoscale Discussion #'+m.num+'</span>'
+      +(until?'<span class="mcd-when">'+esc(until)+'</span>':'')
+      +'</div>'
+      +'<span class="mcd-pill">'+esc(mcdPill(d))+'</span>'
+      +(d.summary?'<div class="mcd-sum">'+esc(d.summary)+'</div>':'')
+      +'<div class="mcd-foot"><span class="mcd-me"'+(d.areas?' title="'+esc(d.areas)+'"':'')+'>'+scope+'</span> · '
+      +'<a class="link" href="https://www.spc.noaa.gov/products/md/md'+m.num+'.html" target="_blank" rel="noopener">Full discussion ↗</a></div>'
+      +'</div>';
+  }).join("");
+  drawMcdPolygons();
+  if(typeof scheduleMasonry==="function") scheduleMasonry();
+}
+function loadMcd(){
+  var fresh=locGuard();
+  return resolveRiskLayers().then(function(){
+    return getJSON(MCD_URL+RISK_LAYERS.mcd+"/query?where=1%3D1&outFields=name&returnGeometry=true&f=geojson");
+  }).then(function(fc){
+    var feats=((fc&&fc.features)||[]).filter(function(f){
+      return f.geometry&&/MD\s*\d+/i.test((f.properties&&f.properties.name)||"");
+    });
+    if(!feats.length){ if(fresh()) renderMcd([]); return; }
+    /* The polygons say which MDs are ACTIVE; only the text products know who they're FOR. The
+       product list is newest-first and MD numbers are sequential, so the active ones sit at the
+       top — fetch just enough texts to cover them, with slack for an update in between. Capped:
+       in a ten-MD national outbreak the tail few may go untexted, and those still show (by
+       polygon hit) or drop (no ATTN to test) exactly as the fallbacks below decide. */
+    return getJSON(API+"/products?type=SWO&location=MCD&limit="+Math.min(feats.length+3,10),LD).then(function(list){
+      var g=(list&&list["@graph"])||[];
+      return Promise.all(g.map(function(p){
+        return getJSON(p["@id"],LD).then(function(prod){
+          var d=parseMcd(prod&&prod.productText);
+          if(d) d.issued=Date.parse(prod.issuanceTime)||0;
+          return d;
+        }).catch(function(){ return null; });   // one dead text ≠ no strip; the polygon still speaks
+      }));
+    }).catch(function(){ return []; }).then(function(texts){
+      if(!fresh()) return;
+      var byNum={};
+      (texts||[]).forEach(function(d){ if(d&&!(d.num in byNum)) byNum[d.num]=d; });   // newest wins
+      var out=[];
+      feats.forEach(function(f){
+        var num=+(/MD\s*(\d+)/i.exec(f.properties.name)[1]);
+        var d=byNum[num]||{num:num,areas:"",concerning:"",validEnd:null,prob:null,summary:"",attn:[],issued:0};
+        var hits=!!ptInGeometry(current.lon,current.lat,f.geometry);
+        if(!hits&&d.attn.indexOf("LSX")<0) return;   // a discussion three states away is not this page's business
+        var end=d.validEnd?mcdValidEnd(d.validEnd,d.issued):null;
+        if(end&&end<=Date.now()) return;   // the service can hold an expired MD briefly past its window
+        out.push({num:num,geom:f.geometry,hits:hits,end:end,d:d});
+      });
+      renderMcd(out);
+    });
+  }).catch(function(e){
+    if(isAbort(e)||!fresh()) return;
+    /* A failed refresh must not read as "the discussion ended": keep what's already painted until
+       its own valid time retires it. (An MD whose window never parsed rides until a fetch succeeds.) */
+    renderMcd(lastMcds.filter(function(m){ return !m.end||m.end>Date.now(); }));
   });
 }
 
@@ -5870,6 +6049,7 @@ function resetLocationState(){
   smart.hourly=[]; smart.days=[];
   heroNow.temp=null;   // the old city's reading must not mark the new city's range
   aqiState={val:null, pm:null, err:false}; callAqi=null; callRisk=null;
+  lastMcds=[];   // "inside this area" was ray-cast against the OLD point; loadMcd re-answers
   userZones={county:"",forecast:"",fire:""};
   renderHourly24._hrs=null; loadForecast._paint=null;
 }
@@ -5880,7 +6060,7 @@ function clearLocationUI(){
   load("current"); load("daily","Loading forecast\u2026"); load("hourly24","Loading hourly\u2026");
   load("cnGrid","Loading departures\u2026"); load("spc","Loading outlook\u2026");
   load("hazards","Loading hazards\u2026"); load("cpc","Loading outlooks\u2026");
-  ["cnCtx","cnSrc","ccCtx","ccUv","aqi","aqiMini","callRow","qpf7","h24loc","spcLoc"].forEach(function(id){
+  ["cnCtx","cnSrc","ccCtx","ccUv","aqi","aqiMini","callRow","qpf7","h24loc","spcLoc","mcd"].forEach(function(id){
     var e=document.getElementById(id); if(e) e.innerHTML="";
   });
   ["drNow","drMonth","drSeason"].forEach(function(id){
@@ -5889,6 +6069,7 @@ function clearLocationUI(){
   var cc=document.getElementById("callCard"); if(cc) cc.classList.remove("has");
   var aq=document.getElementById("aqiCard"); if(aq) aq.classList.remove("show");
   var cs=document.getElementById("cnStation"); if(cs) cs.textContent="\u2026";
+  drawMcdPolygons();   // lastMcds was just reset; take the old place's outline off the map with it
   if(typeof scheduleMasonry==="function") scheduleMasonry();
 }
 function setLocation(loc,opts){
@@ -5901,7 +6082,7 @@ function setLocation(loc,opts){
   clearLocationUI();
   updateLocNow();
   if(opts.save) saveLoc(loc);
-  var jobs=[loadForecast(),loadAqi(),loadSpc(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),
+  var jobs=[loadForecast(),loadAqi(),loadSpc(),loadMcd(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),
             loadClimate(),loadAlerts(),loadClimateContext(),loadUv()];
   loadRadar();
   if(loc.station){ jobs.push(loadCurrent()); }
@@ -6762,6 +6943,7 @@ var SNAP_PARTS=[
   {id:"aqi",      ttl:3*3600000},
   {id:"spc",      ttl:6*3600000},
   {id:"spcLoc",   ttl:6*3600000},
+  {id:"mcd",      ttl:15*60000},     // an MD lives 1–3 h; restore only when nearly current
   {id:"cpc",      ttl:24*3600000},
   {id:"hazards",  ttl:24*3600000},
   {id:"cnToday",  ttl:12*3600000},
@@ -6926,10 +7108,10 @@ function stampSched(fns){
 function refreshAll(){
   var dot=document.getElementById("statusDot"), label=document.getElementById("refreshLabel");
   dot.classList.remove("stale");label.textContent="Refreshing…";
-  stampSched([loadAFD,loadAlerts,loadCurrent,loadForecast,loadRivers,loadAqi,loadSpc,loadCpc,loadQpf,
+  stampSched([loadAFD,loadAlerts,loadCurrent,loadForecast,loadRivers,loadAqi,loadSpc,loadMcd,loadCpc,loadQpf,
               loadHazards,loadDrought,loadClimate,loadClimateContext,loadUv,loadStationPlot,
               refreshSatLayer,saveSnapshotIdle]);
-  Promise.allSettled([loadAFD(),loadAlerts(),loadCurrent(),loadForecast(),loadRivers(),loadAqi(),loadSpc(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),loadClimate(),loadClimateContext(),loadUv(),loadStationPlot()]).then(function(){
+  Promise.allSettled([loadAFD(),loadAlerts(),loadCurrent(),loadForecast(),loadRivers(),loadAqi(),loadSpc(),loadMcd(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),loadClimate(),loadClimateContext(),loadUv(),loadStationPlot()]).then(function(){
     refreshSatLayer();
     label.textContent="Refresh";
     document.getElementById("lastUpdate").textContent="Last updated "+new Date().toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"});
@@ -7044,6 +7226,7 @@ var SCHED=[
   {fn:loadRivers,   every:15*60000},
   {fn:loadAqi,      every:20*60000},
   {fn:loadSpc,      every:30*60000},
+  {fn:loadMcd,      every:5*60000},    // an MD lives 1–3 h; the outlook cadence would sleep through one
   {fn:loadCpc,      every:60*60000},
   {fn:loadQpf,      every:60*60000},
   {fn:loadHazards,  every:60*60000},
