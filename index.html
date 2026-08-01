@@ -2294,6 +2294,14 @@ function alertLevel(p){
   if(ev.indexOf("advisory")>=0) return LEVELS.advisory;
   return LEVELS.statement;
 }
+/* Is this the tier where the answer is ACT NOW? Three places need to know, and they were each
+   spelling it `lv.k==="emergency"` inline: the sort (it leads its list), the family fold (it is
+   never a line item inside another card), and the local all-clear row (it drops the calm voice
+   while one is running nearby). Three copies of one question, which is fine right up until the
+   answer moves — and it just did, when Tornado Watch stopped being an emergency. That change
+   silently rewrote all three call sites at once and happened to be correct at all three. Naming
+   the question makes the coupling something you can see instead of something you rediscover. */
+function isTakeCover(lv){ return !!lv&&lv.k==="emergency"; }
 /* ===== "Does this alert actually cover me?" =====
    Two cases, because NWS issues alerts two ways:
      · storm-based warnings (tornado, severe tstorm, flash flood) carry a POLYGON — ray-cast the
@@ -3473,8 +3481,8 @@ var ALERT_SEV_RANK={Extreme:0,Severe:1,Moderate:2,Minor:3,Unknown:4};
    Hoisted out of loadAlerts() so tools/logic-tests.js can lift it: this is the rule the whole
    section exists to express, and it should be asserted rather than eyeballed. */
 function cardCmp(a,b){
-  var ae=(a.lv.k==="emergency")?0:1, be=(b.lv.k==="emergency")?0:1;
-  if(ae!==be) return ae-be;                  // an emergency leads, wherever it is
+  var ae=isTakeCover(a.lv)?0:1, be=isTakeCover(b.lv)?0:1;
+  if(ae!==be) return ae-be;                  // a take-cover product leads its list
   if(!!a.hit!==!!b.hit) return a.hit?-1:1;   // then everything over YOU, whatever its level
   if(a.lv.rank!==b.lv.rank) return a.lv.rank-b.lv.rank;
   var ra=ALERT_SEV_RANK[a.sev], rb=ALERT_SEV_RANK[b.sev];
@@ -3680,7 +3688,7 @@ function loadAlerts(){
        get different tiers, so a heat event renders as an Extreme Heat Warning card and a Heat
        Advisory card that half-repeat each other — two cards reading as two hazards. Fold them:
        the top-tier product hosts the card (its name, level and colour lead) and the others become
-       phases on it. Folding is per-family opt-in (FAMILY_CFG.merge), and an emergency or a
+       phases on it. Folding is per-family opt-in (FAMILY_CFG.merge), and a take-cover product or a
        statement never folds in either direction — a Tornado Warning must not be a line item
        inside anything, and a Special Weather Statement is not a tier of anything. The list is
        already sorted, so the first product seen of a family IS its highest tier.
@@ -3690,7 +3698,7 @@ function loadAlerts(){
     var byFam={}, folded=[];
     glist.forEach(function(g){
       var fam=eventFamily(g.ev), cfg=FAMILY_CFG[fam];
-      if(!cfg||!cfg.merge||g.lv.k==="emergency"||g.lv.k==="statement"){ folded.push(g); return; }
+      if(!cfg||!cfg.merge||isTakeCover(g.lv)||g.lv.k==="statement"){ folded.push(g); return; }
       var famKey=fam+"|"+g.scope;
       var host=byFam[famKey];
       if(!host){
@@ -3905,7 +3913,7 @@ function loadAlerts(){
        (The sentence lives in one span for the reason the office-wide calm row's does: as bare flex
        items the claim and its tail get dealt into columns instead of wrapping.) */
     var awayEmerg=null;
-    glist.forEach(function(g){ if(!awayEmerg&&g.scope==="away"&&g.lv.k==="emergency") awayEmerg=g; });
+    glist.forEach(function(g){ if(!awayEmerg&&g.scope==="away"&&isTakeCover(g.lv)) awayEmerg=g; });
     var calmHTML=(!mineN&&awayN)?'<div class="calmrow'+(awayEmerg?' guarded':'')+'">'
       +'<span class="cdot"></span><span>No active watches, warnings or advisories for '+esc(place)+'.'
       +(awayEmerg?' <span class="cmut">'+esc(awayEmerg.ev)+' is active elsewhere in the area.</span>':'')

@@ -38,6 +38,7 @@ const SUBJECT = new Function(`
   ${lift(/^function alertParas\(txt\)\{[\s\S]*?^\}/m, 'alertParas()')}
   ${lift(/^var LEVELS=\{[\s\S]*?^\};/m, 'LEVELS')}
   ${lift(/^function alertLevel\(p\)\{[\s\S]*?^\}/m, 'alertLevel()')}
+  ${lift(/^function isTakeCover\(lv\)\{.*\}$/m, 'isTakeCover()')}
   ${lift(/^var ALERT_SEV_RANK=\{[\s\S]*?\};/m, 'ALERT_SEV_RANK')}
   ${lift(/^function cardCmp\(a,b\)\{[\s\S]*?^\}/m, 'cardCmp()')}
   ${lift(/^var HIT_RANK=\{[\s\S]*?\};/m, 'HIT_RANK')}
@@ -52,7 +53,7 @@ const SUBJECT = new Function(`
   ${lift(/^function parseMcd\(text\)\{[\s\S]*?^\}/m, 'parseMcd()')}
   ${lift(/^function mcdValidEnd\(v,refMs\)\{[\s\S]*?^\}/m, 'mcdValidEnd()')}
   ${lift(/^function geomTouchesEnv\(geom,env\)\{[\s\S]*?^\}/m, 'geomTouchesEnv()')}
-  return { rangeMark, rangeRow, alertLevel, cardCmp, strongestHit, alertScope, scopeAttr,
+  return { rangeMark, rangeRow, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr,
            FAMILY_CFG, coldVerdict, OUTLOOK_CFG, outlookVerdict,
            parseMcd, mcdValidEnd, geomTouchesEnv };
 `)();
@@ -189,6 +190,37 @@ function check(name, actual, expected) {
     rank('Tornado Warning') < rank('Heat Warning') &&
     rank('Heat Warning') < rank('Heat Watch') &&
     rank('Heat Watch') < rank('Heat Advisory'), true);
+}
+
+/* ============ isTakeCover ============ */
+/* "Is the answer ACT NOW?" — the question three unrelated-looking behaviours turn out to share:
+ * the sort (it leads its list), the family fold (it is never a line item inside another card), and
+ * the local all-clear row (it drops the calm voice while one runs nearby). Each used to ask it
+ * inline as lv.k === 'emergency'. Three copies is fine until the answer moves, and it just did —
+ * Tornado Watch stopped being an emergency, which rewrote all three at once and happened to be
+ * right at all three. These assert the membership itself, so the next such move is checked rather
+ * than lucky. */
+{
+  const T = (event, severity) => SUBJECT.isTakeCover(SUBJECT.alertLevel({ event, severity }));
+
+  check('a tornado warning is take-cover', T('Tornado Warning', 'Severe'), true);
+  check('CAP Extreme on a warning is take-cover', T('Flash Flood Warning', 'Extreme'), true);
+
+  // The move that motivated the naming. A watch is a watch, so it leads nothing, folds like
+  // anything else in its family, and does not mute the all-clear line.
+  check('a tornado watch is NOT take-cover', T('Tornado Watch', 'Extreme'), false);
+
+  check('an ordinary warning is not', T('Winter Storm Warning', 'Severe'), false);
+  check('an advisory is not', T('Heat Advisory', 'Minor'), false);
+  check('a missing level does not throw', SUBJECT.isTakeCover(null), false);
+
+  // The predicate and the ramp must not be able to drift apart: take-cover is exactly the set
+  // alertLevel() calls `emergency`, no more and no less.
+  const RAMP = ['Tornado Warning', 'Flash Flood Warning', 'Tornado Watch', 'Winter Storm Warning',
+                'Heat Advisory', 'Special Weather Statement'];
+  check('take-cover is exactly the emergency tier',
+    RAMP.map(e => SUBJECT.isTakeCover(SUBJECT.alertLevel({ event: e, severity: 'Extreme' }))),
+    RAMP.map(e => SUBJECT.alertLevel({ event: e, severity: 'Extreme' }).k === 'emergency'));
 }
 
 /* ============ strongestHit / alertScope / scopeAttr ============ */
@@ -510,4 +542,4 @@ if (failed) {
   console.error(`\n${failed} logic test(s) failed`);
   process.exit(1);
 }
-console.log('ok    logic: rangeMark, alertLevel, cardCmp, strongestHit, alertScope, scopeAttr, FAMILY_CFG,\n             coldVerdict, outlookVerdict, parseMcd, mcdValidEnd and geomTouchesEnv behave');
+console.log('ok    logic: rangeMark, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr, FAMILY_CFG,\n             coldVerdict, outlookVerdict, parseMcd, mcdValidEnd and geomTouchesEnv behave');
