@@ -2350,6 +2350,41 @@ function alertCoversMe(f){
 var HIT_RANK={polygon:0, county:1, zone:2, fire:3};
 var HIT_TEXT={polygon:"You're inside this area", county:"Your county is included",
               zone:"Your forecast zone is included", fire:"Your fire zone is included"};
+/* Whether /points resolved this location's zones — the difference between a page that can say
+   "this one is over you" and one that must not pretend to. Every coverage decision keys off it,
+   so it is a function rather than a boolean recomputed at each call site. */
+function zonesResolved(){ return !!(userZones.county||userZones.forecast||userZones.fire); }
+/* The strongest evidence in a set of matches: polygon beats county beats zone beats fire. A group
+   renders ONE card making ONE coverage claim, so its segments have to reduce to a single kind, and
+   the claim has to be the one the best evidence supports. Falsy entries are misses. */
+function strongestHit(kinds){
+  var best=false;
+  (kinds||[]).forEach(function(h){ if(h&&(!best||HIT_RANK[h]<HIT_RANK[best])) best=h; });
+  return best;
+}
+/* ===== Which LIST a card belongs to =====
+   Hoisted out of loadAlerts() for the reason cardCmp() is: this is the rule the alerts section
+   exists to express — is this about the reader, or about somewhere else — and it should be
+   asserted in tools/logic-tests.js rather than eyeballed against whatever the sky is doing today.
+   It used to be a line inside a promise chain, testable only during an actual outbreak.
+
+   Coverage decides it, and the signature is the reason it can't drift: there is nowhere to pass a
+   severity. Severity sets how loud a card is; it never sets whether the card is about you.
+
+   THREE answers, not two. "flat" is the degraded mode — zones never resolved, so coverage is
+   unknowable and the page owes the reader one undivided list instead of a confident split it can't
+   support. It is deliberately not "away": an alert we cannot place is not an alert we have placed
+   somewhere else, and collapsing those two would file a warning that might be overhead under a
+   heading that says it isn't. */
+function alertScope(hit,localMode){
+  if(!localMode) return "flat";
+  return hit?"here":"away";
+}
+/* The DOM half of the same answer — which of the two cards an event can now own this one is. The
+   flat mode writes no attribute rather than "flat": three readers normalise a missing data-scope
+   to "" (the open-drawer set, the focus restore, the radar's polygon→card link), and the mode
+   where coverage is unknowable should not hand them a third value to agree about. */
+function scopeAttr(hit,localMode){ var s=alertScope(hit,localMode); return s==="flat"?"":s; }
 /* A tornado gets its own mark — the family icon (a storm cloud) undersells the one event that
    matters most, and flash flood is a different picture from river flooding. */
 function alertIcon(ev,famIco){
@@ -2889,7 +2924,11 @@ function loadWarnPolygons(feats){
       onEachFeature:function(f,layer){
         var ev=(f.properties&&f.properties.event)||"";
         layer.bindTooltip(esc(ev)+" — tap for details",{className:"stn-tip",direction:"top",sticky:true});
-        var scope=alertCoversMe(f)?"here":"away";   // which of the event's two possible cards this is
+        // Which of the event's two possible cards this is — through the same pair of functions the
+        // card writes its data-scope with, so the two ends of the link cannot answer differently.
+        // This end used to hard-code "here"/"away" and so guessed confidently in the flat mode,
+        // where the cards carry no scope at all and the lookup has to fall back to the name.
+        var scope=scopeAttr(alertCoversMe(f),zonesResolved());
         layer.on("click",function(e){
           if(e.originalEvent) e.originalEvent.stopPropagation();
           focusAlertCard(ev,scope);
@@ -3538,14 +3577,14 @@ function loadAlerts(){
     /* ---- the list is for WHERE YOU ARE ----
        The office issues for a 40-plus-county area; the reader lives at one point in it. Alerts that
        cover this location lead the page as full banners; the rest sit below in a compact list —
-       present, readable, and plainly not about here. Two exceptions, both deliberate:
-         · an EMERGENCY always leads, wherever it is. Storm-based warnings are polygons drawn
-           around where a storm is GOING and are re-issued as it moves — a page that demotes an
-           active tornado emergency until the polygon touches your house is not a weather page.
-         · zones unresolved (ensureUserZones failed) means coverage is UNKNOWABLE, and unknowable
-           must fail open. Ranking on a failed lookup would let a network hiccup quietly file a
-           warning that does cover you under "elsewhere", which is worse than one flat list. */
-    var localMode=!!(userZones.county||userZones.forecast||userZones.fire);
+       present, readable, and plainly not about here. Coverage decides that and nothing else does;
+       severity sets how loud a card is, never whether it is about you. See alertScope(), which
+       owns the rule and is asserted in tools/logic-tests.js.
+       One exception, and it is not about severity: zones unresolved (ensureUserZones failed) means
+       coverage is UNKNOWABLE, and unknowable must fail open. Splitting on a failed lookup would let
+       a network hiccup quietly file a warning that DOES cover you under "elsewhere", which is worse
+       than one flat list. */
+    var localMode=zonesResolved();
     var place=(current.name||"").replace(" (home)","");
     var scope=document.getElementById("alertsScope");
     if(scope) scope.textContent=localMode?place:"LSX";
@@ -3592,13 +3631,21 @@ function loadAlerts(){
        and a card elsewhere, and neither speaks for the other.
        Only when localMode holds. With zones unresolved there is no elsewhere list to explain why
        one event produced two cards, and the degraded mode's whole promise is one flat list — so the
-       split collapses back to grouping by name, exactly as it was. */
+       split collapses back to grouping by name, exactly as it was.
+
+       ONE coverage test per feature, and the kind it returns is kept. This used to run here to
+       decide the group and then AGAIN per group to find out how strongly it matched — a second
+       ray-cast over every polygon, and worse, two fields (`here` and `hit`) that agreed only
+       because the second pass re-derived what the first had already decided. Nothing stated that
+       invariant and nothing checked it, so a card's "you're inside this area" badge rested on a
+       loop thirty lines away continuing to duplicate work. One field now; the group's coverage is
+       a function of the kinds its own segments returned. */
     var groups={};
     feats.forEach(function(f){
-      var ev=f.properties.event||"Alert";
-      var here=localMode&&!!alertCoversMe(f);
-      var key=ev+"\u0000"+(here?"here":"away");   // NUL can't appear in an event name
-      (groups[key]=groups[key]||{ev:ev,here:here,segs:[]}).segs.push(f);
+      var ev=f.properties.event||"Alert", hit=alertCoversMe(f);
+      var key=ev+"\u0000"+alertScope(hit,localMode);   // NUL can't appear in an event name
+      var grp=groups[key]||(groups[key]={ev:ev,segs:[],hits:[]});
+      grp.segs.push(f); grp.hits.push(hit);
     });
     var glist=Object.keys(groups).map(function(key){
       var grp=groups[key], ev=grp.ev, segs=grp.segs;
@@ -3615,17 +3662,13 @@ function loadAlerts(){
         if(s&&(!earliest||s<earliest)) earliest=s;
         (p2.areaDesc||"").split(";").forEach(function(c){ c=c.trim(); if(c&&counties.indexOf(c)<0) counties.push(c); });
       });
-      /* WHICH kind of match, keeping the strongest evidence (polygon beats county beats zone) — the
-         badge states exactly what it can support. In local mode every segment of a `here` group
-         covers us by construction, so this only asks how, and an `away` group skips the ray-casts
-         entirely. In the degraded flat mode nothing was split, so every group still has to ask:
-         a polygon test needs no zones, and that badge is the one coverage claim still available. */
-      var hit=false;
-      if(!localMode||grp.here) segs.forEach(function(f){
-        var h=alertCoversMe(f);
-        if(h&&(!hit||HIT_RANK[h]<HIT_RANK[hit])) hit=h;
-      });
-      return {ev:ev,here:grp.here,segs:segs,best:best,sev:best.properties.severity,
+      /* WHICH kind of match, keeping the strongest evidence — the badge states exactly what it can
+         support, and no more. No coverage test runs here: the kinds came back with the segments at
+         grouping time, so this is a reduce over what is already known rather than a second opinion
+         that could differ from the first. `scope` falls out of the same value, which is why a card
+         can no longer be filed in one list while its badge claims the other. */
+      var hit=strongestHit(grp.hits);
+      return {ev:ev,scope:alertScope(hit,localMode),segs:segs,best:best,sev:best.properties.severity,
               lv:alertLevel(best.properties),
               latest:latest,earliest:earliest,counties:counties,hit:hit,
               mapped:segs.some(isMappedAlert)||watchOnRadar(ev)};   // only offer "show on radar" if it IS on the radar
@@ -3648,7 +3691,7 @@ function loadAlerts(){
     glist.forEach(function(g){
       var fam=eventFamily(g.ev), cfg=FAMILY_CFG[fam];
       if(!cfg||!cfg.merge||g.lv.k==="emergency"||g.lv.k==="statement"){ folded.push(g); return; }
-      var famKey=fam+"|"+(g.here?"here":"away");
+      var famKey=fam+"|"+g.scope;
       var host=byFam[famKey];
       if(!host){
         /* The host is its own first phase — but the fold below mutates the host's counties, segs
@@ -3664,7 +3707,10 @@ function loadAlerts(){
       if(g.latest>host.latest) host.latest=g.latest;
       if(g.earliest&&(!host.earliest||g.earliest<host.earliest)) host.earliest=g.earliest;
       g.counties.forEach(function(c){ if(host.counties.indexOf(c)<0) host.counties.push(c); });
-      if(g.hit&&(!host.hit||HIT_RANK[g.hit]<HIT_RANK[host.hit])) host.hit=g.hit;
+      /* The host's claim can only strengthen, never change list: the fold is keyed by scope, so
+         host and phase are already on the same side of the split, and a `here` host absorbing a
+         `here` phase stays `here` however the evidence upgrades. host.scope needs no update. */
+      host.hit=strongestHit([host.hit,g.hit]);
       host.mapped=host.mapped||g.mapped;
     });
     /* No re-sort: folding only ever REMOVES entries, so what survives is still in sorted order, and
@@ -3673,18 +3719,13 @@ function loadAlerts(){
        discover here. */
     glist=folded;
 
-    /* Which cards are ELSEWHERE: coverage decides it, and nothing else decides it. There used to be
-       an exception for emergencies — a tornado warning three counties over stayed in the top
-       section, on the theory that the loudest thing should lead the page. What that actually shipped
-       was a card above a heading that means "for this place" wearing a badge that said it wasn't,
-       and a reader who has to reconcile those two claims is doing it while deciding whether to move
-       their family. Severity sets how loud a card is; it never sets whether the card is about you.
-       The distant tornado leads the elsewhere list instead — same red rail, same emergency colour,
-       under a heading that says where it is and next to the county it's actually for.
-       With zones unresolved (localMode false) nothing is filed away — see the fail-open note above. */
-    glist.forEach(function(g){ g.away=localMode&&!g.here; });
+    /* Which cards are ELSEWHERE. The rule is alertScope(), up beside alertCoversMe() and asserted
+       in tools/logic-tests.js; what is left here is the tally the heading and the all-clear row
+       read. There is no `away` field any more — it was a third spelling of one fact, and a spare
+       field is exactly where an exception hides: the one that used to keep an emergency in the
+       local section from anywhere lived on this line, invisible to any test. */
     var mineN=0, awayN=0;
-    glist.forEach(function(g){ if(g.away) awayN++; else mineN++; });
+    glist.forEach(function(g){ if(g.scope==="away") awayN++; else mineN++; });
 
     /* No summary chips: each banner names its own event in its own colour, which is everything
        the chips used to say. */
@@ -3776,10 +3817,10 @@ function loadAlerts(){
         +(moreN?'<button type="button" class="a2-more" aria-label="Show '+moreN+' more '
           +(moreN>1?'counties':'county')+'">+'+moreN+' more</button>':'')+'</div>':'';
       detail+=areasHTML;          // counties are the tail of the drawer, after the prose
-      /* The second half of a card's identity, written only when the split is real. In flat mode
-         every card is the only one answering to its name, and an unconditional "away" would tell
-         "Show on radar" to skip the very polygon the reader is standing under. */
-      var aid=esc(g.ev), scope=localMode?(g.here?"here":"away"):"";
+      /* The second half of a card's identity, written only when the split is real — see scopeAttr.
+         In flat mode every card is the only one answering to its name, and an unconditional "away"
+         would tell "Show on radar" to skip the very polygon the reader is standing under. */
+      var aid=esc(g.ev), scope=scopeAttr(g.hit,localMode);
       /* A polygon hit is a real point-in-shape test; a zone hit only says your zone is listed.
          In the location-scoped list a card's RANK already says "this includes you", so the zone
          badge would restate the whole widget on every card — only the polygon claim still earns a
@@ -3795,7 +3836,7 @@ function loadAlerts(){
       var meBadge="";
       if(g.hit&&(!localMode||g.hit==="polygon"))
         meBadge='<span class="a2-me">'+ic("pin")+esc(HIT_TEXT[g.hit]||"Includes your location")+'</span>';
-      else if(g.away&&g.counties.length)
+      else if(g.scope==="away"&&g.counties.length)
         meBadge='<span class="a2-where" title="'+esc(g.counties.join(", "))+'">'+esc(g.counties[0])
           +(g.counties.length>1?' +'+(g.counties.length-1):'')+'</span>';
       /* The banner's own window, not the folded union: "Extreme Heat Warning — until Tue 7 PM"
@@ -3853,7 +3894,7 @@ function loadAlerts(){
         +'</div>';
     });
     var mineHTML="", awayHTML="";
-    glist.forEach(function(g,i){ if(g.away) awayHTML+=cardHTMLs[i]; else mineHTML+=cardHTMLs[i]; });
+    glist.forEach(function(g,i){ if(g.scope==="away") awayHTML+=cardHTMLs[i]; else mineHTML+=cardHTMLs[i]; });
     /* All clear HERE while the office is busy elsewhere: say so — it is the answer to the only
        question the reader came with — with the regional list right under it saying what "elsewhere"
        means. The calm VOICE is conditional, though, and it wasn't before: coverage alone files the
@@ -3864,7 +3905,7 @@ function loadAlerts(){
        (The sentence lives in one span for the reason the office-wide calm row's does: as bare flex
        items the claim and its tail get dealt into columns instead of wrapping.) */
     var awayEmerg=null;
-    glist.forEach(function(g){ if(!awayEmerg&&g.away&&g.lv.k==="emergency") awayEmerg=g; });
+    glist.forEach(function(g){ if(!awayEmerg&&g.scope==="away"&&g.lv.k==="emergency") awayEmerg=g; });
     var calmHTML=(!mineN&&awayN)?'<div class="calmrow'+(awayEmerg?' guarded':'')+'">'
       +'<span class="cdot"></span><span>No active watches, warnings or advisories for '+esc(place)+'.'
       +(awayEmerg?' <span class="cmut">'+esc(awayEmerg.ev)+' is active elsewhere in the area.</span>':'')

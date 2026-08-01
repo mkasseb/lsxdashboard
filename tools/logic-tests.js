@@ -40,6 +40,10 @@ const SUBJECT = new Function(`
   ${lift(/^function alertLevel\(p\)\{[\s\S]*?^\}/m, 'alertLevel()')}
   ${lift(/^var ALERT_SEV_RANK=\{[\s\S]*?\};/m, 'ALERT_SEV_RANK')}
   ${lift(/^function cardCmp\(a,b\)\{[\s\S]*?^\}/m, 'cardCmp()')}
+  ${lift(/^var HIT_RANK=\{[\s\S]*?\};/m, 'HIT_RANK')}
+  ${lift(/^function strongestHit\(kinds\)\{[\s\S]*?^\}/m, 'strongestHit()')}
+  ${lift(/^function alertScope\(hit,localMode\)\{[\s\S]*?^\}/m, 'alertScope()')}
+  ${lift(/^function scopeAttr\(hit,localMode\)\{.*\}$/m, 'scopeAttr()')}
   ${lift(/^var FAMILY_CFG=\{[\s\S]*?^\};/m, 'FAMILY_CFG')}
   ${lift(/^var LAYERS_MAX=\d+;/m, 'LAYERS_MAX')}
   ${lift(/^function coldVerdict\(nowT,mMin,cMin\)\{[\s\S]*?^\}/m, 'coldVerdict()')}
@@ -48,7 +52,8 @@ const SUBJECT = new Function(`
   ${lift(/^function parseMcd\(text\)\{[\s\S]*?^\}/m, 'parseMcd()')}
   ${lift(/^function mcdValidEnd\(v,refMs\)\{[\s\S]*?^\}/m, 'mcdValidEnd()')}
   ${lift(/^function geomTouchesEnv\(geom,env\)\{[\s\S]*?^\}/m, 'geomTouchesEnv()')}
-  return { rangeMark, rangeRow, alertLevel, cardCmp, FAMILY_CFG, coldVerdict, OUTLOOK_CFG, outlookVerdict,
+  return { rangeMark, rangeRow, alertLevel, cardCmp, strongestHit, alertScope, scopeAttr,
+           FAMILY_CFG, coldVerdict, OUTLOOK_CFG, outlookVerdict,
            parseMcd, mcdValidEnd, geomTouchesEnv };
 `)();
 
@@ -184,6 +189,51 @@ function check(name, actual, expected) {
     rank('Tornado Warning') < rank('Heat Warning') &&
     rank('Heat Warning') < rank('Heat Watch') &&
     rank('Heat Watch') < rank('Heat Advisory'), true);
+}
+
+/* ============ strongestHit / alertScope / scopeAttr ============ */
+/* WHICH LIST a card goes in — "for this place" or "elsewhere in the office's area". This is the
+ * rule the alerts section exists to express, and until the extraction it was a line inside
+ * loadAlerts()'s promise chain: verifiable only by pointing a browser at a live outbreak, which is
+ * a test you cannot run in calm weather and cannot run at all in CI.
+ *
+ * The signature is half the fix. alertScope() takes coverage and nothing else, so the exception
+ * that used to live on that line — an emergency stayed in the local section from anywhere — has
+ * nowhere to be expressed: there is no severity to consult. Severity sets how loud a card is; it
+ * never sets whether the card is about you. */
+{
+  const { strongestHit, alertScope, scopeAttr } = SUBJECT;
+
+  // One card makes one coverage claim, so a group's segments reduce to their best evidence: a real
+  // point-in-polygon beats a county listing beats a forecast zone beats a fire zone.
+  check('polygon is the strongest claim', strongestHit(['zone', 'polygon', 'county']), 'polygon');
+  check('county beats zone', strongestHit(['zone', 'county']), 'county');
+  check('a miss among hits does not weaken the claim', strongestHit([false, 'zone', false]), 'zone');
+  check('all misses is a miss', strongestHit([false, false]), false);
+  check('no segments is a miss', strongestHit([]), false);
+  check('a missing list does not throw', strongestHit(undefined), false);
+
+  // The regression that started this: a tornado warning whose polygon has not reached you belongs
+  // in the elsewhere list. It used to be hoisted into the local section, where it sat under a
+  // heading meaning "for this place" wearing a badge that said it wasn't.
+  check('no coverage is ELSEWHERE, whatever the alert is', alertScope(false, true), 'away');
+  check('a polygon hit is local', alertScope('polygon', true), 'here');
+  // A zone match is weaker evidence but it is still coverage — it decides the list, and only the
+  // BADGE is held to the stronger standard.
+  check('a zone hit is local too', alertScope('zone', true), 'here');
+
+  /* Fail open. With /points unresolved, coverage is unknowable and the page owes one undivided
+     list rather than a split it cannot support — "flat" is deliberately not "away", because an
+     alert we cannot place is not an alert we have placed somewhere else. A cluttered list is a
+     much smaller failure than a warning filed under a heading promising it isn't overhead. */
+  check('zones unresolved: nothing is filed away', alertScope(false, false), 'flat');
+  check('...not even something that matched', alertScope('polygon', false), 'flat');
+
+  // The DOM half. Flat mode writes no attribute, because three readers normalise a missing
+  // data-scope to "" and inventing a third value would give them something new to disagree about.
+  check('flat mode writes no data-scope', scopeAttr('polygon', false), '');
+  check('the split writes its side', [scopeAttr('polygon', true), scopeAttr(false, true)],
+    ['here', 'away']);
 }
 
 /* ============ cardCmp ============ */
@@ -460,4 +510,4 @@ if (failed) {
   console.error(`\n${failed} logic test(s) failed`);
   process.exit(1);
 }
-console.log('ok    logic: rangeMark, alertLevel, cardCmp, FAMILY_CFG, coldVerdict, outlookVerdict, parseMcd, mcdValidEnd and geomTouchesEnv behave');
+console.log('ok    logic: rangeMark, alertLevel, cardCmp, strongestHit, alertScope, scopeAttr, FAMILY_CFG,\n             coldVerdict, outlookVerdict, parseMcd, mcdValidEnd and geomTouchesEnv behave');
