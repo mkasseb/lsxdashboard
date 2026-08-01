@@ -164,6 +164,15 @@ function check(name, actual, expected) {
   check('Flood Advisory carrying severity Severe stays an advisory', L('Flood Advisory', 'Severe'), 'advisory');
 
   check('watch', L('Severe Thunderstorm Watch', 'Severe'), 'watch');
+
+  /* The one case where CAP severity is NOT allowed to escalate. NWS ships Tornado Watch with
+     severity "Extreme" — alone among watches — and the escalation rule read that as a take-cover
+     product, handing a watch the emergency ramp: red, pulsing, unfoldable, indistinguishable from
+     the Tornado Warning above it. A watch is a watch. */
+  check('a tornado watch is a WATCH, not an emergency', L('Tornado Watch', 'Extreme'), 'watch');
+  check('no watch escalates on CAP severity', L('Flash Flood Watch', 'Extreme'), 'watch');
+  // ...and the escalation still works everywhere it was meant to, which is why it stayed.
+  check('a warning still escalates on CAP Extreme', L('Flash Flood Warning', 'Extreme'), 'emergency');
   check('statement', L('Special Weather Statement', 'Minor'), 'statement');
   check('CAP Moderate never demotes a warning', L('Winter Storm Warning', 'Moderate'), 'warning');
   check('unknown event with no severity', L('Beach Hazards Message', ''), 'statement');
@@ -179,12 +188,18 @@ function check(name, actual, expected) {
 
 /* ============ cardCmp ============ */
 /* The order of the alert list, which is the one thing about this section a reader acts on. The rule
-   is: an emergency leads from anywhere, then everything covering THIS LOCATION, then everything
-   else — level inside each of those, CAP severity last.
+   is: an emergency leads, then everything covering THIS LOCATION, then everything else — level
+   inside each of those, CAP severity last.
  *
  * Level used to be the primary key, and that put a tornado warning two counties away above a severe
  * thunderstorm warning genuinely overhead, because alertLevel() promotes every tornado warning to
- * `emergency`. These assert the rule directly rather than by eye. */
+ * `emergency`. These assert the rule directly rather than by eye.
+ *
+ * What "an emergency leads" means narrowed once loadAlerts started filing cards into the local and
+ * elsewhere sections by COVERAGE alone: this comparator runs inside each section, so an emergency
+ * leads its own list and can no longer climb into a section that promises it's about the reader.
+ * The mixed-coverage cases below still describe one sorted list because that is what cardCmp sees —
+ * loadAlerts sorts first and splits after, and the split preserves order. */
 {
   // Build the shape cardCmp reads off a glist entry: level, coverage, CAP severity.
   const card = (event, hit, severity = 'Severe') => ({
@@ -199,10 +214,11 @@ function check(name, actual, expected) {
   const awayWinter  = card('Winter Storm Warning', false);
   const awayHeat    = card('Heat Advisory', false, 'Minor');
 
-  // The exception, and it stays: a tornado emergency leads from anywhere. A page that files an
-  // active tornado below your heat advisory because its polygon hasn't reached you is not a
-  // weather page.
-  check('a distant emergency still leads', order(localStorm, awayTornado)[0], 'Tornado Warning');
+  // Emergency is still the first term, above coverage. Inside the elsewhere list that is the whole
+  // job: a tornado warning two counties over leads the other things two counties over. It is also
+  // what keeps the degraded flat mode — zones unresolved, one undivided list — from filing an
+  // active tornado below a heat advisory.
+  check('an emergency leads whatever it is sorted against', order(localStorm, awayTornado)[0], 'Tornado Warning');
 
   // The rule the rest of the list follows. Both of these used to come out the other way round.
   check('your warning outranks a distant warning',
