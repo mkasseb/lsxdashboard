@@ -13,8 +13,8 @@ existing dark theme, card layout, `prefers-reduced-motion` support, aria-labels,
 
 > **Note (superseded):** the satellite is no longer an `<img>` with a "didn't load"
 > message. It is a NASA GIBS tile layer stacked under the radar on the same Leaflet
-> map, so it fails per-tile like any other layer. See the README's "Radar and
-> satellite are one widget, stacked".
+> map, so it fails per-tile like any other layer. See "Radar and satellite are
+> one widget, stacked" in DESIGN.md.
 
 An audit was performed on 2026-07-27 with an Extreme Heat Warning active, which is
 useful context for the alert-card items below.
