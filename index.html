@@ -6974,8 +6974,15 @@ function renderTheCall(){
 // holds that <button> and #alertsElse is no longer display:none. A v5 snapshot restores both — a
 // dashed toggle wearing the default button skin, above a block of cards nothing collapses, sitting
 // where the local alerts belong. Same class of wrong first paint as v4's orphaned expander.
-var SNAP_KEY="lsxSnap_v6", snapRestored=false, NET_OK=false;
-try{ localStorage.removeItem("lsxSnap_v1"); localStorage.removeItem("lsxSnap_v3"); localStorage.removeItem("lsxSnap_v4"); localStorage.removeItem("lsxSnap_v5"); }catch(e){}   // don't let dead snapshots crowd the live one
+// v7: coverage alone decides which section a card sits in now, so a v6 snapshot of #alerts restores
+// the OLD split — a distant tornado warning back in the local list, above the "elsewhere" heading,
+// wearing an "Elsewhere in LSX" badge whose class no longer has a single rule behind it (measured:
+// zero matching selectors, so it paints as bare inline text in the banner's flex row). Both halves
+// of the contradiction this version was cut to remove, restored together. #alerts is the
+// safety-critical part on the shortest leash, which makes it the worst one to be wrong on first
+// paint — a reader who opens the page to check on a warning is the reader who gets the stale answer.
+var SNAP_KEY="lsxSnap_v7", snapRestored=false, NET_OK=false;
+try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
 var SNAP_PARTS=[
   {id:"afd",      ttl:6*3600000},
   {id:"alerts",   ttl:15*60000},     // safety-critical: short leash
