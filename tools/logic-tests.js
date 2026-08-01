@@ -38,8 +38,13 @@ const SUBJECT = new Function(`
   ${lift(/^function alertParas\(txt\)\{[\s\S]*?^\}/m, 'alertParas()')}
   ${lift(/^var LEVELS=\{[\s\S]*?^\};/m, 'LEVELS')}
   ${lift(/^function alertLevel\(p\)\{[\s\S]*?^\}/m, 'alertLevel()')}
+  ${lift(/^function isTakeCover\(lv\)\{.*\}$/m, 'isTakeCover()')}
   ${lift(/^var ALERT_SEV_RANK=\{[\s\S]*?\};/m, 'ALERT_SEV_RANK')}
   ${lift(/^function cardCmp\(a,b\)\{[\s\S]*?^\}/m, 'cardCmp()')}
+  ${lift(/^var HIT_RANK=\{[\s\S]*?\};/m, 'HIT_RANK')}
+  ${lift(/^function strongestHit\(kinds\)\{[\s\S]*?^\}/m, 'strongestHit()')}
+  ${lift(/^function alertScope\(hit,localMode\)\{[\s\S]*?^\}/m, 'alertScope()')}
+  ${lift(/^function scopeAttr\(hit,localMode\)\{.*\}$/m, 'scopeAttr()')}
   ${lift(/^var FAMILY_CFG=\{[\s\S]*?^\};/m, 'FAMILY_CFG')}
   ${lift(/^var LAYERS_MAX=\d+;/m, 'LAYERS_MAX')}
   ${lift(/^function coldVerdict\(nowT,mMin,cMin\)\{[\s\S]*?^\}/m, 'coldVerdict()')}
@@ -48,7 +53,8 @@ const SUBJECT = new Function(`
   ${lift(/^function parseMcd\(text\)\{[\s\S]*?^\}/m, 'parseMcd()')}
   ${lift(/^function mcdValidEnd\(v,refMs\)\{[\s\S]*?^\}/m, 'mcdValidEnd()')}
   ${lift(/^function geomTouchesEnv\(geom,env\)\{[\s\S]*?^\}/m, 'geomTouchesEnv()')}
-  return { rangeMark, rangeRow, alertLevel, cardCmp, FAMILY_CFG, coldVerdict, OUTLOOK_CFG, outlookVerdict,
+  return { rangeMark, rangeRow, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr,
+           FAMILY_CFG, coldVerdict, OUTLOOK_CFG, outlookVerdict,
            parseMcd, mcdValidEnd, geomTouchesEnv };
 `)();
 
@@ -164,6 +170,15 @@ function check(name, actual, expected) {
   check('Flood Advisory carrying severity Severe stays an advisory', L('Flood Advisory', 'Severe'), 'advisory');
 
   check('watch', L('Severe Thunderstorm Watch', 'Severe'), 'watch');
+
+  /* The one case where CAP severity is NOT allowed to escalate. NWS ships Tornado Watch with
+     severity "Extreme" — alone among watches — and the escalation rule read that as a take-cover
+     product, handing a watch the emergency ramp: red, pulsing, unfoldable, indistinguishable from
+     the Tornado Warning above it. A watch is a watch. */
+  check('a tornado watch is a WATCH, not an emergency', L('Tornado Watch', 'Extreme'), 'watch');
+  check('no watch escalates on CAP severity', L('Flash Flood Watch', 'Extreme'), 'watch');
+  // ...and the escalation still works everywhere it was meant to, which is why it stayed.
+  check('a warning still escalates on CAP Extreme', L('Flash Flood Warning', 'Extreme'), 'emergency');
   check('statement', L('Special Weather Statement', 'Minor'), 'statement');
   check('CAP Moderate never demotes a warning', L('Winter Storm Warning', 'Moderate'), 'warning');
   check('unknown event with no severity', L('Beach Hazards Message', ''), 'statement');
@@ -177,14 +192,96 @@ function check(name, actual, expected) {
     rank('Heat Watch') < rank('Heat Advisory'), true);
 }
 
+/* ============ isTakeCover ============ */
+/* "Is the answer ACT NOW?" — the question three unrelated-looking behaviours turn out to share:
+ * the sort (it leads its list), the family fold (it is never a line item inside another card), and
+ * the local all-clear row (it drops the calm voice while one runs nearby). Each used to ask it
+ * inline as lv.k === 'emergency'. Three copies is fine until the answer moves, and it just did —
+ * Tornado Watch stopped being an emergency, which rewrote all three at once and happened to be
+ * right at all three. These assert the membership itself, so the next such move is checked rather
+ * than lucky. */
+{
+  const T = (event, severity) => SUBJECT.isTakeCover(SUBJECT.alertLevel({ event, severity }));
+
+  check('a tornado warning is take-cover', T('Tornado Warning', 'Severe'), true);
+  check('CAP Extreme on a warning is take-cover', T('Flash Flood Warning', 'Extreme'), true);
+
+  // The move that motivated the naming. A watch is a watch, so it leads nothing, folds like
+  // anything else in its family, and does not mute the all-clear line.
+  check('a tornado watch is NOT take-cover', T('Tornado Watch', 'Extreme'), false);
+
+  check('an ordinary warning is not', T('Winter Storm Warning', 'Severe'), false);
+  check('an advisory is not', T('Heat Advisory', 'Minor'), false);
+  check('a missing level does not throw', SUBJECT.isTakeCover(null), false);
+
+  // The predicate and the ramp must not be able to drift apart: take-cover is exactly the set
+  // alertLevel() calls `emergency`, no more and no less.
+  const RAMP = ['Tornado Warning', 'Flash Flood Warning', 'Tornado Watch', 'Winter Storm Warning',
+                'Heat Advisory', 'Special Weather Statement'];
+  check('take-cover is exactly the emergency tier',
+    RAMP.map(e => SUBJECT.isTakeCover(SUBJECT.alertLevel({ event: e, severity: 'Extreme' }))),
+    RAMP.map(e => SUBJECT.alertLevel({ event: e, severity: 'Extreme' }).k === 'emergency'));
+}
+
+/* ============ strongestHit / alertScope / scopeAttr ============ */
+/* WHICH LIST a card goes in — "for this place" or "elsewhere in the office's area". This is the
+ * rule the alerts section exists to express, and until the extraction it was a line inside
+ * loadAlerts()'s promise chain: verifiable only by pointing a browser at a live outbreak, which is
+ * a test you cannot run in calm weather and cannot run at all in CI.
+ *
+ * The signature is half the fix. alertScope() takes coverage and nothing else, so the exception
+ * that used to live on that line — an emergency stayed in the local section from anywhere — has
+ * nowhere to be expressed: there is no severity to consult. Severity sets how loud a card is; it
+ * never sets whether the card is about you. */
+{
+  const { strongestHit, alertScope, scopeAttr } = SUBJECT;
+
+  // One card makes one coverage claim, so a group's segments reduce to their best evidence: a real
+  // point-in-polygon beats a county listing beats a forecast zone beats a fire zone.
+  check('polygon is the strongest claim', strongestHit(['zone', 'polygon', 'county']), 'polygon');
+  check('county beats zone', strongestHit(['zone', 'county']), 'county');
+  check('a miss among hits does not weaken the claim', strongestHit([false, 'zone', false]), 'zone');
+  check('all misses is a miss', strongestHit([false, false]), false);
+  check('no segments is a miss', strongestHit([]), false);
+  check('a missing list does not throw', strongestHit(undefined), false);
+
+  // The regression that started this: a tornado warning whose polygon has not reached you belongs
+  // in the elsewhere list. It used to be hoisted into the local section, where it sat under a
+  // heading meaning "for this place" wearing a badge that said it wasn't.
+  check('no coverage is ELSEWHERE, whatever the alert is', alertScope(false, true), 'away');
+  check('a polygon hit is local', alertScope('polygon', true), 'here');
+  // A zone match is weaker evidence but it is still coverage — it decides the list, and only the
+  // BADGE is held to the stronger standard.
+  check('a zone hit is local too', alertScope('zone', true), 'here');
+
+  /* Fail open. With /points unresolved, coverage is unknowable and the page owes one undivided
+     list rather than a split it cannot support — "flat" is deliberately not "away", because an
+     alert we cannot place is not an alert we have placed somewhere else. A cluttered list is a
+     much smaller failure than a warning filed under a heading promising it isn't overhead. */
+  check('zones unresolved: nothing is filed away', alertScope(false, false), 'flat');
+  check('...not even something that matched', alertScope('polygon', false), 'flat');
+
+  // The DOM half. Flat mode writes no attribute, because three readers normalise a missing
+  // data-scope to "" and inventing a third value would give them something new to disagree about.
+  check('flat mode writes no data-scope', scopeAttr('polygon', false), '');
+  check('the split writes its side', [scopeAttr('polygon', true), scopeAttr(false, true)],
+    ['here', 'away']);
+}
+
 /* ============ cardCmp ============ */
 /* The order of the alert list, which is the one thing about this section a reader acts on. The rule
-   is: an emergency leads from anywhere, then everything covering THIS LOCATION, then everything
-   else — level inside each of those, CAP severity last.
+   is: an emergency leads, then everything covering THIS LOCATION, then everything else — level
+   inside each of those, CAP severity last.
  *
  * Level used to be the primary key, and that put a tornado warning two counties away above a severe
  * thunderstorm warning genuinely overhead, because alertLevel() promotes every tornado warning to
- * `emergency`. These assert the rule directly rather than by eye. */
+ * `emergency`. These assert the rule directly rather than by eye.
+ *
+ * What "an emergency leads" means narrowed once loadAlerts started filing cards into the local and
+ * elsewhere sections by COVERAGE alone: this comparator runs inside each section, so an emergency
+ * leads its own list and can no longer climb into a section that promises it's about the reader.
+ * The mixed-coverage cases below still describe one sorted list because that is what cardCmp sees —
+ * loadAlerts sorts first and splits after, and the split preserves order. */
 {
   // Build the shape cardCmp reads off a glist entry: level, coverage, CAP severity.
   const card = (event, hit, severity = 'Severe') => ({
@@ -199,10 +296,11 @@ function check(name, actual, expected) {
   const awayWinter  = card('Winter Storm Warning', false);
   const awayHeat    = card('Heat Advisory', false, 'Minor');
 
-  // The exception, and it stays: a tornado emergency leads from anywhere. A page that files an
-  // active tornado below your heat advisory because its polygon hasn't reached you is not a
-  // weather page.
-  check('a distant emergency still leads', order(localStorm, awayTornado)[0], 'Tornado Warning');
+  // Emergency is still the first term, above coverage. Inside the elsewhere list that is the whole
+  // job: a tornado warning two counties over leads the other things two counties over. It is also
+  // what keeps the degraded flat mode — zones unresolved, one undivided list — from filing an
+  // active tornado below a heat advisory.
+  check('an emergency leads whatever it is sorted against', order(localStorm, awayTornado)[0], 'Tornado Warning');
 
   // The rule the rest of the list follows. Both of these used to come out the other way round.
   check('your warning outranks a distant warning',
@@ -444,4 +542,4 @@ if (failed) {
   console.error(`\n${failed} logic test(s) failed`);
   process.exit(1);
 }
-console.log('ok    logic: rangeMark, alertLevel, cardCmp, FAMILY_CFG, coldVerdict, outlookVerdict, parseMcd, mcdValidEnd and geomTouchesEnv behave');
+console.log('ok    logic: rangeMark, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr, FAMILY_CFG,\n             coldVerdict, outlookVerdict, parseMcd, mcdValidEnd and geomTouchesEnv behave');

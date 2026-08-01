@@ -153,13 +153,30 @@ being the one event where the word and the stakes are not the same size. The eve
 (`eventFamily`) is *not* part of this and stays a separate axis: it answers "what kind of
 weather", which is a different question from "how bad".
 
+A **watch** is the one thing that escalation may not touch. NWS ships Tornado Watch with severity
+`Extreme` — alone among watches; a sweep of every active watch in the country found `Severe` or
+below on all the rest — so the rule was not handling an unusual product, it was firing on exactly
+one product and firing wrong. A watch says conditions are becoming favorable, which is the tier the
+word already names, and the emergency ramp is red, *pulses*, and never folds: a Tornado Watch was
+arriving in the exact chrome of the Tornado Warning it most needs to be distinguishable from.
+
 **But severity is not the sort key — location is.** The office issues for forty-odd counties and
 the reader is standing in one spot in them, so `cardCmp()` ranks coverage above level: an emergency
-leads from anywhere, then everything covering this location whatever its level, then everything
-else. It used to sort on level first, which reads right and isn't — `alertLevel()` promotes every
-Tornado Warning to `emergency`, so a tornado two counties away outranked a Severe Thunderstorm
-Warning genuinely overhead. Your Heat Advisory now sits
-above a distant Winter Storm Warning, which is the correct answer to "what should I look at".
+leads, then everything covering this location whatever its level, then everything else. It used to
+sort on level first, which reads right and isn't — `alertLevel()` promotes every Tornado Warning to
+`emergency`, so a tornado two counties away outranked a Severe Thunderstorm Warning genuinely
+overhead. Your Heat Advisory now sits above a distant Winter Storm Warning, which is the correct
+answer to "what should I look at".
+
+Severity sets how loud a card is; it never sets whether the card is *about you*. So it decides
+nothing about which **section** a card lands in — that is coverage, alone. There used to be an
+exception here, hoisting any emergency-level alert into the local section from anywhere, and what
+it shipped was a card sitting under a heading that means "for this place" wearing a badge that said
+it wasn't. A reader resolves that contradiction while deciding whether to move their family. The
+distant tornado leads the elsewhere list instead, red rail and all. `cardCmp()` is unchanged by
+this and simply runs inside each section now, so "an emergency leads" means it leads its own list;
+the coverage term in it still does real work in the degraded flat mode, where zones never resolved
+and one list holds everything.
 
 Coverage is decided by `alertCoversMe()`, which is two tests because NWS issues alerts two ways:
 storm-based warnings carry a polygon and get a real point-in-shape ray-cast (holes included), while
@@ -189,6 +206,12 @@ toggle puts them back — so there is one card renderer, not a compact one drift
 one. The separation is structural rather than tonal: no tint, a thinner rail, smaller type, and
 deliberately no opacity. Dimmed text on a tinted rail is how the contrast work gets undone, and
 these are still watches and warnings for somebody.
+
+When nothing covers this location the section opens with the all-clear line, which is the answer to
+the only question the reader came with. Its *voice* is conditional, though: with an emergency in
+the list below, a glowing green dot sitting directly on top of a red tornado rail is the page
+arguing with itself, so the row keeps the fact and drops the good news — muted, no glow — and names
+what is running nearby rather than leaving it to be scrolled to.
 
 **The page spends colour like it is scarce.** Saturated colour means severity, and links are blue.
 That is the whole budget. Countdowns moved off `--accent` for exactly that reason: rendered in the
