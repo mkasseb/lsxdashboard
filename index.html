@@ -6152,7 +6152,7 @@ function useMyLocation(explicit){
   navigator.geolocation.getCurrentPosition(function(pos){
     label(" My location");
     var lat=pos.coords.latitude, lon=pos.coords.longitude;
-    var useIt=function(){ setLocation({name:"My Location",lat:lat,lon:lon,station:null},{save:true}); };
+    var useIt=function(nm){ setLocation({name:nm||"My Location",lat:lat,lon:lon,station:null},{save:true}); };
     // Only adopt the fix if it falls inside the LSX forecast area.
     pointsFor(lat,lon).then(function(pt){
       var cwa=pt&&pt.properties&&(pt.properties.cwa||pt.properties.gridId);
@@ -6160,8 +6160,13 @@ function useMyLocation(explicit){
         if(explicit) alert("Your current location is outside the St. Louis (LSX) forecast area, so it isn't shown on this dashboard.");
         return;   // keep the existing in-area location
       }
-      useIt();
-    }).catch(function(){ useIt(); });   // can't verify → allow it
+      /* The same response that vouched for the CWA names the place: /points carries the nearest
+         town as relativeLocation. Showing it beats the literal "My Location" the header used to
+         echo — "Wentzville, MO" tells you which forecast you are actually reading, and costs no
+         second request. The literal stays as the fallback when the field is missing. */
+      var rl=pt&&pt.properties&&pt.properties.relativeLocation&&pt.properties.relativeLocation.properties;
+      useIt(rl&&rl.city?rl.city+(rl.state?", "+rl.state:""):null);
+    }).catch(function(){ useIt(null); });   // can't verify → allow it, under the generic name
   },function(){
     label(" My location");
     if(explicit) alert("Couldn't get your location. Make sure location access is allowed for this site.");
