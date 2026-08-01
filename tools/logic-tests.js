@@ -53,9 +53,11 @@ const SUBJECT = new Function(`
   ${lift(/^function parseMcd\(text\)\{[\s\S]*?^\}/m, 'parseMcd()')}
   ${lift(/^function mcdValidEnd\(v,refMs\)\{[\s\S]*?^\}/m, 'mcdValidEnd()')}
   ${lift(/^function geomTouchesEnv\(geom,env\)\{[\s\S]*?^\}/m, 'geomTouchesEnv()')}
+  ${lift(/^function watchBoundary\(feats\)\{[\s\S]*?^\}/m, 'watchBoundary()')}
+  ${lift(/^function chaikinRing\(ring,iters\)\{[\s\S]*?^\}/m, 'chaikinRing()')}
   return { rangeMark, rangeRow, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr,
            FAMILY_CFG, coldVerdict, OUTLOOK_CFG, outlookVerdict,
-           parseMcd, mcdValidEnd, geomTouchesEnv };
+           parseMcd, mcdValidEnd, geomTouchesEnv, watchBoundary, chaikinRing };
 `)();
 
 let failed = 0;
@@ -538,8 +540,63 @@ LAT...LON   38759474 39039367 39299179 39519038
     T({ type: 'Polygon', coordinates: [] }, env), false);
 }
 
+/* ============ watchBoundary ============ */
+// The dissolve behind the watch outline. The property that matters: an edge two counties share
+// must vanish, an edge only one county has must survive — everything else is stitching.
+{
+  const W = SUBJECT.watchBoundary;
+  const sq = coords => ({ geometry: { type: 'Polygon', coordinates: [coords] } });
+  // Two unit "counties" sharing the x=1 border. The dissolve of the pair is the 2x1 rectangle:
+  // one ring, six perimeter corners (the shared corners survive, the shared EDGE does not).
+  const left  = sq([[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]);
+  const right = sq([[1, 0], [2, 0], [2, 1], [1, 1], [1, 0]]);
+  const pair = W([left, right]);
+  // One ring of exactly 7 points (6 perimeter vertices + the closing repeat) is only reachable
+  // if the shared x=1 edge dissolved: with it still present the walk would close early on one
+  // square and leave the other as a second ring.
+  check('watchBoundary dissolves two counties to one ring', pair.length, 1);
+  check('watchBoundary perimeter closes', pair[0].length, 7);
+  check('watchBoundary ring returns to its start',
+    JSON.stringify(pair[0][0]), JSON.stringify(pair[0][pair[0].length - 1]));
+  // A county with no neighbour keeps every edge it arrived with — [lat,lng] flipped from GeoJSON.
+  const lone = W([sq([[10, 20], [11, 20], [11, 21], [10, 21], [10, 20]])]);
+  check('watchBoundary lone county keeps its own ring', lone.length, 1);
+  check('watchBoundary flips GeoJSON x,y to Leaflet lat,lng',
+    JSON.stringify(lone[0][0]), JSON.stringify([20, 10]));
+  // Two watches that don't touch stay two rings — the walk must not weld distant shapes.
+  check('watchBoundary separate clusters stay separate rings',
+    W([left, sq([[5, 5], [6, 5], [6, 6], [5, 6], [5, 5]])]).length, 2);
+  check('watchBoundary MultiPolygon parts contribute their rings',
+    W([{ geometry: { type: 'MultiPolygon', coordinates: [
+      [[[0, 0], [1, 0], [1, 1], [0, 1], [0, 0]]],
+      [[[5, 5], [6, 5], [6, 6], [5, 6], [5, 5]]],
+    ] } }]).length, 2);
+  check('watchBoundary null geometry contributes nothing', W([{ geometry: null }]).length, 0);
+}
+
+/* ============ chaikinRing ============ */
+// The smoothing between watchBoundary's honest stair-steps and the drawn outline. The invariants:
+// corners go, quarter-points arrive, closure and endpoints are preserved exactly.
+{
+  const C = SUBJECT.chaikinRing;
+  const sq = [[0, 0], [4, 0], [4, 4], [0, 4], [0, 0]];
+  const s1 = C(sq, 1);
+  check('chaikinRing closed ring stays closed',
+    JSON.stringify(s1[0]), JSON.stringify(s1[s1.length - 1]));
+  check('chaikinRing one pass doubles a closed ring', s1.length, 9);   // 4 vertices → 8, + closing repeat
+  check('chaikinRing cuts the corner off', s1.some(p => p[0] === 4 && p[1] === 4), false);
+  // The cuts land at 1/4 and 3/4 along each edge — for the (4,0)→(4,4) edge, (4,1) and (4,3).
+  check('chaikinRing cuts at quarter points',
+    s1.some(p => p[0] === 4 && p[1] === 1) && s1.some(p => p[0] === 4 && p[1] === 3), true);
+  // An open chain is a boundary gap the walk could not close; smoothing must not weld it shut.
+  const o1 = C([[0, 0], [2, 0], [2, 2]], 1);
+  check('chaikinRing open chain keeps its endpoints',
+    JSON.stringify([o1[0], o1[o1.length - 1]]), JSON.stringify([[0, 0], [2, 2]]));
+  check('chaikinRing degenerate input passes through', C([[1, 2], [3, 4]], 2).length, 2);
+}
+
 if (failed) {
   console.error(`\n${failed} logic test(s) failed`);
   process.exit(1);
 }
-console.log('ok    logic: rangeMark, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr, FAMILY_CFG,\n             coldVerdict, outlookVerdict, parseMcd, mcdValidEnd and geomTouchesEnv behave');
+console.log('ok    logic: rangeMark, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr, FAMILY_CFG,\n             coldVerdict, outlookVerdict, parseMcd, mcdValidEnd, geomTouchesEnv, watchBoundary and chaikinRing behave');
