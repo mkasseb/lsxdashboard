@@ -776,6 +776,29 @@
      person to change the map's height would have edited these. */
   /* Leaflet map + radar overlays */
   #radar.leaflet-container{background:#0b0f16;font-family:inherit}
+  /* GeoColor under reflectivity. The imagery is opaque and, by day, near-white — the same luminance
+     as the light end of the radar ramp, so echoes, warning outlines and the location pin were all
+     fighting the cloud tops for contrast. Darkened, NOT faded: opacity would blend cloud with the
+     basemap into mud (see labelUrl()'s comment), while a brightness drop keeps every pixel's shape
+     and only takes its glare. The filter rides on the imagery's own pane, so the labels — one pane
+     up — stay crisp, and applySkyLayers() only sets the class while reflectivity is stacked on
+     top; alone, the satellite IS the picture and shows at full brightness. */
+  #radar.sat-dim .leaflet-sat-pane{filter:brightness(.6) saturate(.85)}
+  /* "You are here", rebuilt for busy backgrounds. The old mark was 5px of #4aa3ff circleMarker —
+     the same hue family as light-rain returns, basemap water and GeoColor's night lights, which
+     are precisely the pixels it has to be found against. A white core in a dark ring reads over
+     all of them; the pulse ring is what draws the eye on a map where everything else also moves. */
+  .me-pin{width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid #14273f;
+    box-shadow:0 0 0 2px rgba(255,255,255,.85),0 2px 10px rgba(0,0,0,.55)}
+  .me-pin::after{content:"";position:absolute;inset:-3px;border-radius:50%;
+    border:2px solid rgba(255,255,255,.7);animation:mePulse 2.4s ease-out infinite}
+  @keyframes mePulse{0%{transform:scale(.55);opacity:.9}70%{transform:scale(1.9);opacity:0}100%{transform:scale(1.9);opacity:0}}
+  @media (prefers-reduced-motion: reduce){.me-pin::after{display:none}}
+  /* A tornado warning is the one shape on this map allowed to move on its own: the stroke breathes
+     so the box that matters most cannot be skimmed past among the calmer ones. */
+  .warn-tor{animation:torPulse 1.6s ease-in-out infinite}
+  @keyframes torPulse{0%,100%{stroke-opacity:1}50%{stroke-opacity:.5}}
+  @media (prefers-reduced-motion: reduce){.warn-tor{animation:none}}
   /* Leaflet ships its attribution as #0078A8 on a white pill — 3.4:1, and the one piece of text on
      the page whose colour we had left to a third-party stylesheet. Same words, same white pill
      (it has to stay legible over whatever the basemap is doing underneath), darkened to clear AA. */
@@ -825,6 +848,16 @@
   .rl-ticks{display:block;position:relative;height:15px;margin-top:3px}
   .rl-ticks span{position:absolute;transform:translateX(-50%);font-size:var(--fs-xs);
     font-weight:600;color:var(--muted);white-space:nowrap}
+  /* ===== Hazard key =====
+     The reflectivity key says what the colours of the RAIN mean; nothing said what the coloured
+     BOXES meant. One chip per hazard type actually drawn right now — syncWarnKey() writes them
+     from the same style functions that paint the shapes, so the key cannot name a colour the map
+     is not using, and :empty removes the row entirely on a clear day. */
+  .rs-wkey{display:flex;flex-wrap:wrap;gap:5px 14px;margin-top:8px}
+  .rs-wkey:empty{display:none}
+  .rw-chip{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-xs);
+    font-weight:600;color:var(--muted)}
+  .rw-chip i{width:10px;height:10px;border-radius:3px;flex:0 0 auto;border:1px solid rgba(0,0,0,.3)}
   /* Radar loop scrubber — sits BELOW the map so it never fights the maplock overlay for taps */
   .radar-ctl{display:none;align-items:center;gap:11px;margin-top:9px}
   .radar-ctl.ready{display:flex}
@@ -1785,6 +1818,9 @@
           <span class="rl-ticks"><span style="left:12%">light</span><span style="left:60%">heavy</span><span style="left:88%">hail</span></span>
         </span>
       </div>
+      <!-- Empty in the markup on purpose: syncWarnKey() fills it from the shapes actually drawn,
+           and CSS :empty removes the row when the map is clear. -->
+      <div class="rs-wkey" id="rsWarnKey"></div>
     </div>
     <div class="imgcap" id="rsCap"><span></span><span></span></div>
   </section>
@@ -2482,9 +2518,16 @@ function initMapLocks(){
 }
 
 /* ============ SKY MAP (NWS radar + GOES satellite + warning polygons) ============ */
-var rvMap=null, rvBase=null, rvMarker=null, nwsRadar=null, warnLayer=null;
-var satLayer=null, satLabels=null;
+var rvMap=null, rvBase=null, rvMarker=null, nwsRadar=null, warnLayer=null, warnCase=null;
+var satLayer=null, baseLabels=null;
 var NWS_WMS="https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows";
+/* 0.9, not the 0.8 it launched with. The 0.8 was tuned when reflectivity sat straight on a dark
+   basemap and needed to let the geography through; over the dimmed cloud shield the geography
+   comes through the labels pane instead, and the extra tenth is what keeps LIGHT rain — the low,
+   translucent end of the ramp — from vanishing into cloud texture. One constant because three
+   call sites (the fallback layer, its refresh, and every pooled frame) must agree or a scrub
+   would visibly change the weather's weight. */
+var RADAR_OPACITY=0.9;
 /* NASA GIBS serves GOES-East GeoColor as WMTS in the map's own projection (EPSG:3857), which is
    the whole reason the satellite can be a LAYER now instead of a separate view. The old source \u2014
    NESDIS's `SECTOR/umv/GEOCOLOR/600x600.jpg` \u2014 is a finished picture in a fixed frame: nothing in
@@ -2508,16 +2551,20 @@ function effectiveLight(){
   // data-theme always holds the resolved theme; the "auto" pref never reaches the DOM
   return document.documentElement.getAttribute("data-theme")==="light";
 }
+/* The nolabels variant, deliberately: the basemap's own place names are baked into its tiles, at
+   the bottom of the stack, where every layer above them \u2014 cloud, rain, watch shade \u2014 buries them
+   exactly when geography matters most. The names come back via labelUrl() as a separate layer at
+   the TOP of the stack instead. */
 function baseUrl(){
   return effectiveLight()
-    ? "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-    : "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+    ? "https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png";
 }
-/* GeoColor is opaque imagery: laid over the basemap it hides every state line and city name the
-   basemap was drawing, and a satellite view with no geography under it is a pretty picture you
-   can't locate yourself in. CARTO publishes the label half of the same basemap separately, so the
-   fix is to put the labels back on TOP of the imagery rather than to make the imagery translucent
-   (which just turns both layers to mud). Same origin as the basemap \u2014 no new CSP entry. */
+/* The label half of the same basemap, published separately by CARTO (same origin \u2014 no new CSP
+   entry). It began as the satellite's companion \u2014 GeoColor is opaque and buried the basemap's
+   names \u2014 but the radar buries them just as thoroughly, so the labels are now a permanent layer
+   above BOTH: a city under the storm is the city someone is squinting for. They ride above the
+   sat-dim filter too, staying crisp while the imagery under them dims. */
 function labelUrl(){
   return effectiveLight()
     ? "https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png"
@@ -2525,7 +2572,7 @@ function labelUrl(){
 }
 function updateRadarBase(){
   if(rvBase) rvBase.setUrl(baseUrl());
-  if(satLabels) satLabels.setUrl(labelUrl());
+  if(baseLabels) baseLabels.setUrl(labelUrl());
 }
 /* ---- Is the sky actually drawing? ---------------------------------------
    A tile layer that fails leaves the basemap showing, and a bare basemap under this card is
@@ -2582,6 +2629,16 @@ function initRadarMap(){
      Warnings deliberately do NOT toggle with reflectivity \u2014 someone who turns it off to look at
      the cloud shield still needs to see where the warning is. */
   rvMap.createPane("radarPane").style.zIndex=350;
+  /* The satellite gets a pane of its own for a different reason than the radar did: not stacking
+     order (a zIndex on the layer handled that for years) but so CSS can reach the IMAGERY alone.
+     The sat-dim filter — see the rule on #radar.sat-dim — must darken the cloud tops without
+     touching the place names. 250 keeps the imagery above the basemap tiles (200) and under
+     reflectivity (350). The LABELS go above the reflectivity too — 375, under the overlays at 400
+     — because a name legible only in clear air answers no question anyone asks a radar: "is that
+     cell over Springfield" is exactly the moment the name must survive. Warning polygons still
+     out-rank the labels; a label the storm can't bury, a box nothing can. */
+  rvMap.createPane("satPane").style.zIndex=250;
+  rvMap.createPane("labelPane").style.zIndex=375;
   rvBase=L.tileLayer(baseUrl(),{subdomains:"abcd",maxZoom:12,zIndex:1,
     /* Only the BASEMAP is credited here. The NOAA and NASA lines used to ride along, and on a
        375px phone the four of them wrapped to three lines — 46px over a 236px map, a fifth of the
@@ -2591,9 +2648,12 @@ function initRadarMap(){
        GIBS asks for acknowledgement, which the caption gives. Every source is still credited on
        the page — the credits just stopped being drawn over the weather. */
     attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>'}).addTo(rvMap);
-  satLayer=L.tileLayer(GIBS_SAT,{maxZoom:12,maxNativeZoom:SAT_MAX_NATIVE,zIndex:5});
+  satLayer=L.tileLayer(GIBS_SAT,{maxZoom:12,maxNativeZoom:SAT_MAX_NATIVE,pane:"satPane"});
   bindSkyHealth(satLayer);
-  satLabels=L.tileLayer(labelUrl(),{subdomains:"abcd",maxZoom:12,zIndex:6});
+  /* Added unconditionally, not tied to the satellite the way it used to be: the nolabels basemap
+     carries no names of its own, so this layer is the map's ONLY geography text now and every
+     combination of toggles needs it. */
+  baseLabels=L.tileLayer(labelUrl(),{subdomains:"abcd",maxZoom:12,pane:"labelPane"}).addTo(rvMap);
   /* Added straight away, not left for the catch in refreshRadarLayer(): the capabilities fetch
      takes a moment, and this paints reflectivity NOW rather than showing an empty map until the
      frame list resolves. The success path removes it once the pooled frames can drive.
@@ -2601,12 +2661,18 @@ function initRadarMap(){
      moment it runs, and a visitor who left the layer off last time should not pay for a sweep the
      next line would immediately take away again. */
   nwsRadar=L.tileLayer.wms(NWS_WMS,{
-    layers:"conus_bref_qcd",format:"image/png",transparent:true,opacity:0.8,version:"1.3.0",
+    layers:"conus_bref_qcd",format:"image/png",transparent:true,opacity:RADAR_OPACITY,version:"1.3.0",
     pane:"radarPane"
   });
   bindSkyHealth(nwsRadar);
   if(skyOn.radar) nwsRadar.addTo(rvMap);
-  rvMarker=L.circleMarker([current.lat,current.lon],{radius:5,color:"#4aa3ff",weight:2,fillColor:"#4aa3ff",fillOpacity:.9,interactive:false}).addTo(rvMap);
+  /* A divIcon rather than a circleMarker so the mark can be MORE than a disc — the .me-pin CSS
+     owns its look (halo, pulse) for the reasons given there. markerPane sits at 600, over the
+     warning polygons: being findable inside a warning is the moment the pin earns its keep. */
+  rvMarker=L.marker([current.lat,current.lon],{
+    icon:L.divIcon({className:"me-pin",iconSize:[16,16],iconAnchor:[8,8]}),
+    interactive:false,keyboard:false
+  }).addTo(rvMap);
   applySkyLayers(true);
   setTimeout(function(){ if(rvMap) rvMap.invalidateSize(); },250);
   /* The radar now stretches to whatever height the hero column ends up at, and that height moves
@@ -2773,7 +2839,7 @@ function showRadarFrame(i){
   if(!radarFrames.length) return;
   i=Math.max(0,Math.min(radarFrames.length-1,i));
   radarIdx=i;
-  radarFrames.forEach(function(f,k){ f.layer.setOpacity(k===i?0.8:0); });
+  radarFrames.forEach(function(f,k){ f.layer.setOpacity(k===i?RADAR_OPACITY:0); });
   var t=new Date(radarFrames[i].time), latest=(i===radarFrames.length-1);
   syncRadarBadge();
   var ft=document.getElementById("radarFrameTime");
@@ -2887,7 +2953,7 @@ function refreshRadarLayer(){
     radarFallback=true;
     if(nwsRadar){
       if(!rvMap.hasLayer(nwsRadar)) nwsRadar.addTo(rvMap);
-      nwsRadar.setOpacity(0.8); nwsRadar.setParams({_t:Date.now()});
+      nwsRadar.setOpacity(RADAR_OPACITY); nwsRadar.setParams({_t:Date.now()});
     }
     /* This used to blank the badge, which left a live map with nothing on it saying so — and left
        a DEAD map looking identical. syncRadarBadge() distinguishes the two: "latest sweep" while
@@ -2901,14 +2967,17 @@ function refreshRadarLayer(){
     updateRadarCtl();
   });
 }
+/* Weights and fills re-tuned against the bright satellite, not the dark basemap they were born
+   on: a shade heavier, a shade fuller, ordered so the deadliest boxes read first. The tornado
+   entry alone carries a className — see .warn-tor for what it buys and who it excludes. */
 function warnStyle(ev){
   ev=(ev||"").toLowerCase();
-  if(ev.indexOf("tornado")>=0)            return {color:"#ff2d55",weight:2.5,fillColor:"#ff2d55",fillOpacity:.14};
-  if(ev.indexOf("severe thunderstorm")>=0)return {color:"#ffb020",weight:2.5,fillColor:"#ffb020",fillOpacity:.12};
-  if(ev.indexOf("flash flood")>=0)        return {color:"#3ecf8e",weight:2.5,fillColor:"#3ecf8e",fillOpacity:.12};
-  if(ev.indexOf("flood")>=0)              return {color:"#2e8b57",weight:2,fillColor:"#2e8b57",fillOpacity:.10};
-  if(ev.indexOf("special marine")>=0||ev.indexOf("special weather")>=0) return {color:"#4aa3ff",weight:2,fillColor:"#4aa3ff",fillOpacity:.08};
-  return {color:"#c17bff",weight:2,fillColor:"#c17bff",fillOpacity:.10};
+  if(ev.indexOf("tornado")>=0)            return {color:"#ff2d55",weight:3,fillColor:"#ff2d55",fillOpacity:.20,className:"warn-tor"};
+  if(ev.indexOf("severe thunderstorm")>=0)return {color:"#ffb020",weight:3,fillColor:"#ffb020",fillOpacity:.18};
+  if(ev.indexOf("flash flood")>=0)        return {color:"#3ecf8e",weight:3,fillColor:"#3ecf8e",fillOpacity:.18};
+  if(ev.indexOf("flood")>=0)              return {color:"#2e8b57",weight:2.5,fillColor:"#2e8b57",fillOpacity:.14};
+  if(ev.indexOf("special marine")>=0||ev.indexOf("special weather")>=0) return {color:"#4aa3ff",weight:2.5,fillColor:"#4aa3ff",fillOpacity:.10};
+  return {color:"#c17bff",weight:2.5,fillColor:"#c17bff",fillOpacity:.14};
 }
 var lastWarnFeats=[];
 /* One predicate for "this alert is drawn on the radar", shared by the map and by the card's
@@ -2922,10 +2991,20 @@ function loadWarnPolygons(feats){
   if(!rvMap) return;
   var polys=lastWarnFeats.filter(isMappedAlert);
   if(warnLayer){ rvMap.removeLayer(warnLayer); warnLayer=null; }
-  if(!polys.length) return;
+  if(warnCase){ rvMap.removeLayer(warnCase); warnCase=null; }
+  if(!polys.length){ syncWarnKey(); return; }
   // Drawing is best-effort: this runs before the alert LIST renders, so a single malformed
   // geometry must not be able to take down the safety-critical list with it.
   try{
+    /* Casing: every warning drawn twice, a dark wide stroke under the coloured one — the road-map
+       trick, and the only treatment that keeps a coloured line legible over ANY background. No
+       single stroke colour can: over the dark basemap the old lines read fine, over white cloud
+       tops the yellow ones all but dissolved. Added first so it stays underneath; not interactive,
+       so every tap still lands on the coloured layer that owns the tooltips and card links. */
+    warnCase=L.geoJSON({type:"FeatureCollection",features:polys.map(normFeature)},{
+      style:{color:"#0b0f16",weight:5.5,opacity:.65,fill:false},
+      pane:"overlayPane",interactive:false
+    }).addTo(rvMap);
     warnLayer=L.geoJSON({type:"FeatureCollection",features:polys.map(normFeature)},{
       style:function(f){ return warnStyle(f.properties.event); },
       pane:"overlayPane",
@@ -2943,7 +3022,11 @@ function loadWarnPolygons(feats){
         });
       }
     }).addTo(rvMap);
-  }catch(e){ warnLayer=null; }
+  }catch(e){
+    if(warnCase){ rvMap.removeLayer(warnCase); }   // a casing with no coloured line over it is just a smudge
+    warnCase=null; warnLayer=null;
+  }
+  syncWarnKey();
 }
 function loadRadar(){  // recenter on location change
   if(!rvMap) return;
@@ -2978,17 +3061,22 @@ function geomTouchesEnv(geom,env){
   })(geom&&geom.coordinates||[]);
   return bb[0]<=env.xmax&&bb[2]>=env.xmin&&bb[1]<=env.ymax&&bb[3]>=env.ymin;
 }
-var watchFeats=[], watchKey="", watchAt=0, watchLayer=null;
+var watchFeats=[], watchKey="", watchAt=0, watchLayer=null, watchOutline=null;
 function isWatchEvent(ev){
   ev=(ev||"").toLowerCase();
   return ev.indexOf("tornado watch")>=0||ev.indexOf("severe thunderstorm watch")>=0;
 }
 function watchStyle(ev){
   /* radar.weather.gov's colours, so a reader coming from the official map keeps their bearings:
-     tornado watch yellow, severe thunderstorm watch pink. Fill-only — the product is county-based,
-     and stroking it would draw every internal county line; the warnings stay the crisp ones. */
-  if((ev||"").toLowerCase().indexOf("tornado")>=0) return {stroke:false,fillColor:"#ffe14d",fillOpacity:.16};
-  return {stroke:false,fillColor:"#db7093",fillOpacity:.16};
+     tornado watch yellow, severe thunderstorm watch pink. The FILL stays stroke-free — the product
+     is county-based, and stroking these shapes would draw every internal county line. The outline
+     a watch deserves is drawn separately, from watchBoundary()'s dissolve of those same counties,
+     so the perimeter can be crisp without the seams. */
+  /* .22, up from .16 — yellow at 16% over white cloud tops was close to invisible once the
+     satellite joined the stack. The dimmed imagery carries most of the recovery; this carries
+     the rest without shading the geography away, which is what the fill-only choice protects. */
+  if((ev||"").toLowerCase().indexOf("tornado")>=0) return {stroke:false,fillColor:"#ffe14d",fillOpacity:.22};
+  return {stroke:false,fillColor:"#db7093",fillOpacity:.22};
 }
 // Whether the card's "Show on radar" button has something to frame — the watch analogue of isMappedAlert.
 function watchOnRadar(ev){
@@ -3040,10 +3128,85 @@ function watchEvSet(){
   watchFeats.forEach(function(f){ s[(f.properties||{}).prod_type||""]=1; });
   return Object.keys(s).sort().join("|");
 }
+/* Dissolve a watch's county polygons into their outer perimeter. No geometry math: every edge two
+   counties share appears in the set exactly twice (once per county), so the perimeter is precisely
+   the edges that appear ONCE, stitched end-to-end into rings. Vertex equality can stand in for
+   intersection because the WWA service returns topologically shared borders and the query rounds
+   them to geometryPrecision=3 — neighbouring counties hand back bit-identical coordinates. Where
+   that assumption ever slips (a T-junction the rounding didn't heal), the walk just ends early and
+   ships an open polyline: a short gap in the outline, never a wrong shape. Returns rings as
+   [lat,lng] pairs, Leaflet-ready. */
+function watchBoundary(feats){
+  var cnt={}, seg={};
+  function k(p){ return p[0]+","+p[1]; }
+  function ring(r){
+    for(var i=0;i<r.length-1;i++){
+      var a=k(r[i]), b=k(r[i+1]);
+      if(a===b) continue;
+      var e=a<b?a+"|"+b:b+"|"+a;
+      cnt[e]=(cnt[e]||0)+1;
+      seg[e]=[r[i],r[i+1]];
+    }
+  }
+  feats.forEach(function(f){
+    var g=(f&&f.geometry)||{};
+    var polys=g.type==="Polygon"?[g.coordinates]:(g.type==="MultiPolygon"?g.coordinates:[]);
+    polys.forEach(function(p){ (p||[]).forEach(ring); });
+  });
+  var edges=[], adj={};
+  Object.keys(cnt).forEach(function(e){
+    if(cnt[e]!==1) return;   // shared border — interior, not perimeter
+    var s=seg[e], ed={a:k(s[0]),b:k(s[1]),pa:s[0],pb:s[1],used:false};
+    edges.push(ed);
+    (adj[ed.a]=adj[ed.a]||[]).push(ed);
+    (adj[ed.b]=adj[ed.b]||[]).push(ed);
+  });
+  var rings=[];
+  edges.forEach(function(start){
+    if(start.used) return;
+    start.used=true;
+    var pts=[start.pa,start.pb], cur=start.b, guard=edges.length+1;
+    while(cur!==start.a && guard-->0){
+      var nxt=(adj[cur]||[]).filter(function(ed){ return !ed.used; })[0];
+      if(!nxt) break;
+      nxt.used=true;
+      pts.push(nxt.a===cur?nxt.pb:nxt.pa);
+      cur=nxt.a===cur?nxt.b:nxt.a;
+    }
+    if(pts.length>2) rings.push(pts.map(function(p){ return [p[1],p[0]]; }));  // GeoJSON x,y → Leaflet lat,lng
+  });
+  return rings;
+}
+/* Chaikin corner-cutting: each pass replaces every vertex with two points a quarter and three
+   quarters of the way along its edges. Two passes turn the dissolve's county stair-steps into
+   gentle curves — the perimeter stops tracing bureaucracy and starts reading as weather. The
+   smoothed line no longer matches the county fill EDGE for edge, and that is fine on purpose:
+   at a .22 fill the mismatch is invisible, and the alternative (smoothing the fill too) would
+   redraw the actual counties under alert, which the fill is the honest record of. Closed rings
+   (first point repeated last) come back closed; a chain the boundary walk left open keeps its
+   endpoints so a gap stays a gap instead of growing a false bridge. */
+function chaikinRing(ring,iters){
+  if(!ring||ring.length<3) return ring||[];
+  var closed=ring[0][0]===ring[ring.length-1][0]&&ring[0][1]===ring[ring.length-1][1];
+  var pts=closed?ring.slice(0,-1):ring.slice();
+  for(var n=0;n<iters;n++){
+    var out=[], len=pts.length, edges=closed?len:len-1;
+    if(!closed) out.push(pts[0]);
+    for(var i=0;i<edges;i++){
+      var a=pts[i], b=pts[(i+1)%len];
+      out.push([a[0]*.75+b[0]*.25, a[1]*.75+b[1]*.25]);
+      out.push([a[0]*.25+b[0]*.75, a[1]*.25+b[1]*.75]);
+    }
+    if(!closed) out.push(pts[len-1]);
+    pts=out;
+  }
+  return closed?pts.concat([pts[0]]):pts;
+}
 function drawWatchPolygons(){
   if(!rvMap) return;
   if(watchLayer){ rvMap.removeLayer(watchLayer); watchLayer=null; }
-  if(!watchFeats.length) return;
+  if(watchOutline){ rvMap.removeLayer(watchOutline); watchOutline=null; }
+  if(!watchFeats.length){ syncWarnKey(); return; }
   try{
     watchLayer=L.geoJSON({type:"FeatureCollection",features:watchFeats.map(normFeature)},{
       style:function(f){ return watchStyle((f.properties||{}).prod_type); },
@@ -3060,7 +3223,60 @@ function drawWatchPolygons(){
       }
     }).addTo(rvMap);
     watchLayer.bringToBack();   // fills under every outline: warnings and MDs both out-rank a watch shade
-  }catch(e){ watchLayer=null; }
+    /* The perimeter the fill was too shy to show: a thin solid line inside a wide, faint halo of
+       its own colour. The halo is what earns the line its legibility over bright cloud — it widens
+       the stroke's footprint without adding a second pattern, where the first cut of this (dark
+       casing under dashes, the warnings' treatment scaled up) read as hazard tape. The watch stays
+       distinguishable from the warnings by everything else: huge where they are small, smooth
+       where they are sharp, glowing where they are cased. Lines are not interactive — the county
+       fills underneath own the tooltip and the card link, and the key under the map names the
+       colour. */
+    var byType={};
+    watchFeats.forEach(function(f){
+      var ev=(f.properties||{}).prod_type||"";
+      (byType[ev]=byType[ev]||[]).push(f);
+    });
+    var parts=[];
+    Object.keys(byType).forEach(function(ev){
+      var rings=watchBoundary(byType[ev]).map(function(r){ return chaikinRing(r,2); });
+      if(!rings.length) return;
+      var c=watchStyle(ev).fillColor;
+      parts.push(L.polyline(rings,{color:c,weight:10,opacity:.16,pane:"overlayPane",interactive:false}));
+      parts.push(L.polyline(rings,{color:c,weight:2,opacity:.9,pane:"overlayPane",interactive:false}));
+    });
+    if(parts.length) watchOutline=L.layerGroup(parts).addTo(rvMap);
+  }catch(e){
+    watchLayer=null;
+    if(watchOutline){ rvMap.removeLayer(watchOutline); watchOutline=null; }
+  }
+  syncWarnKey();
+}
+/* ===== Hazard key =====
+   One chip per hazard TYPE the map is drawing right now, written into #rsWarnKey under the
+   reflectivity key. Everything about it is derived, nothing asserted: the set comes from the same
+   feature lists the two draw functions just painted (gated on their layers actually standing, so
+   a failed draw advertises nothing), and each chip's colour comes out of the same style function
+   that coloured the shape. Both draw paths call this on every outcome — draw, clear, and failure —
+   so the key can neither outlive its shapes nor lag them. */
+function syncWarnKey(){
+  var el=document.getElementById("rsWarnKey");
+  if(!el) return;
+  var seen={}, chips=[];
+  if(warnLayer) lastWarnFeats.filter(isMappedAlert).forEach(function(f){
+    var ev=(f.properties&&f.properties.event)||"";
+    if(!ev||seen[ev]) return;
+    seen[ev]=1;
+    chips.push({ev:ev,c:warnStyle(ev).color});
+  });
+  if(watchLayer) watchFeats.forEach(function(f){
+    var ev=(f.properties||{}).prod_type||"";
+    if(!ev||seen[ev]) return;
+    seen[ev]=1;
+    chips.push({ev:ev,c:watchStyle(ev).fillColor});
+  });
+  el.innerHTML=chips.map(function(k){
+    return '<span class="rw-chip"><i style="background:'+k.c+'"></i>'+esc(k.ev)+'</span>';
+  }).join("");
 }
 
 /* ===== Two-way linking between the radar polygons and the alert cards =====
@@ -5748,16 +5964,20 @@ function detachRadarLayers(){
 function applySkyLayers(first){
   syncSkyMeta();
   if(!rvMap) return;
+  /* Dimmed only while BOTH layers stack — the whole point is giving reflectivity contrast over
+     the cloud tops. Radar off, the satellite is the product and gets its full brightness back. */
+  rvMap.getContainer().classList.toggle("sat-dim",!!(skyOn.radar&&skyOn.sat));
   if(!skyOn.radar) detachRadarLayers();
   // The scrubber drives frames nobody can see; it goes with them. (Class-driven display otherwise
   // — clearing the inline value hands it back to .radar-ctl.ready rather than forcing it open.)
   var ctl=document.getElementById("radarCtl");
   if(ctl) ctl.style.display=skyOn.radar?"":"none";
-  [[satLayer,skyOn.sat],[satLabels,skyOn.sat]].forEach(function(p){
-    if(!p[0]) return;
-    if(p[1]&&!rvMap.hasLayer(p[0])) p[0].addTo(rvMap);
-    else if(!p[1]&&rvMap.hasLayer(p[0])) rvMap.removeLayer(p[0]);
-  });
+  // Only the imagery toggles; the labels stay put — they are the map's whole supply of geography
+  // text now that the basemap ships nameless (see baseUrl()).
+  if(satLayer){
+    if(skyOn.sat&&!rvMap.hasLayer(satLayer)) satLayer.addTo(rvMap);
+    else if(!skyOn.sat&&rvMap.hasLayer(satLayer)) rvMap.removeLayer(satLayer);
+  }
   /* Switched back on while the radar is parked in the past, the satellite would return as the LIVE
      frame — the exact mismatch the time track exists to close, reachable by a route that never
      touches the scrubber. Re-ask where the radar is standing. */
