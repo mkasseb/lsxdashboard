@@ -623,7 +623,19 @@
     padding:7px 13px;font-size:var(--fs-md);font-weight:500;color:var(--text);
     align-items:flex-start;text-wrap:pretty}
   .call-pill .ce{width:1.15em;height:1.15em;margin-top:.1em;color:var(--muted)}
-  @media(max-width:480px){.call-pill{font-size:var(--fs-sm);padding:6px 11px}}
+  @media(max-width:480px){
+    /* One decision leads; supporting context stops pretending every sentence is its own card.
+       The renderer marks the highest-priority verdict .primary after sorting, so this hierarchy
+       follows the same safety/impact score that already decides the reading order. */
+    #callCard{padding:12px 14px}
+    .callrow{gap:5px}
+    #callRow .call-lbl{width:100%;margin-bottom:2px}
+    .call-pill{width:100%;font-size:var(--fs-sm);padding:6px 2px;background:transparent;
+      border:0;border-radius:0}
+    .call-pill.primary{padding:8px 11px;background:var(--inset);border:1px solid var(--border);
+      border-radius:var(--r-md);font-weight:650}
+    .call-pill:not(.primary)+.call-pill:not(.primary){border-top:1px solid var(--border)}
+  }
 
   /* ===== Banner mode: the section sheds its card =====
      The banners ARE the alert section; the wrapper contributes nothing visible. The h2 survives
@@ -1700,7 +1712,8 @@
     <div class="callrow" id="callRow"></div>
   </section>
 
-  <!-- THE PULSE — the forecaster's own reasoning, ranked directly under the Bottom Line because
+  <!-- THE PULSE — the forecaster's own reasoning, ranked directly under the Bottom Line on wider
+       screens because
        the two cards are the same kind of thing: one verdict computed by this page, one written by
        a human at NWS St. Louis. It used to sit below the hero band under "the week ahead & deeper
        context", which mis-filed it twice over — extractAFD reaches for Key Messages, then the
@@ -1720,7 +1733,14 @@
        in all 21 recent products sampled, so the first branch always wins. Pre-existing, left
        alone here deliberately: fixing it changes what this card SAYS, which is its own change.
        It is also the input the clamp was originally sized against — paragraphs this card has
-       never actually been handed. Fix that first, then re-measure, before reaching for a clamp.) -->
+       never actually been handed. Fix that first, then re-measure, before reaching for a clamp.
+
+       On a single-column screen the priority changes: Alerts and Bottom Line still lead, but the
+       complete Right Now sequence (conditions, sky, next 24 hours) comes before this discussion.
+       syncAfdPlacement() physically moves this node after #h24Card at the same 680px breakpoint
+       that stacks the hero pair. This is a DOM move rather than CSS order, so visual, keyboard and
+       screen-reader order stay aligned. The inert template is the exact wider-screen return slot.) -->
+  <template id="afdHome"></template>
   <section class="card col-12" id="afdCard">
     <h2>The Pulse — NWS Forecast Discussion
       <a class="link" href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener">Full discussion ↗</a>
@@ -6233,6 +6253,28 @@ function renderAFD(sec, issued){
   var meta=sec.label+" · NWS St. Louis"+(issued?" · issued "+timeAgo(issued):"");
   el.innerHTML='<div class="afd-body">'+inner+'</div><div class="afd-meta">'+meta+'</div>';
 }
+
+/* The desktop scan benefits from the forecaster's summary directly under the computed Bottom
+   Line. On a single-column screen that same full-width card delays the actual temperature, map and
+   hourly curve by an entire viewport, so it follows the complete Right Now sequence instead.
+   Move the real node — not only its CSS box — so focus and assistive-tech order match the pixels. */
+var afdPlaceMQ=window.matchMedia?window.matchMedia("(max-width:680px)"):null;
+function syncAfdPlacement(){
+  var card=document.getElementById("afdCard"), home=document.getElementById("afdHome");
+  var h24=document.getElementById("h24Card");
+  if(!card||!home||!h24) return;
+  if(afdPlaceMQ&&afdPlaceMQ.matches){
+    if(h24.nextElementSibling!==card) h24.insertAdjacentElement("afterend",card);
+  }else if(home.nextElementSibling!==card){
+    home.insertAdjacentElement("afterend",card);
+  }
+}
+function initAfdPlacement(){
+  syncAfdPlacement();
+  if(!afdPlaceMQ) return;
+  if(afdPlaceMQ.addEventListener) afdPlaceMQ.addEventListener("change",syncAfdPlacement);
+  else if(afdPlaceMQ.addListener) afdPlaceMQ.addListener(syncAfdPlacement);
+}
 function loadAFD(){
   return getJSON(API+"/products/types/AFD/locations/LSX",LD).then(function(list){
     var g=list["@graph"]||[];
@@ -7165,8 +7207,8 @@ function renderTheCall(){
   /* An <h2>, not a styled span. The Bottom Line was the one card on the page with no heading at
      all — second from the top, and invisible to anything navigating by structure. It shares the
      eyebrow styling with every other card title, so this changes the outline and nothing else. */
-  row.innerHTML='<h2 class="call-lbl">Bottom Line</h2>'+pills.map(function(pl){
-    return '<span class="call-pill">'+ic(pl.ico,"ce")+'<span>'+esc(pl.txt)+'</span></span>';
+  row.innerHTML='<h2 class="call-lbl">Bottom Line</h2>'+pills.map(function(pl,i){
+    return '<span class="call-pill'+(i===0?' primary':'')+'">'+ic(pl.ico,"ce")+'<span>'+esc(pl.txt)+'</span></span>';
   }).join("");
   card.classList.add("has");
 }
@@ -7444,6 +7486,7 @@ function initTheme(){
 initTheme();
 initLocationUI();
 initLocation();
+initAfdPlacement();
 restoreSnapshot();   // paint the last good view NOW — before a single fetch (needs `current` from initLocation)
 initMapLocks();
 /* The caption and the toggles' pressed state ship EMPTY and are written by syncSkyMeta(), which

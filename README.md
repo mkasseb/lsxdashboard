@@ -228,23 +228,28 @@ internals deliberately stay on explicit pixels: those values are tuned to SVG ge
 text system, and folding them into the type scale would be a category error.
 
 **The page is ordered by what a visitor came for.** Alerts first (in calm weather that card
-collapses to a single all-clear line), then the Bottom Line, then The Pulse, then the hero band —
-"Now" on the left, the Sky card on the right — then the next 24 hours in a full-width band of its
-own, and finally the masonry.
+collapses to a single all-clear line), then the Bottom Line. Above 680px, The Pulse follows and then
+the hero band — "Now" on the left, the Sky card on the right — followed by the next 24 hours in a
+full-width band and finally the masonry. On a single-column screen the complete Right Now sequence
+(conditions, Sky, next 24 hours) comes before The Pulse, so a full discussion cannot push the live
+reading more than a viewport down.
 The Bottom Line (né The Call; ids are still `callCard`/`callRow`) is the page reasoning on the
 visitor's behalf rather than handing them numbers: rain/storm windows, heat and cold, UV with a
 burn clock, wind, air quality, a temperature-crash warning, climate records — and one synthesized
 verdict that scores every daylight hour on comfort, rain risk and wind to name the best two-hour
 window to be outside, spoken only when the day has adversity worth dodging. It ranks directly
-under safety, so the card is on the first screen whatever the weather is doing.
+under safety, so the card is on the first screen whatever the weather is doing. On a phone the
+highest-priority verdict keeps the inset treatment while the supporting verdicts become quieter
+divided rows; the same score that orders the statements therefore also sets their visual weight.
 
-**The Pulse rides directly behind it in calm weather, at full length.** `#afdCard` is the same kind
+**The Pulse rides directly behind it on wider screens, at full length.** `#afdCard` is the same kind
 of card as the Bottom Line — one verdict computed by this page, one written by a human at NWS
-St. Louis — so the two reason together above the numbers. It used to sit below the
-hero under "the week ahead & deeper context", which mis-filed it twice: `extractAFD` reaches for
-Key Messages, then the Synopsis, then the **Short-Term Outlook**, all of which describe the next
-12–24 hours rather than the week, and the rank buried the forecaster's read of the day some
-2,000px down.
+St. Louis — so the two reason together above the numbers where the screen can carry both. In the
+single-column flow it follows the 24-hour chart instead: still inside the near-term story, but no
+longer between the reader and the temperature. It once sat under "the week ahead & deeper context",
+which mis-filed it twice: `extractAFD` reaches for Key Messages, then the Synopsis, then the
+**Short-Term Outlook**, all of which describe the next 12–24 hours rather than the week, and the rank
+buried the forecaster's read of the day some 2,000px down.
 
 **There is deliberately no clamp, and that took two attempts.** The card first shipped collapsed to
 a few lines behind a "Read the full discussion" button, on the theory that it had to be cheap to
@@ -264,8 +269,9 @@ always wins. That is pre-existing and deliberately left alone — fixing it chan
 ever fixed, re-measure before reaching for one again.
 
 `.railhead` labels name each band — "Right now", "Next 24 hours", "The week ahead" — so the scroll
-has a spine. The grid renders in DOM order (no card carries a CSS `order`), so the sequence above
-is exactly the source order of `index.html`.
+has a spine. The grid renders in DOM order (no card carries a CSS `order`). `syncAfdPlacement()` moves
+the real Pulse node between its inert source anchor and the position after `#h24Card` when the
+680px media query changes, keeping visual, keyboard and screen-reader order aligned.
 
 **The 24-hour chart is never nested inside `#current`.** It has its own full-width card (`#h24Card`)
 below the hero pair; it previously sat inside `#currentCard` as a *sibling* of `#current`, which was
