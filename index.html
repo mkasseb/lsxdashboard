@@ -735,6 +735,8 @@
   .fc-scale{display:grid;grid-template-columns:minmax(42px,auto) minmax(62px,1fr) minmax(42px,auto);align-items:center;gap:6px;
     min-width:180px;flex:1 1 180px;font-size:var(--fs-2xs);font-weight:700;color:var(--muted);
     font-variant-numeric:tabular-nums}
+  .fc-scale-label{grid-column:1 / -1;font-size:var(--fs-2xs);font-weight:800;text-transform:uppercase;
+    letter-spacing:var(--ls-eyebrow);color:var(--muted)}
   .fc-scale i{height:5px;border-radius:3px;background:linear-gradient(90deg,var(--fc-lo),var(--fc-hi))}
   .fc-end{display:grid;line-height:1.12}
   .fc-end:last-of-type{text-align:right}
@@ -3669,6 +3671,7 @@ function loadForecast(){
           +'</div>'
           +'<div class="fc-foot">'
             +'<div class="fc-scale" style="--fc-lo:'+tCol(rr.lo)+';--fc-hi:'+tCol(rr.hi)+'">'
+              +'<span class="fc-scale-label">7-day temperature scale · low → high</span>'
               +'<span class="fc-end" aria-hidden="true"><b>'+rr.lo+'°</b><small>'+esc(compactPeriodName(rr.loLabel))+'</small></span>'
               +'<i aria-hidden="true"></i>'
               +'<span class="fc-end" aria-hidden="true"><b>'+rr.hi+'°</b><small>'+esc(compactPeriodName(rr.hiLabel))+'</small></span>'
@@ -7426,8 +7429,10 @@ function renderTheCall(){
 // v9: the fixed list of peak/rain/coolest facts became a headline plus supporting insights, and
 // the weekly range endpoints gained their day labels. A v8 snapshot restores the old summary DOM
 // under the new hierarchy and leaves the endpoint grid without its .fc-end wrappers.
-var SNAP_KEY="lsxSnap_v9", snapRestored=false, NET_OK=false;
-try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
+// v10: the shared temperature bar gained a visible "7-day temperature scale · low → high"
+// label. A v9 snapshot would restore the exact unlabeled bar this release is meant to clarify.
+var SNAP_KEY="lsxSnap_v10", snapRestored=false, NET_OK=false;
+try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
 var SNAP_PARTS=[
   {id:"afd",      ttl:6*3600000},
   {id:"alerts",   ttl:15*60000},     // safety-critical: short leash
