@@ -726,13 +726,20 @@
   .sr{position:absolute;width:1px;height:1px;margin:0;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .daily{display:flex;flex-direction:column;gap:8px}
   .fc-overview{display:grid;gap:8px;margin-bottom:2px;padding:0 1px 2px}
-  .fc-story{font-size:var(--fs-sm);line-height:1.45;color:var(--text);text-wrap:pretty}
-  .fc-story b{font-weight:750}
+  .fc-story{display:grid;gap:4px;color:var(--text);text-wrap:pretty}
+  .fc-headline{font-size:var(--fs-md);font-weight:800;line-height:1.35}
+  .fc-insights{display:flex;flex-wrap:wrap;column-gap:6px;row-gap:2px;
+    font-size:var(--fs-sm);line-height:1.4;color:var(--muted)}
+  .fc-insights span+span::before{content:"·";margin-right:6px;color:var(--border)}
   .fc-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
-  .fc-scale{display:grid;grid-template-columns:auto minmax(62px,1fr) auto;align-items:center;gap:6px;
+  .fc-scale{display:grid;grid-template-columns:minmax(42px,auto) minmax(62px,1fr) minmax(42px,auto);align-items:center;gap:6px;
     min-width:180px;flex:1 1 180px;font-size:var(--fs-2xs);font-weight:700;color:var(--muted);
     font-variant-numeric:tabular-nums}
   .fc-scale i{height:5px;border-radius:3px;background:linear-gradient(90deg,var(--fc-lo),var(--fc-hi))}
+  .fc-end{display:grid;line-height:1.12}
+  .fc-end:last-of-type{text-align:right}
+  .fc-end b{font-size:var(--fs-sm);color:var(--text)}
+  .fc-end small{font-size:var(--fs-2xs);font-weight:600;color:var(--muted);white-space:nowrap}
   .fc-meta{font-size:var(--fs-2xs);color:var(--muted);white-space:nowrap}
   .day-item{background:var(--inset);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden}
   .day{display:grid;grid-template-columns:72px 26px 36px minmax(42px,1fr) 66px 12px;align-items:center;gap:6px;
@@ -3378,6 +3385,10 @@ function compactDayName(name){
   var days={Monday:"Mon",Tuesday:"Tue",Wednesday:"Wed",Thursday:"Thu",Friday:"Fri",Saturday:"Sat",Sunday:"Sun"};
   return days[name]||name;
 }
+function compactPeriodName(name){
+  return String(name||"").replace(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/,
+    function(day){ return compactDayName(day); });
+}
 function compactCondition(text){
   var t=String(text||"").toLowerCase();
   if(t.indexOf("tornado")>=0) return "Tornado";
@@ -3408,19 +3419,119 @@ function forecastImpact(feels,air){
   if(feels!=null&&feels<=0&&(air==null||air-feels>=5)) return {kind:"cold",label:"Feels "+Math.round(feels)+"°"};
   return null;
 }
+function summaryPopText(pop){
+  var rounded=summaryPop(pop);
+  if(rounded==null) return "";
+  return (Math.round(pop)===rounded?"":"~")+rounded+"%";
+}
+/* Turn a week of already-derived facts into one editorial hierarchy. The renderer supplies facts;
+   this function decides what deserves the headline, which supporting facts are non-redundant, and
+   what the shared range endpoints mean. Keeping that judgment pure makes hot, cold, snow, dry and
+   overnight-heavy weeks testable without waiting for each one to happen over St. Louis. */
+function buildForecastSummary(facts){
+  var F=(facts||[]).filter(function(f){ return !!f; });
+  if(!F.length) return {headline:"Forecast summary unavailable",details:[],tone:"neutral",range:null};
+  function name(i){ return (F[i]&&F[i].name)||("Day "+(i+1)); }
+  function nightName(i){ return /^tonight$/i.test(name(i))?"Tonight":name(i)+" night"; }
+  function periodName(p){ return p.part==="night"?nightName(p.i):name(p.i); }
+  function periodSpan(a,b){
+    if(a.i===b.i&&a.part!==b.part) return name(a.i)+" into "+nightName(a.i);
+    return periodName(a)===periodName(b)?periodName(a):periodName(a)+"–"+periodName(b);
+  }
+  var maxHi=null,maxHiI=-1,minLo=null,minLoI=-1,maxFeels=null,maxFeelsI=-1,minFeels=null,minFeelsI=-1;
+  F.forEach(function(f,i){
+    if(f.hi!=null&&(maxHi==null||f.hi>maxHi)){ maxHi=f.hi; maxHiI=i; }
+    if(f.lo!=null&&(minLo==null||f.lo<minLo)){ minLo=f.lo; minLoI=i; }
+    if(f.feelsHigh!=null&&(maxFeels==null||f.feelsHigh>maxFeels)){ maxFeels=f.feelsHigh; maxFeelsI=i; }
+    if(f.feelsLow!=null&&(minFeels==null||f.feelsLow<minFeels)){ minFeels=f.feelsLow; minFeelsI=i; }
+  });
+
+  var periods=[];
+  F.forEach(function(f,i){
+    if(f.dayPop!=null) periods.push({i:i,part:"day",pop:+f.dayPop||0,condition:f.dayCondition||""});
+    if(f.nightPop!=null) periods.push({i:i,part:"night",pop:+f.nightPop||0,condition:f.nightCondition||""});
+  });
+  var maxPop=0;
+  periods.forEach(function(p){ if(p.pop>maxPop) maxPop=p.pop; });
+  var precip=null;
+  if(maxPop>=20){
+    var floor=Math.max(20,maxPop-10), clusters=[], run=[];
+    periods.forEach(function(p){
+      if(p.pop>=floor) run.push(p);
+      else if(run.length){ clusters.push(run); run=[]; }
+    });
+    if(run.length) clusters.push(run);
+    clusters=clusters.filter(function(c){ return c.some(function(p){ return p.pop===maxPop; }); });
+    clusters.sort(function(a,b){ return b.length-a.length; });
+    var win=clusters[0]||[], wx=win.map(function(p){return p.condition;}).join(" ").toLowerCase();
+    var family=/freezing|sleet|ice|wintry/.test(wx)?"wintry":(/snow|flurr/.test(wx)?"snow":
+      (/thunder|storm|tornado/.test(wx)?"storm":(/rain|shower|drizzle/.test(wx)?"rain":"precip")));
+    var lead={wintry:"Wintry precipitation",snow:"Snow chances",storm:"Storm chances",
+              rain:"Rain chances",precip:"Precipitation chances"}[family];
+    precip={family:family,text:lead+" "+periodSpan(win[0],win[win.length-1])+" ("+summaryPopText(maxPop)+")"};
+  }
+
+  var hot=[], firstHot=-1,lastHot=-1;
+  F.forEach(function(f,i){
+    if((f.hi!=null&&f.hi>=95)||(f.feelsHigh!=null&&f.feelsHigh>=100)){
+      hot.push(i); if(firstHot<0) firstHot=i; lastHot=i;
+    }
+  });
+  var heatHeadline="";
+  if(hot.length>=2){
+    var sustained=true;
+    for(var h=firstHot;h<=lastHot;h++){
+      if(!((F[h].hi!=null&&F[h].hi>=90)||(F[h].feelsHigh!=null&&F[h].feelsHigh>=100))){ sustained=false; break; }
+    }
+    if(sustained) heatHeadline="Very hot "+(firstHot===0||(firstHot===1&&F[0].hi==null)
+      ?"through "+name(lastHot):name(firstHot)+"–"+name(lastHot));
+  }
+  var hotImpact=maxFeelsI>=0?forecastImpact(maxFeels,F[maxFeelsI].hi):null;
+  if(!heatHeadline&&hotImpact&&hotImpact.kind==="hot") heatHeadline="Feels up to "+Math.round(maxFeels)+"° "+name(maxFeelsI);
+  var coldImpact=minFeelsI>=0?forecastImpact(minFeels,F[minFeelsI].lo!=null?F[minFeelsI].lo:F[minFeelsI].hi):null;
+
+  var headline="",tone="neutral",details=[];
+  function add(s){ if(s&&details.indexOf(s)<0&&details.length<2) details.push(s); }
+  if(coldImpact&&coldImpact.kind==="cold"){
+    headline="Wind chills down to "+Math.round(minFeels)+"° "+(F[minFeelsI].feelsLowLabel||nightName(minFeelsI)); tone="cold";
+  }else if(heatHeadline){ headline=heatHeadline; tone="hot"; }
+  else if(precip){ headline=precip.text; tone=precip.family; }
+  else { headline="Mainly dry this week"; tone="dry"; }
+
+  if(heatHeadline&&hotImpact&&hotImpact.kind==="hot"){
+    add(maxHiI===maxFeelsI&&maxHi!=null
+      ?"Peak "+Math.round(maxHi)+"° "+name(maxHiI)+", feels "+Math.round(maxFeels)+"°"
+      :"Feels up to "+Math.round(maxFeels)+"° "+name(maxFeelsI));
+  }
+  if(precip&&headline!==precip.text) add(precip.text);
+  var bestChange=null;
+  for(var i=1;i<F.length;i++){
+    if(F[i-1].hi==null||F[i].hi==null) continue;
+    var delta=Math.round(F[i].hi-F[i-1].hi);
+    if(Math.abs(delta)>=10&&(!bestChange||Math.abs(delta)>Math.abs(bestChange.delta))) bestChange={i:i,delta:delta};
+  }
+  if(bestChange) add((bestChange.delta<0?"Turning cooler ":"Turning warmer ")+name(bestChange.i)+": high "+
+    (bestChange.delta<0?"drops ":"rises ")+Math.abs(bestChange.delta)+"°");
+
+  var range=(minLo!=null||maxHi!=null)?{
+    lo:minLo,loLabel:minLoI>=0?nightName(minLoI):"",hi:maxHi,hiLabel:maxHiI>=0?name(maxHiI):""
+  }:null;
+  return {headline:headline,details:details,tone:tone,range:range};
+}
 /* One walk over the hourly forecast, two recoveries per local date:
    — rh: the humidity nearest midday (1pm). NWS removed relativeHumidity from the twice-daily
      /forecast periods (API discussion #752), so the day's headline humidity comes from here.
      rhT remembers WHICH hour won, because the cell's label says so: on a full day that's 1pm,
      but a "Tonight" row's nearest-to-midday hour is this evening, and a label that just said
      "midday" would be claiming an hour the feed never supplied.
-   — fl: the date's peak feels-like. The daily high and the 1pm humidity don't co-occur — the
+   — fl/flMin: the date's hottest and coldest feels-like. The daily high and the 1pm humidity don't co-occur — the
      high lands mid-afternoon, after the morning moisture has mixed out — and running the heat
      index on that pair overstated summer days by ~5° (a forecast of 85°/77% afternoon showed
-     "Feels Like 99°"). Each hour is scored with its OWN temp/RH/wind and the date keeps the max.
+     "Feels Like 99°"). Each hour is scored with its OWN temp/RH/wind. Keeping both ends matters:
+     the maximum is the heat story, while the minimum is the wind-chill story a max would erase.
    — lastH: the latest local hour the feed covers for that date. The hourly feed runs ~6½ days,
      so its final date arrives with only its morning hours; a "peak" taken from half a day would
-     understate with the same confidence the old pairing overstated. fl is only trusted when
+     understate with the same confidence the old pairing overstated. Both extrema are only trusted when
      coverage reaches evening (see the Feels Like cell), and lastH is what says whether it does. */
 function hourlyByDate(hrs){
   var map={};
@@ -3428,7 +3539,7 @@ function hourlyByDate(hrs){
     if(!pp.startTime) return;
     var dt=new Date(pp.startTime);
     var key=dt.getFullYear()+"-"+("0"+(dt.getMonth()+1)).slice(-2)+"-"+("0"+dt.getDate()).slice(-2);
-    var rec=map[key]||(map[key]={rh:null, rhT:null, diff:99, fl:null, lastH:-1});
+    var rec=map[key]||(map[key]={rh:null, rhT:null, diff:99, fl:null, flT:null, flMin:null, flMinT:null, lastH:-1});
     var hr=dt.getHours();
     if(hr>rec.lastH) rec.lastH=hr;
     var rh=(pp.relativeHumidity && pp.relativeHumidity.value!=null)?Math.round(pp.relativeHumidity.value):null;
@@ -3437,7 +3548,8 @@ function hourlyByDate(hrs){
       if(diff<rec.diff){ rec.rh=rh; rec.rhT=dt; rec.diff=diff; }
     }
     var fl=feelsLikeF(pp.temperature,rh,parseMph(pp.windSpeed));
-    if(fl!=null&&(rec.fl==null||fl>rec.fl)) rec.fl=fl;
+    if(fl!=null&&(rec.fl==null||fl>rec.fl)){ rec.fl=fl; rec.flT=dt; }
+    if(fl!=null&&(rec.flMin==null||fl<rec.flMin)){ rec.flMin=fl; rec.flMinT=dt; }
   });
   return map;
 }
@@ -3525,49 +3637,43 @@ function loadForecast(){
         var hrec=(key&&hByDate[key])?hByDate[key]:null;
         var full=!!(hrec&&hrec.lastH>=18);
         var rh=full?hrec.rh:null;
-        var fl=(full&&hrec.fl!=null)?hrec.fl
-              :feelsLikeF(main?main.temperature:null,rh,parseMph(main?main.windSpeed:null));
-        return {hi:hi,lo:lo,main:main,mdt:mdt,key:key,hrec:hrec,full:full,rh:rh,fl:fl,
-                pop:Math.max(popOf(d.day)!=null?popOf(d.day):0,popOf(d.night)!=null?popOf(d.night):0),
+        var highPeriod=d.day||main, lowPeriod=d.night||main;
+        var feelsHigh=(full&&hrec.fl!=null)?hrec.fl
+              :feelsLikeF(highPeriod?highPeriod.temperature:null,rh,parseMph(highPeriod?highPeriod.windSpeed:null));
+        var feelsLow=(full&&hrec.flMin!=null)?hrec.flMin
+              :feelsLikeF(lowPeriod?lowPeriod.temperature:null,null,parseMph(lowPeriod?lowPeriod.windSpeed:null));
+        var lowHr=(full&&hrec.flMinT)?hrec.flMinT.getHours():null;
+        var lowLabel=/^tonight$/i.test(d.name)?"Tonight"
+          :(lowHr!=null&&lowHr<12?d.name+" morning":(lowHr!=null&&lowHr<18?d.name:d.name+" night"));
+        var dayPop=popOf(d.day), nightPop=popOf(d.night);
+        return {name:d.name,hi:hi,lo:lo,main:main,mdt:mdt,key:key,hrec:hrec,full:full,rh:rh,
+                feelsHigh:feelsHigh,feelsLow:feelsLow,feelsLowLabel:lowLabel,
+                dayPop:dayPop,nightPop:nightPop,
+                dayCondition:d.day?d.day.shortForecast:"",nightCondition:d.night?d.night.shortForecast:"",
+                pop:Math.max(dayPop!=null?dayPop:0,nightPop!=null?nightPop:0),
                 wind:main?(((main.windDirection?main.windDirection+" ":"")+(main.windSpeed||"")).trim()||"—"):"—"};
       }
       function forecastOverview(){
-        var facts=days.map(factsFor), maxHi=null, maxHiI=-1, minLo=null, minLoI=-1;
-        var maxPop=0, popI=[], maxFeels=null, maxFeelsI=-1;
-        facts.forEach(function(x,idx){
-          if(x.hi!=null&&(maxHi==null||x.hi>maxHi)){ maxHi=x.hi; maxHiI=idx; }
-          if(x.lo!=null&&(minLo==null||x.lo<minLo)){ minLo=x.lo; minLoI=idx; }
-          if(x.pop>maxPop){ maxPop=x.pop; popI=[idx]; }
-          else if(x.pop===maxPop&&x.pop>0) popI.push(idx);
-          if(x.fl!=null&&(maxFeels==null||x.fl>maxFeels)){ maxFeels=x.fl; maxFeelsI=idx; }
-        });
-        function n(idx){ return idx>=0?compactDayName(days[idx].name):""; }
-        function span(idxs){
-          if(!idxs.length) return "";
-          if(idxs.length===1) return n(idxs[0]);
-          var consecutive=idxs[idxs.length-1]-idxs[0]+1===idxs.length;
-          return consecutive?n(idxs[0])+"–"+n(idxs[idxs.length-1]):idxs.map(n).join(", ");
-        }
-        var bits=[];
-        if(maxHi!=null){
-          var peak="Peak <b>"+maxHi+"°</b> "+esc(n(maxHiI));
-          if(maxFeelsI===maxHiI&&forecastImpact(maxFeels,maxHi)) peak+=" · feels <b>"+Math.round(maxFeels)+"°</b>";
-          bits.push(peak);
-        }
-        if(maxFeelsI>=0&&maxFeelsI!==maxHiI&&forecastImpact(maxFeels,facts[maxFeelsI].hi))
-          bits.push("Feels up to <b>"+Math.round(maxFeels)+"°</b> "+esc(n(maxFeelsI)));
-        if(maxPop>=20) bits.push("Rain peaks <b>"+summaryPop(maxPop)+"%</b> "+esc(span(popI)));
-        else bits.push("<b>Mainly dry</b>");
-        if(bits.length<3&&minLo!=null&&maxHi!=null&&maxHi-minLo>=10)
-          bits.push("Coolest low <b>"+minLo+"°</b> "+esc(n(minLoI)));
+        var summary=buildForecastSummary(days.map(factsFor));
+        var sr=summary.range||{};
+        var rr={lo:sr.lo!=null?sr.lo:wMin,loLabel:sr.loLabel||"",
+                hi:sr.hi!=null?sr.hi:wMax,hiLabel:sr.hiLabel||""};
         var updated=f&&f.properties&&(f.properties.updated||f.properties.updateTime||f.properties.generatedAt);
         var stamp=updated?new Date(updated).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):"live feed";
-        return '<div class="fc-overview">'
-          +'<div class="fc-story"><span class="sr">Week summary: </span>'+bits.join(" · ")+'</div>'
+        return '<div class="fc-overview" data-tone="'+esc(summary.tone)+'">'
+          +'<div class="fc-story">'
+            +'<div class="fc-headline"><span class="sr">Week summary: </span>'+esc(summary.headline)+'</div>'
+            +(summary.details.length?'<div class="fc-insights">'+summary.details.map(function(s){
+              return '<span>'+esc(s)+'</span>';
+            }).join("")+'</div>':'')
+          +'</div>'
           +'<div class="fc-foot">'
-            +'<div class="fc-scale" style="--fc-lo:'+tCol(wMin)+';--fc-hi:'+tCol(wMax)+'">'
-              +'<span aria-hidden="true">'+wMin+'°</span><i aria-hidden="true"></i><span aria-hidden="true">'+wMax+'°</span>'
-              +'<span class="sr">Weekly temperature range, '+wMin+' to '+wMax+' degrees</span></div>'
+            +'<div class="fc-scale" style="--fc-lo:'+tCol(rr.lo)+';--fc-hi:'+tCol(rr.hi)+'">'
+              +'<span class="fc-end" aria-hidden="true"><b>'+rr.lo+'°</b><small>'+esc(compactPeriodName(rr.loLabel))+'</small></span>'
+              +'<i aria-hidden="true"></i>'
+              +'<span class="fc-end" aria-hidden="true"><b>'+rr.hi+'°</b><small>'+esc(compactPeriodName(rr.hiLabel))+'</small></span>'
+              +'<span class="sr">Weekly temperature range, low '+rr.lo+' degrees '+esc(rr.loLabel)
+                +', high '+rr.hi+' degrees '+esc(rr.hiLabel)+'</span></div>'
             +'<div class="fc-meta">NWS · updated '+esc(stamp)+'</div>'
           +'</div>'
         +'</div>';
@@ -3596,9 +3702,12 @@ function loadForecast(){
         var a=(lo!=null?lo:hi), b=(hi!=null?hi:lo);
         var left=((Math.min(a,b)-wMin)/range)*100, width=Math.max(4,(Math.abs(b-a)/range)*100);
         var grad="linear-gradient(90deg,"+tCol(Math.min(a,b))+","+tCol(Math.max(a,b))+")";
-        var pop=fact.pop, popSummary=summaryPop(pop), main=fact.main, wind=fact.wind;
-        var mdt=fact.mdt, _dk=fact.key, hrec=fact.hrec, rh=fact.rh, fl=fact.fl;
-        var impact=forecastImpact(fl,hi!=null?hi:(main?main.temperature:null));
+        var pop=fact.pop, popText=summaryPopText(pop), main=fact.main, wind=fact.wind;
+        var mdt=fact.mdt, _dk=fact.key, hrec=fact.hrec, rh=fact.rh;
+        var hotImpact=forecastImpact(fact.feelsHigh,hi!=null?hi:(main?main.temperature:null));
+        var coldImpact=forecastImpact(fact.feelsLow,lo!=null?lo:(main?main.temperature:null));
+        var impact=(hotImpact&&hotImpact.kind==="hot")?hotImpact:((coldImpact&&coldImpact.kind==="cold")?coldImpact:null);
+        var fl=impact&&impact.kind==="cold"?fact.feelsLow:fact.feelsHigh;
         var condition=impact?impact.label:compactCondition(main.shortForecast);
         /* A day period whose night hasn't been issued. The 7-row cap normally leaves the feed's
            day-only tail on the floor (see the pairing loop), so this fires only when the feed
@@ -3627,7 +3736,9 @@ function loadForecast(){
               +'<span class="sr">'+esc(d.name)+'</span>'+md+'</div>'
               +'<div class="dcond'+(impact?' impact-'+impact.kind:'')+'">'+esc(condition)+'</div></div>'
             +'<div class="di">'+wxImg(main.shortForecast,!!d.day,26,!!impact)+'</div>'
-            +'<div class="dp">'+(popSummary!=null?ic("drop")+'<span class="sr">Precipitation </span>'+popSummary+"%":"&nbsp;")+'</div>'
+            +'<div class="dp">'+(popText?ic("drop")
+              +'<span class="sr">Precipitation '+(popText.charAt(0)==="~"?"about ":"")+popText.replace("~","")+'</span>'
+              +'<span aria-hidden="true">'+popText+'</span>':"&nbsp;")+'</div>'
             +'<div class="tbar"><div class="tfill" style="left:'+left.toFixed(1)+'%;width:'+width.toFixed(1)+'%;background:'+grad+'"></div></div>'
             // The visible H/L survives colour-vision differences and makes the conventional
             // high-first order explicit. The clipped words keep the same clarity for a reader.
@@ -3643,7 +3754,8 @@ function loadForecast(){
             +'<div class="dd-grid">'
               +'<div class="dd-item"><div class="k">Precip Chance</div><div class="v">'+(pop>0?pop+"%":"0%")+'</div></div>'
               +'<div class="dd-item"><div class="k">Wind</div><div class="v">'+esc(wind)+'</div></div>'
-              +'<div class="dd-item'+(impact?' impact-'+impact.kind:'')+'"><div class="k">Feels Like</div>'
+              +'<div class="dd-item'+(impact?' impact-'+impact.kind:'')+'"><div class="k">'
+                +(impact&&impact.kind==="hot"?"Peak Feels Like":(impact&&impact.kind==="cold"?"Lowest Feels Like":"Feels Like"))+'</div>'
                 +'<div class="v">'+(fl!=null?fl+"°":"—")+'</div></div>'
               // The key names the hour the reading came from — the page's habit of saying exactly
               // what a number is. Usually "(1pm)"; on a Tonight row the winner is an evening hour.
@@ -7311,8 +7423,11 @@ function renderTheCall(){
 // visible H/L labels in high-first order, and rounded precipitation in the collapsed scan. A v7
 // snapshot restores the old six-column row under the new fixed-width grid and silently loses the
 // new answer-first context, so it needs one cold paint rather than a malformed first impression.
-var SNAP_KEY="lsxSnap_v8", snapRestored=false, NET_OK=false;
-try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
+// v9: the fixed list of peak/rain/coolest facts became a headline plus supporting insights, and
+// the weekly range endpoints gained their day labels. A v8 snapshot restores the old summary DOM
+// under the new hierarchy and leaves the endpoint grid without its .fc-end wrappers.
+var SNAP_KEY="lsxSnap_v9", snapRestored=false, NET_OK=false;
+try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
 var SNAP_PARTS=[
   {id:"afd",      ttl:6*3600000},
   {id:"alerts",   ttl:15*60000},     // safety-critical: short leash
