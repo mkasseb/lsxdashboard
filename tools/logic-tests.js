@@ -48,6 +48,10 @@ const SUBJECT = new Function(`
   ${lift(/^var FAMILY_CFG=\{[\s\S]*?^\};/m, 'FAMILY_CFG')}
   ${lift(/^var LAYERS_MAX=\d+;/m, 'LAYERS_MAX')}
   ${lift(/^function coldVerdict\(nowT,mMin,cMin\)\{[\s\S]*?^\}/m, 'coldVerdict()')}
+  ${lift(/^function compactDayName\(name\)\{[\s\S]*?^\}/m, 'compactDayName()')}
+  ${lift(/^function compactCondition\(text\)\{[\s\S]*?^\}/m, 'compactCondition()')}
+  ${lift(/^function summaryPop\(pop\)\{[\s\S]*?^\}/m, 'summaryPop()')}
+  ${lift(/^function forecastImpact\(feels,air\)\{[\s\S]*?^\}/m, 'forecastImpact()')}
   ${lift(/^var OUTLOOK_CFG=\{[\s\S]*?^\};/m, 'OUTLOOK_CFG')}
   ${lift(/^function outlookVerdict\(cfg,l0,l1\)\{[\s\S]*?^\}/m, 'outlookVerdict()')}
   ${lift(/^function parseMcd\(text\)\{[\s\S]*?^\}/m, 'parseMcd()')}
@@ -56,7 +60,8 @@ const SUBJECT = new Function(`
   ${lift(/^function watchBoundary\(feats\)\{[\s\S]*?^\}/m, 'watchBoundary()')}
   ${lift(/^function chaikinRing\(ring,iters\)\{[\s\S]*?^\}/m, 'chaikinRing()')}
   return { rangeMark, rangeRow, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr,
-           FAMILY_CFG, coldVerdict, OUTLOOK_CFG, outlookVerdict,
+           FAMILY_CFG, coldVerdict, compactDayName, compactCondition, summaryPop, forecastImpact,
+           OUTLOOK_CFG, outlookVerdict,
            parseMcd, mcdValidEnd, geomTouchesEnv, watchBoundary, chaikinRing };
 `)();
 
@@ -155,6 +160,30 @@ function check(name, actual, expected) {
   check('no drop in the daytime branch, even when hi<lo', R(both(40, 45), day(50), 42).drop, null);
   check('...and that row still draws', R(both(40, 45), day(50), 42),
     { lo: 45, hi: 40, nextDay: false, mark: 0.6, drop: null });
+}
+
+/* ============ compact 7-day decisions ============ */
+{
+  const { compactDayName: day, compactCondition: cond, summaryPop: pop, forecastImpact: impact } = SUBJECT;
+
+  check('long weekdays use deliberate abbreviations',
+    ['Monday', 'Wednesday', 'Sunday'].map(day), ['Mon', 'Wed', 'Sun']);
+  check('period names that are not weekdays survive',
+    ['Tonight', 'Today', 'Independence Day'].map(day), ['Tonight', 'Today', 'Independence Day']);
+
+  check('condition language keeps the useful distinction',
+    [cond('Mostly Sunny'), cond('Partly Cloudy'), cond('Chance Rain Showers'), cond('Severe Thunderstorms')],
+    ['Mostly sunny', 'Partly cloudy', 'Showers', 'Storms']);
+  check('condition fallback preserves unfamiliar NWS wording', cond('Patchy Blowing Dust'), 'Patchy Blowing Dust');
+
+  check('single-digit precip stays out of the collapsed scan', [pop(0), pop(4), pop(14)], [null, null, null]);
+  check('collapsed precip rounds while the detail can keep exact data',
+    [pop(15), pop(37), pop(96), pop(100)], [20, 40, 100, 100]);
+
+  check('truly consequential heat is promoted', impact(112, 98), { kind: 'hot', label: 'Feels 112°' });
+  check('ordinary summer apparent temperature is not promoted', impact(94, 91), null);
+  check('truly consequential cold is promoted', impact(-8, 5), { kind: 'cold', label: 'Feels -8°' });
+  check('an air temperature extreme without a meaningful apparent delta is not doubled', impact(103, 101), null);
 }
 
 
@@ -599,4 +628,4 @@ if (failed) {
   console.error(`\n${failed} logic test(s) failed`);
   process.exit(1);
 }
-console.log('ok    logic: rangeMark, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr, FAMILY_CFG,\n             coldVerdict, outlookVerdict, parseMcd, mcdValidEnd, geomTouchesEnv, watchBoundary and chaikinRing behave');
+console.log('ok    logic: rangeMark, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr, FAMILY_CFG,\n             compact forecast decisions, coldVerdict, outlookVerdict, parseMcd, mcdValidEnd,\n             geomTouchesEnv, watchBoundary and chaikinRing behave');
