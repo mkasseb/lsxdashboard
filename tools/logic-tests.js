@@ -58,7 +58,9 @@ const SUBJECT = new Function(`
   ${lift(/^function forecastImpact\(feels,air\)\{[\s\S]*?^\}/m, 'forecastImpact()')}
   ${lift(/^function summaryPopText\(pop\)\{[\s\S]*?^\}/m, 'summaryPopText()')}
   ${lift(/^function buildForecastSummary\(facts\)\{[\s\S]*?^\}/m, 'buildForecastSummary()')}
+  ${lift(/^function nwsWallTime\(value\)\{[\s\S]*?^\}/m, 'nwsWallTime()')}
   ${lift(/^function hourlyByDate\(hrs\)\{[\s\S]*?^\}/m, 'hourlyByDate()')}
+  ${lift(/^function hrWord\(d\)\{[\s\S]*?^\}/m, 'hrWord()')}
   ${lift(/^var OUTLOOK_CFG=\{[\s\S]*?^\};/m, 'OUTLOOK_CFG')}
   ${lift(/^function outlookVerdict\(cfg,l0,l1\)\{[\s\S]*?^\}/m, 'outlookVerdict()')}
   ${lift(/^function parseMcd\(text\)\{[\s\S]*?^\}/m, 'parseMcd()')}
@@ -69,7 +71,7 @@ const SUBJECT = new Function(`
   return { rangeMark, rangeRow, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr,
            FAMILY_CFG, coldVerdict, parseMph, heatIndexF, windChillF, feelsLikeF,
            compactDayName, compactCondition, summaryPop, forecastImpact,
-           summaryPopText, buildForecastSummary, hourlyByDate,
+           summaryPopText, buildForecastSummary, nwsWallTime, hourlyByDate, hrWord,
            OUTLOOK_CFG, outlookVerdict,
            parseMcd, mcdValidEnd, geomTouchesEnv, watchBoundary, chaikinRing };
 `)();
@@ -296,6 +298,12 @@ function check(name, actual, expected) {
 /* ============ hourly apparent-temperature extrema ============ */
 {
   const H = SUBJECT.hourlyByDate;
+  check('NWS wall time preserves the forecast-local date and hour',
+    SUBJECT.nwsWallTime('2026-01-10T23:00:00-06:00'),
+    { key: '2026-01-10', month: 0, day: 10, hour: 23 });
+  check('invalid NWS wall time fails closed', SUBJECT.nwsWallTime('not-a-time'), null);
+  check('forecast-local source hours render without timezone conversion',
+    [SUBJECT.hrWord(0), SUBJECT.hrWord(12), SUBJECT.hrWord(23)], ['12am', '12pm', '11pm']);
   const hours = [
     { startTime: '2026-01-10T06:00:00-06:00', temperature: 5,
       relativeHumidity: { value: 70 }, windSpeed: '20 mph' },
@@ -306,10 +314,10 @@ function check(name, actual, expected) {
   ];
   const rec = H(hours)['2026-01-10'];
   check('hourly summary retains full-day coverage', rec.lastH, 19);
-  check('hourly summary retains the midday humidity source', [rec.rh, rec.rhT.getHours()], [55, 13]);
+  check('hourly summary retains the midday humidity source', [rec.rh, rec.rhH], [55, 13]);
   check('hourly summary retains both apparent-temperature ends', rec.flMin < rec.fl, true);
-  check('coldest apparent temperature keeps its source hour', rec.flMinT.getHours(), 6);
-  check('warmest apparent temperature keeps its source hour', rec.flT.getHours(), 13);
+  check('coldest apparent temperature keeps its source hour', rec.flMinH, 6);
+  check('warmest apparent temperature keeps its source hour', rec.flH, 13);
 }
 
 

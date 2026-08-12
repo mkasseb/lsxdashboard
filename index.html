@@ -3530,7 +3530,7 @@ function buildForecastSummary(facts){
 /* One walk over the hourly forecast, two recoveries per local date:
    — rh: the humidity nearest midday (1pm). NWS removed relativeHumidity from the twice-daily
      /forecast periods (API discussion #752), so the day's headline humidity comes from here.
-     rhT remembers WHICH hour won, because the cell's label says so: on a full day that's 1pm,
+     rhH remembers WHICH hour won, because the cell's label says so: on a full day that's 1pm,
      but a "Tonight" row's nearest-to-midday hour is this evening, and a label that just said
      "midday" would be claiming an hour the feed never supplied.
    — fl/flMin: the date's hottest and coldest feels-like. The daily high and the 1pm humidity don't co-occur — the
@@ -3541,24 +3541,34 @@ function buildForecastSummary(facts){
    — lastH: the latest local hour the feed covers for that date. The hourly feed runs ~6½ days,
      so its final date arrives with only its morning hours; a "peak" taken from half a day would
      understate with the same confidence the old pairing overstated. Both extrema are only trusted when
-     coverage reaches evening (see the Feels Like cell), and lastH is what says whether it does. */
+     coverage reaches evening (see the Feels Like cell), and lastH is what says whether it does.
+   NWS timestamps include the forecast location's UTC offset. Pulling the wall-clock fields out of
+   that timestamp before Date converts it keeps date grouping and source-hour labels tied to the
+   forecast location instead of whichever timezone the browser or CI runner happens to use. */
+function nwsWallTime(value){
+  var m=String(value||"").match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):/);
+  if(!m) return null;
+  var month=Number(m[2]), day=Number(m[3]), hour=Number(m[4]);
+  if(month<1||month>12||day<1||day>31||hour<0||hour>23) return null;
+  return {key:m[1]+"-"+m[2]+"-"+m[3],month:month-1,day:day,hour:hour};
+}
 function hourlyByDate(hrs){
   var map={};
   (hrs||[]).forEach(function(pp){
     if(!pp.startTime) return;
-    var dt=new Date(pp.startTime);
-    var key=dt.getFullYear()+"-"+("0"+(dt.getMonth()+1)).slice(-2)+"-"+("0"+dt.getDate()).slice(-2);
-    var rec=map[key]||(map[key]={rh:null, rhT:null, diff:99, fl:null, flT:null, flMin:null, flMinT:null, lastH:-1});
-    var hr=dt.getHours();
+    var wall=nwsWallTime(pp.startTime);
+    if(!wall) return;
+    var rec=map[wall.key]||(map[wall.key]={rh:null, rhH:null, diff:99, fl:null, flH:null, flMin:null, flMinH:null, lastH:-1});
+    var hr=wall.hour;
     if(hr>rec.lastH) rec.lastH=hr;
     var rh=(pp.relativeHumidity && pp.relativeHumidity.value!=null)?Math.round(pp.relativeHumidity.value):null;
     if(rh!=null){
       var diff=Math.abs(hr-13); // closeness to 1pm local
-      if(diff<rec.diff){ rec.rh=rh; rec.rhT=dt; rec.diff=diff; }
+      if(diff<rec.diff){ rec.rh=rh; rec.rhH=hr; rec.diff=diff; }
     }
     var fl=feelsLikeF(pp.temperature,rh,parseMph(pp.windSpeed));
-    if(fl!=null&&(rec.fl==null||fl>rec.fl)){ rec.fl=fl; rec.flT=dt; }
-    if(fl!=null&&(rec.flMin==null||fl<rec.flMin)){ rec.flMin=fl; rec.flMinT=dt; }
+    if(fl!=null&&(rec.fl==null||fl>rec.fl)){ rec.fl=fl; rec.flH=hr; }
+    if(fl!=null&&(rec.flMin==null||fl<rec.flMin)){ rec.flMin=fl; rec.flMinH=hr; }
   });
   return map;
 }
@@ -3641,8 +3651,8 @@ function loadForecast(){
       function factsFor(d){
         var hi=d.day?d.day.temperature:null, lo=d.night?d.night.temperature:null;
         var main=d.day||d.night;
-        var mdt=main&&main.startTime?new Date(main.startTime):null;
-        var key=mdt?mdt.getFullYear()+"-"+("0"+(mdt.getMonth()+1)).slice(-2)+"-"+("0"+mdt.getDate()).slice(-2):null;
+        var wall=main&&main.startTime?nwsWallTime(main.startTime):null;
+        var key=wall?wall.key:null;
         var hrec=(key&&hByDate[key])?hByDate[key]:null;
         var full=!!(hrec&&hrec.lastH>=18);
         var rh=full?hrec.rh:null;
@@ -3651,11 +3661,12 @@ function loadForecast(){
               :feelsLikeF(highPeriod?highPeriod.temperature:null,rh,parseMph(highPeriod?highPeriod.windSpeed:null));
         var feelsLow=(full&&hrec.flMin!=null)?hrec.flMin
               :feelsLikeF(lowPeriod?lowPeriod.temperature:null,null,parseMph(lowPeriod?lowPeriod.windSpeed:null));
-        var lowHr=(full&&hrec.flMinT)?hrec.flMinT.getHours():null;
+        var lowHr=(full&&hrec.flMinH!=null)?hrec.flMinH:null;
         var lowLabel=/^tonight$/i.test(d.name)?"Tonight"
           :(lowHr!=null&&lowHr<12?d.name+" morning":(lowHr!=null&&lowHr<18?d.name:d.name+" night"));
         var dayPop=popOf(d.day), nightPop=popOf(d.night);
-        return {name:d.name,hi:hi,lo:lo,main:main,mdt:mdt,key:key,hrec:hrec,full:full,rh:rh,
+        return {name:d.name,hi:hi,lo:lo,main:main,month:wall?wall.month:null,dayOfMonth:wall?wall.day:null,
+                key:key,hrec:hrec,full:full,rh:rh,
                 feelsHigh:feelsHigh,feelsLow:feelsLow,feelsLowLabel:lowLabel,
                 dayPop:dayPop,nightPop:nightPop,
                 dayCondition:d.day?d.day.shortForecast:"",nightCondition:d.night?d.night.shortForecast:"",
@@ -3703,7 +3714,7 @@ function loadForecast(){
         var left=((Math.min(a,b)-wMin)/range)*100, width=Math.max(4,(Math.abs(b-a)/range)*100);
         var grad="linear-gradient(90deg,"+tCol(Math.min(a,b))+","+tCol(Math.max(a,b))+")";
         var pop=fact.pop, popText=summaryPopText(pop), main=fact.main, wind=fact.wind;
-        var mdt=fact.mdt, _dk=fact.key, hrec=fact.hrec, rh=fact.rh;
+        var mMonth=fact.month, mDay=fact.dayOfMonth, _dk=fact.key, hrec=fact.hrec, rh=fact.rh;
         var hotImpact=forecastImpact(fact.feelsHigh,hi!=null?hi:(main?main.temperature:null));
         var coldImpact=forecastImpact(fact.feelsLow,lo!=null?lo:(main?main.temperature:null));
         var impact=(hotImpact&&hotImpact.kind==="hot")?hotImpact:((coldImpact&&coldImpact.kind==="cold")?coldImpact:null);
@@ -3728,8 +3739,8 @@ function loadForecast(){
         // month spelled out instead, since "8 slash 1" is noise. Shown only where the column
         // can hold it — fitDayDates() measures after paint; see the .dnd rule for why no
         // media query can make that call.
-        var md=mdt?'<span class="dnd" aria-hidden="true">'+(mdt.getMonth()+1)+"/"+mdt.getDate()+'</span>'
-                  +'<span class="sr">, '+MONTHS[mdt.getMonth()]+" "+mdt.getDate()+'</span>':'';
+        var md=mMonth!=null?'<span class="dnd" aria-hidden="true">'+(mMonth+1)+"/"+mDay+'</span>'
+                  +'<span class="sr">, '+MONTHS[mMonth]+" "+mDay+'</span>':'';
         return '<div class="day-item">'
           +'<button class="day" type="button" aria-expanded="false" title="'+esc(main.shortForecast)+'">'
             +'<div><div class="dn"><span aria-hidden="true">'+esc(compactDayName(d.name))+'</span>'
@@ -3759,7 +3770,7 @@ function loadForecast(){
                 +'<div class="v">'+(fl!=null?fl+"°":"—")+'</div></div>'
               // The key names the hour the reading came from — the page's habit of saying exactly
               // what a number is. Usually "(1pm)"; on a Tonight row the winner is an evening hour.
-              +'<div class="dd-item"><div class="k">Humidity'+(rh!=null&&hrec.rhT?' ('+hrWord(hrec.rhT)+')':'')
+              +'<div class="dd-item"><div class="k">Humidity'+(rh!=null&&hrec.rhH!=null?' ('+hrWord(hrec.rhH)+')':'')
                 +'</div><div class="v">'+(rh!=null?rh+"%":"—")+'</div></div>'
               +(function(){   // that day's peak UV, when Open-Meteo has it for the date
                 var du=_dk?uv.daily[_dk]:null;
@@ -7124,7 +7135,10 @@ function renderUvNow(){
    loaded. */
 var callAqi=null;
 var callRisk=null;   // {spc, ero, fire, wssi}, each [day1,day2] — raw dn/rank values from loadSpc
-function hrWord(d){ return d.toLocaleTimeString([], {hour:"numeric"}).replace(/\s/g,"").toLowerCase(); }
+function hrWord(d){
+  if(typeof d==="number") return ((d%12)||12)+(d<12?"am":"pm");
+  return d.toLocaleTimeString([], {hour:"numeric"}).replace(/\s/g,"").toLowerCase();
+}
 /* The same clock word, plus the day when it isn't today. The Bottom Line reasons over a 24-hour
    window, so a bare "near 1pm" read at 8pm was describing TOMORROW afternoon in a voice that
    sounds like this afternoon. Twenty-four hours can only reach tomorrow, never further. */
