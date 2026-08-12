@@ -1553,6 +1553,15 @@
     /* Day-detail 2-col grid → single column so wind/humidity never truncate */
     .dd-grid{grid-template-columns:1fr}
   }
+  /* At 320px the ordinary phone grid's fixed tracks, gaps and padding add up to 285px, while the
+     card gives the row 260px. .day-item intentionally clips its rounded corners, so that overflow
+     hid the chevron completely. Keep every column, but let the name and temperature bar share the
+     remaining room and trim the chrome by a few pixels at this narrow edge. */
+  @media(max-width:340px){
+    .day{grid-template-columns:minmax(52px,1.15fr) 22px 32px minmax(26px,1fr) 58px 10px;
+      gap:4px;padding:9px 8px}
+    .day .dt{gap:2px;font-size:var(--fs-xs)}
+  }
   footer a{color:inherit;text-decoration:underline;text-underline-offset:2px}
 </style>
 </head>
