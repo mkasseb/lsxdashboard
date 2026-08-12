@@ -725,15 +725,45 @@
      the accessibility tree. First used by the 7-day rows' Low/High labels. */
   .sr{position:absolute;width:1px;height:1px;margin:0;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .daily{display:flex;flex-direction:column;gap:8px}
+  .fc-overview{display:grid;gap:10px;margin-bottom:2px;padding:1px 1px 3px}
+  .fc-story{display:flex;align-items:flex-start;gap:9px;color:var(--text);text-wrap:pretty}
+  .fc-signal{display:grid;place-items:center;width:32px;height:32px;flex:0 0 32px;border:1px solid var(--border);
+    border-radius:10px;background:var(--inset);color:var(--muted);box-shadow:inset 3px 0 currentColor}
+  .fc-signal .ic{width:17px;height:17px}
+  .fc-overview[data-tone="hot"] .fc-signal{color:var(--sev)}
+  .fc-overview[data-tone="cold"] .fc-signal,.fc-overview[data-tone="snow"] .fc-signal,
+  .fc-overview[data-tone="rain"] .fc-signal,.fc-overview[data-tone="wintry"] .fc-signal{color:var(--accent)}
+  .fc-overview[data-tone="storm"] .fc-signal{color:var(--warn)}
+  .fc-overview[data-tone="dry"] .fc-signal{color:var(--good)}
+  .fc-headline{padding-top:5px;font-size:var(--fs-lg);font-weight:800;line-height:1.35}
+  .fc-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+  .fc-fact{display:grid;grid-template-columns:19px minmax(0,1fr);align-items:center;gap:7px;min-height:48px;
+    padding:7px 8px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--inset)}
+  .fc-fact:last-child:nth-child(odd){grid-column:1 / -1}
+  .fc-fact>.ic{width:15px;height:15px;color:var(--muted)}
+  .fc-fact[data-tone="hot"]>.ic{color:var(--sev)}
+  .fc-fact[data-tone="cold"]>.ic,.fc-fact[data-tone="rain"]>.ic,
+  .fc-fact[data-tone="snow"]>.ic,.fc-fact[data-tone="wintry"]>.ic{color:var(--accent)}
+  .fc-fact[data-tone="storm"]>.ic{color:var(--warn)}
+  .fc-fact[data-tone="dry"]>.ic{color:var(--good)}
+  .fc-fact .k{font-size:var(--fs-2xs);font-weight:800;text-transform:uppercase;letter-spacing:var(--ls-eyebrow);color:var(--muted)}
+  .fc-fact .v{margin-top:2px;font-size:var(--fs-sm);font-weight:750;line-height:1.25;color:var(--text);font-variant-numeric:tabular-nums}
+  .fc-meta{display:flex;justify-content:space-between;gap:10px;padding-top:8px;border-top:1px solid var(--border);
+    font-size:var(--fs-2xs);color:var(--muted);white-space:nowrap}
+  .fc-meta span:first-child{font-weight:750;color:var(--text)}
   .day-item{background:var(--inset);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden}
-  .day{display:grid;grid-template-columns:minmax(0,1.25fr) 26px 40px minmax(46px,2fr) auto 14px;align-items:center;gap:8px;
+  .day{display:grid;grid-template-columns:72px 26px 36px minmax(42px,1fr) 66px 12px;align-items:center;gap:6px;
     width:100%;text-align:left;background:transparent;border:0;color:var(--text);
-    padding:11px 12px;min-height:48px;cursor:pointer;font-family:inherit}
+    padding:9px 12px;min-height:56px;cursor:pointer;font-family:inherit}
   .day:hover{background:var(--chip)}
   .day .dn{font-weight:700;font-size:var(--fs-md);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-  /* The date riding along with the day name — and no media query deciding its fate, because the
+  .day .dcond{font-size:var(--fs-2xs);line-height:1.2;color:var(--muted);white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;margin-top:3px}
+  .day .dcond.impact-hot{color:var(--sev);font-weight:800}
+  .day .dcond.impact-cold{color:var(--accent);font-weight:800}
+  /* The date riding along with the compact day name — and no media query deciding its fate, because the
      viewport is the wrong thing to ask: this card is col-4 at desktop but full-width on a phone,
-     so the name column is at its NARROWEST on the largest screens. Whether "Wednesday 8/5" fits
+     so the name column is at its NARROWEST on the largest screens. Whether "Tonight 8/5" fits
      is a fact about the painted column, and fitDayDates() measures exactly that after each paint,
      setting .no-dnd when any row would have to eat its own day name to keep the date. The .sr
      twin is out of flow, so a screen reader keeps the date at every width either way. */
@@ -743,8 +773,12 @@
   .day .dp{font-size:var(--fs-xs);color:var(--accent);text-align:center;font-variant-numeric:tabular-nums;min-width:0}
   .tbar{position:relative;height:7px;border-radius:4px;background:var(--chip);min-width:0}
   .tbar .tfill{position:absolute;top:0;bottom:0;border-radius:4px;min-width:8px}
-  .day .dt{font-weight:700;font-variant-numeric:tabular-nums;font-size:var(--fs-md);white-space:nowrap;text-align:right}
-  .day .dt .lo{font-weight:600;margin-right:5px}
+  .day .dt{display:grid;grid-template-columns:1fr 1fr;gap:3px;align-items:center;
+    font-weight:700;font-variant-numeric:tabular-nums;font-size:var(--fs-sm);white-space:nowrap;text-align:right}
+  .day .dt.only-one{grid-template-columns:1fr;justify-items:end}
+  .day .dt span{display:inline-flex;align-items:baseline;justify-content:flex-end;gap:2px}
+  .day .dt .lo{font-weight:600}
+  .day .dt .tl{font-size:var(--fs-2xs);font-weight:800;color:var(--muted)}
   /* The missing-low dash on a day-only row — only reachable when the feed itself runs short of
      seven whole days (see the pairing loop). Sits in the .lo slot with the .lo spacing so the
      high doesn't shift left and read as the row's only number being a low. Muted + help cursor
@@ -761,6 +795,10 @@
   .dd-item{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:7px 10px}
   .dd-item .k{font-size:var(--fs-xs);color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
   .dd-item .v{font-size:var(--fs-md);font-weight:700;margin-top:2px}
+  .dd-item.impact-hot{box-shadow:inset 3px 0 var(--sev)}
+  .dd-item.impact-hot .v{color:var(--sev)}
+  .dd-item.impact-cold{box-shadow:inset 3px 0 var(--accent)}
+  .dd-item.impact-cold .v{color:var(--accent)}
   .cc-feels{font-size:var(--fs-md);font-weight:700;color:var(--muted);margin-top:3px}
   .cc-feels.is-hot{color:var(--sev)}
   .cc-feels.is-cold{color:var(--accent)}
@@ -1466,15 +1504,10 @@
   .afd-list li:last-child{margin-bottom:0}
   .afd-meta{font-size:var(--fs-sm);color:var(--muted);margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
   /* ===== Why there is no clamp here =====
-     This card renders at whatever length the office wrote, and that is deliberate — it was
-     clamped for a while, and the measurement is what removed it. Across the 21 most recent LSX
-     products in the calm-weather layout it runs 151–365px (median 304), which puts the top of
-     #currentCard between 668px and 881px: on a 912px phone the hero is on the first screen in
-     every one of them, clamped or not. The clamp was hiding up to 200px to protect something
-     that was never at risk, and cutting the forecaster off mid-sentence to do it.
-     It was sized, originally, against multi-paragraph Short-Term prose — which extractAFD cannot
-     actually produce (see the note above #afdCard). A guard built for an input that never
-     arrives. */
+     The Pulse now follows Current Conditions and the 24-hour chart, so its full forecaster-written
+     context no longer delays either current product. Clamping it here would only cut the reasoning
+     off immediately before the 7-day forecast it is meant to explain. Recent LSX products measured
+     151–365px (median 304), a reasonable briefing at this point in the reading order. */
   /* ===== Responsive overrides (kept last so they win over base rules) ===== */
   @media(max-width:480px){
     /* Was `html,body`. The <body> half silently disabled position:sticky at exactly the width
@@ -1488,8 +1521,7 @@
     .brand h1{font-size:var(--fs-lg)}
     .header-right{gap:10px}
     .clock .time{font-size:var(--fs-xl)}
-    .day{grid-template-columns:minmax(0,1.15fr) 24px 38px minmax(38px,1.6fr) auto 12px;gap:7px;padding:10px}
-    .day .dt{font-size:var(--fs-md)}
+    .day{grid-template-columns:68px 24px 34px minmax(38px,1fr) 64px 12px;gap:5px;padding:9px 10px}
     /* Risk matrix: stack day label above its 3 pills so nothing collides */
     .spc-row{grid-template-columns:1fr 1fr 1fr;gap:5px 5px;padding:9px 0}
     .spc-row .spc-day{grid-column:1 / -1;font-size:12px;margin-bottom:1px}
@@ -1520,6 +1552,15 @@
     .rlink .rname{min-width:0;flex:1 1 60%}
     /* Day-detail 2-col grid → single column so wind/humidity never truncate */
     .dd-grid{grid-template-columns:1fr}
+  }
+  /* At 320px the ordinary phone grid's fixed tracks, gaps and padding add up to 285px, while the
+     card gives the row 260px. .day-item intentionally clips its rounded corners, so that overflow
+     hid the chevron completely. Keep every column, but let the name and temperature bar share the
+     remaining room and trim the chrome by a few pixels at this narrow edge. */
+  @media(max-width:340px){
+    .day{grid-template-columns:minmax(52px,1.15fr) 22px 32px minmax(26px,1fr) 58px 10px;
+      gap:4px;padding:9px 8px}
+    .day .dt{gap:2px;font-size:var(--fs-xs)}
   }
   footer a{color:inherit;text-decoration:underline;text-underline-offset:2px}
 </style>
@@ -1700,34 +1741,6 @@
     <div class="callrow" id="callRow"></div>
   </section>
 
-  <!-- THE PULSE — the forecaster's own reasoning, ranked directly under the Bottom Line because
-       the two cards are the same kind of thing: one verdict computed by this page, one written by
-       a human at NWS St. Louis. It used to sit below the hero band under "the week ahead & deeper
-       context", which mis-filed it twice over — extractAFD reaches for Key Messages, then the
-       Synopsis, then the SHORT TERM outlook, all of which are about the next 12–24 hours, not the
-       week; and it put the forecaster's read of the day some 2,000px down the page.
-       It renders at FULL LENGTH here, which took two attempts to get right. It shipped clamped
-       to a few lines behind a "Read the full discussion" button, on the theory that the card had
-       to be cheap to deserve the rank. Measuring the 21 most recent products said otherwise: in
-       the calm-weather layout the card runs 151–365px and puts #currentCard between 668px and
-       881px, so on a 912px phone the hero is on the first screen either way. The clamp was hiding
-       up to 200px, and cutting the forecaster off mid-sentence, to buy room nothing needed. The
-       reasoning behind that removal is kept in the CSS beside the styles, so it does not come
-       back by default.
-       (Worth knowing if you change extractAFD: its Synopsis and Short-Term fallbacks currently
-       match NOTHING on this office's products — LSX writes `.SHORT TERM /THROUGH THURSDAY/...`
-       and the pattern wants `.SHORT TERM...`. It goes unnoticed because Key Messages was present
-       in all 21 recent products sampled, so the first branch always wins. Pre-existing, left
-       alone here deliberately: fixing it changes what this card SAYS, which is its own change.
-       It is also the input the clamp was originally sized against — paragraphs this card has
-       never actually been handed. Fix that first, then re-measure, before reaching for a clamp.) -->
-  <section class="card col-12" id="afdCard">
-    <h2>The Pulse — NWS Forecast Discussion
-      <a class="link" href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener">Full discussion ↗</a>
-    </h2>
-    <div id="afd"><div class="loading">Loading discussion…</div></div>
-  </section>
-
   <!-- ── RIGHT NOW: the hero band. Everything a visitor opens this page to learn is in the
        first screen — conditions on the left, radar on the right, the verdicts underneath. ── -->
   <div class="railhead rail-now col-12">
@@ -1847,8 +1860,26 @@
   <!-- ── THE WEEK AHEAD & DEEPER CONTEXT ── -->
   <div class="railhead col-12">
     <span class="rail-t">The week ahead &amp; deeper context</span>
-    <span class="rail-s">outlooks, rivers, drought, climate</span>
+    <span class="rail-s">forecast discussion, outlooks, rivers, drought, climate</span>
   </div>
+
+  <!-- THE PULSE — the NWS forecaster's reasoning now follows Current Conditions and the
+       full-width 24-hour chart, immediately before the 7-day forecast band. This order lets the
+       observations and hourly evolution establish what is happening first, then uses the human
+       discussion to explain why before the reader reaches the day-by-day week.
+       It stays full-width and outside the masonry so its prose reads as one continuous briefing
+       and the 7-day card remains the first packed weekly product.
+       (Worth knowing if you change extractAFD: its Synopsis and Short-Term fallbacks currently
+       match NOTHING on this office's products — LSX writes `.SHORT TERM /THROUGH THURSDAY/...`
+       and the pattern wants `.SHORT TERM...`. It goes unnoticed because Key Messages was present
+       in all 21 recent products sampled, so the first branch always wins. Pre-existing, left
+       alone here deliberately: fixing it changes what this card SAYS, which is its own change.) -->
+  <section class="card col-12" id="afdCard">
+    <h2>The Pulse — NWS Forecast Discussion
+      <a class="link" href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener">Full discussion ↗</a>
+    </h2>
+    <div id="afd"><div class="loading">Loading discussion…</div></div>
+  </section>
 
   <!-- ── Self-packing masonry band: cards flow into the shortest column (no manual balancing, no gaps) ── -->
   <div class="masonry col-12">
@@ -2045,9 +2076,9 @@ function wxName(text,day){
 function mcImg(name,fb,px,alt){
   /* alt is empty by DEFAULT and that is the right default: nearly every sky icon on this page sits
      beside words that already say the condition, and a second announcement of "Sunny" is noise.
-     The exception is the collapsed 7-day row, where the icon is the only thing saying what the
-     weather is — no condition text is visible there until the row is opened — so that one call
-     passes the forecast through. data-alt carries it to the CDN-failure path below. */
+     A collapsed 7-day row normally has its own concise condition text now. When that line is
+     replaced by a higher-value feels-like impact, the row passes the full forecast here instead;
+     data-alt carries that description to the CDN-failure path below. */
   return '<img class="wxi" src="'+ICON_BASE+name+'.svg" width="'+px+'" height="'+px+'" alt="'
     +esc(alt||"")+'" data-ic="'+fb+'"'+(alt?' data-alt="'+esc(alt)+'"':'')
     +' loading="lazy" onerror="wxiFail(this)">';
@@ -3348,36 +3379,205 @@ function showAlertOnRadar(ev,scope){
 }
 
 /* ============ FORECAST ============ */
+/* Compact display decisions used by the collapsed 7-day rows. These stay pure because every pixel
+   is scarce in the one-third-width desktop card AND the phone card, and a subtle threshold change
+   otherwise becomes something that can only be checked against whichever forecast happens to be
+   live. The expanded row always preserves the exact NWS wording and precipitation value. */
+function compactDayName(name){
+  var days={Monday:"Mon",Tuesday:"Tue",Wednesday:"Wed",Thursday:"Thu",Friday:"Fri",Saturday:"Sat",Sunday:"Sun"};
+  return days[name]||name;
+}
+function compactCondition(text){
+  var t=String(text||"").toLowerCase();
+  if(t.indexOf("tornado")>=0) return "Tornado";
+  if(t.indexOf("thunder")>=0||t.indexOf("storm")>=0) return "Storms";
+  if(t.indexOf("freezing")>=0||t.indexOf("sleet")>=0||t.indexOf("ice")>=0) return "Wintry mix";
+  if(t.indexOf("snow")>=0||t.indexOf("flurr")>=0) return "Snow";
+  if(t.indexOf("shower")>=0) return "Showers";
+  if(t.indexOf("rain")>=0||t.indexOf("drizzle")>=0) return "Rain";
+  if(t.indexOf("fog")>=0) return "Fog";
+  if(t.indexOf("haze")>=0||t.indexOf("smoke")>=0) return "Hazy";
+  if(t.indexOf("wind")>=0||t.indexOf("breezy")>=0||t.indexOf("blustery")>=0) return "Windy";
+  if(t.indexOf("mostly sunny")>=0) return "Mostly sunny";
+  if(t.indexOf("partly sunny")>=0) return "Partly sunny";
+  if(t.indexOf("mostly clear")>=0) return "Mostly clear";
+  if(t.indexOf("partly cloudy")>=0) return "Partly cloudy";
+  if(t.indexOf("mostly cloudy")>=0) return "Mostly cloudy";
+  if(t.indexOf("overcast")>=0||t.indexOf("cloudy")>=0) return "Cloudy";
+  if(t.indexOf("sunny")>=0||t.indexOf("hot")>=0) return "Sunny";
+  if(t.indexOf("clear")>=0||t.indexOf("fair")>=0) return "Clear";
+  return text||"Forecast";
+}
+function summaryPop(pop){
+  if(pop==null||pop<15) return null;
+  return Math.min(100,Math.round(pop/10)*10);
+}
+function forecastImpact(feels,air){
+  if(feels!=null&&feels>=100&&(air==null||feels-air>=5)) return {kind:"hot",label:"Feels "+Math.round(feels)+"°"};
+  if(feels!=null&&feels<=0&&(air==null||air-feels>=5)) return {kind:"cold",label:"Feels "+Math.round(feels)+"°"};
+  return null;
+}
+function summaryPopText(pop){
+  var rounded=summaryPop(pop);
+  if(rounded==null) return "";
+  return (Math.round(pop)===rounded?"":"~")+rounded+"%";
+}
+/* Turn a week of already-derived facts into one editorial hierarchy. The renderer supplies facts;
+   this function decides what deserves the headline and which supporting facts are non-redundant.
+   Keeping that judgment pure makes hot, cold, snow, dry and
+   overnight-heavy weeks testable without waiting for each one to happen over St. Louis. */
+function buildForecastSummary(facts){
+  var F=(facts||[]).filter(function(f){ return !!f; });
+  if(!F.length) return {headline:"Forecast summary unavailable",facts:[],tone:"neutral",icon:"info"};
+  function name(i){ return (F[i]&&F[i].name)||("Day "+(i+1)); }
+  function nightName(i){ return /^tonight$/i.test(name(i))?"Tonight":name(i)+" night"; }
+  function periodName(p){ return p.part==="night"?nightName(p.i):name(p.i); }
+  function shortLabel(label){
+    return String(label||"").replace(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/,
+      function(day){ return compactDayName(day); });
+  }
+  function shortPeriodName(p){
+    return shortLabel(periodName(p));
+  }
+  function periodSpan(a,b){
+    if(a.i===b.i&&a.part!==b.part) return name(a.i)+" into "+nightName(a.i);
+    return periodName(a)===periodName(b)?periodName(a):periodName(a)+"–"+periodName(b);
+  }
+  function shortPeriodSpan(a,b){
+    if(a.i===b.i&&a.part!==b.part) return compactDayName(name(a.i))+" day–night";
+    return shortPeriodName(a)===shortPeriodName(b)?shortPeriodName(a):shortPeriodName(a)+"–"+shortPeriodName(b);
+  }
+  function numberRange(values){
+    var v=values.filter(function(x){return x!=null;}).map(function(x){return Math.round(x);});
+    if(!v.length) return "";
+    var lo=Math.min.apply(null,v),hi=Math.max.apply(null,v);
+    return lo===hi?lo+"°":lo+"–"+hi+"°";
+  }
+  var maxFeels=null,maxFeelsI=-1,minFeels=null,minFeelsI=-1;
+  F.forEach(function(f,i){
+    if(f.feelsHigh!=null&&(maxFeels==null||f.feelsHigh>maxFeels)){ maxFeels=f.feelsHigh; maxFeelsI=i; }
+    if(f.feelsLow!=null&&(minFeels==null||f.feelsLow<minFeels)){ minFeels=f.feelsLow; minFeelsI=i; }
+  });
+
+  var periods=[];
+  F.forEach(function(f,i){
+    if(f.dayPop!=null) periods.push({i:i,part:"day",pop:+f.dayPop||0,condition:f.dayCondition||""});
+    if(f.nightPop!=null) periods.push({i:i,part:"night",pop:+f.nightPop||0,condition:f.nightCondition||""});
+  });
+  var maxPop=0;
+  periods.forEach(function(p){ if(p.pop>maxPop) maxPop=p.pop; });
+  var precip=null;
+  if(maxPop>=20){
+    var floor=Math.max(20,maxPop-10), clusters=[], run=[];
+    periods.forEach(function(p){
+      if(p.pop>=floor) run.push(p);
+      else if(run.length){ clusters.push(run); run=[]; }
+    });
+    if(run.length) clusters.push(run);
+    clusters=clusters.filter(function(c){ return c.some(function(p){ return p.pop===maxPop; }); });
+    clusters.sort(function(a,b){ return b.length-a.length; });
+    var win=clusters[0]||[], wx=win.map(function(p){return p.condition;}).join(" ").toLowerCase();
+    var family=/freezing|sleet|ice|wintry/.test(wx)?"wintry":(/snow|flurr/.test(wx)?"snow":
+      (/thunder|storm|tornado/.test(wx)?"storm":(/rain|shower|drizzle/.test(wx)?"rain":"precip")));
+    var lead={wintry:"Wintry precipitation",snow:"Snow chances",storm:"Storm chances",
+              rain:"Rain chances",precip:"Precipitation chances"}[family];
+    precip={family:family,text:lead+" "+periodSpan(win[0],win[win.length-1])+" ("+summaryPopText(maxPop)+")",
+      short:shortPeriodSpan(win[0],win[win.length-1])+" · "+summaryPopText(maxPop)};
+  }
+
+  var hot=[], firstHot=-1,lastHot=-1;
+  F.forEach(function(f,i){
+    if((f.hi!=null&&f.hi>=95)||(f.feelsHigh!=null&&f.feelsHigh>=100)){
+      hot.push(i); if(firstHot<0) firstHot=i; lastHot=i;
+    }
+  });
+  var heatHeadline="";
+  if(hot.length>=2){
+    var sustained=true;
+    for(var h=firstHot;h<=lastHot;h++){
+      if(!((F[h].hi!=null&&F[h].hi>=90)||(F[h].feelsHigh!=null&&F[h].feelsHigh>=100))){ sustained=false; break; }
+    }
+    if(sustained) heatHeadline="Very hot "+(firstHot===0||(firstHot===1&&F[0].hi==null)
+      ?"through "+name(lastHot):name(firstHot)+"–"+name(lastHot));
+  }
+  var hotImpact=maxFeelsI>=0?forecastImpact(maxFeels,F[maxFeelsI].hi):null;
+  if(!heatHeadline&&hotImpact&&hotImpact.kind==="hot") heatHeadline="Feels up to "+Math.round(maxFeels)+"° "+name(maxFeelsI);
+  var coldImpact=minFeelsI>=0?forecastImpact(minFeels,F[minFeelsI].lo!=null?F[minFeelsI].lo:F[minFeelsI].hi):null;
+
+  var headline="",tone="neutral",icon="info";
+  if(coldImpact&&coldImpact.kind==="cold"){
+    headline="Wind chills down to "+Math.round(minFeels)+"° "+(F[minFeelsI].feelsLowLabel||nightName(minFeelsI)); tone="cold"; icon="cold";
+  }else if(heatHeadline){ headline=heatHeadline; tone="hot"; icon="heat"; }
+  else if(precip){ headline=precip.text; tone=precip.family; icon=precip.family==="storm"?"storm":(precip.family==="rain"?"rain":(precip.family==="precip"?"drop":"snow")); }
+  else { headline="Mainly dry this week"; tone="dry"; icon="sun"; }
+
+  var bestChange=null;
+  for(var i=1;i<F.length;i++){
+    if(F[i-1].hi==null||F[i].hi==null) continue;
+    var delta=Math.round(F[i].hi-F[i-1].hi);
+    if(Math.abs(delta)>=10&&(!bestChange||Math.abs(delta)>Math.abs(bestChange.delta))) bestChange={i:i,delta:delta};
+  }
+  var summaryFacts=[];
+  function addFact(label,value,factIcon,factTone){
+    if(value&&summaryFacts.length<4) summaryFacts.push({label:label,value:value,icon:factIcon,tone:factTone||"neutral"});
+  }
+  if(hotImpact&&hotImpact.kind==="hot") addFact("Peak feels",Math.round(maxFeels)+"° "+compactDayName(name(maxFeelsI)),"heat","hot");
+  else if(coldImpact&&coldImpact.kind==="cold") addFact("Lowest feels",Math.round(minFeels)+"° "+
+    shortLabel(F[minFeelsI].feelsLowLabel||nightName(minFeelsI)),"cold","cold");
+  if(precip){
+    var pLabel={wintry:"Wintry window",snow:"Snow window",storm:"Storm window",rain:"Rain window",precip:"Precip window"}[precip.family];
+    var pIcon=precip.family==="storm"?"storm":(precip.family==="rain"?"rain":(precip.family==="precip"?"drop":"snow"));
+    addFact(pLabel,precip.short,pIcon,precip.family);
+  }else addFact("Rain signal","Mostly dry","sun","dry");
+  addFact("Highs",numberRange(F.map(function(f){return f.hi;})),"heat","temp");
+  addFact("Night lows",numberRange(F.map(function(f){return f.lo;})),"moon","night");
+  if(bestChange&&summaryFacts.length<4) addFact("Temperature trend",Math.abs(bestChange.delta)+"° "+
+    (bestChange.delta<0?"cooler ":"warmer ")+compactDayName(name(bestChange.i)),"stats","temp");
+
+  return {headline:headline,facts:summaryFacts,tone:tone,icon:icon};
+}
 /* One walk over the hourly forecast, two recoveries per local date:
    — rh: the humidity nearest midday (1pm). NWS removed relativeHumidity from the twice-daily
      /forecast periods (API discussion #752), so the day's headline humidity comes from here.
-     rhT remembers WHICH hour won, because the cell's label says so: on a full day that's 1pm,
+     rhH remembers WHICH hour won, because the cell's label says so: on a full day that's 1pm,
      but a "Tonight" row's nearest-to-midday hour is this evening, and a label that just said
      "midday" would be claiming an hour the feed never supplied.
-   — fl: the date's peak feels-like. The daily high and the 1pm humidity don't co-occur — the
+   — fl/flMin: the date's hottest and coldest feels-like. The daily high and the 1pm humidity don't co-occur — the
      high lands mid-afternoon, after the morning moisture has mixed out — and running the heat
      index on that pair overstated summer days by ~5° (a forecast of 85°/77% afternoon showed
-     "Feels Like 99°"). Each hour is scored with its OWN temp/RH/wind and the date keeps the max.
+     "Feels Like 99°"). Each hour is scored with its OWN temp/RH/wind. Keeping both ends matters:
+     the maximum is the heat story, while the minimum is the wind-chill story a max would erase.
    — lastH: the latest local hour the feed covers for that date. The hourly feed runs ~6½ days,
      so its final date arrives with only its morning hours; a "peak" taken from half a day would
-     understate with the same confidence the old pairing overstated. fl is only trusted when
-     coverage reaches evening (see the Feels Like cell), and lastH is what says whether it does. */
+     understate with the same confidence the old pairing overstated. Both extrema are only trusted when
+     coverage reaches evening (see the Feels Like cell), and lastH is what says whether it does.
+   NWS timestamps include the forecast location's UTC offset. Pulling the wall-clock fields out of
+   that timestamp before Date converts it keeps date grouping and source-hour labels tied to the
+   forecast location instead of whichever timezone the browser or CI runner happens to use. */
+function nwsWallTime(value){
+  var m=String(value||"").match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):/);
+  if(!m) return null;
+  var month=Number(m[2]), day=Number(m[3]), hour=Number(m[4]);
+  if(month<1||month>12||day<1||day>31||hour<0||hour>23) return null;
+  return {key:m[1]+"-"+m[2]+"-"+m[3],month:month-1,day:day,hour:hour};
+}
 function hourlyByDate(hrs){
   var map={};
   (hrs||[]).forEach(function(pp){
     if(!pp.startTime) return;
-    var dt=new Date(pp.startTime);
-    var key=dt.getFullYear()+"-"+("0"+(dt.getMonth()+1)).slice(-2)+"-"+("0"+dt.getDate()).slice(-2);
-    var rec=map[key]||(map[key]={rh:null, rhT:null, diff:99, fl:null, lastH:-1});
-    var hr=dt.getHours();
+    var wall=nwsWallTime(pp.startTime);
+    if(!wall) return;
+    var rec=map[wall.key]||(map[wall.key]={rh:null, rhH:null, diff:99, fl:null, flH:null, flMin:null, flMinH:null, lastH:-1});
+    var hr=wall.hour;
     if(hr>rec.lastH) rec.lastH=hr;
     var rh=(pp.relativeHumidity && pp.relativeHumidity.value!=null)?Math.round(pp.relativeHumidity.value):null;
     if(rh!=null){
       var diff=Math.abs(hr-13); // closeness to 1pm local
-      if(diff<rec.diff){ rec.rh=rh; rec.rhT=dt; rec.diff=diff; }
+      if(diff<rec.diff){ rec.rh=rh; rec.rhH=hr; rec.diff=diff; }
     }
     var fl=feelsLikeF(pp.temperature,rh,parseMph(pp.windSpeed));
-    if(fl!=null&&(rec.fl==null||fl>rec.fl)) rec.fl=fl;
+    if(fl!=null&&(rec.fl==null||fl>rec.fl)){ rec.fl=fl; rec.flH=hr; }
+    if(fl!=null&&(rec.flMin==null||fl<rec.flMin)){ rec.flMin=fl; rec.flMinH=hr; }
   });
   return map;
 }
@@ -3457,6 +3657,47 @@ function loadForecast(){
         }
       }
       function popOf(p){ return (p&&p.probabilityOfPrecipitation&&p.probabilityOfPrecipitation.value!=null)?p.probabilityOfPrecipitation.value:null; }
+      function factsFor(d){
+        var hi=d.day?d.day.temperature:null, lo=d.night?d.night.temperature:null;
+        var main=d.day||d.night;
+        var wall=main&&main.startTime?nwsWallTime(main.startTime):null;
+        var key=wall?wall.key:null;
+        var hrec=(key&&hByDate[key])?hByDate[key]:null;
+        var full=!!(hrec&&hrec.lastH>=18);
+        var rh=full?hrec.rh:null;
+        var highPeriod=d.day||main, lowPeriod=d.night||main;
+        var feelsHigh=(full&&hrec.fl!=null)?hrec.fl
+              :feelsLikeF(highPeriod?highPeriod.temperature:null,rh,parseMph(highPeriod?highPeriod.windSpeed:null));
+        var feelsLow=(full&&hrec.flMin!=null)?hrec.flMin
+              :feelsLikeF(lowPeriod?lowPeriod.temperature:null,null,parseMph(lowPeriod?lowPeriod.windSpeed:null));
+        var lowHr=(full&&hrec.flMinH!=null)?hrec.flMinH:null;
+        var lowLabel=/^tonight$/i.test(d.name)?"Tonight"
+          :(lowHr!=null&&lowHr<12?d.name+" morning":(lowHr!=null&&lowHr<18?d.name:d.name+" night"));
+        var dayPop=popOf(d.day), nightPop=popOf(d.night);
+        return {name:d.name,hi:hi,lo:lo,main:main,month:wall?wall.month:null,dayOfMonth:wall?wall.day:null,
+                key:key,hrec:hrec,full:full,rh:rh,
+                feelsHigh:feelsHigh,feelsLow:feelsLow,feelsLowLabel:lowLabel,
+                dayPop:dayPop,nightPop:nightPop,
+                dayCondition:d.day?d.day.shortForecast:"",nightCondition:d.night?d.night.shortForecast:"",
+                pop:Math.max(dayPop!=null?dayPop:0,nightPop!=null?nightPop:0),
+                wind:main?(((main.windDirection?main.windDirection+" ":"")+(main.windSpeed||"")).trim()||"—"):"—"};
+      }
+      function forecastOverview(){
+        var summary=buildForecastSummary(days.map(factsFor));
+        var updated=f&&f.properties&&(f.properties.updated||f.properties.updateTime||f.properties.generatedAt);
+        var stamp=updated?new Date(updated).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):"live feed";
+        return '<div class="fc-overview" data-tone="'+esc(summary.tone)+'">'
+          +'<div class="fc-story">'
+            +'<div class="fc-signal" aria-hidden="true">'+ic(summary.icon)+'</div>'
+            +'<div class="fc-headline"><span class="sr">Week summary: </span>'+esc(summary.headline)+'</div>'
+          +'</div>'
+          +(summary.facts.length?'<div class="fc-facts">'+summary.facts.map(function(k){
+            return '<div class="fc-fact" data-tone="'+esc(k.tone)+'">'+ic(k.icon)
+              +'<div><div class="k">'+esc(k.label)+'</div><div class="v">'+esc(k.value)+'</div></div></div>';
+          }).join("")+'</div>':'')
+          +'<div class="fc-meta"><span>NWS forecast</span><span>Updated '+esc(stamp)+'</span></div>'
+        +'</div>';
+      }
       // Stored as a repaintable closure: climate context (per-day normals) usually lands AFTER the
       // forecast, and renderContext calls this again so the "vs Normal" cell can appear.
       loadForecast._paint=function(){
@@ -3465,7 +3706,7 @@ function loadForecast(){
           if(it.classList.contains("open")) open.push(i);
           if(it.contains(document.activeElement)) focused=i;
         });
-        daily.innerHTML=paintDays();
+        daily.innerHTML=forecastOverview()+paintDays();
         var items=daily.querySelectorAll(".day-item");
         open.forEach(function(i){ if(items[i]) setOpen(items[i],items[i].querySelector(".day"),true); });   // keep expanded rows expanded
         // …and keep the keyboard where it was. This repaint fires on its own schedule (whenever
@@ -3477,24 +3718,17 @@ function loadForecast(){
         // final width, which a measurement taken now wouldn't have.
       };
       function paintDays(){ return days.map(function(d){
-        var hi=d.day?d.day.temperature:null, lo=d.night?d.night.temperature:null;
+        var fact=factsFor(d), hi=fact.hi, lo=fact.lo;
         var a=(lo!=null?lo:hi), b=(hi!=null?hi:lo);
         var left=((Math.min(a,b)-wMin)/range)*100, width=Math.max(4,(Math.abs(b-a)/range)*100);
         var grad="linear-gradient(90deg,"+tCol(Math.min(a,b))+","+tCol(Math.max(a,b))+")";
-        var pop=Math.max(popOf(d.day)!=null?popOf(d.day):0, popOf(d.night)!=null?popOf(d.night):0);
-        var main=d.day||d.night;
-        var wind=((main.windDirection?main.windDirection+" ":"")+(main.windSpeed||"")).trim()||"—";
-        // Humidity: NWS dropped it from twice-daily periods → use the day's midday value from the hourly feed
-        var mdt=main.startTime?new Date(main.startTime):null;
-        var _dk=mdt?mdt.getFullYear()+"-"+("0"+(mdt.getMonth()+1)).slice(-2)+"-"+("0"+mdt.getDate()).slice(-2):null;
-        var hrec=(_dk && hByDate[_dk])?hByDate[_dk]:null;
-        /* Only a date the hourly feed covers into the evening (6pm) can vouch for what's below.
-           The feed runs ~6½ days, so the widget's last date arrives with morning hours only:
-           its "nearest midday" humidity is really a 6am reading, and pairing THAT with the
-           afternoon high scored a 92° day as "Feels Like 131°". A half-covered date makes no
-           humidity claim and lets feels-like fall through to the temperature itself. */
-        var full=!!(hrec&&hrec.lastH>=18);
-        var rh=full?hrec.rh:null;
+        var pop=fact.pop, popText=summaryPopText(pop), main=fact.main, wind=fact.wind;
+        var mMonth=fact.month, mDay=fact.dayOfMonth, _dk=fact.key, hrec=fact.hrec, rh=fact.rh;
+        var hotImpact=forecastImpact(fact.feelsHigh,hi!=null?hi:(main?main.temperature:null));
+        var coldImpact=forecastImpact(fact.feelsLow,lo!=null?lo:(main?main.temperature:null));
+        var impact=(hotImpact&&hotImpact.kind==="hot")?hotImpact:((coldImpact&&coldImpact.kind==="cold")?coldImpact:null);
+        var fl=impact&&impact.kind==="cold"?fact.feelsLow:fact.feelsHigh;
+        var condition=impact?impact.label:compactCondition(main.shortForecast);
         /* A day period whose night hasn't been issued. The 7-row cap normally leaves the feed's
            day-only tail on the floor (see the pairing loop), so this fires only when the feed
            itself comes up short of seven whole days — rare, but a real NWS failure mode. When it
@@ -3514,21 +3748,25 @@ function loadForecast(){
         // month spelled out instead, since "8 slash 1" is noise. Shown only where the column
         // can hold it — fitDayDates() measures after paint; see the .dnd rule for why no
         // media query can make that call.
-        var md=mdt?'<span class="dnd" aria-hidden="true">'+(mdt.getMonth()+1)+"/"+mdt.getDate()+'</span>'
-                  +'<span class="sr">, '+MONTHS[mdt.getMonth()]+" "+mdt.getDate()+'</span>':'';
+        var md=mMonth!=null?'<span class="dnd" aria-hidden="true">'+(mMonth+1)+"/"+mDay+'</span>'
+                  +'<span class="sr">, '+MONTHS[mMonth]+" "+mDay+'</span>':'';
         return '<div class="day-item">'
           +'<button class="day" type="button" aria-expanded="false" title="'+esc(main.shortForecast)+'">'
-            +'<div class="dn">'+esc(d.name)+md+'</div>'
-            +'<div class="di">'+wxImg(main.shortForecast,!!d.day,26,true)+'</div>'
-            +'<div class="dp">'+(pop>0?ic("drop")+pop+"%":"&nbsp;")+'</div>'
+            +'<div><div class="dn"><span aria-hidden="true">'+esc(compactDayName(d.name))+'</span>'
+              +'<span class="sr">'+esc(d.name)+'</span>'+md+'</div>'
+              +'<div class="dcond'+(impact?' impact-'+impact.kind:'')+'">'+esc(condition)+'</div></div>'
+            +'<div class="di">'+wxImg(main.shortForecast,!!d.day,26,!!impact)+'</div>'
+            +'<div class="dp">'+(popText?ic("drop")
+              +'<span class="sr">Precipitation '+(popText.charAt(0)==="~"?"about ":"")+popText.replace("~","")+'</span>'
+              +'<span aria-hidden="true">'+popText+'</span>':"&nbsp;")+'</div>'
             +'<div class="tbar"><div class="tfill" style="left:'+left.toFixed(1)+'%;width:'+width.toFixed(1)+'%;background:'+grad+'"></div></div>'
-            // Weight and colour say which number is the low; a screen reader hearing "68° 85°"
-            // gets neither, and this row reads low-first — the reverse of the order most
-            // forecasts have taught people to expect. The clipped words say it outright.
-            +'<div class="dt">'+(lo!=null?'<span '+tvAttr(lo,"lo")+'><span class="sr">Low </span>'+lo+'°</span>'
+            // The visible H/L survives colour-vision differences and makes the conventional
+            // high-first order explicit. The clipped words keep the same clarity for a reader.
+            +'<div class="dt'+(((hi==null&&lo!=null)||(hi!=null&&lo==null&&!noNight))?' only-one':'')+'">'
+              +(hi!=null?'<span '+tvAttr(hi)+'><span class="tl" aria-hidden="true">H</span><span class="sr">High </span>'+hi+'°</span>':'')
+              +(lo!=null?'<span '+tvAttr(lo,"lo")+'><span class="tl" aria-hidden="true">L</span><span class="sr">Low </span>'+lo+'°</span>'
               :(noNight?'<span class="dt-na" title="No low yet — NWS hasn\'t issued '+esc(d.name)+' Night">'
-                +'<span class="sr">Low not yet forecast</span><span aria-hidden="true">—</span></span>':''))
-              +(hi!=null?'<span '+tvAttr(hi)+'><span class="sr">High </span>'+hi+'°</span>':'')+'</div>'
+                +'<span class="sr">Low not yet forecast</span><span aria-hidden="true">L —</span></span>':''))+'</div>'
             +'<div class="chev" aria-hidden="true">▾</div>'
           +'</button>'
           +'<div class="day-detail">'
@@ -3536,17 +3774,12 @@ function loadForecast(){
             +'<div class="dd-grid">'
               +'<div class="dd-item"><div class="k">Precip Chance</div><div class="v">'+(pop>0?pop+"%":"0%")+'</div></div>'
               +'<div class="dd-item"><div class="k">Wind</div><div class="v">'+esc(wind)+'</div></div>'
-              +(function(){
-                /* The date's hourly peak, each hour scored with its own temp/RH/wind — not the
-                   old high-plus-midday-RH pairing, which mixed hours that never co-occur and
-                   overstated summer days by ~5°. Past the feed's reach (`full` above), rh is
-                   null and this degrades to the temperature itself, or wind chill in winter. */
-                var fl=(full&&hrec.fl!=null)?hrec.fl
-                      :feelsLikeF(main.temperature,rh,parseMph(main.windSpeed));
-                return '<div class="dd-item"><div class="k">Feels Like</div><div class="v">'+(fl!=null?fl+"°":"—")+'</div></div>';})()
+              +'<div class="dd-item'+(impact?' impact-'+impact.kind:'')+'"><div class="k">'
+                +(impact&&impact.kind==="hot"?"Peak Feels Like":(impact&&impact.kind==="cold"?"Lowest Feels Like":"Feels Like"))+'</div>'
+                +'<div class="v">'+(fl!=null?fl+"°":"—")+'</div></div>'
               // The key names the hour the reading came from — the page's habit of saying exactly
               // what a number is. Usually "(1pm)"; on a Tonight row the winner is an evening hour.
-              +'<div class="dd-item"><div class="k">Humidity'+(rh!=null&&hrec.rhT?' ('+hrWord(hrec.rhT)+')':'')
+              +'<div class="dd-item"><div class="k">Humidity'+(rh!=null&&hrec.rhH!=null?' ('+hrWord(hrec.rhH)+')':'')
                 +'</div><div class="v">'+(rh!=null?rh+"%":"—")+'</div></div>'
               +(function(){   // that day's peak UV, when Open-Meteo has it for the date
                 var du=_dk?uv.daily[_dk]:null;
@@ -6911,7 +7144,10 @@ function renderUvNow(){
    loaded. */
 var callAqi=null;
 var callRisk=null;   // {spc, ero, fire, wssi}, each [day1,day2] — raw dn/rank values from loadSpc
-function hrWord(d){ return d.toLocaleTimeString([], {hour:"numeric"}).replace(/\s/g,"").toLowerCase(); }
+function hrWord(d){
+  if(typeof d==="number") return ((d%12)||12)+(d<12?"am":"pm");
+  return d.toLocaleTimeString([], {hour:"numeric"}).replace(/\s/g,"").toLowerCase();
+}
 /* The same clock word, plus the day when it isn't today. The Bottom Line reasons over a 24-hour
    window, so a bare "near 1pm" read at 8pm was describing TOMORROW afternoon in a voice that
    sounds like this afternoon. Twenty-four hours can only reach tomorrow, never further. */
@@ -7206,8 +7442,21 @@ function renderTheCall(){
 // of the contradiction this version was cut to remove, restored together. #alerts is the
 // safety-critical part on the shortest leash, which makes it the worst one to be wrong on first
 // paint — a reader who opens the page to check on a warning is the reader who gets the stale answer.
-var SNAP_KEY="lsxSnap_v7", snapRestored=false, NET_OK=false;
-try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
+// v8: #daily gained the week summary/scale and its rows changed shape: compact condition text,
+// visible H/L labels in high-first order, and rounded precipitation in the collapsed scan. A v7
+// snapshot restores the old six-column row under the new fixed-width grid and silently loses the
+// new answer-first context, so it needs one cold paint rather than a malformed first impression.
+// v9: the fixed list of peak/rain/coolest facts became a headline plus supporting insights, and
+// the weekly range endpoints gained their day labels. A v8 snapshot restores the old summary DOM
+// under the new hierarchy and leaves the endpoint grid without its .fc-end wrappers.
+// v10: the shared temperature bar gained a visible "7-day temperature scale · low → high"
+// label. A v9 snapshot would restore the exact unlabeled bar this release is meant to clarify.
+// v11: the shared weekly temperature bar was removed. A v10 snapshot would restore the rejected
+// element even though today's renderer no longer creates it.
+// v12: the loose summary sentences became a tone icon, labeled fact grid and separated source
+// footer. A v11 snapshot would restore the old floating text under the new summary styles.
+var SNAP_KEY="lsxSnap_v12", snapRestored=false, NET_OK=false;
+try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
 var SNAP_PARTS=[
   {id:"afd",      ttl:6*3600000},
   {id:"alerts",   ttl:15*60000},     // safety-critical: short leash

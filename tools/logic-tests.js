@@ -48,6 +48,19 @@ const SUBJECT = new Function(`
   ${lift(/^var FAMILY_CFG=\{[\s\S]*?^\};/m, 'FAMILY_CFG')}
   ${lift(/^var LAYERS_MAX=\d+;/m, 'LAYERS_MAX')}
   ${lift(/^function coldVerdict\(nowT,mMin,cMin\)\{[\s\S]*?^\}/m, 'coldVerdict()')}
+  ${lift(/^function parseMph\(s\)\{.*\}$/m, 'parseMph()')}
+  ${lift(/^function heatIndexF\(t,rh\)\{[\s\S]*?^\}/m, 'heatIndexF()')}
+  ${lift(/^function windChillF\(t,mph\)\{[\s\S]*?^\}/m, 'windChillF()')}
+  ${lift(/^function feelsLikeF\(t,rh,mph\)\{[\s\S]*?^\}/m, 'feelsLikeF()')}
+  ${lift(/^function compactDayName\(name\)\{[\s\S]*?^\}/m, 'compactDayName()')}
+  ${lift(/^function compactCondition\(text\)\{[\s\S]*?^\}/m, 'compactCondition()')}
+  ${lift(/^function summaryPop\(pop\)\{[\s\S]*?^\}/m, 'summaryPop()')}
+  ${lift(/^function forecastImpact\(feels,air\)\{[\s\S]*?^\}/m, 'forecastImpact()')}
+  ${lift(/^function summaryPopText\(pop\)\{[\s\S]*?^\}/m, 'summaryPopText()')}
+  ${lift(/^function buildForecastSummary\(facts\)\{[\s\S]*?^\}/m, 'buildForecastSummary()')}
+  ${lift(/^function nwsWallTime\(value\)\{[\s\S]*?^\}/m, 'nwsWallTime()')}
+  ${lift(/^function hourlyByDate\(hrs\)\{[\s\S]*?^\}/m, 'hourlyByDate()')}
+  ${lift(/^function hrWord\(d\)\{[\s\S]*?^\}/m, 'hrWord()')}
   ${lift(/^var OUTLOOK_CFG=\{[\s\S]*?^\};/m, 'OUTLOOK_CFG')}
   ${lift(/^function outlookVerdict\(cfg,l0,l1\)\{[\s\S]*?^\}/m, 'outlookVerdict()')}
   ${lift(/^function parseMcd\(text\)\{[\s\S]*?^\}/m, 'parseMcd()')}
@@ -56,7 +69,10 @@ const SUBJECT = new Function(`
   ${lift(/^function watchBoundary\(feats\)\{[\s\S]*?^\}/m, 'watchBoundary()')}
   ${lift(/^function chaikinRing\(ring,iters\)\{[\s\S]*?^\}/m, 'chaikinRing()')}
   return { rangeMark, rangeRow, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr,
-           FAMILY_CFG, coldVerdict, OUTLOOK_CFG, outlookVerdict,
+           FAMILY_CFG, coldVerdict, parseMph, heatIndexF, windChillF, feelsLikeF,
+           compactDayName, compactCondition, summaryPop, forecastImpact,
+           summaryPopText, buildForecastSummary, nwsWallTime, hourlyByDate, hrWord,
+           OUTLOOK_CFG, outlookVerdict,
            parseMcd, mcdValidEnd, geomTouchesEnv, watchBoundary, chaikinRing };
 `)();
 
@@ -155,6 +171,153 @@ function check(name, actual, expected) {
   check('no drop in the daytime branch, even when hi<lo', R(both(40, 45), day(50), 42).drop, null);
   check('...and that row still draws', R(both(40, 45), day(50), 42),
     { lo: 45, hi: 40, nextDay: false, mark: 0.6, drop: null });
+}
+
+/* ============ compact 7-day decisions ============ */
+{
+  const { compactDayName: day, compactCondition: cond, summaryPop: pop,
+          summaryPopText: popText, forecastImpact: impact } = SUBJECT;
+
+  check('long weekdays use deliberate abbreviations',
+    ['Monday', 'Wednesday', 'Sunday'].map(day), ['Mon', 'Wed', 'Sun']);
+  check('period names that are not weekdays survive',
+    ['Tonight', 'Today', 'Independence Day'].map(day), ['Tonight', 'Today', 'Independence Day']);
+  check('condition language keeps the useful distinction',
+    [cond('Mostly Sunny'), cond('Partly Cloudy'), cond('Chance Rain Showers'), cond('Severe Thunderstorms')],
+    ['Mostly sunny', 'Partly cloudy', 'Showers', 'Storms']);
+  check('condition fallback preserves unfamiliar NWS wording', cond('Patchy Blowing Dust'), 'Patchy Blowing Dust');
+
+  check('single-digit precip stays out of the collapsed scan', [pop(0), pop(4), pop(14)], [null, null, null]);
+  check('collapsed precip rounds while the detail can keep exact data',
+    [pop(15), pop(37), pop(96), pop(100)], [20, 40, 100, 100]);
+  check('approximate precipitation is labelled honestly',
+    [popText(30), popText(37), popText(4)], ['30%', '~40%', '']);
+
+  check('truly consequential heat is promoted', impact(112, 98), { kind: 'hot', label: 'Feels 112°' });
+  check('ordinary summer apparent temperature is not promoted', impact(94, 91), null);
+  check('truly consequential cold is promoted', impact(-8, 5), { kind: 'cold', label: 'Feels -8°' });
+  check('an air temperature extreme without a meaningful apparent delta is not doubled', impact(103, 101), null);
+}
+
+/* ============ 7-day editorial summary ============ */
+/* These are forecast regimes, not markup snapshots. Each case asserts the judgment users see:
+   what leads, which weather word is used, and how a multi-period window is named. This keeps a
+   future copy tweak from accidentally reviving the old fixed
+   "Peak / Rain peaks / Coolest low" template. */
+{
+  const S = SUBJECT.buildForecastSummary;
+  const fact = (name, hi, lo, extra = {}) => Object.assign({
+    name, hi, lo, feelsHigh: hi, feelsLow: lo, feelsLowLabel: `${name} night`,
+    dayPop: 0, nightPop: 0, dayCondition: 'Mostly Sunny', nightCondition: 'Mostly Clear'
+  }, extra);
+
+  const hot = [
+    fact('Monday', 96, 76, { feelsHigh: 108 }),
+    fact('Tuesday', 98, 75, { feelsHigh: 112 }),
+    fact('Wednesday', 97, 74, { feelsHigh: 110, nightPop: 30, nightCondition: 'Chance Thunderstorms' }),
+    fact('Thursday', 95, 73, { feelsHigh: 106, dayPop: 30, nightPop: 37,
+      dayCondition: 'Chance Thunderstorms', nightCondition: 'Showers and Thunderstorms' }),
+    fact('Friday', 94, 74, { feelsHigh: 103, dayPop: 37, dayCondition: 'Chance Thunderstorms' }),
+    fact('Saturday', 96, 73, { feelsHigh: 108 }),
+    fact('Sunday', 95, 72, { feelsHigh: 105 })
+  ];
+  check('heat regime leads with duration and keeps peak plus storm window', S(hot), {
+    headline: 'Very hot through Sunday',
+    facts: [
+      { label: 'Peak feels', value: '112° Tue', icon: 'heat', tone: 'hot' },
+      { label: 'Storm window', value: 'Wed night–Fri · ~40%', icon: 'storm', tone: 'storm' },
+      { label: 'Highs', value: '94–98°', icon: 'heat', tone: 'temp' },
+      { label: 'Night lows', value: '72–76°', icon: 'moon', tone: 'night' }
+    ],
+    tone: 'hot',
+    icon: 'heat'
+  });
+  const delayedHeat = hot.map((f, i) => Object.assign({}, f, i === 0
+    ? { hi: 88, feelsHigh: 90 }
+    : {}));
+  check('heat that starts later names both ends instead of implying it begins now', S(delayedHeat).headline,
+    'Very hot Tuesday–Sunday');
+
+  const cold = [
+    fact('Monday', 18, 3, { feelsLow: -8, feelsLowLabel: 'Monday night' }),
+    fact('Tuesday', 12, -2, { feelsLow: -15, feelsLowLabel: 'Tuesday morning' }),
+    fact('Wednesday', 22, 8, { feelsLow: -4 }),
+    fact('Thursday', 31, 18), fact('Friday', 36, 23), fact('Saturday', 40, 25), fact('Sunday', 38, 21)
+  ];
+  check('cold regime promotes the coldest apparent temperature at its actual period', S(cold).headline,
+    'Wind chills down to -15° Tuesday morning');
+  check('cold regime carries the cold tone', S(cold).tone, 'cold');
+  check('cold regime labels the apparent-temperature fact compactly', S(cold).facts[0],
+    { label: 'Lowest feels', value: '-15° Tue morning', icon: 'cold', tone: 'cold' });
+
+  const snow = [
+    fact('Monday', 34, 24),
+    fact('Tuesday', 31, 22, { nightPop: 55, nightCondition: 'Snow Likely' }),
+    fact('Wednesday', 28, 18, { dayPop: 60, nightPop: 20, dayCondition: 'Snow', nightCondition: 'Chance Snow' }),
+    fact('Thursday', 30, 20), fact('Friday', 35, 23), fact('Saturday', 38, 27), fact('Sunday', 40, 29)
+  ];
+  check('snow regime names snow and preserves an overnight window', S(snow).headline,
+    'Snow chances Tuesday night–Wednesday (60%)');
+  check('snow regime is classified independently from rain', S(snow).tone, 'snow');
+  check('snow regime exposes a compact, labeled weather window', S(snow).facts[0],
+    { label: 'Snow window', value: 'Tue night–Wed · 60%', icon: 'snow', tone: 'snow' });
+
+  const dry = [
+    fact('Monday', 72, 51, { dayPop: 4 }), fact('Tuesday', 74, 52, { nightPop: 10 }),
+    fact('Wednesday', 75, 53), fact('Thursday', 76, 54), fact('Friday', 77, 55),
+    fact('Saturday', 76, 54), fact('Sunday', 75, 53)
+  ];
+  check('quiet week receives a plain dry headline', S(dry).headline, 'Mainly dry this week');
+  check('quiet week is classified dry', S(dry).tone, 'dry');
+  check('quiet week still says what the precipitation signal is', S(dry).facts[0],
+    { label: 'Rain signal', value: 'Mostly dry', icon: 'sun', tone: 'dry' });
+
+  const front = [
+    fact('Monday', 80, 58), fact('Tuesday', 82, 60), fact('Wednesday', 81, 57),
+    fact('Thursday', 64, 43), fact('Friday', 62, 41), fact('Saturday', 66, 44), fact('Sunday', 69, 47)
+  ];
+  check('a meaningful front earns the fourth fact when no hazard metric displaces it', S(front).facts[3],
+    { label: 'Temperature trend', value: '17° cooler Thu', icon: 'stats', tone: 'temp' });
+
+  const overnightRain = [
+    fact('Monday', 68, 48),
+    fact('Tuesday', 66, 50, { nightPop: 35, nightCondition: 'Rain Showers Likely' }),
+    fact('Wednesday', 62, 44, { dayPop: 32, dayCondition: 'Chance Rain Showers' }),
+    fact('Thursday', 60, 42), fact('Friday', 64, 45), fact('Saturday', 67, 47), fact('Sunday', 69, 49)
+  ];
+  check('overnight rain is a continuous named window, not two tied days', S(overnightRain).headline,
+    'Rain chances Tuesday night–Wednesday (~40%)');
+  check('overnight rain fact keeps timing and probability together', S(overnightRain).facts[0],
+    { label: 'Rain window', value: 'Tue night–Wed · ~40%', icon: 'rain', tone: 'rain' });
+
+  check('missing facts fail with a stable neutral result', S([]), {
+    headline: 'Forecast summary unavailable', facts: [], tone: 'neutral', icon: 'info'
+  });
+}
+
+/* ============ hourly apparent-temperature extrema ============ */
+{
+  const H = SUBJECT.hourlyByDate;
+  check('NWS wall time preserves the forecast-local date and hour',
+    SUBJECT.nwsWallTime('2026-01-10T23:00:00-06:00'),
+    { key: '2026-01-10', month: 0, day: 10, hour: 23 });
+  check('invalid NWS wall time fails closed', SUBJECT.nwsWallTime('not-a-time'), null);
+  check('forecast-local source hours render without timezone conversion',
+    [SUBJECT.hrWord(0), SUBJECT.hrWord(12), SUBJECT.hrWord(23)], ['12am', '12pm', '11pm']);
+  const hours = [
+    { startTime: '2026-01-10T06:00:00-06:00', temperature: 5,
+      relativeHumidity: { value: 70 }, windSpeed: '20 mph' },
+    { startTime: '2026-01-10T13:00:00-06:00', temperature: 20,
+      relativeHumidity: { value: 55 }, windSpeed: '5 mph' },
+    { startTime: '2026-01-10T19:00:00-06:00', temperature: 10,
+      relativeHumidity: { value: 60 }, windSpeed: '12 mph' }
+  ];
+  const rec = H(hours)['2026-01-10'];
+  check('hourly summary retains full-day coverage', rec.lastH, 19);
+  check('hourly summary retains the midday humidity source', [rec.rh, rec.rhH], [55, 13]);
+  check('hourly summary retains both apparent-temperature ends', rec.flMin < rec.fl, true);
+  check('coldest apparent temperature keeps its source hour', rec.flMinH, 6);
+  check('warmest apparent temperature keeps its source hour', rec.flH, 13);
 }
 
 
@@ -599,4 +762,4 @@ if (failed) {
   console.error(`\n${failed} logic test(s) failed`);
   process.exit(1);
 }
-console.log('ok    logic: rangeMark, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr, FAMILY_CFG,\n             coldVerdict, outlookVerdict, parseMcd, mcdValidEnd, geomTouchesEnv, watchBoundary and chaikinRing behave');
+console.log('ok    logic: rangeMark, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr, FAMILY_CFG,\n             compact forecast decisions, regime summaries, hourly extrema, coldVerdict, outlookVerdict,\n             parseMcd, mcdValidEnd, geomTouchesEnv, watchBoundary and chaikinRing behave');
