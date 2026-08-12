@@ -63,6 +63,7 @@ const SUBJECT = new Function(`
   ${lift(/^function hrWord\(d\)\{[\s\S]*?^\}/m, 'hrWord()')}
   ${lift(/^var OUTLOOK_CFG=\{[\s\S]*?^\};/m, 'OUTLOOK_CFG')}
   ${lift(/^function outlookVerdict\(cfg,l0,l1\)\{[\s\S]*?^\}/m, 'outlookVerdict()')}
+  ${lift(/^function extractAFD\(text\)\{[\s\S]*?^\}/m, 'extractAFD()')}
   ${lift(/^function parseMcd\(text\)\{[\s\S]*?^\}/m, 'parseMcd()')}
   ${lift(/^function mcdValidEnd\(v,refMs\)\{[\s\S]*?^\}/m, 'mcdValidEnd()')}
   ${lift(/^function geomTouchesEnv\(geom,env\)\{[\s\S]*?^\}/m, 'geomTouchesEnv()')}
@@ -73,7 +74,7 @@ const SUBJECT = new Function(`
            compactDayName, compactCondition, summaryPop, forecastImpact,
            summaryPopText, buildForecastSummary, nwsWallTime, hourlyByDate, hrWord,
            OUTLOOK_CFG, outlookVerdict,
-           parseMcd, mcdValidEnd, geomTouchesEnv, watchBoundary, chaikinRing };
+           extractAFD, parseMcd, mcdValidEnd, geomTouchesEnv, watchBoundary, chaikinRing };
 `)();
 
 let failed = 0;
@@ -602,6 +603,32 @@ function check(name, actual, expected) {
   check('undefined levels are no pill', V(C.spc, undefined, undefined), null);
 }
 
+/* ============ extractAFD ============ */
+// LSX often puts a slash-delimited time qualifier between SHORT TERM and the ellipsis. The
+// dashboard must accept both that operational form and the simpler heading used by older products.
+{
+  const E = SUBJECT.extractAFD;
+  check('extractAFD accepts qualified SHORT TERM heading',
+    E(`.SHORT TERM /THROUGH THURSDAY/...
+Useful short-term guidance for the next day.
+&&`),
+    { kind: 'para', label: 'Short-Term Outlook', text: 'Useful short-term guidance for the next day.' });
+  check('extractAFD accepts plain SHORT TERM heading',
+    E(`.SHORT TERM...
+Useful short-term guidance without a qualifier.
+$$`),
+    { kind: 'para', label: 'Short-Term Outlook', text: 'Useful short-term guidance without a qualifier.' });
+  check('extractAFD still prefers KEY MESSAGES',
+    E(`.KEY MESSAGES...
+- First actionable point for today.
+
+.SHORT TERM /TODAY/...
+Secondary forecast prose that should not win.
+&&`),
+    { kind: 'key', label: 'Key Messages', text: '- First actionable point for today.' });
+  check('extractAFD rejects unrelated text', E('Area forecast discussion without a recognized section.'), null);
+}
+
 /* ============ parseMcd ============ */
 // One SPC mesoscale discussion text → the fields the risk card's strip renders. The sample is
 // MD 1810 (2026-07-31), abridged mid-discussion; the line structure is the real product's.
@@ -762,4 +789,4 @@ if (failed) {
   console.error(`\n${failed} logic test(s) failed`);
   process.exit(1);
 }
-console.log('ok    logic: rangeMark, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr, FAMILY_CFG,\n             compact forecast decisions, regime summaries, hourly extrema, coldVerdict, outlookVerdict,\n             parseMcd, mcdValidEnd, geomTouchesEnv, watchBoundary and chaikinRing behave');
+console.log('ok    logic: rangeMark, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr, FAMILY_CFG,\n             compact forecast decisions, regime summaries, hourly extrema, coldVerdict, outlookVerdict,\n             extractAFD, parseMcd, mcdValidEnd, geomTouchesEnv, watchBoundary and chaikinRing behave');

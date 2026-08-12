@@ -1869,11 +1869,9 @@
        discussion to explain why before the reader reaches the day-by-day week.
        It stays full-width and outside the masonry so its prose reads as one continuous briefing
        and the 7-day card remains the first packed weekly product.
-       (Worth knowing if you change extractAFD: its Synopsis and Short-Term fallbacks currently
-       match NOTHING on this office's products — LSX writes `.SHORT TERM /THROUGH THURSDAY/...`
-       and the pattern wants `.SHORT TERM...`. It goes unnoticed because Key Messages was present
-       in all 21 recent products sampled, so the first branch always wins. Pre-existing, left
-       alone here deliberately: fixing it changes what this card SAYS, which is its own change.) -->
+       extractAFD prefers Key Messages, then Synopsis, then Short Term. Its Short-Term fallback
+       accepts both LSX's qualified `.SHORT TERM /THROUGH THURSDAY/...` form and the plain
+       `.SHORT TERM...` heading, with both forms covered by the pure logic tests.) -->
   <section class="card col-12" id="afdCard">
     <h2>The Pulse — NWS Forecast Discussion
       <a class="link" href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener">Full discussion ↗</a>
@@ -2746,7 +2744,7 @@ var RADAR_SPAN_MIN=60;
    broke". Detail is not what a z4 view is for anyway: seven frames still show an hour of motion at
    synoptic scale, for roughly half the requests. */
 var RADAR_N_DESK=15, RADAR_N_PHONE=8, RADAR_N_WIDE=7, RADAR_WIDE_ZOOM=5;
-var radarFrames=[], radarPool={}, radarIdx=-1;
+var radarFrames=[], radarPool={}, radarIdx=-1, radarBuildGen=0;
 var radarPlaying=false, radarTimer=null, radarUserPaused=false;
 function radarFrameCount(){
   if(rvMap && rvMap.getZoom()<=RADAR_WIDE_ZOOM) return RADAR_N_WIDE;
@@ -2814,7 +2812,37 @@ function fetchRadarTimes(){
       return list;
     });
 }
+/* Add the newest sweep first, then admit at most two historical frames at a time. A cold load used
+   to add every selected WMS layer in one synchronous loop: fifteen layers times the visible tile
+   grid could occupy the host connection pool before the rest of the dashboard had painted. The
+   pool still owns every selected timestamp immediately, but its network work is staged. */
+function preloadRadarFrames(layers,gen){
+  var q=(layers||[]).filter(function(lyr){ return !rvMap.hasLayer(lyr); }).reverse();
+  if(!q.length||gen!==radarBuildGen) return;
+  function add(lyr,done){
+    if(gen!==radarBuildGen||!skyOn.radar){ done(); return; }
+    if(rvMap.hasLayer(lyr)){ done(); return; }
+    var released=false, timer=null;
+    function release(){
+      if(released) return; released=true;
+      if(timer) clearTimeout(timer);
+      lyr.off("load",release);
+      updateRadarCtl();
+      done();
+    }
+    lyr.once("load",release);
+    timer=setTimeout(release,9000);   // one broken layer cannot stop the queue forever
+    lyr.addTo(rvMap);
+  }
+  function pump(){
+    if(gen!==radarBuildGen||!skyOn.radar||!q.length) return;
+    add(q.shift(),pump);
+  }
+  // The current picture goes first. Historical preloads start only after it settles.
+  add(q.shift(),function(){ pump(); pump(); });
+}
 function buildRadarFrames(times){
+  var gen=++radarBuildGen;
   var want=pickRadarTimes(times), keep={};
   radarFrames=want.map(function(t){
     keep[t]=1;
@@ -2824,7 +2852,6 @@ function buildRadarFrames(times){
         version:"1.3.0",time:t,opacity:0,pane:"radarPane"});
       lyr.on("load",function(){ lyr._ready=1; updateRadarCtl(); });
       bindSkyHealth(lyr);
-      lyr.addTo(rvMap);
       radarPool[t]=lyr;
     }
     return {time:t, layer:lyr};
@@ -2832,6 +2859,7 @@ function buildRadarFrames(times){
   Object.keys(radarPool).forEach(function(t){   // release sweeps that aged out of the window
     if(!keep[t]){ if(rvMap.hasLayer(radarPool[t])) rvMap.removeLayer(radarPool[t]); delete radarPool[t]; }
   });
+  preloadRadarFrames(radarFrames.map(function(f){ return f.layer; }),gen);
 }
 /* A sweep this old is not "now" no matter what the clock face says. Three missed cycles: the
    scheduler re-reads the time dimension every 4 minutes, so anything past ~15 means the feed has
@@ -2885,6 +2913,9 @@ function showRadarFrame(i){
 function radarFramesReady(){
   return radarFrames.length>1 && radarFrames.every(function(f){ return f.layer._ready; });
 }
+function radarFramesAttached(){
+  return !!rvMap && radarFrames.length>1 && radarFrames.every(function(f){ return rvMap.hasLayer(f.layer); });
+}
 function updateRadarCtl(){
   var ctl=document.getElementById("radarCtl"), sl=document.getElementById("radarSlider");
   if(!ctl||!sl) return;
@@ -2892,8 +2923,10 @@ function updateRadarCtl(){
     ctl.classList.add("ready");
     sl.max=radarFrames.length-1;
     if(radarIdx>=0) sl.value=Math.min(radarIdx,radarFrames.length-1);
+    sl.disabled=!radarFramesAttached();
   }else{
     ctl.classList.remove("ready");
+    sl.disabled=true;
   }
   setRadarBtn();   // the span the button advertises changes with the frame list, so re-derive it here
 }
@@ -2905,6 +2938,7 @@ function setRadarBtn(){
      question. Before frames land there is no honest number, so it says nothing instead. */
   var span=radarSpanMin(), of=span?(" — last "+span+" minutes"):"";
   b.innerHTML=radarPlaying?ic("pause")+"Pause":ic("play")+"Loop";
+  b.disabled=radarFrames.length>1&&!radarFramesAttached();
   b.setAttribute("aria-label",(radarPlaying?"Pause radar loop":"Play radar loop")+of);
   b.title=span?("Play the last "+span+" minutes"):"Play the radar loop";
 }
@@ -2912,7 +2946,9 @@ function setRadarBtn(){
    that flag is set by the first load ever and never cleared, so it stays true through a zoom that
    has invalidated every tile behind it. Leaflet's own _loading is the live answer. */
 function radarFramesPainted(){
-  return radarFrames.length>1 && radarFrames.every(function(f){ return !f.layer._loading; });
+  return radarFrames.length>1 && radarFrames.every(function(f){
+    return rvMap.hasLayer(f.layer)&&!f.layer._loading;
+  });
 }
 var radarHoldSince=0, RADAR_HOLD_MAX=9000;
 function setRadarLoading(on){
@@ -3840,6 +3876,23 @@ function ccNone(label,why){
 function loadCurrent(){
   var fresh=locGuard();
   var el=document.getElementById("current"), stEl=document.getElementById("ccStation");
+  /* A searched/geolocated place starts without a station. Discovery belongs in this loader so a
+     transient failure is retried by the ordinary 10-minute schedule; calling loadCurrent() with a
+     null id instead permanently turned every retry into /stations/null/observations/latest. */
+  if(!current.station){
+    if(el) el.innerHTML='<div class="loading">Finding nearest station\u2026</div>';
+    return stationFor(current.lat,current.lon).then(function(st){
+      if(!fresh()) return;
+      if(!st) throw new Error("no observation station");
+      current.station=st;
+      saveLoc(current);   // preserve the resolved station for the next visit
+      return loadCurrent();
+    }).catch(function(e){
+      if(isAbort(e)||!fresh()) return;
+      if(stEl) stEl.textContent="\u2014";
+      if(el) el.innerHTML='<div class="empty">Couldn\'t find a nearby reporting station. This will retry automatically.</div>';
+    });
+  }
   return getJSON(API+"/stations/"+current.station+"/observations/latest",HEADERS,locSignal()).then(function(o){
     if(!fresh()) return;   // user moved while this was in flight
     var p=o.properties, c2f=function(c){return c==null?null:Math.round(c*9/5+32);};
@@ -4385,6 +4438,7 @@ function loadAlerts(){
     }
     paintAlerts(el,calmHTML+mineHTML+elseHTML);
   }).catch(function(){
+    if(!fresh()) return;   // an old location's failed request must not replace the new alert list
     card.classList.remove("calm");
     paintAlerts(el,'<div class="empty">Couldn\'t load alerts. <a href="https://www.weather.gov/lsx/" target="_blank" rel="noopener">Check weather.gov/lsx ↗</a></div>');
   });
@@ -5399,9 +5453,10 @@ function loadClimate(){
       // so a complete nearby record beats four dashes \u2014 borrowed as a COHERENT set from ONE
       // station (mixing sources per cell would be impossible to reason about) and attributed.
       return ask(deep.sid).then(function(dc){
+        if(!fresh()) return;
         if(climAllOK(dc,showSnow)) paint(dc,deep.name||deep.sid);
         else paint(local,"");
-      }).catch(function(){ paint(local,""); });
+      }).catch(function(){ if(fresh()) paint(local,""); });
     });
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
@@ -6176,6 +6231,7 @@ function syncSkyMeta(){
    the way back and draw nothing. Rebuilding costs one capabilities fetch, and the sweeps would be
    stale by then anyway. */
 function detachRadarLayers(){
+  radarBuildGen++;   // cancel any staged historical-frame queue before it adds another layer
   radarPauseLoop();
   if(!rvMap) return;
   if(nwsRadar&&rvMap.hasLayer(nwsRadar)) rvMap.removeLayer(nwsRadar);
@@ -6435,6 +6491,8 @@ function extractAFD(text){
   var wants=[["KEY MESSAGES","Key Messages","key"],["SYNOPSIS","Synopsis","para"],["SHORT TERM","Short-Term Outlook","para"]];
   for(var i=0;i<wants.length;i++){
     var pat=wants[i][0].replace(" ","\\s+");
+    // LSX commonly qualifies this heading as `.SHORT TERM /THROUGH THURSDAY/...`.
+    if(wants[i][0]==="SHORT TERM") pat+="(?:\\s*\\/[^\\n]*\\/)?";
     var re=new RegExp("\\."+pat+"\\.\\.\\.([\\s\\S]*?)(?=\\n\\.[A-Z]|\\n&&|\\$\\$)","i");
     var m=text.match(re);
     if(m){
@@ -6512,7 +6570,7 @@ function stationFor(lat,lon){
    Every location-scoped fetch captures the generation it was issued under. If the user moves
    before it lands, the response is DISCARDED rather than painted: a slow forecast for the old
    town was otherwise overwriting the new one and sitting there under the new town's label. */
-var locSeq=0, snapSafeSeq=0;
+var locSeq=0, snapSafeSeq=0, geoSeq=0;
 /* Packages the capture half of that guard. Call it once at the top of a location-scoped loader,
    then call the returned fresh() immediately before any DOM write:
 
@@ -6572,6 +6630,7 @@ function clearLocationUI(){
 }
 function setLocation(loc,opts){
   opts=opts||{};
+  geoSeq++;                       // a search selection supersedes geolocation still resolving
   var g=++locSeq;              // anything already in flight for the old place is now stale
   if(locAbort) locAbort.abort();          // …so stop paying for it
   locAbort=new AbortController();         // this generation's fetches hang off a fresh signal
@@ -6583,34 +6642,32 @@ function setLocation(loc,opts){
   var jobs=[loadForecast(),loadAqi(),loadSpc(),loadMcd(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),
             loadClimate(),loadAlerts(),loadClimateContext(),loadUv()];
   loadRadar();
-  if(loc.station){ jobs.push(loadCurrent()); }
-  else{
-    var cc=document.getElementById("current"); if(cc) cc.innerHTML='<div class="loading">Finding nearest station\u2026</div>';
-    jobs.push(stationFor(loc.lat,loc.lon).then(function(st){
-      if(g!==locSeq) return;                       // moved again while resolving the station
-      loc.station=st; if(opts.save)saveLoc(loc); return loadCurrent();
-    }).catch(function(){ if(g===locSeq) return loadCurrent(); }));
-  }
+  jobs.push(loadCurrent());      // discovers a missing station itself, and retries on later cycles
   // Only once everything has settled for THIS generation is the screen safe to snapshot --
   // otherwise a scheduled save could store the old town's cards under the new town's name.
   Promise.allSettled(jobs).then(function(){ if(g===locSeq) snapSafeSeq=g; });
 }
 function useMyLocation(explicit){
   var btn=document.getElementById("geoBtn");
+  var seq=++geoSeq, locAtStart=locSeq;
   // Write the label into .g-txt, never over the button: the phone layout hides that span to get
   // the geolocate control down to its icon, and a textContent assignment would delete it.
-  function label(t){ var s=btn&&btn.querySelector(".g-txt"); if(s) s.textContent=t; }
+  function active(){ return seq===geoSeq&&locAtStart===locSeq; }
+  function label(t){ if(!active()) return; var s=btn&&btn.querySelector(".g-txt"); if(s) s.textContent=t; }
   if(!navigator.geolocation){ if(explicit) alert("Geolocation isn't available on this device/browser."); return; }
   label(" Locating…");
   navigator.geolocation.getCurrentPosition(function(pos){
+    if(!active()) return;
     label(" My location");
     var lat=pos.coords.latitude, lon=pos.coords.longitude;
-    var useIt=function(nm){ setLocation({name:nm||"My Location",lat:lat,lon:lon,station:null},{save:true}); };
     // Only adopt the fix if it falls inside the LSX forecast area.
     pointsFor(lat,lon).then(function(pt){
+      if(!active()) return;
       var cwa=pt&&pt.properties&&(pt.properties.cwa||pt.properties.gridId);
-      if(cwa&&cwa!=="LSX"){
-        if(explicit) alert("Your current location is outside the St. Louis (LSX) forecast area, so it isn't shown on this dashboard.");
+      if(cwa!=="LSX"){
+        if(explicit) alert(cwa
+          ?"Your current location is outside the St. Louis (LSX) forecast area, so it isn't shown on this dashboard."
+          :"Couldn't verify that your location is inside the St. Louis (LSX) forecast area. Your current dashboard location was kept.");
         return;   // keep the existing in-area location
       }
       /* The same response that vouched for the CWA names the place: /points carries the nearest
@@ -6618,9 +6675,14 @@ function useMyLocation(explicit){
          echo — "Wentzville, MO" tells you which forecast you are actually reading, and costs no
          second request. The literal stays as the fallback when the field is missing. */
       var rl=pt&&pt.properties&&pt.properties.relativeLocation&&pt.properties.relativeLocation.properties;
-      useIt(rl&&rl.city?rl.city+(rl.state?", "+rl.state:""):null);
-    }).catch(function(){ useIt(null); });   // can't verify → allow it, under the generic name
+      var nm=rl&&rl.city?rl.city+(rl.state?", "+rl.state:""):"My Location";
+      setLocation({name:nm,lat:lat,lon:lon,station:null},{save:true});
+    }).catch(function(e){
+      if(isAbort(e)||!active()) return;
+      if(explicit) alert("Couldn't verify that your location is inside the St. Louis (LSX) forecast area. Your current dashboard location was kept.");
+    });
   },function(){
+    if(!active()) return;
     label(" My location");
     if(explicit) alert("Couldn't get your location. Make sure location access is allowed for this site.");
   },{enableHighAccuracy:false,timeout:9000,maximumAge:600000});
@@ -7631,20 +7693,44 @@ function stampSched(fns){
   var now=Date.now();
   SCHED.forEach(function(t){ if(fns.indexOf(t.fn)>=0) t.last=now; });
 }
+var refreshInFlight=null, refreshSeq=0;
 function refreshAll(){
+  if(refreshInFlight) return refreshInFlight;   // one caller owns the expensive full-page fan-out
+  var seq=++refreshSeq, g=locSeq;
+  var fns=[loadAFD,loadAlerts,loadCurrent,loadForecast,loadRivers,loadAqi,loadSpc,loadMcd,loadCpc,loadQpf,
+           loadHazards,loadDrought,loadClimate,loadClimateContext,loadUv,loadStationPlot];
   var dot=document.getElementById("statusDot"), label=document.getElementById("refreshLabel");
+  var btn=document.getElementById("refresh");
   dot.classList.remove("stale");label.textContent="Refreshing…";
-  stampSched([loadAFD,loadAlerts,loadCurrent,loadForecast,loadRivers,loadAqi,loadSpc,loadMcd,loadCpc,loadQpf,
-              loadHazards,loadDrought,loadClimate,loadClimateContext,loadUv,loadStationPlot,
-              refreshSatLayer,saveSnapshotIdle]);
-  Promise.allSettled([loadAFD(),loadAlerts(),loadCurrent(),loadForecast(),loadRivers(),loadAqi(),loadSpc(),loadMcd(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),loadClimate(),loadClimateContext(),loadUv(),loadStationPlot()]).then(function(){
+  if(btn){ btn.disabled=true; btn.setAttribute("aria-busy","true"); }
+  stampSched(fns.concat([refreshSatLayer,saveSnapshotIdle]));
+  /* Convert synchronous loader failures to rejected task promises. Without this guard, one throw
+     while building the array exits refreshAll before refreshInFlight exists and strands the button
+     in its disabled "Refreshing…" state. allSettled can isolate failures only after it receives
+     them, so each invocation has to cross that boundary deliberately. */
+  var tasks=fns.map(function(fn){
+    try{ return fn(); }catch(e){ return Promise.reject(e); }
+  });
+  refreshInFlight=Promise.allSettled(tasks).then(function(){
     refreshSatLayer();
-    label.textContent="Refresh";
     document.getElementById("lastUpdate").textContent="Last updated "+new Date().toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"});
-    snapSafeSeq=locSeq;  // the screen now matches `current`, so it is safe to snapshot
+    if(g===locSeq) snapSafeSeq=g;  // an older location's refresh cannot bless a newer screen
     resolveSnapBar();   // live data has landed (or we're offline and should say so)
     saveSnapshotIdle(); // freshest render → instant paint next visit (no rush: yield to idle)
+  }).then(function(v){
+    if(seq===refreshSeq){
+      refreshInFlight=null; label.textContent="Refresh";
+      if(btn){ btn.disabled=false; btn.removeAttribute("aria-busy"); }
+    }
+    return v;
+  },function(e){
+    if(seq===refreshSeq){
+      refreshInFlight=null; label.textContent="Refresh";
+      if(btn){ btn.disabled=false; btn.removeAttribute("aria-busy"); }
+    }
+    throw e;
   });
+  return refreshInFlight;
 }
 
 
@@ -7800,7 +7886,7 @@ document.addEventListener("visibilitychange",function(){
   else { tick(); startSchedule(); runDue(); freshnessCheck(); } // catch up on return
 });
 syncTabMotion();   // a page opened into a background tab never gets the event
-startSchedule();
+if(!document.hidden) startSchedule();
 document.getElementById("refresh").addEventListener("click",function(){ refreshAll(); });
 
 /* ---- JavaScript masonry: pack band cards by their REAL measured height ---- */
