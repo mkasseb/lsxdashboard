@@ -1504,15 +1504,10 @@
   .afd-list li:last-child{margin-bottom:0}
   .afd-meta{font-size:var(--fs-sm);color:var(--muted);margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
   /* ===== Why there is no clamp here =====
-     This card renders at whatever length the office wrote, and that is deliberate — it was
-     clamped for a while, and the measurement is what removed it. Across the 21 most recent LSX
-     products in the calm-weather layout it runs 151–365px (median 304), which puts the top of
-     #currentCard between 668px and 881px: on a 912px phone the hero is on the first screen in
-     every one of them, clamped or not. The clamp was hiding up to 200px to protect something
-     that was never at risk, and cutting the forecaster off mid-sentence to do it.
-     It was sized, originally, against multi-paragraph Short-Term prose — which extractAFD cannot
-     actually produce (see the note above #afdCard). A guard built for an input that never
-     arrives. */
+     The Pulse now follows Current Conditions and the 24-hour chart, so its full forecaster-written
+     context no longer delays either current product. Clamping it here would only cut the reasoning
+     off immediately before the 7-day forecast it is meant to explain. Recent LSX products measured
+     151–365px (median 304), a reasonable briefing at this point in the reading order. */
   /* ===== Responsive overrides (kept last so they win over base rules) ===== */
   @media(max-width:480px){
     /* Was `html,body`. The <body> half silently disabled position:sticky at exactly the width
@@ -1737,34 +1732,6 @@
     <div class="callrow" id="callRow"></div>
   </section>
 
-  <!-- THE PULSE — the forecaster's own reasoning, ranked directly under the Bottom Line because
-       the two cards are the same kind of thing: one verdict computed by this page, one written by
-       a human at NWS St. Louis. It used to sit below the hero band under "the week ahead & deeper
-       context", which mis-filed it twice over — extractAFD reaches for Key Messages, then the
-       Synopsis, then the SHORT TERM outlook, all of which are about the next 12–24 hours, not the
-       week; and it put the forecaster's read of the day some 2,000px down the page.
-       It renders at FULL LENGTH here, which took two attempts to get right. It shipped clamped
-       to a few lines behind a "Read the full discussion" button, on the theory that the card had
-       to be cheap to deserve the rank. Measuring the 21 most recent products said otherwise: in
-       the calm-weather layout the card runs 151–365px and puts #currentCard between 668px and
-       881px, so on a 912px phone the hero is on the first screen either way. The clamp was hiding
-       up to 200px, and cutting the forecaster off mid-sentence, to buy room nothing needed. The
-       reasoning behind that removal is kept in the CSS beside the styles, so it does not come
-       back by default.
-       (Worth knowing if you change extractAFD: its Synopsis and Short-Term fallbacks currently
-       match NOTHING on this office's products — LSX writes `.SHORT TERM /THROUGH THURSDAY/...`
-       and the pattern wants `.SHORT TERM...`. It goes unnoticed because Key Messages was present
-       in all 21 recent products sampled, so the first branch always wins. Pre-existing, left
-       alone here deliberately: fixing it changes what this card SAYS, which is its own change.
-       It is also the input the clamp was originally sized against — paragraphs this card has
-       never actually been handed. Fix that first, then re-measure, before reaching for a clamp.) -->
-  <section class="card col-12" id="afdCard">
-    <h2>The Pulse — NWS Forecast Discussion
-      <a class="link" href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener">Full discussion ↗</a>
-    </h2>
-    <div id="afd"><div class="loading">Loading discussion…</div></div>
-  </section>
-
   <!-- ── RIGHT NOW: the hero band. Everything a visitor opens this page to learn is in the
        first screen — conditions on the left, radar on the right, the verdicts underneath. ── -->
   <div class="railhead rail-now col-12">
@@ -1884,8 +1851,26 @@
   <!-- ── THE WEEK AHEAD & DEEPER CONTEXT ── -->
   <div class="railhead col-12">
     <span class="rail-t">The week ahead &amp; deeper context</span>
-    <span class="rail-s">outlooks, rivers, drought, climate</span>
+    <span class="rail-s">forecast discussion, outlooks, rivers, drought, climate</span>
   </div>
+
+  <!-- THE PULSE — the NWS forecaster's reasoning now follows Current Conditions and the
+       full-width 24-hour chart, immediately before the 7-day forecast band. This order lets the
+       observations and hourly evolution establish what is happening first, then uses the human
+       discussion to explain why before the reader reaches the day-by-day week.
+       It stays full-width and outside the masonry so its prose reads as one continuous briefing
+       and the 7-day card remains the first packed weekly product.
+       (Worth knowing if you change extractAFD: its Synopsis and Short-Term fallbacks currently
+       match NOTHING on this office's products — LSX writes `.SHORT TERM /THROUGH THURSDAY/...`
+       and the pattern wants `.SHORT TERM...`. It goes unnoticed because Key Messages was present
+       in all 21 recent products sampled, so the first branch always wins. Pre-existing, left
+       alone here deliberately: fixing it changes what this card SAYS, which is its own change.) -->
+  <section class="card col-12" id="afdCard">
+    <h2>The Pulse — NWS Forecast Discussion
+      <a class="link" href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener">Full discussion ↗</a>
+    </h2>
+    <div id="afd"><div class="loading">Loading discussion…</div></div>
+  </section>
 
   <!-- ── Self-packing masonry band: cards flow into the shortest column (no manual balancing, no gaps) ── -->
   <div class="masonry col-12">
