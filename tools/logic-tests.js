@@ -221,8 +221,14 @@ function check(name, actual, expected) {
   ];
   check('heat regime leads with duration and keeps peak plus storm window', S(hot), {
     headline: 'Very hot through Sunday',
-    details: ['Peak 98° Tuesday, feels 112°', 'Storm chances Wednesday night–Friday (~40%)'],
-    tone: 'hot'
+    facts: [
+      { label: 'Peak feels', value: '112° Tue', icon: 'heat', tone: 'hot' },
+      { label: 'Storm window', value: 'Wed night–Fri · ~40%', icon: 'storm', tone: 'storm' },
+      { label: 'Highs', value: '94–98°', icon: 'heat', tone: 'temp' },
+      { label: 'Night lows', value: '72–76°', icon: 'moon', tone: 'night' }
+    ],
+    tone: 'hot',
+    icon: 'heat'
   });
   const delayedHeat = hot.map((f, i) => Object.assign({}, f, i === 0
     ? { hi: 88, feelsHigh: 90 }
@@ -239,6 +245,8 @@ function check(name, actual, expected) {
   check('cold regime promotes the coldest apparent temperature at its actual period', S(cold).headline,
     'Wind chills down to -15° Tuesday morning');
   check('cold regime carries the cold tone', S(cold).tone, 'cold');
+  check('cold regime labels the apparent-temperature fact compactly', S(cold).facts[0],
+    { label: 'Lowest feels', value: '-15° Tue morning', icon: 'cold', tone: 'cold' });
 
   const snow = [
     fact('Monday', 34, 24),
@@ -249,6 +257,8 @@ function check(name, actual, expected) {
   check('snow regime names snow and preserves an overnight window', S(snow).headline,
     'Snow chances Tuesday night–Wednesday (60%)');
   check('snow regime is classified independently from rain', S(snow).tone, 'snow');
+  check('snow regime exposes a compact, labeled weather window', S(snow).facts[0],
+    { label: 'Snow window', value: 'Tue night–Wed · 60%', icon: 'snow', tone: 'snow' });
 
   const dry = [
     fact('Monday', 72, 51, { dayPop: 4 }), fact('Tuesday', 74, 52, { nightPop: 10 }),
@@ -257,6 +267,15 @@ function check(name, actual, expected) {
   ];
   check('quiet week receives a plain dry headline', S(dry).headline, 'Mainly dry this week');
   check('quiet week is classified dry', S(dry).tone, 'dry');
+  check('quiet week still says what the precipitation signal is', S(dry).facts[0],
+    { label: 'Rain signal', value: 'Mostly dry', icon: 'sun', tone: 'dry' });
+
+  const front = [
+    fact('Monday', 80, 58), fact('Tuesday', 82, 60), fact('Wednesday', 81, 57),
+    fact('Thursday', 64, 43), fact('Friday', 62, 41), fact('Saturday', 66, 44), fact('Sunday', 69, 47)
+  ];
+  check('a meaningful front earns the fourth fact when no hazard metric displaces it', S(front).facts[3],
+    { label: 'Temperature trend', value: '17° cooler Thu', icon: 'stats', tone: 'temp' });
 
   const overnightRain = [
     fact('Monday', 68, 48),
@@ -266,9 +285,11 @@ function check(name, actual, expected) {
   ];
   check('overnight rain is a continuous named window, not two tied days', S(overnightRain).headline,
     'Rain chances Tuesday night–Wednesday (~40%)');
+  check('overnight rain fact keeps timing and probability together', S(overnightRain).facts[0],
+    { label: 'Rain window', value: 'Tue night–Wed · ~40%', icon: 'rain', tone: 'rain' });
 
   check('missing facts fail with a stable neutral result', S([]), {
-    headline: 'Forecast summary unavailable', details: [], tone: 'neutral'
+    headline: 'Forecast summary unavailable', facts: [], tone: 'neutral', icon: 'info'
   });
 }
 
