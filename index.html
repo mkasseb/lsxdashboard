@@ -731,17 +731,6 @@
   .fc-insights{display:flex;flex-wrap:wrap;column-gap:6px;row-gap:2px;
     font-size:var(--fs-sm);line-height:1.4;color:var(--muted)}
   .fc-insights span+span::before{content:"·";margin-right:6px;color:var(--border)}
-  .fc-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
-  .fc-scale{display:grid;grid-template-columns:minmax(42px,auto) minmax(62px,1fr) minmax(42px,auto);align-items:center;gap:6px;
-    min-width:180px;flex:1 1 180px;font-size:var(--fs-2xs);font-weight:700;color:var(--muted);
-    font-variant-numeric:tabular-nums}
-  .fc-scale-label{grid-column:1 / -1;font-size:var(--fs-2xs);font-weight:800;text-transform:uppercase;
-    letter-spacing:var(--ls-eyebrow);color:var(--muted)}
-  .fc-scale i{height:5px;border-radius:3px;background:linear-gradient(90deg,var(--fc-lo),var(--fc-hi))}
-  .fc-end{display:grid;line-height:1.12}
-  .fc-end:last-of-type{text-align:right}
-  .fc-end b{font-size:var(--fs-sm);color:var(--text)}
-  .fc-end small{font-size:var(--fs-2xs);font-weight:600;color:var(--muted);white-space:nowrap}
   .fc-meta{font-size:var(--fs-2xs);color:var(--muted);white-space:nowrap}
   .day-item{background:var(--inset);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden}
   .day{display:grid;grid-template-columns:72px 26px 36px minmax(42px,1fr) 66px 12px;align-items:center;gap:6px;
@@ -1519,8 +1508,6 @@
     .header-right{gap:10px}
     .clock .time{font-size:var(--fs-xl)}
     .day{grid-template-columns:68px 24px 34px minmax(38px,1fr) 64px 12px;gap:5px;padding:9px 10px}
-    .fc-foot{align-items:flex-start}
-    .fc-scale{flex-basis:100%}
     /* Risk matrix: stack day label above its 3 pills so nothing collides */
     .spc-row{grid-template-columns:1fr 1fr 1fr;gap:5px 5px;padding:9px 0}
     .spc-row .spc-day{grid-column:1 / -1;font-size:12px;margin-bottom:1px}
@@ -3387,10 +3374,6 @@ function compactDayName(name){
   var days={Monday:"Mon",Tuesday:"Tue",Wednesday:"Wed",Thursday:"Thu",Friday:"Fri",Saturday:"Sat",Sunday:"Sun"};
   return days[name]||name;
 }
-function compactPeriodName(name){
-  return String(name||"").replace(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/,
-    function(day){ return compactDayName(day); });
-}
 function compactCondition(text){
   var t=String(text||"").toLowerCase();
   if(t.indexOf("tornado")>=0) return "Tornado";
@@ -3427,12 +3410,12 @@ function summaryPopText(pop){
   return (Math.round(pop)===rounded?"":"~")+rounded+"%";
 }
 /* Turn a week of already-derived facts into one editorial hierarchy. The renderer supplies facts;
-   this function decides what deserves the headline, which supporting facts are non-redundant, and
-   what the shared range endpoints mean. Keeping that judgment pure makes hot, cold, snow, dry and
+   this function decides what deserves the headline and which supporting facts are non-redundant.
+   Keeping that judgment pure makes hot, cold, snow, dry and
    overnight-heavy weeks testable without waiting for each one to happen over St. Louis. */
 function buildForecastSummary(facts){
   var F=(facts||[]).filter(function(f){ return !!f; });
-  if(!F.length) return {headline:"Forecast summary unavailable",details:[],tone:"neutral",range:null};
+  if(!F.length) return {headline:"Forecast summary unavailable",details:[],tone:"neutral"};
   function name(i){ return (F[i]&&F[i].name)||("Day "+(i+1)); }
   function nightName(i){ return /^tonight$/i.test(name(i))?"Tonight":name(i)+" night"; }
   function periodName(p){ return p.part==="night"?nightName(p.i):name(p.i); }
@@ -3440,10 +3423,9 @@ function buildForecastSummary(facts){
     if(a.i===b.i&&a.part!==b.part) return name(a.i)+" into "+nightName(a.i);
     return periodName(a)===periodName(b)?periodName(a):periodName(a)+"–"+periodName(b);
   }
-  var maxHi=null,maxHiI=-1,minLo=null,minLoI=-1,maxFeels=null,maxFeelsI=-1,minFeels=null,minFeelsI=-1;
+  var maxHi=null,maxHiI=-1,maxFeels=null,maxFeelsI=-1,minFeels=null,minFeelsI=-1;
   F.forEach(function(f,i){
     if(f.hi!=null&&(maxHi==null||f.hi>maxHi)){ maxHi=f.hi; maxHiI=i; }
-    if(f.lo!=null&&(minLo==null||f.lo<minLo)){ minLo=f.lo; minLoI=i; }
     if(f.feelsHigh!=null&&(maxFeels==null||f.feelsHigh>maxFeels)){ maxFeels=f.feelsHigh; maxFeelsI=i; }
     if(f.feelsLow!=null&&(minFeels==null||f.feelsLow<minFeels)){ minFeels=f.feelsLow; minFeelsI=i; }
   });
@@ -3515,10 +3497,7 @@ function buildForecastSummary(facts){
   if(bestChange) add((bestChange.delta<0?"Turning cooler ":"Turning warmer ")+name(bestChange.i)+": high "+
     (bestChange.delta<0?"drops ":"rises ")+Math.abs(bestChange.delta)+"°");
 
-  var range=(minLo!=null||maxHi!=null)?{
-    lo:minLo,loLabel:minLoI>=0?nightName(minLoI):"",hi:maxHi,hiLabel:maxHiI>=0?name(maxHiI):""
-  }:null;
-  return {headline:headline,details:details,tone:tone,range:range};
+  return {headline:headline,details:details,tone:tone};
 }
 /* One walk over the hourly forecast, two recoveries per local date:
    — rh: the humidity nearest midday (1pm). NWS removed relativeHumidity from the twice-daily
@@ -3657,9 +3636,6 @@ function loadForecast(){
       }
       function forecastOverview(){
         var summary=buildForecastSummary(days.map(factsFor));
-        var sr=summary.range||{};
-        var rr={lo:sr.lo!=null?sr.lo:wMin,loLabel:sr.loLabel||"",
-                hi:sr.hi!=null?sr.hi:wMax,hiLabel:sr.hiLabel||""};
         var updated=f&&f.properties&&(f.properties.updated||f.properties.updateTime||f.properties.generatedAt);
         var stamp=updated?new Date(updated).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):"live feed";
         return '<div class="fc-overview" data-tone="'+esc(summary.tone)+'">'
@@ -3669,16 +3645,7 @@ function loadForecast(){
               return '<span>'+esc(s)+'</span>';
             }).join("")+'</div>':'')
           +'</div>'
-          +'<div class="fc-foot">'
-            +'<div class="fc-scale" style="--fc-lo:'+tCol(rr.lo)+';--fc-hi:'+tCol(rr.hi)+'">'
-              +'<span class="fc-scale-label">7-day temperature scale · low → high</span>'
-              +'<span class="fc-end" aria-hidden="true"><b>'+rr.lo+'°</b><small>'+esc(compactPeriodName(rr.loLabel))+'</small></span>'
-              +'<i aria-hidden="true"></i>'
-              +'<span class="fc-end" aria-hidden="true"><b>'+rr.hi+'°</b><small>'+esc(compactPeriodName(rr.hiLabel))+'</small></span>'
-              +'<span class="sr">Weekly temperature range, low '+rr.lo+' degrees '+esc(rr.loLabel)
-                +', high '+rr.hi+' degrees '+esc(rr.hiLabel)+'</span></div>'
-            +'<div class="fc-meta">NWS · updated '+esc(stamp)+'</div>'
-          +'</div>'
+          +'<div class="fc-meta">NWS · updated '+esc(stamp)+'</div>'
         +'</div>';
       }
       // Stored as a repaintable closure: climate context (per-day normals) usually lands AFTER the
@@ -7431,8 +7398,10 @@ function renderTheCall(){
 // under the new hierarchy and leaves the endpoint grid without its .fc-end wrappers.
 // v10: the shared temperature bar gained a visible "7-day temperature scale · low → high"
 // label. A v9 snapshot would restore the exact unlabeled bar this release is meant to clarify.
-var SNAP_KEY="lsxSnap_v10", snapRestored=false, NET_OK=false;
-try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
+// v11: the shared weekly temperature bar was removed. A v10 snapshot would restore the rejected
+// element even though today's renderer no longer creates it.
+var SNAP_KEY="lsxSnap_v11", snapRestored=false, NET_OK=false;
+try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
 var SNAP_PARTS=[
   {id:"afd",      ttl:6*3600000},
   {id:"alerts",   ttl:15*60000},     // safety-critical: short leash

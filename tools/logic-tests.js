@@ -53,7 +53,6 @@ const SUBJECT = new Function(`
   ${lift(/^function windChillF\(t,mph\)\{[\s\S]*?^\}/m, 'windChillF()')}
   ${lift(/^function feelsLikeF\(t,rh,mph\)\{[\s\S]*?^\}/m, 'feelsLikeF()')}
   ${lift(/^function compactDayName\(name\)\{[\s\S]*?^\}/m, 'compactDayName()')}
-  ${lift(/^function compactPeriodName\(name\)\{[\s\S]*?^\}/m, 'compactPeriodName()')}
   ${lift(/^function compactCondition\(text\)\{[\s\S]*?^\}/m, 'compactCondition()')}
   ${lift(/^function summaryPop\(pop\)\{[\s\S]*?^\}/m, 'summaryPop()')}
   ${lift(/^function forecastImpact\(feels,air\)\{[\s\S]*?^\}/m, 'forecastImpact()')}
@@ -69,7 +68,7 @@ const SUBJECT = new Function(`
   ${lift(/^function chaikinRing\(ring,iters\)\{[\s\S]*?^\}/m, 'chaikinRing()')}
   return { rangeMark, rangeRow, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr,
            FAMILY_CFG, coldVerdict, parseMph, heatIndexF, windChillF, feelsLikeF,
-           compactDayName, compactPeriodName, compactCondition, summaryPop, forecastImpact,
+           compactDayName, compactCondition, summaryPop, forecastImpact,
            summaryPopText, buildForecastSummary, hourlyByDate,
            OUTLOOK_CFG, outlookVerdict,
            parseMcd, mcdValidEnd, geomTouchesEnv, watchBoundary, chaikinRing };
@@ -174,16 +173,13 @@ function check(name, actual, expected) {
 
 /* ============ compact 7-day decisions ============ */
 {
-  const { compactDayName: day, compactPeriodName: period, compactCondition: cond,
-          summaryPop: pop, summaryPopText: popText, forecastImpact: impact } = SUBJECT;
+  const { compactDayName: day, compactCondition: cond, summaryPop: pop,
+          summaryPopText: popText, forecastImpact: impact } = SUBJECT;
 
   check('long weekdays use deliberate abbreviations',
     ['Monday', 'Wednesday', 'Sunday'].map(day), ['Mon', 'Wed', 'Sun']);
   check('period names that are not weekdays survive',
     ['Tonight', 'Today', 'Independence Day'].map(day), ['Tonight', 'Today', 'Independence Day']);
-  check('range endpoints abbreviate the weekday without losing the period',
-    ['Wednesday night', 'Sunday', 'Tonight'].map(period), ['Wed night', 'Sun', 'Tonight']);
-
   check('condition language keeps the useful distinction',
     [cond('Mostly Sunny'), cond('Partly Cloudy'), cond('Chance Rain Showers'), cond('Severe Thunderstorms')],
     ['Mostly sunny', 'Partly cloudy', 'Showers', 'Storms']);
@@ -203,8 +199,8 @@ function check(name, actual, expected) {
 
 /* ============ 7-day editorial summary ============ */
 /* These are forecast regimes, not markup snapshots. Each case asserts the judgment users see:
-   what leads, which weather word is used, how a multi-period window is named, and which endpoints
-   explain the range. This keeps a future copy tweak from accidentally reviving the old fixed
+   what leads, which weather word is used, and how a multi-period window is named. This keeps a
+   future copy tweak from accidentally reviving the old fixed
    "Peak / Rain peaks / Coolest low" template. */
 {
   const S = SUBJECT.buildForecastSummary;
@@ -226,8 +222,7 @@ function check(name, actual, expected) {
   check('heat regime leads with duration and keeps peak plus storm window', S(hot), {
     headline: 'Very hot through Sunday',
     details: ['Peak 98° Tuesday, feels 112°', 'Storm chances Wednesday night–Friday (~40%)'],
-    tone: 'hot',
-    range: { lo: 72, loLabel: 'Sunday night', hi: 98, hiLabel: 'Tuesday' }
+    tone: 'hot'
   });
   const delayedHeat = hot.map((f, i) => Object.assign({}, f, i === 0
     ? { hi: 88, feelsHigh: 90 }
@@ -273,7 +268,7 @@ function check(name, actual, expected) {
     'Rain chances Tuesday night–Wednesday (~40%)');
 
   check('missing facts fail with a stable neutral result', S([]), {
-    headline: 'Forecast summary unavailable', details: [], tone: 'neutral', range: null
+    headline: 'Forecast summary unavailable', details: [], tone: 'neutral'
   });
 }
 
