@@ -45,6 +45,7 @@ const SUBJECT = new Function(`
   ${lift(/^function strongestHit\(kinds\)\{[\s\S]*?^\}/m, 'strongestHit()')}
   ${lift(/^function alertScope\(hit,localMode\)\{[\s\S]*?^\}/m, 'alertScope()')}
   ${lift(/^function scopeAttr\(hit,localMode\)\{.*\}$/m, 'scopeAttr()')}
+  ${lift(/^function eventFamily\(ev\)\{[\s\S]*?^\}/m, 'eventFamily()')}
   ${lift(/^var FAMILY_CFG=\{[\s\S]*?^\};/m, 'FAMILY_CFG')}
   ${lift(/^var LAYERS_MAX=\d+;/m, 'LAYERS_MAX')}
   ${lift(/^function coldVerdict\(nowT,mMin,cMin\)\{[\s\S]*?^\}/m, 'coldVerdict()')}
@@ -61,8 +62,21 @@ const SUBJECT = new Function(`
   ${lift(/^function nwsWallTime\(value\)\{[\s\S]*?^\}/m, 'nwsWallTime()')}
   ${lift(/^function hourlyByDate\(hrs\)\{[\s\S]*?^\}/m, 'hourlyByDate()')}
   ${lift(/^function hrWord\(d\)\{[\s\S]*?^\}/m, 'hrWord()')}
+  ${lift(/^function whenWord\(d,base\)\{[\s\S]*?^\}/m, 'whenWord()')}
+  ${lift(/^function windowSpan\(a,b,base\)\{[\s\S]*?^\}/m, 'windowSpan()')}
+  ${lift(/^function bottomLineHorizon\(d\)\{[\s\S]*?^\}/m, 'bottomLineHorizon()')}
+  ${lift(/^function dewF\(tF,rh\)\{[\s\S]*?^\}/m, 'dewF()')}
   ${lift(/^var OUTLOOK_CFG=\{[\s\S]*?^\};/m, 'OUTLOOK_CFG')}
   ${lift(/^function outlookVerdict\(cfg,l0,l1\)\{[\s\S]*?^\}/m, 'outlookVerdict()')}
+  ${lift(/^function bottomCandidate\(pri,ico,topic,label,headline,detail,action,tone,context,opts\)\{[\s\S]*?^\}/m, 'bottomCandidate()')}
+  ${lift(/^function bottomLineHours\(hrs\)\{[\s\S]*?^\}/m, 'bottomLineHours()')}
+  ${lift(/^function bottomLineHourlyCandidates\(H,opts\)\{[\s\S]*?^\}/m, 'bottomLineHourlyCandidates()')}
+  ${lift(/^function bottomLineLocalAlert\(groups\)\{[\s\S]*?^\}/m, 'bottomLineLocalAlert()')}
+  ${lift(/^function bottomLineCmp\(a,b\)\{[\s\S]*?^\}/m, 'bottomLineCmp()')}
+  ${lift(/^function bottomLineAlertMatch\(alert,candidate\)\{[\s\S]*?^\}/m, 'bottomLineAlertMatch()')}
+  ${lift(/^function bottomLineAlertHeadline\(candidate,outdoor\)\{[\s\S]*?^\}/m, 'bottomLineAlertHeadline()')}
+  ${lift(/^function bottomLineWindowAction\(candidate,outdoor\)\{[\s\S]*?^\}/m, 'bottomLineWindowAction()')}
+  ${lift(/^function buildBottomLine\(candidates,localAlert\)\{[\s\S]*?^\}/m, 'buildBottomLine()')}
   ${lift(/^function extractAFD\(text\)\{[\s\S]*?^\}/m, 'extractAFD()')}
   ${lift(/^function parseMcd\(text\)\{[\s\S]*?^\}/m, 'parseMcd()')}
   ${lift(/^function mcdValidEnd\(v,refMs\)\{[\s\S]*?^\}/m, 'mcdValidEnd()')}
@@ -73,7 +87,9 @@ const SUBJECT = new Function(`
            FAMILY_CFG, coldVerdict, parseMph, heatIndexF, windChillF, feelsLikeF,
            compactDayName, compactCondition, summaryPop, forecastImpact,
            summaryPopText, buildForecastSummary, nwsWallTime, hourlyByDate, hrWord,
-           OUTLOOK_CFG, outlookVerdict,
+           whenWord, windowSpan, bottomLineHorizon, dewF,
+           OUTLOOK_CFG, outlookVerdict, bottomLineHours, bottomLineHourlyCandidates,
+           bottomLineLocalAlert, buildBottomLine,
            extractAFD, parseMcd, mcdValidEnd, geomTouchesEnv, watchBoundary, chaikinRing };
 `)();
 
@@ -84,6 +100,13 @@ function check(name, actual, expected) {
   console.error(`FAIL  ${name}\n        expected ${e}\n        got      ${a}`);
   failed++;
 }
+
+/* Restored snapshots contain rendered HTML, so a Bottom Line DOM migration must reject the old
+   shape rather than painting v12 pills under v13 briefing styles. */
+check('Bottom Line markup migration bumps the snapshot key',
+  /var SNAP_KEY="lsxSnap_v13"/.test(SRC), true);
+check('the previous v12 snapshot is explicitly discarded',
+  /"lsxSnap_v12"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
 
 /* ============ rangeMark ============ */
 // The hero's range bar. Left end is the earlier reading, right end the later one.
@@ -561,46 +584,438 @@ function check(name, actual, expected) {
 }
 
 /* ============ outlookVerdict ============ */
-// Which outlook pill a hazard family earns. Inputs are category LEVELS for today and tomorrow
+// Which structured briefing candidate an outlook family earns. Inputs are category LEVELS for today and tomorrow
 // (spcRisk/eroRisk/fireRisk .lvl), so -1 means "no risk" and SPC's 0 means "General Storms".
 {
   const V = SUBJECT.outlookVerdict, C = SUBJECT.OUTLOOK_CFG;
 
   // The gap this closes: a Slight Risk for TOMORROW afternoon, invisible to the 24-hour hourly
   // window, must still make the card — that is the whole point of reading the outlook desks.
-  check('slight risk tomorrow speaks', V(C.spc, -1, 2),
-    { pri: 80, ico: 'storm', txt: 'Severe storms possible tomorrow (Slight Risk 2/5)' });
+  check('slight risk tomorrow speaks', V(C.spc, -1, 2), {
+    priority: 80, icon: 'storm', topic: 'storm', label: 'Severe outlook',
+    headline: 'Severe storms possible tomorrow', detail: 'Slight Risk 2/5',
+    action: 'Review your severe-weather plan and keep alerts enabled.', tone: 'warning', context: false
+  });
 
   // Non-hazards stay quiet: no outlook at all, and SPC's "General Storms" (thunder without
-  // severe potential) — the wet-block pill already covers plain storms.
-  check('no risk either day is no pill', V(C.spc, -1, -1), null);
+  // severe potential) — the wet-block candidate already covers plain storms.
+  check('no risk either day is no candidate', V(C.spc, -1, -1), null);
   check('general storms is not a hazard', V(C.spc, 0, 0), null);
 
-  // One pill per family: the stronger day speaks, a tie reads as one span.
-  check('the stronger day wins', V(C.spc, 3, 2),
-    { pri: 90, ico: 'storm', txt: 'Severe storms likely today (Enhanced Risk 3/5)' });
-  check('a tie merges the days', V(C.ero, 2, 2),
-    { pri: 79, ico: 'flood', txt: 'Flash flooding possible today and tomorrow (Slight Risk 2/4)' });
+  // One candidate per family: the stronger day speaks, a tie reads as one span.
+  check('the stronger day wins', V(C.spc, 3, 2), {
+    priority: 90, icon: 'storm', topic: 'storm', label: 'Severe outlook',
+    headline: 'Severe storms likely today', detail: 'Enhanced Risk 3/5',
+    action: 'Review your severe-weather plan and keep alerts enabled.', tone: 'danger', context: false
+  });
+  check('a tie merges the days', V(C.ero, 2, 2), {
+    priority: 79, icon: 'flood', topic: 'flood', label: 'Flood outlook',
+    headline: 'Flash flooding possible today and tomorrow', detail: 'Slight Risk 2/4',
+    action: 'Avoid flood-prone roads if heavy rain develops.', tone: 'warning', context: false
+  });
 
   // Fire categories already name themselves — no "(Critical 2/3)" saying it twice.
-  check('fire skips the category tag', V(C.fire, 0, 2),
-    { pri: 82, ico: 'fire', txt: 'Critical fire weather tomorrow (2/3)' });
+  check('fire skips the category tag', V(C.fire, 0, 2), {
+    priority: 82, icon: 'fire', topic: 'fire', label: 'Fire outlook',
+    headline: 'Critical fire weather tomorrow', detail: '2/3',
+    action: 'Avoid outdoor burning and anything that could spark.', tone: 'warning', context: false
+  });
 
   // Winter (WSSI Overall Impact): rank 0 is "Winter Weather Area" — snow on the map, nothing to
   // act on — and a Major day outranks the wet block's own wintry pill (93), which can only say
   // "snow tonight", not how bad.
   check('winter weather area alone stays quiet', V(C.wssi, 0, 0), null);
-  check('a major winter storm tomorrow speaks', V(C.wssi, 0, 3),
-    { pri: 96, ico: 'snow', txt: 'Major winter storm impacts tomorrow (3/4)' });
-  check('major winter outranks the wintry-mix pill', V(C.wssi, 3, 0).pri > 93, true);
+  check('a major winter storm tomorrow speaks', V(C.wssi, 0, 3), {
+    priority: 96, icon: 'snow', topic: 'winter', label: 'Winter outlook',
+    headline: 'Major winter storm impacts tomorrow', detail: '3/4',
+    action: 'Build extra time into travel plans.', tone: 'danger', context: false
+  });
+  check('major winter outranks the wintry-mix candidate', V(C.wssi, 3, 0).priority > 93, true);
 
   // The top of each scale exists and outranks the hourly rules it explains.
-  check('an outbreak outranks the thunder pill', V(C.spc, 5, 5).pri > 95, true);
-  check('high flood risk lands', V(C.ero, -1, 4),
-    { pri: 98, ico: 'flood', txt: 'Widespread flash flooding expected tomorrow (High Risk 4/4)' });
+  check('an outbreak outranks the thunder candidate', V(C.spc, 5, 5).priority > 95, true);
+  check('high flood risk lands', V(C.ero, -1, 4), {
+    priority: 98, icon: 'flood', topic: 'flood', label: 'Flood outlook',
+    headline: 'Widespread flash flooding expected tomorrow', detail: 'High Risk 4/4',
+    action: 'Avoid flood-prone roads if heavy rain develops.', tone: 'danger', context: false
+  });
 
   // Missing inputs must not throw or invent a verdict.
-  check('undefined levels are no pill', V(C.spc, undefined, undefined), null);
+  check('undefined levels are no candidate', V(C.spc, undefined, undefined), null);
+}
+
+/* ============ Bottom Line hourly decisions ============ */
+// Controlled hourly facts test the actual source used by renderTheCall(), not hand-authored final
+// candidates. Every threshold gets a just-below/at-boundary assertion; missing data must fail quiet.
+{
+  const C = SUBJECT.bottomLineHourlyCandidates;
+  const NOW = new Date(2026, 7, 13, 12, 0, 0, 0);
+  function hours(start, count, edit) {
+    return Array.from({length: count}, (_, i) => {
+      const d = new Date(start.getTime() + i * 3600000), hr = d.getHours();
+      return Object.assign({t: 70, d, hr, pop: 0, rh: 50, mph: 5, dew: 50, fl: 70,
+        thund: false, wint: false, fog: false, day: hr >= 7 && hr <= 19}, edit ? edit(i, d) : {});
+    });
+  }
+  function topic(list, name) { return list.find(x => x.topic === name) || null; }
+  function weather(H, opts) { return C(H, Object.assign({now: NOW}, opts || {})); }
+
+  const normalized = SUBJECT.bottomLineHours([
+    {startTime: 'not-a-time', temperature: 80},
+    {startTime: '2026-08-13T12:00:00-05:00', temperature: 80,
+      relativeHumidity: {value: 'bad'}, probabilityOfPrecipitation: {value: 130},
+      windSpeed: '10 to 20 mph', shortForecast: 'Thunderstorms, snow and fog', isDaytime: true},
+    {startTime: '2026-08-13T13:00:00-05:00', temperature: 75,
+      probabilityOfPrecipitation: {value: -4}, shortForecast: '', isDaytime: false}
+  ]);
+  check('hour normalization drops invalid timestamps', normalized.length, 2);
+  check('hour normalization clamps malformed precipitation probabilities', normalized.map(h => h.pop), [100, 0]);
+  check('hour normalization preserves missing humidity instead of inventing dew point',
+    [normalized[0].rh, normalized[0].dew], [null, null]);
+  check('hour normalization takes the strongest sustained-wind number', normalized[0].mph, 20);
+  check('hour normalization identifies storm, winter and fog signals',
+    [normalized[0].thund, normalized[0].wint, normalized[0].fog], [true, true, true]);
+  check('hour normalization preserves the official daylight flag', normalized.map(h => h.day), [true, false]);
+
+  let H = hours(NOW, 12, i => ({pop: i === 2 ? 39 : 0}));
+  check('39 percent stays a dry-window call', topic(weather(H), 'precip').headline, 'No rain expected');
+  H = hours(NOW, 12, i => ({pop: i === 2 ? 40 : (i === 3 ? 29 : 0)}));
+  check('40 percent starts a rain block', topic(weather(H), 'precip').headline, 'Rain likely');
+  check('below 30 percent ends a rain block', topic(weather(H), 'precip').detail, '~2pm–3pm');
+  H = hours(NOW, 12, i => ({pop: i === 2 ? 50 : (i === 3 ? 35 : (i === 4 ? 20 : (i === 8 ? 35 : 0))), thund: i === 8}));
+  check('thunder outside the first wet block cannot relabel rain', topic(weather(H), 'precip').headline, 'Rain likely');
+  H = hours(NOW, 12, i => ({pop: i === 2 ? 50 : (i === 3 ? 20 : 0), thund: i === 2}));
+  check('thunder inside the wet block becomes storm timing', topic(weather(H), 'precip').headline, 'Thunderstorms likely');
+  H = hours(NOW, 12, i => ({pop: i === 2 ? 50 : (i === 3 ? 20 : 0), wint: i === 2}));
+  check('winter weather inside the wet block becomes travel weather', topic(weather(H), 'precip').headline, 'Snow or wintry mix');
+  H = hours(NOW, 12, i => ({pop: i === 2 ? 50 : (i === 3 ? 20 : 0), thund: i === 2, wint: i === 2}));
+  check('mixed thunder and winter weather states both hazards', topic(weather(H), 'precip').headline,
+    'Thunderstorms with wintry precipitation');
+  check('mixed thunder and winter weather includes both actions', topic(weather(H), 'precip').action,
+    'Be ready to move inside and watch for slick roads.');
+  H = hours(NOW, 12, i => ({pop: i === 2 || i === 7 ? 50 : (i === 3 ? 20 : 0)}));
+  check('a second wet round is disclosed instead of merged into the first',
+    topic(weather(H), 'precip').detail.includes('another round ~7pm'), true);
+  H = hours(NOW, 12, i => ({pop: i === 3 ? 24 : 0}));
+  check('24 percent does not get a peak-chance qualifier', topic(weather(H), 'precip').detail.includes('peak chance'), false);
+  H = hours(NOW, 12, i => ({pop: i === 3 ? 25 : 0}));
+  check('25 percent gets an honest peak-chance qualifier', topic(weather(H), 'precip').detail.includes('peak chance 25%'), true);
+
+  for (const [feels, expected] of [[98, null], [99, 'High heat near 2pm'], [104, 'High heat near 2pm'], [105, 'Dangerous heat near 2pm']]) {
+    H = hours(NOW, 12, i => ({fl: i === 2 ? feels : 70}));
+    check(`heat threshold at feels-like ${feels}`, topic(weather(H), 'heat')?.headline || null, expected);
+  }
+
+  const EVE = new Date(2026, 7, 13, 18);
+  H = hours(EVE, 18, i => ({t: i === 0 ? 72 : (i === 12 ? 28 : 60), fl: i === 0 ? 72 : (i === 12 ? 28 : 60)}));
+  check('a freezing morning becomes the cold lead candidate', topic(weather(H, {now: EVE}), 'cold').headline, 'Freezing early');
+  H = hours(NOW, 12, i => ({t: i === 0 ? 72 : (i === 6 ? 45 : 65), fl: i === 0 ? 72 : (i === 6 ? 45 : 65)}));
+  check('a real temperature crash becomes one trend candidate', topic(weather(H), 'cold').headline, 'Sharp temperature drop');
+  H = hours(new Date(2026, 7, 14, 0), 12, i => ({t: i === 6 ? 40 : 48, fl: i === 6 ? 40 : 48}));
+  check('a cold morning without a sharp fall stays a cold-morning candidate',
+    topic(C(H, {now: new Date(2026, 7, 14, 0)}), 'cold').headline, 'Cold morning');
+
+  for (const [hour, expected] of [[3, false], [4, true], [9, true], [10, false]]) {
+    H = hours(new Date(2026, 7, 14, 0), 12, i => ({fog: i === hour}));
+    check(`fog at ${hour}:00 respects the morning-drive window`, !!topic(C(H, {now: new Date(2026, 7, 14, 0)}), 'fog'), expected);
+  }
+  for (const [mph, expected] of [[24, null], [25, 'Windy near 2pm'], [34, 'Windy near 2pm'], [35, 'Very windy near 2pm']]) {
+    H = hours(NOW, 12, i => ({mph: i === 2 ? mph : 5}));
+    check(`wind threshold at ${mph} mph`, topic(weather(H), 'wind')?.headline || null, expected);
+  }
+
+  H = hours(NOW, 12);
+  check('expired UV peak cannot speak', !!topic(weather(H, {uvPeak: {v: 12, t: NOW.getTime() - 1}}), 'uv'), false);
+  check('UV 7 stays below the action threshold', !!topic(weather(H, {uvPeak: {v: 7, t: NOW.getTime() + 3600000}}), 'uv'), false);
+  check('UV 8 becomes very high guidance', topic(weather(H, {uvPeak: {v: 8, t: NOW.getTime() + 3600000}}), 'uv').headline,
+    'Very high UV near 1pm');
+  check('UV 11 becomes extreme guidance', topic(weather(H, {uvPeak: {v: 11, t: NOW.getTime() + 3600000}}), 'uv').headline,
+    'Extreme UV near 1pm');
+  check('AQI 100 stays quiet', !!topic(weather(H, {aqi: 100}), 'air'), false);
+  check('AQI 101 triggers sensitive-group guidance', topic(weather(H, {aqi: 101}), 'air').action,
+    'Sensitive groups should limit prolonged outdoor exertion.');
+
+  const NIGHT = new Date(2026, 7, 13, 21);
+  H = hours(NIGHT, 6, () => ({t: 65, fl: 65, dew: 50, pop: 0, mph: 5, day: false}));
+  check('four continuous mild dry night hours support window-opening guidance',
+    topic(C(H, {now: NIGHT}), 'overnight').headline, 'Comfortable overnight');
+  H = hours(NIGHT, 6, () => ({t: 65, fl: 65, dew: null, pop: 0, mph: 5, day: false}));
+  check('missing dew point cannot be described as dry air', !!topic(C(H, {now: NIGHT}), 'overnight'), false);
+  H = hours(NIGHT, 6, () => ({t: 72, fl: 72, dew: 68, pop: 0, mph: 5, day: false}));
+  check('muggy overnight conditions warn that windows may not help', topic(C(H, {now: NIGHT}), 'overnight').headline,
+    'Warm and humid overnight');
+  H = hours(NIGHT, 6, () => ({t: 65, fl: 65, dew: 50, pop: 0, mph: 5, day: false}));
+  H[2].d = new Date(H[2].d.getTime() + 3600000);
+  check('a gap in hourly coverage cannot certify the overnight window', !!topic(C(H, {now: NIGHT}), 'overnight'), false);
+
+  const MORNING = new Date(2026, 7, 13, 8);
+  H = hours(MORNING, 6);
+  check('four or more genuinely good daylight hours earn the excellent call', topic(C(H, {now: MORNING}), 'outdoors').headline,
+    'Excellent outdoor conditions');
+  H = hours(MORNING, 6, i => i === 2 ? {pop: 20} : {});
+  check('20 percent rain prevents an all-day excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
+  H = hours(MORNING, 6, i => i === 2 ? {fl: 95} : {});
+  check('feels-like 95 prevents an all-day excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
+  H = hours(MORNING, 6, i => i === 2 ? {mph: 16} : {});
+  check('16 mph wind prevents an all-day excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
+  H = hours(MORNING, 6, i => i === 2 ? {dew: 67} : {});
+  check('oppressive humidity prevents an all-day excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
+  H = hours(MORNING, 6, i => i === 2 ? {t: null, fl: null} : {});
+  check('missing temperature cannot become an excellent-day claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
+  check('the excellent-day claim stops after 5 PM',
+    !!topic(C(hours(new Date(2026, 7, 13, 17), 4, () => ({day: true})), {now: new Date(2026, 7, 13, 17)}), 'outdoors'), false);
+
+  H = hours(EVE, 24, i => ({fl: i < 2 ? 99 : 70}));
+  const afterFiveWindow = topic(C(H, {now: EVE}), 'outdoors');
+  check('after 5 PM can still find tomorrow daylight', afterFiveWindow.windowLabel, '7am–9am tomorrow');
+  H = hours(new Date(2026, 7, 13, 7), 14, i => ({fl: i === 0 ? 99 : 70, day: false}));
+  check('clock time alone cannot masquerade as official daylight', !!topic(C(H, {now: new Date(2026, 7, 13, 7)}), 'outdoors'), false);
+  H = hours(new Date(2026, 7, 13, 7), 5, i => ({fl: i === 0 || i === 3 || i === 4 ? 120 : 70, day: true}));
+  H[2].d = new Date(H[2].d.getTime() + 3600000);
+  check('non-contiguous forecast hours cannot form a two-hour outdoor window',
+    !!topic(C(H, {now: new Date(2026, 7, 13, 7)}), 'outdoors'), false);
+  H = hours(MORNING, 6);
+  check('quiet weather does not invent a narrow best-window cutoff',
+    topic(C(H, {now: MORNING}), 'outdoors').headline, 'Excellent outdoor conditions');
+  check('empty hourly data produces no weather claims', C([], {now: NOW}), []);
+}
+
+/* ============ Bottom Line local-alert selection ============ */
+{
+  const L = SUBJECT.bottomLineLocalAlert;
+  const awayEmergency = {scope: 'away', ev: 'Tornado Warning', lv: {k: 'emergency'}, latest: 500};
+  const localAdvisory = {scope: 'here', ev: 'Heat Advisory', lv: {k: 'advisory'}, latest: 300};
+  const localWarning = {scope: 'here', ev: 'High Wind Warning', lv: {k: 'warning'}, latest: 400};
+  check('alerts elsewhere never enter Bottom Line state', L([awayEmergency]), null);
+  check('the strongest local alert wins regardless of input order', L([localAdvisory, awayEmergency, localWarning]),
+    {event: 'High Wind Warning', family: 'wind', level: 'warning', ends: 400});
+  check('reversing alert input cannot change the strongest local alert',
+    L([localWarning, awayEmergency, localAdvisory]), L([localAdvisory, awayEmergency, localWarning]));
+  const floodWarning = {scope: 'here', ev: 'Flash Flood Warning', lv: {k: 'warning'}, sev: 'Severe', latest: 450};
+  const stormWarning = {scope: 'here', ev: 'Severe Thunderstorm Warning', lv: {k: 'warning'}, sev: 'Severe', latest: 460};
+  check('equal-level local alerts use a deterministic tiebreaker',
+    L([stormWarning, floodWarning]), L([floodWarning, stormWarning]));
+  check('degraded flat mode remains fail-open for alert translation',
+    L([{scope: '', ev: 'Winter Storm Watch', lv: {k: 'watch'}, latest: 200}]),
+    {event: 'Winter Storm Watch', family: 'winter', level: 'watch', ends: 200});
+  check('missing alert groups fail quiet', L(null), null);
+}
+
+/* ============ buildBottomLine ============ */
+// Feed completion order cannot decide the visible hierarchy. One topic earns one slot; wet timing
+// is protected, dry timing competes normally, and climate context is reserved for a quiet lead.
+{
+  const B = SUBJECT.buildBottomLine;
+  function c(topic, priority, context, headline, extras) {
+    return Object.assign({ topic, priority, context: !!context, headline: headline || topic,
+      icon: 'check', label: topic, detail: '', action: '', tone: context ? 'context' : 'neutral' }, extras || {});
+  }
+  function shape(list, alert) {
+    const m = B(list, alert);
+    return { lead: m.lead && `${m.lead.topic}:${m.lead.headline}`,
+      supports: m.supports.map(x => `${x.topic}:${x.headline}`) };
+  }
+
+  check('a local severe-storm warning outranks unrelated dangerous heat', shape([
+    c('heat', 100, false, 'Dangerous heat', {icon: 'heat', tone: 'danger'}),
+    c('precip', 95, false, 'Thunderstorms likely', {icon: 'storm', tone: 'danger'})
+  ], {family: 'convective', event: 'Severe Thunderstorm Warning', level: 'warning'}),
+    {lead: 'precip:Be ready to move plans indoors', supports: ['heat:Dangerous heat']});
+  check('a local winter warning outranks unrelated dangerous heat', shape([
+    c('heat', 100, false, 'Dangerous heat', {icon: 'heat', tone: 'danger'}),
+    c('winter', 89, false, 'Moderate winter impacts', {icon: 'snow', tone: 'danger'})
+  ], {family: 'winter', event: 'Winter Storm Warning', level: 'warning'}),
+    {lead: 'winter:Allow extra time for winter travel', supports: ['heat:Dangerous heat']});
+  check('a watch does not displace a more consequential unrelated lead', shape([
+    c('heat', 100, false, 'Dangerous heat', {icon: 'heat', tone: 'danger'}),
+    c('storm', 80, false, 'Severe storms possible', {icon: 'storm', tone: 'warning'})
+  ], {family: 'convective', event: 'Severe Thunderstorm Watch', level: 'watch'}),
+    {lead: 'heat:Dangerous heat', supports: ['storm:Severe storms possible']});
+  check('an unmatched emergency suppresses a distracting unrelated briefing', shape([
+    c('heat', 100, false, 'Dangerous heat', {icon: 'heat', tone: 'danger'})
+  ], {family: 'convective', event: 'Tornado Warning', level: 'emergency'}),
+    {lead: null, supports: []});
+  check('an unmatched non-emergency warning does not invent a weather candidate', shape([
+    c('heat', 100, false, 'Dangerous heat', {icon: 'heat', tone: 'danger'})
+  ], {family: 'flood', event: 'Flood Warning', level: 'warning'}),
+    {lead: 'heat:Dangerous heat', supports: []});
+
+  const airAlert = {family: 'convective', event: 'Air Quality Alert', level: 'advisory'};
+  check('air-quality products match air guidance',
+    B([c('air', 75, false, 'Poor air quality', {icon: 'air', tone: 'warning'})], airAlert).lead.alertAware, true);
+  check('air-quality products cannot rewrite storm guidance',
+    B([c('storm', 80, false, 'Storms possible', {icon: 'storm', tone: 'warning'})], airAlert).lead.alertAware, undefined);
+  const smokeAlert = {family: 'fire', event: 'Dense Smoke Advisory', level: 'advisory'};
+  check('smoke products cannot rewrite fire-weather guidance',
+    B([c('fire', 82, false, 'Critical fire weather', {icon: 'fire', tone: 'warning'})], smokeAlert).lead.alertAware, undefined);
+  const fogAlert = {family: 'convective', event: 'Dense Fog Advisory', level: 'advisory'};
+  check('fog products cannot rewrite severe-storm guidance',
+    B([c('storm', 80, false, 'Storms possible', {icon: 'storm', tone: 'warning'})], fogAlert).lead.alertAware, undefined);
+
+  check('dangerous heat leads its practical briefing', shape([
+    c('climate', 92, true, 'record'), c('overnight', 30),
+    c('heat', 100, false, 'heat', {tone: 'danger'}), c('precip', 40)
+  ]), { lead: 'heat:heat', supports: ['precip:precip', 'overnight:overnight'] });
+
+  check('severe outlook and useful storm timing coexist', shape([
+    c('storm', 97, false, 'storm', {tone: 'danger'}),
+    c('precip', 95, false, 'precip', {supportRank: 0}), c('air', 75), c('outdoors', 58)
+  ]), { lead: 'storm:storm', supports: ['precip:precip', 'air:air', 'outdoors:outdoors'] });
+
+  check('rain-only data still produces a lead', shape([c('precip', 60)]),
+    { lead: 'precip:precip', supports: [] });
+
+  check('quiet weather leads with the outdoor opportunity', shape([
+    c('precip', 40), c('overnight', 50), c('outdoors', 55), c('climate', 88, true)
+  ]), { lead: 'outdoors:outdoors', supports: ['overnight:overnight', 'precip:precip', 'climate:climate'] });
+
+  check('poor AQI can lead when it is the main actionable issue', shape([
+    c('precip', 40), c('air', 75, false, 'air', {tone: 'warning'}), c('climate', 92, true)
+  ]), { lead: 'air:air', supports: ['precip:precip'] });
+
+  check('freezing suppresses the weaker duplicate cold cue', shape([
+    c('cold', 70, false, 'cold morning'), c('precip', 40), c('cold', 85, false, 'freezing early')
+  ]), { lead: 'cold:freezing early', supports: ['precip:precip'] });
+
+  check('outdoor-window scan no longer stops after 5 PM',
+    /if\(maxFl>=99\|\|wet0>=0\|\|wMax>=25\)/.test(SRC), true);
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(7, 0, 0, 0);
+  const tomorrowEnd = new Date(tomorrow); tomorrowEnd.setHours(9);
+  check('tomorrow outdoor window carries its day', SUBJECT.windowSpan(tomorrow, tomorrowEnd), '7am–9am tomorrow');
+
+  check('climate stays out of a hazard briefing even with a spare slot', shape([
+    c('heat', 100, false, 'heat', {tone: 'danger'}), c('precip', 40), c('climate', 99, true)
+  ]), { lead: 'heat:heat', supports: ['precip:precip'] });
+
+  check('dry precipitation competes instead of claiming a reserved slot', shape([
+    c('heat', 100, false, 'heat', {tone: 'danger'}), c('air', 75), c('wind', 65),
+    c('outdoors', 58), c('precip', 40)
+  ]), { lead: 'heat:heat', supports: ['air:air', 'wind:wind', 'outdoors:outdoors'] });
+
+  check('wet timing keeps its protected support rank', shape([
+    c('heat', 100, false, 'heat', {tone: 'danger'}),
+    c('precip', 60, false, 'wet', {supportRank: 0}), c('air', 75), c('wind', 65), c('outdoors', 58)
+  ]), { lead: 'heat:heat', supports: ['precip:wet', 'air:air', 'wind:wind'] });
+
+  const merged = B([
+    c('heat', 100, false, 'Dangerous heat', {tone: 'danger', detail: 'Heat index around 111°.', action: 'Limit exertion near peak heat.'}),
+    c('outdoors', 58, false, 'Best window', {mergeAction: 'Use 7am–9am tomorrow for strenuous plans.', windowLabel: '7am–9am tomorrow', windowEnd: '9am tomorrow'}),
+    c('precip', 40)
+  ]);
+  check('best window becomes specific lead guidance', merged.lead.action,
+    'If outdoor work is necessary, finish by 9am tomorrow. Limit exertion near peak heat.');
+  check('merged outdoor guidance does not consume a support slot', merged.supports.map(x => x.topic), ['precip']);
+
+  const alerted = B([
+    c('heat', 100, false, 'Dangerous heat', {tone: 'danger', icon: 'heat', detail: 'Heat index around 111°.', action: 'Limit exertion near peak heat.'}),
+    c('outdoors', 58, false, 'Best window', {mergeAction: 'Use 7am–9am tomorrow for strenuous plans.', windowLabel: '7am–9am tomorrow', windowEnd: '9am tomorrow'})
+  ], {family: 'heat', event: 'Extreme Heat Warning'});
+  check('matching local alert translates into a plan', alerted.lead.headline,
+    'Finish strenuous outdoor work by 9am tomorrow');
+  check('alert title is not repeated in the briefing', JSON.stringify(alerted).includes('Extreme Heat Warning'), false);
+  check('alert-aware lead retains local provenance', alerted.lead.detail,
+    'Alert active locally · Heat index around 111°.');
+
+  /* Copy matrix: every hazard that can own the lead. A usable outdoor window should become a
+     natural cutoff only for conditions it helps avoid; without one, the alert becomes a concise
+     condition-specific action. The product title itself always stays in the alert banner. */
+  const windowCue = c('outdoors', 58, false, 'Best window', {
+    mergeAction: 'Use 7am–9am tomorrow for weather-sensitive plans.',
+    windowLabel: '7am–9am tomorrow', windowEnd: '9am tomorrow'
+  });
+  [
+    {name: 'heat', candidate: c('heat', 100, false, 'Dangerous heat', {icon: 'heat', tone: 'danger'}),
+      alert: {family: 'heat', event: 'Extreme Heat Warning'},
+      headline: 'Finish strenuous outdoor work by 9am tomorrow'},
+    {name: 'severe storms', candidate: c('storm', 97, false, 'Severe storms likely', {icon: 'storm', tone: 'danger'}),
+      alert: {family: 'convective', event: 'Severe Thunderstorm Warning'},
+      headline: 'Finish weather-sensitive outdoor tasks by 9am tomorrow'},
+    {name: 'thunderstorm timing', candidate: c('precip', 95, false, 'Thunderstorms likely', {icon: 'storm', tone: 'danger'}),
+      alert: {family: 'convective', event: 'Severe Thunderstorm Watch'},
+      headline: 'Finish weather-sensitive outdoor tasks by 9am tomorrow'},
+    {name: 'wind', candidate: c('wind', 78, false, 'Very windy', {icon: 'wind', tone: 'danger'}),
+      alert: {family: 'wind', event: 'High Wind Warning'},
+      headline: 'Handle outdoor setup by 9am tomorrow'}
+  ].forEach(x => {
+    const m = B([x.candidate, windowCue], x.alert);
+    check(`${x.name} alert uses a natural window cutoff`, m.lead.headline, x.headline);
+    check(`${x.name} alert title stays in the banner`, JSON.stringify(m.lead).includes(x.alert.event), false);
+    check(`${x.name} merged window does not become a support`, m.supports.map(s => s.topic).includes('outdoors'), false);
+  });
+
+  [
+    {name: 'heat', candidate: c('heat', 100, false, 'Dangerous heat', {tone: 'danger', action: 'Limit exertion.'}),
+      action: 'If outdoor work is necessary, finish by 9am tomorrow. Limit exertion.'},
+    {name: 'storm outlook', candidate: c('storm', 97, false, 'Severe storms likely', {tone: 'danger', action: 'Keep alerts enabled.'}),
+      action: 'Finish weather-sensitive outdoor tasks by 9am tomorrow. Keep alerts enabled.'},
+    {name: 'ordinary rain', candidate: c('precip', 60, false, 'Rain likely', {icon: 'rain', tone: 'warning', action: 'Plan around rain.'}),
+      action: 'Finish weather-sensitive outdoor tasks by 9am tomorrow. Plan around rain.'},
+    {name: 'wind', candidate: c('wind', 78, false, 'Very windy', {tone: 'danger', action: 'Secure loose objects.'}),
+      action: 'Handle weather-sensitive outdoor tasks by 9am tomorrow. Secure loose objects.'}
+  ].forEach(x => {
+    const m = B([x.candidate, windowCue]);
+    check(`${x.name} uses the cutoff without an alert`, m.lead.action, x.action);
+  });
+
+  [
+    {name: 'heat', topic: 'heat', headline: 'Dangerous heat', alert: {family: 'heat', event: 'Heat Advisory'},
+      expected: 'Avoid strenuous outdoor work near peak heat'},
+    {name: 'severe storms', topic: 'storm', headline: 'Severe storms likely', alert: {family: 'convective', event: 'Tornado Watch'},
+      expected: 'Be ready to move plans indoors'},
+    {name: 'wintry precipitation', topic: 'precip', icon: 'snow', headline: 'Snow or wintry mix', alert: {family: 'winter', event: 'Winter Storm Warning'},
+      expected: 'Allow extra time for winter travel'},
+    {name: 'winter outlook', topic: 'winter', headline: 'Major winter impacts', alert: {family: 'winter', event: 'Winter Storm Watch'},
+      expected: 'Allow extra time for winter travel'},
+    {name: 'freezing cold', topic: 'cold', headline: 'Freezing early', alert: {family: 'winter', event: 'Freeze Warning'},
+      expected: 'Plan around freezing or dangerous cold'},
+    {name: 'flooding', topic: 'flood', headline: 'Flash flooding likely', alert: {family: 'flood', event: 'Flash Flood Warning'},
+      expected: 'Avoid flood-prone travel during heavy rain'},
+    {name: 'fire weather', topic: 'fire', headline: 'Critical fire weather', alert: {family: 'fire', event: 'Red Flag Warning'},
+      expected: 'Avoid outdoor burning'},
+    {name: 'wind', topic: 'wind', headline: 'Very windy', alert: {family: 'wind', event: 'Wind Advisory'},
+      expected: 'Secure loose outdoor objects'},
+    {name: 'air quality', topic: 'air', headline: 'Poor air quality', alert: {family: 'convective', event: 'Air Quality Alert'},
+      expected: 'Limit prolonged outdoor exertion'},
+    {name: 'smoke', topic: 'air', headline: 'Poor air quality', alert: {family: 'fire', event: 'Dense Smoke Advisory'},
+      expected: 'Limit prolonged outdoor exertion'},
+    {name: 'fog', topic: 'fog', headline: 'Fog early', alert: {family: 'convective', event: 'Dense Fog Advisory'},
+      expected: 'Slow down for reduced visibility'}
+  ].forEach(x => {
+    const candidate = c(x.topic, 90, false, x.headline, {icon: x.icon || x.topic, tone: 'warning'});
+    const m = B([candidate], x.alert);
+    check(`${x.name} alert has useful no-window guidance`, m.lead.headline, x.expected);
+    check(`${x.name} no-window case invents no morning cutoff`, /\b9am\b/.test(m.lead.headline + ' ' + m.lead.action), false);
+  });
+
+  [
+    {topic: 'precip', headline: 'Rain likely'}, {topic: 'cold', headline: 'Cold morning'},
+    {topic: 'fog', headline: 'Fog early'}, {topic: 'uv', headline: 'Extreme UV'},
+    {topic: 'air', headline: 'Poor air quality'}, {topic: 'flood', headline: 'Flooding possible'},
+    {topic: 'fire', headline: 'Critical fire weather'}, {topic: 'winter', headline: 'Winter impacts'},
+    {topic: 'overnight', headline: 'Comfortable overnight'}, {topic: 'outdoors', headline: 'Excellent outdoor conditions'}
+  ].forEach(x => {
+    const m = B([c(x.topic, 70, false, x.headline, {tone: 'warning'})]);
+    check(`${x.topic} stays literal without alert or window evidence`, m.lead.headline, x.headline);
+    check(`${x.topic} invents no morning cutoff`, /\b9am\b/.test(m.lead.headline + ' ' + m.lead.action), false);
+  });
+
+  const mismatch = B([
+    c('wind', 78, false, 'Very windy', {icon: 'wind', tone: 'danger'}), windowCue
+  ], {family: 'heat', event: 'Heat Advisory'});
+  check('an unrelated active alert cannot rewrite the lead', mismatch.lead.headline, 'Very windy');
+  check('an unrelated alert still allows evidence-based window guidance', mismatch.lead.action,
+    'Handle weather-sensitive outdoor tasks by 9am tomorrow.');
+
+  const unordered = [c('wind', 65), c('precip', 40), c('heat', 72), c('outdoors', 58), c('climate', 88, true)];
+  check('candidate arrival order cannot change the briefing',
+    JSON.stringify(shape(unordered)), JSON.stringify(shape(unordered.slice().reverse())));
+
+  check('missing optional feeds are valid', B([null, undefined, c('precip', 40)]).lead.topic, 'precip');
+  check('context alone never becomes the Bottom Line', shape([c('climate', 99, true)]),
+    { lead: null, supports: [] });
+
+  check('the horizon names a concrete end time',
+    SUBJECT.bottomLineHorizon(new Date(2026, 7, 14, 21)), 'Through Fri 9 PM');
 }
 
 /* ============ extractAFD ============ */
@@ -789,4 +1204,4 @@ if (failed) {
   console.error(`\n${failed} logic test(s) failed`);
   process.exit(1);
 }
-console.log('ok    logic: rangeMark, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr, FAMILY_CFG,\n             compact forecast decisions, regime summaries, hourly extrema, coldVerdict, outlookVerdict,\n             extractAFD, parseMcd, mcdValidEnd, geomTouchesEnv, watchBoundary and chaikinRing behave');
+console.log('ok    logic: rangeMark, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr, FAMILY_CFG,\n             compact forecast decisions, regime summaries, hourly extrema, coldVerdict, outlookVerdict,\n             Bottom Line hourly candidates, local-alert routing, buildBottomLine, extractAFD, parseMcd,\n             mcdValidEnd, geomTouchesEnv, watchBoundary and chaikinRing behave');

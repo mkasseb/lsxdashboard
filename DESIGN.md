@@ -171,6 +171,43 @@ verdict that scores every daylight hour on comfort, rain risk and wind to name t
 window to be outside, spoken only when the day has adversity worth dodging. It ranks directly
 under safety, so the card is on the first screen whatever the weather is doing.
 
+Its presentation is a decision briefing, not a pill cloud. `buildBottomLine()` receives structured
+candidates and chooses one actionable lead; climate context can never take that slot, and the
+rain/no-rain candidate is the fallback when the forecast offers no stronger decision. Up to three
+supporting cues are then ranked by consequence: useful wet timing receives a protected rank, while
+a dry forecast competes normally with air quality, wind, overnight comfort and other decisions.
+Duplicate topics collapse before selection, so two ways of describing the same cold trough or heat
+episode cannot consume the card.
+
+The synthesized outdoor window now searches the full forecast horizon, including tomorrow after
+an evening page load. When a heat, storm/rain or wind lead would otherwise say only “use cooler
+hours” or “keep plans flexible,” that candidate is folded into the lead as an exact two-hour plan
+and removed from the support list. The Alerts section remains the safety authority; the strongest
+active local alert only changes matching Bottom Line wording into an action (“finish strenuous
+outdoor work by 9am”), without copying the alert product title. The endpoint is the decision; the
+scored two-hour range remains evidence, not an invitation to schedule recreation at dawn.
+Historical context fills a spare support slot
+only when the lead itself is neutral or good; a warning never spends scarce space on a record fact.
+Below 600px that optional context cue yields the space entirely because the same information
+remains available in the Climate section.
+
+The header’s horizon is computed from the last hourly period (“Through Fri 9 PM”) rather than
+promising a generic 24 hours. The renderer preserves the hierarchy in DOM order — heading, lead,
+semantic support list — and uses severity colour only when the underlying candidate warrants it.
+The blocks are deliberately not pill-shaped and have no hover state: they are readings, not
+controls.
+
+All hourly decisions run through `bottomLineHours()` and the pure
+`bottomLineHourlyCandidates()` before rendering. That boundary is intentional safety engineering:
+thresholds, wet-block timing, daylight continuity, missing-data behavior and slower-feed inputs can
+be tested without a DOM or a live forecast. “Dry air” requires an actual dew point, an outdoor
+window requires two truly consecutive hours carrying NWS `isDaytime`, and a local warning or
+emergency can promote its matching forecast candidate over an unrelated numeric priority. If an
+emergency has no matching evidence to translate, the briefing yields rather than placing an
+unrelated recommendation directly below the emergency banner. Air-quality, smoke and fog products
+use exclusive semantic matches so their fallback alert styling cannot accidentally rewrite storm
+or fire-weather guidance.
+
 **The Pulse rides directly behind it in calm weather, at full length.** `#afdCard` is the same kind
 of card as the Bottom Line — one verdict computed by this page, one written by a human at NWS
 St. Louis — so the two reason together above the numbers. It used to sit below the

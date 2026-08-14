@@ -349,7 +349,7 @@ def check_csp_covers_origins(served_html, headers_text):
 SYMBOL = re.compile(r'<symbol id="i-([a-z0-9-]+)"')
 # Every way an icon name reaches the sprite. ic("x") and <use href="#i-x"> are direct; the rest
 # are the producers that hand a name to ic() indirectly — the per-family and per-hazard lookup
-# tables, and the two renderers that take the name as a positional argument (push(pri, ico, txt)
+# tables, and the two renderers that take the name as a positional argument (push(pri, ico, ...)
 # for the Bottom Line, line(ico, html) for the climate context).
 ICON_REFS = [
     re.compile(r'\bic\("([a-z0-9-]+)"'),

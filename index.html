@@ -191,7 +191,7 @@
      that sit side by side in the same card did not agree on their own geometry. Each class below
      still exists (JS builds them by name, and restored snapshots carry those names), but now it
      only declares what genuinely differs: colour, weight, size. */
-  .a2-chip,.a2-more,.a2-radar,.a2-me,.a2-where,.call-pill,.h24-pill,.hz-chip,
+  .a2-chip,.a2-more,.a2-radar,.a2-me,.a2-where,.h24-pill,.hz-chip,
   .dr-pill,.cpc-pill,.rfcat,.qpfchip,.rs-full,.stn-tools button,.quicklinks a,.dr-none{
     display:inline-flex;align-items:center;gap:6px;border-radius:var(--r-pill);
     font-family:inherit;line-height:1.35;text-align:left}
@@ -334,7 +334,7 @@
      tag — is this one thing. There used to be three: 12px caps at 1.2px tracking, 13px title case
      at 800, and an 11px caps label tinted with the link colour. Three idioms for one job reads as
      three different authors. */
-  .card h2,.rail-t,.call-lbl{font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;
+  .card h2,.rail-t{font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;
     letter-spacing:var(--ls-eyebrow);color:var(--muted)}
   .card h2{margin:0 0 var(--sp-3);display:flex;align-items:center;justify-content:space-between;gap:8px}
   .card h2 .link{font-size:var(--fs-sm);text-transform:none;letter-spacing:0;font-weight:400}
@@ -609,21 +609,65 @@
   @keyframes sbPulse{0%,100%{opacity:.35}50%{opacity:1}}
   @media (prefers-reduced-motion: reduce){.snapbar .sb-spin{animation:none}}
 
-  /* The Call — plain-English verdicts derived from data already on the page */
-  #callCard{padding:13px 16px;display:none}
+  /* Bottom Line — one decision first, then the evidence that changes the plan. The old version
+     rendered every verdict as an equal pill; that made a record comparison look as important as
+     dangerous heat, and the rounded shapes looked interactive even though none were controls. */
+  #callCard{padding:12px 16px;display:none}
   #callCard.has{display:block}
-  .callrow{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
-  /* The label was tinted --accent, which is the link colour — "BOTTOM LINE" read as clickable. It
-     is a section name like every other, so it wears the eyebrow. */
-  /* It became a real <h2> for the document outline, which means `.card h2` above now claims it —
-     and that rule is written for a card TITLE row (its own line, flex, 12px under it), not for a
-     chip sitting inline among the verdicts. Take the outline, decline the layout. */
-  #callRow .call-lbl{flex:0 0 auto;display:inline-flex;align-items:center;margin:0;justify-content:flex-start}
-  .call-pill{gap:8px;background:var(--inset);border:1px solid var(--border);
-    padding:7px 13px;font-size:var(--fs-md);font-weight:500;color:var(--text);
-    align-items:flex-start;text-wrap:pretty}
-  .call-pill .ce{width:1.15em;height:1.15em;margin-top:.1em;color:var(--muted)}
-  @media(max-width:480px){.call-pill{font-size:var(--fs-sm);padding:6px 11px}}
+  .call-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:8px}
+  #callCard .call-head h2{margin:0}
+  .call-horizon{font-size:var(--fs-sm);color:var(--muted);font-weight:500}
+  .callrow{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1.45fr);gap:14px;align-items:center}
+  .bl-lead{--bl-tone:var(--muted);display:grid;grid-template-columns:auto minmax(0,1fr);gap:13px;
+    align-items:start;align-content:center;padding:4px 0 4px 12px;border-left:3px solid var(--bl-tone)}
+  .bl-lead-ico{width:32px;height:32px;display:grid;place-items:center;border-radius:var(--r-sm);
+    color:var(--bl-tone);background:color-mix(in srgb,var(--bl-tone) 10%,transparent)}
+  .bl-lead-ico .ic{width:18px;height:18px}
+  .bl-kicker,.bl-slabel{font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;
+    letter-spacing:var(--ls-eyebrow);color:var(--muted)}
+  .bl-headline{margin-top:2px;font-size:var(--fs-lg);font-weight:750;line-height:1.2;
+    letter-spacing:-.015em;text-wrap:pretty}
+  .bl-detail,.bl-action{display:inline;font-size:var(--fs-sm);line-height:1.4;text-wrap:pretty}
+  .bl-detail{color:var(--muted)}
+  .bl-action{font-weight:650}
+  .bl-detail+.bl-action::before{content:" · ";color:var(--muted);font-weight:400}
+  .bl-support{list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:0;
+    margin:0;padding:0}
+  .bl-support li{--bl-tone:var(--muted);display:grid;grid-template-columns:auto minmax(0,1fr);gap:9px;
+    align-items:start;min-width:0;padding:4px 10px;border-left:1px solid var(--border)}
+  .bl-sico{color:var(--bl-tone);margin-top:1px}
+  .bl-sico .ic{width:17px;height:17px}
+  .bl-slabel{display:inline}
+  .bl-sheadline{display:inline;margin-left:7px;font-size:var(--fs-sm);font-weight:650;line-height:1.3;text-wrap:pretty}
+  .bl-sdetail{margin-top:3px;font-size:var(--fs-sm);color:var(--muted);line-height:1.4;text-wrap:pretty}
+  .bl-sdetail strong{display:inline;color:var(--text);font-weight:600}
+  .bl-sdetail span+strong::before{content:" · ";color:var(--muted);font-weight:400}
+  .bl-tone-danger{--bl-tone:var(--danger)}
+  .bl-tone-warning{--bl-tone:var(--warn)}
+  .bl-tone-good{--bl-tone:var(--good)}
+  .bl-tone-context{--bl-tone:var(--muted)}
+  @media(max-width:980px){
+    .callrow{grid-template-columns:1fr}
+    .bl-support{grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+  }
+  @media(max-width:760px){
+    .bl-support{grid-template-columns:1fr}
+    .bl-support li{padding:7px 0;border-left:0;border-top:1px solid var(--border)}
+  }
+  @media(max-width:600px){
+    .bl-support .bl-tone-context{display:none}
+    .bl-slabel,.bl-sheadline{display:block}
+    .bl-sheadline{margin:3px 0 0}
+  }
+  @media(max-width:480px){
+    #callCard{padding:11px 12px}
+    .call-head{margin-bottom:7px}
+    .callrow{gap:8px}
+    .bl-lead{padding:3px 0 6px 10px;gap:9px}
+    .bl-lead-ico{width:30px;height:30px}
+    .bl-headline{font-size:var(--fs-lg)}
+    .bl-support{gap:0}
+  }
 
   /* ===== Banner mode: the section sheds its card =====
      The banners ARE the alert section; the wrapper contributes nothing visible. The h2 survives
@@ -1738,6 +1782,10 @@
        so it sits directly under the alerts: safety first, then what today actually means,
        on the first screen whatever the weather is doing. -->
   <section class="card col-12" id="callCard">
+    <div class="call-head">
+      <h2>Bottom Line</h2>
+      <span class="call-horizon" id="callHorizon">Next 24 hours</span>
+    </div>
     <div class="callrow" id="callRow"></div>
   </section>
 
@@ -4119,6 +4167,8 @@ function loadAlerts(){
          the break landed mid-clause across the row's 10px gap. */
       card.classList.add("calm");
       paintAlerts(el,'<div class="calmrow"><span class="cdot"></span><span>No active watches, warnings or advisories <span class="cmut">anywhere in eastern Missouri or southwest Illinois.</span></span></div>');
+      callLocalAlert=null;
+      if(typeof renderTheCall==="function") renderTheCall();
       return;
     }
     card.classList.remove("calm");
@@ -4228,6 +4278,13 @@ function loadAlerts(){
        — but phases now share their host's coverage by construction, so there is nothing left to
        discover here. */
     glist=folded;
+
+    /* The alert banners remain the authoritative safety layer. Bottom Line only needs the
+       strongest product that actually covers this location so it can turn that hazard into a
+       plan instead of repeating the product title. In degraded flat mode every LSX product is
+       intentionally treated as local, matching the fail-open list above. */
+    callLocalAlert=bottomLineLocalAlert(glist);
+    if(typeof renderTheCall==="function") renderTheCall();
 
     /* Which cards are ELSEWHERE. The rule is alertScope(), up beside alertCoversMe() and asserted
        in tools/logic-tests.js; what is left here is the tally the heading and the all-clear row
@@ -4439,6 +4496,8 @@ function loadAlerts(){
     paintAlerts(el,calmHTML+mineHTML+elseHTML);
   }).catch(function(){
     if(!fresh()) return;   // an old location's failed request must not replace the new alert list
+    callLocalAlert=null;
+    if(typeof renderTheCall==="function") renderTheCall();
     card.classList.remove("calm");
     paintAlerts(el,'<div class="empty">Couldn\'t load alerts. <a href="https://www.weather.gov/lsx/" target="_blank" rel="noopener">Check weather.gov/lsx ↗</a></div>');
   });
@@ -6604,7 +6663,7 @@ function resetLocationState(){
   uv={now:null, peak:null, daily:{}};
   smart.hourly=[]; smart.days=[];
   heroNow.temp=null;   // the old city's reading must not mark the new city's range
-  aqiState={val:null, pm:null, err:false}; callAqi=null; callRisk=null;
+  aqiState={val:null, pm:null, err:false}; callAqi=null; callRisk=null; callLocalAlert=null;
   lastMcds=[];   // "inside this area" was ray-cast against the OLD point; loadMcd re-answers
   userZones={county:"",forecast:"",fire:""};
   renderHourly24._hrs=null; loadForecast._paint=null;
@@ -6623,6 +6682,7 @@ function clearLocationUI(){
     var e=document.getElementById(id); if(e) e.innerHTML='<span class="dr-load">\u2026</span>';
   });
   var cc=document.getElementById("callCard"); if(cc) cc.classList.remove("has");
+  var ch=document.getElementById("callHorizon"); if(ch) ch.textContent="Next 24 hours";
   var aq=document.getElementById("aqiCard"); if(aq) aq.classList.remove("show");
   var cs=document.getElementById("cnStation"); if(cs) cs.textContent="\u2026";
   drawMcdPolygons();   // lastMcds was just reset; take the old place's outline off the map with it
@@ -7201,11 +7261,12 @@ function renderUvNow(){
 }
 /* ============ BOTTOM LINE (né The Call — plain-English verdicts from data on hand) ============
    Rules fire off the next ~24 hourly periods (smart.hourly) + the latest AQI + the SPC/WPC
-   outlook levels (callRisk, fed by loadSpc). Each verdict has a priority; the top 4 render.
-   The rain/umbrella call always exists, so the strip is never empty once the hourly feed has
-   loaded. */
+   outlook levels (callRisk, fed by loadSpc). Each verdict is a structured candidate; one leads
+   and up to three distinct topics support it. The rain/umbrella call always exists, so the
+   briefing is never empty once the hourly feed has loaded. */
 var callAqi=null;
 var callRisk=null;   // {spc, ero, fire, wssi}, each [day1,day2] — raw dn/rank values from loadSpc
+var callLocalAlert=null; // strongest active LSX alert covering the selected location, if known
 function hrWord(d){
   if(typeof d==="number") return ((d%12)||12)+(d<12?"am":"pm");
   return d.toLocaleTimeString([], {hour:"numeric"}).replace(/\s/g,"").toLowerCase();
@@ -7213,9 +7274,20 @@ function hrWord(d){
 /* The same clock word, plus the day when it isn't today. The Bottom Line reasons over a 24-hour
    window, so a bare "near 1pm" read at 8pm was describing TOMORROW afternoon in a voice that
    sounds like this afternoon. Twenty-four hours can only reach tomorrow, never further. */
-function whenWord(d){
+function whenWord(d,base){
+  base=base||new Date();
   var w=hrWord(d);
-  return d.getDate()===new Date().getDate()?w:w+" tomorrow";
+  return d.getDate()===base.getDate()?w:w+" tomorrow";
+}
+function windowSpan(a,b,base){
+  base=base||new Date();
+  var span=hrWord(a)+"–"+hrWord(b);
+  return a.getDate()===base.getDate()?span:span+" tomorrow";
+}
+function bottomLineHorizon(d){
+  if(!d||isNaN(d.getTime())) return "Next 24 hours";
+  var clock=hrWord(d).replace(/(am|pm)$/i,function(m){ return " "+m.toUpperCase(); });
+  return "Through "+d.toLocaleDateString([], {weekday:"short"})+" "+clock;
 }
 function dewF(tF,rh){ // Magnus approximation, good to ~±1° in this range
   if(tF==null||rh==null||rh<=0) return null;
@@ -7244,34 +7316,34 @@ function coldVerdict(nowT,mMin,cMin){
   if(mMin!=null&&mMin<=45) return "cold";
   return null;
 }
-/* Which outlook pill a hazard family earns, if any — the decision on its own, so it can be
+/* Which outlook candidate a hazard family earns, if any — the decision on its own, so it can be
    tested without a DOM. `l0`/`l1` are today's and tomorrow's category LEVELS (spcRisk/eroRisk/
    fireRisk .lvl, not raw dn), so "no risk" (-1) and SPC's "General Storms" (0) both fall out
    of the same `<1` gate.
 
-   One pill per hazard family: the card holds four slots, and two flood pills would say less
+   One candidate per hazard family: the card holds four slots, and two flood messages would say less
    than one. The stronger day speaks; a tie reads "today and tomorrow" — dropping the weaker
    day is fine because the outlook matrix below still shows every cell.
 
-   Priorities sit ON PURPOSE around the hourly pills: an SPC Moderate (97) outranks the wet
-   block's own thunderstorm pill (95) because "widespread severe storms" is the why behind it,
+   Priorities sit ON PURPOSE around the hourly candidates: an SPC Moderate (97) outranks the wet
+   block's own thunderstorm call (95) because "widespread severe storms" is the why behind it,
    but a Marginal (59) must not push "Rain likely" (60) off a quiet card. */
 var OUTLOOK_CFG={
-  spc:{ico:"storm", den:5, pri:[0,59,80,90,97,99],
+  spc:{ico:"storm", topic:"storm", label:"Severe outlook", action:"Review your severe-weather plan and keep alerts enabled.", den:5, pri:[0,59,80,90,97,99],
        cat:["","Marginal Risk","Slight Risk","Enhanced Risk","Moderate Risk","High Risk"],
        txt:["","Isolated severe storms possible","Severe storms possible","Severe storms likely",
             "Widespread severe storms expected","Severe weather outbreak expected"]},
-  ero:{ico:"flood", den:4, pri:[0,44,79,91,98],
+  ero:{ico:"flood", topic:"flood", label:"Flood outlook", action:"Avoid flood-prone roads if heavy rain develops.", den:4, pri:[0,44,79,91,98],
        cat:["","Marginal Risk","Slight Risk","Moderate Risk","High Risk"],
        txt:["","Isolated flash flooding possible","Flash flooding possible","Flash flooding likely",
             "Widespread flash flooding expected"]},
-  fire:{ico:"fire", den:3, pri:[0,51,82,94],
+  fire:{ico:"fire", topic:"fire", label:"Fire outlook", action:"Avoid outdoor burning and anything that could spark.", den:3, pri:[0,51,82,94],
        cat:["","","",""],   // "Critical fire weather (Critical 2/3)" would say it twice
        txt:["","Elevated fire weather","Critical fire weather","Extreme fire weather"]},
   /* WPC's Winter Storm Severity Index (wssiQuery ranks its `impact` field 1–4). Major (96)
-     outranks the wet block's own wintry pill (93) for the same reason Moderate severe outranks
+     outranks the wet block's own wintry call (93) for the same reason Moderate severe outranks
      thunder: the hourly rules can say "snow tonight", only the desk can say how bad. */
-  wssi:{ico:"snow", den:4, pri:[0,61,89,96,99],
+  wssi:{ico:"snow", topic:"winter", label:"Winter outlook", action:"Build extra time into travel plans.", den:4, pri:[0,61,89,96,99],
        cat:["","","","",""],   // "Minor winter impacts (Minor 1/4)" would say it twice
        txt:["","Minor winter impacts","Moderate winter impacts","Major winter storm impacts",
             "Extreme winter storm impacts"]}
@@ -7281,191 +7353,376 @@ function outlookVerdict(cfg,l0,l1){
   if(lv<1) return null;
   var day=(l0===lv&&l1===lv)?"today and tomorrow":(l0===lv?"today":"tomorrow");
   var tag=(cfg.cat[lv]?cfg.cat[lv]+" ":"")+lv+"/"+cfg.den;
-  return {pri:cfg.pri[lv], ico:cfg.ico, txt:cfg.txt[lv]+" "+day+" ("+tag+")"};
+  return {priority:cfg.pri[lv], icon:cfg.ico, topic:cfg.topic, label:cfg.label,
+          headline:cfg.txt[lv]+" "+day, detail:tag, action:cfg.action,
+          tone:lv>=3?"danger":"warning", context:false};
 }
-function renderTheCall(){
-  var card=document.getElementById("callCard"), row=document.getElementById("callRow");
-  if(!card||!row) return;
-  var hrs=smart.hourly;
-  if(!hrs||hrs.length<6){ card.classList.remove("has"); return; }
-  var n=Math.min(24,hrs.length), i, pills=[];
-  function push(pri,ico,txt){ pills.push({pri:pri,ico:ico,txt:txt}); }
+function bottomCandidate(pri,ico,topic,label,headline,detail,action,tone,context,opts){
+  opts=opts||{};
+  return {priority:pri,icon:ico,topic:topic,label:label,headline:headline,
+          detail:detail||"",action:action||"",tone:tone||"neutral",context:!!context,
+          supportRank:opts.supportRank,mergeAction:opts.mergeAction||"",
+          windowLabel:opts.windowLabel||"",windowEnd:opts.windowEnd||"",
+          alertFamilies:opts.alertFamilies||[]};
+}
+/* Normalize the NWS hourly shape once. Invalid timestamps are ignored rather than becoming an
+   "Invalid Date" timing claim, and missing optional values stay missing so the decisions below
+   can fail quiet instead of inventing precision. */
+function bottomLineHours(hrs){
   var H=[];
-  for(i=0;i<n;i++){
-    var p=hrs[i], d=new Date(p.startTime);
-    var rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?p.relativeHumidity.value:null;
-    var pop=(p.probabilityOfPrecipitation&&p.probabilityOfPrecipitation.value!=null)?p.probabilityOfPrecipitation.value:0;
-    var mph=parseMph(p.windSpeed), sf=p.shortForecast||"";
-    H.push({t:p.temperature,d:d,hr:d.getHours(),pop:pop,rh:rh,mph:mph,
-            dew:dewF(p.temperature,rh), fl:feelsLikeF(p.temperature,rh,mph),
-            thund:/thunder|t-?storm/i.test(sf), wint:/snow|sleet|wintry|freezing/i.test(sf),
-            fog:/fog/i.test(sf), day:p.isDaytime});
+  (hrs||[]).slice(0,24).forEach(function(p){
+    p=p||{};
+    var d=new Date(p.startTime);
+    if(isNaN(d.getTime())) return;
+    var rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?Number(p.relativeHumidity.value):null;
+    if(rh!=null&&!isFinite(rh)) rh=null;
+    var pop=(p.probabilityOfPrecipitation&&p.probabilityOfPrecipitation.value!=null)
+      ?Number(p.probabilityOfPrecipitation.value):0;
+    if(!isFinite(pop)) pop=0;
+    pop=Math.max(0,Math.min(100,pop));
+    var mph=parseMph(p.windSpeed), sf=p.shortForecast||"", t=p.temperature;
+    H.push({t:t,d:d,hr:d.getHours(),pop:pop,rh:rh,mph:mph,
+            dew:dewF(t,rh),fl:feelsLikeF(t,rh,mph),
+            thund:/thunder|t-?storm/i.test(sf),wint:/snow|sleet|wintry|freezing/i.test(sf),
+            fog:/fog/i.test(sf),day:!!p.isDaytime});
+  });
+  return H;
+}
+/* Every hourly-data decision in one pure function. The renderer supplies normalized hours and
+   slower-feed facts; tests supply controlled scenarios. `now` is explicit so "today/tomorrow",
+   expired UV peaks and the after-5pm behavior do not depend on the test runner's clock. */
+function bottomLineHourlyCandidates(H,opts){
+  H=H||[]; opts=opts||{};
+  var now=opts.now||new Date(), n=H.length, i, candidates=[];
+  function push(pri,ico,topic,label,headline,detail,action,tone,context,extra){
+    candidates.push(bottomCandidate(pri,ico,topic,label,headline,detail,action,tone,context,extra));
   }
-  // — rain / storm window (the #1 question; always produces a pill) —
+  function when(d){ return whenWord(d,now); }
+
+  // Rain/storm window. One wet block owns its weather type; a later storm cannot relabel it.
   var wet0=-1, wetEnd=-1, hasThunder=false, hasWintry=false, maxPop=0;
   for(i=0;i<n;i++){
     if(H[i].pop>maxPop) maxPop=H[i].pop;
-    if(wet0<0 && H[i].pop>=40) wet0=i;
-    if(wet0>=0 && wetEnd<0 && i>wet0 && H[i].pop<30) wetEnd=i;
+    if(wet0<0&&H[i].pop>=40) wet0=i;
+    if(wet0>=0&&wetEnd<0&&i>wet0&&H[i].pop<30) wetEnd=i;
   }
-  /* Thunder and wintry are read from the wet BLOCK, not from anywhere in the 24-hour window.
-     Scanning the whole window let a thunderstorm flagged for 9pm relabel an unrelated morning
-     rain block as "Thunderstorms likely ~9am–noon" — a forecast nobody issued, in the one pill
-     that outranks everything else on the card. */
-  for(i=(wet0<0?n:wet0); i<(wetEnd>wet0?wetEnd:n); i++){
-    if(H[i].pop>=30 && H[i].thund) hasThunder=true;
-    if(H[i].pop>=30 && H[i].wint) hasWintry=true;
+  for(i=(wet0<0?n:wet0);i<(wetEnd>wet0?wetEnd:n);i++){
+    if(H[i].pop>=30&&H[i].thund) hasThunder=true;
+    if(H[i].pop>=30&&H[i].wint) hasWintry=true;
   }
-  if(wet0<0){
-    /* "through 6am tomorrow", never "into tomorrow": the all-clear can only vouch for the hours
-       it scanned, and the vague phrase read as a verdict on tomorrow itself — printed, once, one
-       hour before an 87%-chance morning storm just past the window's edge. */
-    push(40,"sun","No rain expected through "+whenWord(H[n-1].d)+(maxPop>=25?" (peak chance "+maxPop+"%)":""));
-  }else{
-    /* Open-ended blocks lead with "from", not a trailing " on": "~9pm on" scanned fine, but the
-       24-hour window routinely starts a block tomorrow, and "~7am tomorrow on" did not. */
-    var span=(wetEnd>wet0)
-      ?(wet0===0?"now":"~"+whenWord(H[wet0].d))+"–"+whenWord(H[wetEnd].d)
-      :(wet0===0?"now":"from ~"+whenWord(H[wet0].d));
-    // a second round after the first block clears?
-    var wet2=-1;
-    if(wetEnd>0){ for(i=wetEnd;i<n;i++){ if(H[i].pop>=40){ wet2=i; break; } } }
-    var more=(wet2>0)?" · another round ~"+whenWord(H[wet2].d):"";
-    if(hasThunder) push(95,"storm","Thunderstorms likely "+span+more);
-    else if(hasWintry) push(93,"snow","Snow or wintry mix "+span+more+" — expect slick roads");
-    else push(60,"rain","Rain likely "+span+more);
+  if(n){
+    if(wet0<0){
+      push(40,"sun","precip","Rain","No rain expected",
+        "Dry through "+when(H[n-1].d)+(maxPop>=25?"; peak chance "+maxPop+"%":""),
+        "No umbrella needed in the forecast window.","neutral");
+    }else{
+      var span=(wetEnd>wet0)
+        ?(wet0===0?"now":"~"+when(H[wet0].d))+"–"+when(H[wetEnd].d)
+        :(wet0===0?"now":"from ~"+when(H[wet0].d));
+      var wet2=-1;
+      if(wetEnd>0){ for(i=wetEnd;i<n;i++){ if(H[i].pop>=40){ wet2=i; break; } } }
+      var more=(wet2>0)?" · another round ~"+when(H[wet2].d):"";
+      if(hasThunder&&hasWintry) push(96,"storm","precip","Storm & travel weather",
+        "Thunderstorms with wintry precipitation",span+more,
+        "Be ready to move inside and watch for slick roads.","danger",false,
+        {supportRank:0,alertFamilies:["convective","winter"]});
+      else if(hasThunder) push(95,"storm","precip","Storm timing","Thunderstorms likely",span+more,
+        "Keep outdoor plans flexible and be ready to move inside.","danger",false,{supportRank:0});
+      else if(hasWintry) push(93,"snow","precip","Travel weather","Snow or wintry mix",span+more,
+        "Allow extra travel time and watch for slick roads.","danger",false,{supportRank:0});
+      else push(60,"rain","precip","Rain timing","Rain likely",span+more,
+        "Plan around the wet window.","warning",false,{supportRank:0});
+    }
   }
-  // — heat (dangerous ≈ local heat-advisory territory; "hot" tier below that) —
+
   var maxFl=-999, flAt=null;
   for(i=0;i<n;i++){ if(H[i].fl!=null&&H[i].fl>maxFl){ maxFl=H[i].fl; flAt=H[i].d; } }
-  if(maxFl>=105) push(100,"heat","Dangerous heat — feels like "+maxFl+"° near "+whenWord(flAt)+". Limit outdoor exertion.");
-  else if(maxFl>=99) push(72,"heat","Feels like "+maxFl+"° near "+whenWord(flAt)+" — take breaks outdoors");
-  /* — the cold end of the window: ONE pill for one trough —
-     Three ways of saying "it gets cold", in descending order of what the reader has to do about
-     it, and mutually exclusive because they all describe the same upcoming low. They used to be
-     two independent blocks, so a 70° evening falling to 40° by dawn printed "Falling 30° to 40°
-     by 7am — dress in layers" AND "40° near 7am — dress for cold": one fact, twice, eating half
-     the card. Freezing wins outright — ice is a different problem from a chilly evening, and
-     "layers" is the wrong advice for 28°. */
-  var mMin=999, mAt=null;                    // the morning-drive low, 6–9am
-  for(i=0;i<n;i++){ if(H[i].hr>=6&&H[i].hr<=9&&H[i].t<mMin){ mMin=H[i].t; mAt=H[i].d; } }
-  var cMin=999, cAt=null;                    // the lowest hour ahead, whenever it lands
+  if(maxFl>=105) push(100,"heat","heat","Heat","Dangerous heat near "+when(flAt),
+    "Heat index around "+maxFl+"°.","Limit outdoor exertion near peak heat.","danger");
+  else if(maxFl>=99) push(72,"heat","heat","Heat","High heat near "+when(flAt),
+    "Feels like "+maxFl+"°.","Take frequent breaks during outdoor work.","warning");
+
+  var mMin=999,mAt=null;
+  for(i=0;i<n;i++){ if(H[i].hr>=6&&H[i].hr<=9&&H[i].t!=null&&H[i].t<mMin){ mMin=H[i].t; mAt=H[i].d; } }
+  var cMin=999,cAt=null;
   for(i=3;i<n;i++){ if(H[i].t!=null&&H[i].t<cMin){ cMin=H[i].t; cAt=H[i].d; } }
-  var cold=coldVerdict(H[0].t, mAt?mMin:null, cAt?cMin:null);
-  if(cold==="freezing") push(85,"cold","Freezing early — "+mMin+"° near "+whenWord(mAt));
-  else if(cold==="falling") push(66,"trend-down","Falling "+(H[0].t-cMin)+"° to "+cMin+"° by "+whenWord(cAt)+" — dress in layers");
-  else if(cold==="cold") push(70,"cold",mMin+"° near "+whenWord(mAt)+" — dress for cold");
-  // — fog around the morning drive —
-  for(i=0;i<n;i++){ if(H[i].fog&&H[i].hr>=4&&H[i].hr<=9){ push(68,"fog","Fog early — reduced visibility for the morning drive"); break; } }
-  // — wind (sustained; NWS strings undersell gusts, so thresholds are conservative) —
-  var wMax=0, wAt=null;
+  var cold=coldVerdict(H[0]&&H[0].t,mAt?mMin:null,cAt?cMin:null);
+  if(cold==="freezing") push(85,"cold","cold","Cold","Freezing early",
+    mMin+"° near "+when(mAt)+".","Plan for freezing temperatures early.","danger");
+  else if(cold==="falling") push(66,"trend-down","cold","Temperature trend","Sharp temperature drop",
+    "Falling "+(H[0].t-cMin)+"° to "+cMin+"° by "+when(cAt)+".","Bring a layer if you'll be out late.","warning");
+  else if(cold==="cold") push(70,"cold","cold","Cold","Cold morning",
+    mMin+"° near "+when(mAt)+".","Dress for the cold.","warning");
+
+  for(i=0;i<n;i++){ if(H[i].fog&&H[i].hr>=4&&H[i].hr<=9){
+    push(68,"fog","fog","Visibility","Fog early","Reduced visibility during the morning drive.",
+      "Slow down and leave extra following distance.","warning"); break;
+  } }
+
+  var wMax=0,wAt=null;
   for(i=0;i<n;i++){ if(H[i].mph!=null&&H[i].mph>wMax){ wMax=H[i].mph; wAt=H[i].d; } }
-  if(wMax>=35) push(78,"wind","Very windy — "+wMax+" mph near "+whenWord(wAt)+". Secure loose objects.");
-  else if(wMax>=25) push(65,"wind","Windy — sustained to "+wMax+" mph near "+whenWord(wAt));
-  // — UV (cross-feed from the Open-Meteo series; the burn clock is the actionable part) —
-  if(uv.peak&&uv.peak.t>Date.now()){
-    var uvR=Math.round(uv.peak.v), uvAt=whenWord(new Date(uv.peak.t));
-    if(uvR>=11) push(76,"uv","Extreme UV "+uvR+" near "+uvAt+" — unprotected burn in ~"+Math.max(5,Math.round(200/uvR))+" min");
-    else if(uvR>=8) push(62,"uv","UV "+uvR+" near "+uvAt+" — sun protection advised");
+  if(wMax>=35) push(78,"wind","wind","Wind","Very windy near "+when(wAt),
+    "Sustained wind around "+wMax+" mph.","Secure loose outdoor objects.","danger");
+  else if(wMax>=25) push(65,"wind","wind","Wind","Windy near "+when(wAt),
+    "Sustained wind around "+wMax+" mph.","Use extra care with outdoor plans.","warning");
+
+  var peak=opts.uvPeak;
+  if(peak&&peak.t>now.getTime()){
+    var uvR=Math.round(peak.v),uvAt=when(new Date(peak.t));
+    if(uvR>=11) push(76,"uv","uv","Sun exposure","Extreme UV near "+uvAt,
+      "UV "+uvR+"; unprotected skin may burn in about "+Math.max(5,Math.round(200/uvR))+" minutes.",
+      "Use shade, protective clothing, and sunscreen.","danger");
+    else if(uvR>=8) push(62,"uv","uv","Sun exposure","Very high UV near "+uvAt,
+      "UV index around "+uvR+".","Use sun protection for outdoor plans.","warning");
   }
-  // — air quality (fed by loadAqi) —
-  if(callAqi!=null&&callAqi>100) push(75,"air","Poor air quality (AQI "+callAqi+") — sensitive groups should limit exertion");
-  /* — the outlook desks: SPC severe, WPC flash flood, SPC fire (fed by loadSpc) —
-     The hourly rules above can only see ~24 hours, and only what a PoP number admits. The
-     outlooks say WHY a day is dangerous — hail, tornadoes, flash flooding — and say it for
-     tomorrow AFTERNOON before a single hourly period can reach it: a Friday outbreak is
-     invisible to a Thursday-lunch window that ends at 1pm Friday. */
-  if(callRisk){
-    [outlookVerdict(OUTLOOK_CFG.spc, spcRisk(callRisk.spc[0]).lvl, spcRisk(callRisk.spc[1]).lvl),
-     outlookVerdict(OUTLOOK_CFG.ero, eroRisk(callRisk.ero[0]).lvl, eroRisk(callRisk.ero[1]).lvl),
-     outlookVerdict(OUTLOOK_CFG.fire, fireRisk(callRisk.fire[0]).lvl, fireRisk(callRisk.fire[1]).lvl),
-     outlookVerdict(OUTLOOK_CFG.wssi, callRisk.wssi[0], callRisk.wssi[1])   // wssiQuery ranks are already levels
-    ].forEach(function(v){ if(v) push(v.pri,v.ico,v.txt); });
-  }
-  /* — windows-open vs. AC night (dew point is the honest comfort test) —
-     The contiguous run from the first night hour, not every night-shaped hour in the window: as a
-     filter, at 3am this matched THIS morning's small hours and tomorrow evening's alike, so "low
-     near X" was the minimum across two different nights with a day in between. */
-  var n0=-1; for(i=0;i<n;i++){ if(H[i].hr>=21||H[i].hr<=6){ n0=i; break; } }
+  if(opts.aqi!=null&&opts.aqi>100) push(75,"air","air","Air quality","Poor air quality",
+    "AQI "+opts.aqi+".","Sensitive groups should limit prolonged outdoor exertion.","warning");
+
+  var n0=-1;
+  for(i=0;i<n;i++){ if(H[i].hr>=21||H[i].hr<=6){ n0=i; break; } }
   var night=[];
-  for(i=n0;i>=0&&i<n&&(H[i].hr>=21||H[i].hr<=6);i++) night.push(H[i]);
+  for(i=n0;i>=0&&i<n&&(H[i].hr>=21||H[i].hr<=6);i++){
+    if(night.length&&H[i].d.getTime()-night[night.length-1].d.getTime()!==3600000) break;
+    night.push(H[i]);
+  }
   if(night.length>=4){
-    var ok=true, muggy=false, lo=999;
+    var ok=true,muggy=false,lo=999;
     night.forEach(function(h){
       if(h.t<lo) lo=h.t;
-      if(h.t<50||h.t>72||h.pop>=25||(h.mph!=null&&h.mph>14)||(h.dew!=null&&h.dew>64)) ok=false;
+      if(h.t<50||h.t>72||h.pop>=25||(h.mph!=null&&h.mph>14)||h.dew==null||h.dew>64) ok=false;
       if(h.dew!=null&&h.dew>=67&&h.t>=70) muggy=true;
     });
-    if(ok&&!muggy) push(50,"moon","Comfortable overnight — "+lo+"° and dry");
-    else if(muggy) push(30,"moon","Humid overnight — low near "+lo+"°");
+    if(ok&&!muggy) push(50,"moon","overnight","Tonight","Comfortable overnight",
+      "Low near "+lo+"° with dry air.","Good window-opening weather.","good");
+    else if(muggy) push(30,"moon","overnight","Tonight","Warm and humid overnight",
+      "Low near "+lo+"°.","Open windows may offer little relief.","neutral");
   }
-  /* — a legitimately good day (only worth saying before evening) —
-     Today's daylight only: the window runs into tomorrow morning, and a verdict on "the day"
-     must not average two of them. And it can only vouch for hours it can SEE — by afternoon
-     those are the ones still ahead, so it stops calling them "all day". */
-  var today=new Date().getDate();
+
+  var today=now.getDate();
   var dayH=H.filter(function(h){ return h.day&&h.d.getDate()===today; });
-  if(dayH.length>=4 && new Date().getHours()<17){
-    var dhi=-999, nice=true;
+  if(dayH.length>=4&&now.getHours()<17){
+    var dhi=-999,nice=true;
     dayH.forEach(function(h){
-      if(h.t>dhi) dhi=h.t;
-      if(h.pop>=20||h.t<58||h.t>88||(h.fl!=null&&h.fl>=95)||(h.mph!=null&&h.mph>15)||(h.dew!=null&&h.dew>66)) nice=false;
+      if(h.t!=null&&h.t>dhi) dhi=h.t;
+      if(h.t==null||h.pop>=20||h.t<58||h.t>88||(h.fl!=null&&h.fl>=95)||(h.mph!=null&&h.mph>15)||(h.dew!=null&&h.dew>66)) nice=false;
     });
-    if(nice) push(55,"check",dhi+"° and dry "+(new Date().getHours()>=12?"the rest of the day":"all day")+" — excellent conditions");
+    if(nice) push(55,"check","outdoors","Outdoor plans","Excellent outdoor conditions",
+      dhi+"° and dry "+(now.getHours()>=12?"the rest of the day":"all day")+".",
+      "Good day to keep outdoor plans.","good");
   }
-  // — the synthesis: WHEN to be outside, not just what is wrong with today. Hours are scored on
-  //   feels-like comfort, rain/storm risk and wind; the best contiguous 2-hour daylight window
-  //   wins. Only speaks when the day has adversity worth dodging (heat, a wet window, real wind) —
-  //   on an all-day-nice day the "excellent conditions" pill already covers it — and only while the
-  //   advice is still usable. —
-  if(new Date().getHours()<17&&(maxFl>=99||wet0>=0||wMax>=25)){
-    var cands=[];
+
+  if(maxFl>=99||wet0>=0||wMax>=25){
+    var windowHours=[];
     for(i=0;i<n;i++){
       var hb=H[i];
-      if(hb.hr<7||hb.hr>20) continue;
-      if(hb.d.getDate()!==new Date().getDate()) continue;   // today's advice only
-      var fl2=(hb.fl!=null)?hb.fl:hb.t; if(fl2==null) continue;
+      if(!hb.day||hb.hr<7||hb.hr>20) continue;
+      var fl2=(hb.fl!=null)?hb.fl:hb.t;
+      if(fl2==null) continue;
       var sc=Math.abs(fl2-70)*1.3;
       sc+=hb.pop>=50?60:(hb.pop>=30?30:(hb.pop>=20?12:0));
       if(hb.thund&&hb.pop>=30) sc+=70;
       if(hb.mph!=null) sc+=hb.mph>=20?14:(hb.mph>=15?6:0);
-      cands.push({idx:i,h:hb,sc:sc});
+      windowHours.push({idx:i,h:hb,sc:sc});
     }
     var bw=null;
-    for(i=0;i+1<cands.length;i++){
-      if(cands[i+1].idx!==cands[i].idx+1) continue;
-      var s2=(cands[i].sc+cands[i+1].sc)/2;
-      if(!bw||s2<bw.sc) bw={sc:s2,a:cands[i].h,b:cands[i+1].h};
+    for(i=0;i+1<windowHours.length;i++){
+      if(windowHours[i+1].idx!==windowHours[i].idx+1) continue;
+      if(windowHours[i+1].h.d.getTime()-windowHours[i].h.d.getTime()!==3600000) continue;
+      var s2=(windowHours[i].sc+windowHours[i+1].sc)/2;
+      if(!bw||s2<bw.sc) bw={sc:s2,a:windowHours[i].h,b:windowHours[i+1].h};
     }
     if(bw&&bw.sc<=30){
       var bFl=Math.round(((bw.a.fl!=null?bw.a.fl:bw.a.t)+(bw.b.fl!=null?bw.b.fl:bw.b.t))/2);
       var bWet=Math.max(bw.a.pop,bw.b.pop)>=20?"":", dry";
-      push(58,"walk","Best window outside: "+hrWord(bw.a.d)+"–"+hrWord(new Date(bw.b.d.getTime()+3600000))
-        +" — feels like "+bFl+"°"+bWet);
+      var end=new Date(bw.b.d.getTime()+3600000),bSpan=windowSpan(bw.a.d,end,now);
+      push(58,"walk","outdoors","Outdoor window","Best window: "+bSpan,
+        "Feels like "+bFl+"°"+bWet+".","Use this window for strenuous or weather-sensitive plans.","good",false,
+        {mergeAction:"Use "+bSpan+" for strenuous or weather-sensitive plans.",
+         windowLabel:bSpan,windowEnd:when(end)});
     }
   }
-  // — climate context: only genuinely notable framings earn a pill (and only from a record
+  return candidates;
+}
+function bottomLineLocalAlert(groups){
+  var local=null,bestKey=null,ranks={emergency:0,warning:1,watch:2,advisory:3,statement:4};
+  (groups||[]).forEach(function(g){
+    if(!g||g.scope==="away") return;
+    var level=g.lv&&g.lv.k||"statement",rank=ranks[level]==null?5:ranks[level];
+    var sev=ALERT_SEV_RANK[g.sev],key=[rank,sev==null?5:sev,String(g.ev||"Alert")].join("|");
+    if(bestKey!=null&&key>=bestKey) return;
+    bestKey=key;
+    local={event:g.ev||"Alert",family:eventFamily(g.ev),level:level,ends:g.latest||0};
+  });
+  return local;
+}
+/* The Bottom Line is selected independently of the DOM so its hierarchy can be tested. Candidate
+   order is deliberately irrelevant: feeds resolve in a different order on every load, and a
+   slower climate or outlook response must not reshuffle equal-priority facts arbitrarily. */
+function bottomLineCmp(a,b){
+  if(a.priority!==b.priority) return b.priority-a.priority;
+  var at=a.topic||"", bt=b.topic||"";
+  if(at!==bt) return at<bt?-1:1;
+  var ah=a.headline||"", bh=b.headline||"";
+  return ah<bh?-1:(ah>bh?1:0);
+}
+function bottomLineAlertMatch(alert,candidate){
+  if(!alert||!candidate) return false;
+  var ev=(alert.event||"").toLowerCase();
+  /* These products fall into a presentation family by default, but semantically they are
+     exclusive: a Dense Smoke Advisory must not rewrite a fire-weather outlook, and a Dense Fog
+     Advisory must not rewrite a severe-storm candidate merely because both use fallback chrome. */
+  if(/air quality|smoke/.test(ev)) return candidate.topic==="air";
+  if(/fog/.test(ev)) return candidate.topic==="fog";
+  var fam=alert.family;
+  if(candidate.alertFamilies&&candidate.alertFamilies.indexOf(fam)>=0) return true;
+  if(fam==="convective") return candidate.topic==="storm"||(candidate.topic==="precip"&&candidate.icon==="storm");
+  if(fam==="winter") return candidate.topic==="winter"||candidate.topic==="cold"||(candidate.topic==="precip"&&candidate.icon==="snow");
+  return fam===candidate.topic;
+}
+function bottomLineAlertHeadline(candidate,outdoor){
+  if(outdoor&&outdoor.windowEnd){
+    if(candidate.topic==="heat") return "Finish strenuous outdoor work by "+outdoor.windowEnd;
+    if(candidate.topic==="storm"||candidate.topic==="precip")
+      return "Finish weather-sensitive outdoor tasks by "+outdoor.windowEnd;
+    if(candidate.topic==="wind") return "Handle outdoor setup by "+outdoor.windowEnd;
+  }
+  if(candidate.topic==="precip"&&candidate.alertFamilies&&
+     candidate.alertFamilies.indexOf("convective")>=0&&candidate.alertFamilies.indexOf("winter")>=0)
+    return "Prepare for storms and slick travel";
+  if(candidate.topic==="precip"&&candidate.icon==="snow") return "Allow extra time for winter travel";
+  var plans={heat:"Avoid strenuous outdoor work near peak heat",
+             storm:"Be ready to move plans indoors",
+             precip:"Be ready to move plans indoors",
+             flood:"Avoid flood-prone travel during heavy rain",
+             winter:"Allow extra time for winter travel",
+             cold:"Plan around freezing or dangerous cold",
+             wind:"Secure loose outdoor objects",
+             fire:"Avoid outdoor burning",
+             air:"Limit prolonged outdoor exertion",
+             fog:"Slow down for reduced visibility"};
+  return plans[candidate.topic]||candidate.headline;
+}
+function bottomLineWindowAction(candidate,outdoor){
+  if(!outdoor) return "";
+  if(outdoor.windowEnd){
+    if(candidate.topic==="heat") return "If outdoor work is necessary, finish by "+outdoor.windowEnd+".";
+    if(candidate.topic==="storm"||candidate.topic==="precip")
+      return "Finish weather-sensitive outdoor tasks by "+outdoor.windowEnd+".";
+    if(candidate.topic==="wind") return "Handle weather-sensitive outdoor tasks by "+outdoor.windowEnd+".";
+  }
+  return outdoor.mergeAction||"";
+}
+function buildBottomLine(candidates,localAlert){
+  var sorted=(candidates||[]).filter(function(c){
+    return c&&typeof c.priority==="number"&&c.topic&&c.headline;
+  }).slice().sort(bottomLineCmp);
+  var seen={}, unique=[];
+  sorted.forEach(function(c){
+    if(seen[c.topic]) return;
+    seen[c.topic]=true; unique.push(c);
+  });
+  var actionable=unique.filter(function(c){ return !c.context; });
+  var sourceLead=actionable.length?actionable[0]:null;
+  /* A local warning or emergency is more consequential than the generic priority table. When
+     hourly/outlook evidence contains the same hazard, translate THAT candidate as the lead even
+     if an unrelated condition has a numerically higher score. Watches and advisories stay in the
+     normal ranking; the alert banner above already gives them authoritative placement. */
+  if(localAlert&&(localAlert.level==="emergency"||localAlert.level==="warning")){
+    var alertLead=actionable.filter(function(c){ return bottomLineAlertMatch(localAlert,c); })[0];
+    if(alertLead) sourceLead=alertLead;
+    else if(localAlert.level==="emergency") return {lead:null,supports:[]};
+  }
+  var lead=sourceLead?Object.assign({},sourceLead):null;
+  if(!lead) return {lead:null,supports:[]};
+  var outdoor=unique.filter(function(c){ return c.topic==="outdoors"&&c.mergeAction; })[0]||null;
+  var mergeOutdoor=!!(outdoor&&{heat:1,precip:1,storm:1,wind:1}[lead.topic]);
+  var alertAware=bottomLineAlertMatch(localAlert,lead);
+  if(alertAware){
+    lead.headline=bottomLineAlertHeadline(lead,mergeOutdoor?outdoor:null);
+    lead.detail="Alert active locally"+(lead.detail?" · "+lead.detail:"");
+    lead.alertAware=true;
+  }else if(mergeOutdoor){
+    lead.action=bottomLineWindowAction(lead,outdoor)+(lead.action?" "+lead.action:"");
+  }
+  var rest=unique.filter(function(c){
+    return c.topic!==lead.topic&&!c.context&&(!mergeOutdoor||c.topic!=="outdoors");
+  });
+  rest.sort(function(a,b){
+    var ar=typeof a.supportRank==="number"?a.supportRank:1;
+    var br=typeof b.supportRank==="number"?b.supportRank:1;
+    return ar!==br?ar-br:bottomLineCmp(a,b);
+  });
+  var supports=rest.slice(0,3);
+  /* Context is garnish for a genuinely quiet briefing, never a fourth fact competing with a
+     warning. A neutral dry lead or a good outdoor lead can use it; hazard leads cannot. */
+  if(supports.length<3&&(lead.tone==="neutral"||lead.tone==="good")){
+    unique.filter(function(c){ return c.context; }).sort(bottomLineCmp).some(function(c){
+      supports.push(c); return supports.length>=3;
+    });
+  }
+  return {lead:lead,supports:supports};
+}
+function renderTheCall(){
+  var card=document.getElementById("callCard"), row=document.getElementById("callRow");
+  if(!card||!row) return;
+  var now=new Date(), H=bottomLineHours(smart.hourly);
+  if(H.length<6){ card.classList.remove("has"); return; }
+  var candidates=bottomLineHourlyCandidates(H,{now:now,uvPeak:uv.peak,aqi:callAqi});
+  function push(pri,ico,topic,label,headline,detail,action,tone,context,opts){
+    candidates.push(bottomCandidate(pri,ico,topic,label,headline,detail,action,tone,context,opts));
+  }
+  var horizon=document.getElementById("callHorizon");
+  if(horizon) horizon.textContent=bottomLineHorizon(H[H.length-1].d);
+
+  /* The outlook desks see hazards beyond the hourly edge. Their pure verdicts join the hourly
+     candidates before one deterministic selector chooses the lead and supports. */
+  if(callRisk){
+    [outlookVerdict(OUTLOOK_CFG.spc, spcRisk(callRisk.spc[0]).lvl, spcRisk(callRisk.spc[1]).lvl),
+     outlookVerdict(OUTLOOK_CFG.ero, eroRisk(callRisk.ero[0]).lvl, eroRisk(callRisk.ero[1]).lvl),
+     outlookVerdict(OUTLOOK_CFG.fire, fireRisk(callRisk.fire[0]).lvl, fireRisk(callRisk.fire[1]).lvl),
+     outlookVerdict(OUTLOOK_CFG.wssi, callRisk.wssi[0], callRisk.wssi[1])
+    ].forEach(function(v){ if(v) candidates.push(v); });
+  }
+  // — climate context: only genuinely notable framings earn a candidate (and only from a record
   //    deep enough to mean anything) —
   if(ctx.ready&&ctx.years>=CTX_MIN_YEARS&&climate.fcHi!=null&&ctx.recHi){
     var gap=ctx.recHi.v-climate.fcHi;
-    if(gap<=0) push(92,"record","Could reach the "+fmtMD(new Date())+" record of "+Math.round(ctx.recHi.v)+"° ("+ctx.recHi.y+")");
-    else if(gap<=4) push(88,"record","Within "+Math.round(gap)+"° of the "+fmtMD(new Date())+" record ("+Math.round(ctx.recHi.v)+"°, "+ctx.recHi.y+")");
+    if(gap<=0) push(92,"record","climate","Context","Record warmth possible",
+      "Could reach the "+fmtMD(new Date())+" record of "+Math.round(ctx.recHi.v)+"° from "+ctx.recHi.y+".","","context",true);
+    else if(gap<=4) push(88,"record","climate","Context","Near-record warmth",
+      "Within "+Math.round(gap)+"° of the "+fmtMD(new Date())+" record: "+Math.round(ctx.recHi.v)+"° in "+ctx.recHi.y+".","","context",true);
     else{
       var rk=ctxRankBelow(ctx.doyHi,climate.fcHi);
-      if(rk&&rk.pct>=90) push(74,"stats","Warmer than "+rk.below+" of "+rk.total+" "+fmtMD(new Date())+"s on record");
-      else if(rk&&rk.pct<=10) push(74,"stats","Cooler than "+(rk.total-rk.below)+" of "+rk.total+" "+fmtMD(new Date())+"s on record");
+      if(rk&&rk.pct>=90) push(74,"stats","climate","Context","Unusually warm",
+        "Warmer than "+rk.below+" of "+rk.total+" "+fmtMD(new Date())+"s on record.","","context",true);
+      else if(rk&&rk.pct<=10) push(74,"stats","climate","Context","Unusually cool",
+        "Cooler than "+(rk.total-rk.below)+" of "+rk.total+" "+fmtMD(new Date())+"s on record.","","context",true);
     }
   }
-  if(ctx.ready&&ctx.dry&&ctx.dry.days>=10) push(45,"drought","Day "+ctx.dry.days+" with no measurable rain");
+  if(ctx.ready&&ctx.dry&&ctx.dry.days>=10) push(45,"drought","climate","Context","Long dry stretch",
+    "Day "+ctx.dry.days+" with no measurable rain.","","context",true);
 
-  pills.sort(function(a,b){ return b.pri-a.pri; });
-  pills=pills.slice(0,4);
-  /* An <h2>, not a styled span. The Bottom Line was the one card on the page with no heading at
-     all — second from the top, and invisible to anything navigating by structure. It shares the
-     eyebrow styling with every other card title, so this changes the outline and nothing else. */
-  row.innerHTML='<h2 class="call-lbl">Bottom Line</h2>'+pills.map(function(pl){
-    return '<span class="call-pill">'+ic(pl.ico,"ce")+'<span>'+esc(pl.txt)+'</span></span>';
-  }).join("");
+  var model=buildBottomLine(candidates,callLocalAlert);
+  if(!model.lead){ card.classList.remove("has"); row.innerHTML=""; return; }
+  function tone(c){ return /^(danger|warning|good|context)$/.test(c.tone)?c.tone:"neutral"; }
+  function detail(c){
+    var parts=[];
+    if(c.detail) parts.push('<span>'+esc(c.detail)+'</span>');
+    if(c.action) parts.push('<strong>'+esc(c.action)+'</strong>');
+    return parts.join(' ');
+  }
+  var lead=model.lead;
+  row.innerHTML='<div class="bl-lead bl-tone-'+tone(lead)+'">'
+    +'<div class="bl-lead-ico" aria-hidden="true">'+ic(lead.icon)+'</div><div>'
+    +'<div class="bl-kicker">'+esc(lead.label)+'</div>'
+    +'<div class="bl-headline">'+esc(lead.headline)+'</div>'
+    +(lead.detail?'<div class="bl-detail">'+esc(lead.detail)+'</div>':'')
+    +(lead.action?'<div class="bl-action">'+esc(lead.action)+'</div>':'')+'</div></div>'
+    +(model.supports.length?'<ul class="bl-support" aria-label="Supporting considerations">'
+      +model.supports.map(function(c){ return '<li class="bl-tone-'+tone(c)+'">'
+        +'<span class="bl-sico" aria-hidden="true">'+ic(c.icon)+'</span><div>'
+        +'<div class="bl-slabel">'+esc(c.label)+'</div><div class="bl-sheadline">'+esc(c.headline)+'</div>'
+        +(detail(c)?'<div class="bl-sdetail">'+detail(c)+'</div>':'')+'</div></li>'; }).join('')+'</ul>':'');
   card.classList.add("has");
 }
 
@@ -7517,8 +7774,10 @@ function renderTheCall(){
 // element even though today's renderer no longer creates it.
 // v12: the loose summary sentences became a tone icon, labeled fact grid and separated source
 // footer. A v11 snapshot would restore the old floating text under the new summary styles.
-var SNAP_KEY="lsxSnap_v12", snapRestored=false, NET_OK=false;
-try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
+// v13: #callRow changed from an equal-weight pill cloud to a lead briefing plus semantic support
+// list. A v12 snapshot would restore the old pills under rules that deliberately no longer exist.
+var SNAP_KEY="lsxSnap_v13", snapRestored=false, NET_OK=false;
+try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
 var SNAP_PARTS=[
   {id:"afd",      ttl:6*3600000},
   {id:"alerts",   ttl:15*60000},     // safety-critical: short leash
