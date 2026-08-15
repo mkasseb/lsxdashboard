@@ -54,7 +54,7 @@ const SUBJECT = new Function(`
   ${lift(/^function windChillF\(t,mph\)\{[\s\S]*?^\}/m, 'windChillF()')}
   ${lift(/^function feelsLikeF\(t,rh,mph\)\{[\s\S]*?^\}/m, 'feelsLikeF()')}
   ${lift(/^function compactDayName\(name\)\{[\s\S]*?^\}/m, 'compactDayName()')}
-  ${lift(/^function compactCondition\(text\)\{[\s\S]*?^\}/m, 'compactCondition()')}
+  ${lift(/^function compactCondition\(text,pop\)\{[\s\S]*?^\}/m, 'compactCondition()')}
   ${lift(/^function summaryPop\(pop\)\{[\s\S]*?^\}/m, 'summaryPop()')}
   ${lift(/^function forecastImpact\(feels,air\)\{[\s\S]*?^\}/m, 'forecastImpact()')}
   ${lift(/^function summaryPopText\(pop\)\{[\s\S]*?^\}/m, 'summaryPopText()')}
@@ -209,6 +209,19 @@ check('the previous v12 snapshot is explicitly discarded',
   check('condition language keeps the useful distinction',
     [cond('Mostly Sunny'), cond('Partly Cloudy'), cond('Chance Rain Showers'), cond('Severe Thunderstorms')],
     ['Mostly sunny', 'Partly cloudy', 'Showers', 'Storms']);
+  check('storm coverage language follows the rounded precipitation band',
+    [cond('Chance Thunderstorms', 10), cond('Chance Thunderstorms', 17),
+     cond('Chance Thunderstorms', 20), cond('Chance Thunderstorms', 29),
+     cond('Chance Thunderstorms', 30), cond('Chance Thunderstorms', 50),
+     cond('Chance Thunderstorms', 60), cond('Chance Thunderstorms', 100)],
+    ['Isolated storms', 'Isolated storms', 'Isolated storms', 'Scattered storms',
+     'Scattered storms', 'Scattered storms', 'Storms', 'Storms']);
+  check('storms without a usable probability stay generic',
+    [cond('Thunderstorms'), cond('Thunderstorms', null), cond('Thunderstorms', 'bad'), cond('Thunderstorms', -4)],
+    ['Storms', 'Storms', 'Storms', 'Storms']);
+  check('storm probability does not override tornado or non-storm labels',
+    [cond('Tornado and Thunderstorms', 30), cond('Chance Rain Showers', 30)],
+    ['Tornado', 'Showers']);
   check('condition fallback preserves unfamiliar NWS wording', cond('Patchy Blowing Dust'), 'Patchy Blowing Dust');
 
   check('single-digit precip stays out of the collapsed scan', [pop(0), pop(4), pop(14)], [null, null, null]);

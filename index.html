@@ -801,8 +801,8 @@
     padding:9px 12px;min-height:56px;cursor:pointer;font-family:inherit}
   .day:hover{background:var(--chip)}
   .day .dn{font-weight:700;font-size:var(--fs-md);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-  .day .dcond{font-size:var(--fs-2xs);line-height:1.2;color:var(--muted);white-space:nowrap;
-    overflow:hidden;text-overflow:ellipsis;margin-top:3px}
+  .day .dcond{display:-webkit-box;font-size:var(--fs-2xs);line-height:1.2;color:var(--muted);
+    white-space:normal;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:2;margin-top:3px}
   .day .dcond.impact-hot{color:var(--sev);font-weight:800}
   .day .dcond.impact-cold{color:var(--accent);font-weight:800}
   /* The date riding along with the compact day name — and no media query deciding its fate, because the
@@ -3471,10 +3471,20 @@ function compactDayName(name){
   var days={Monday:"Mon",Tuesday:"Tue",Wednesday:"Wed",Thursday:"Thu",Friday:"Fri",Saturday:"Sat",Sunday:"Sun"};
   return days[name]||name;
 }
-function compactCondition(text){
+function compactCondition(text,pop){
   var t=String(text||"").toLowerCase();
   if(t.indexOf("tornado")>=0) return "Tornado";
-  if(t.indexOf("thunder")>=0||t.indexOf("storm")>=0) return "Storms";
+  if(t.indexOf("thunder")>=0||t.indexOf("storm")>=0){
+    /* Match the coverage word to the same nearest-ten band the collapsed row presents. NWS
+       point probabilities can arrive between those display steps (17%, 29%, etc.), so using the
+       raw cutoff would let "~30%" sit beside "Isolated storms". Unknown or out-of-band values
+       stay generic rather than claiming more spatial precision than the feed supports. */
+    var chance=(pop==null||pop==="")?null:Number(pop);
+    var band=(chance!=null&&isFinite(chance))?Math.max(0,Math.min(100,Math.round(chance/10)*10)):null;
+    if(band>=10&&band<=20) return "Isolated storms";
+    if(band>=30&&band<=50) return "Scattered storms";
+    return "Storms";
+  }
   if(t.indexOf("freezing")>=0||t.indexOf("sleet")>=0||t.indexOf("ice")>=0) return "Wintry mix";
   if(t.indexOf("snow")>=0||t.indexOf("flurr")>=0) return "Snow";
   if(t.indexOf("shower")>=0) return "Showers";
@@ -3812,7 +3822,7 @@ function loadForecast(){
         var coldImpact=forecastImpact(fact.feelsLow,lo!=null?lo:(main?main.temperature:null));
         var impact=(hotImpact&&hotImpact.kind==="hot")?hotImpact:((coldImpact&&coldImpact.kind==="cold")?coldImpact:null);
         var fl=impact&&impact.kind==="cold"?fact.feelsLow:fact.feelsHigh;
-        var condition=impact?impact.label:compactCondition(main.shortForecast);
+        var condition=impact?impact.label:compactCondition(main.shortForecast,pop);
         /* A day period whose night hasn't been issued. The 7-row cap normally leaves the feed's
            day-only tail on the floor (see the pairing loop), so this fires only when the feed
            itself comes up short of seven whole days — rare, but a real NWS failure mode. When it
