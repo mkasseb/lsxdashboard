@@ -7592,11 +7592,20 @@ function bottomLineAlertMatch(alert,candidate){
   if(fam==="winter") return candidate.topic==="winter"||candidate.topic==="cold"||(candidate.topic==="precip"&&candidate.icon==="snow");
   return fam===candidate.topic;
 }
-function bottomLineAlertHeadline(candidate,outdoor){
+/* Short-fuse convective warnings need an action for NOW. A forecast's best later outdoor window
+   cannot qualify that action: in the failure that prompted this guard, a Severe Thunderstorm
+   Warning over the selected location was rewritten as "finish outdoor tasks by 9am tomorrow"
+   merely because 7–9am was the coolest dry pair of hours after the overnight storms. */
+function bottomLineUrgentStormAlert(alert,candidate){
+  if(!alert||!candidate||alert.family!=="convective"||
+     (alert.level!=="warning"&&alert.level!=="emergency")) return false;
+  return candidate.topic==="storm"||(candidate.topic==="precip"&&candidate.icon==="storm");
+}
+function bottomLineAlertHeadline(candidate,outdoor,alert){
+  if(bottomLineUrgentStormAlert(alert,candidate))
+    return /tornado/i.test(alert.event||"")?"Take tornado shelter now":"Take shelter indoors now";
   if(outdoor&&outdoor.windowEnd){
     if(candidate.topic==="heat") return "Finish strenuous outdoor work by "+outdoor.windowEnd;
-    if(candidate.topic==="storm"||candidate.topic==="precip")
-      return "Finish weather-sensitive outdoor tasks by "+outdoor.windowEnd;
     if(candidate.topic==="wind") return "Handle outdoor setup by "+outdoor.windowEnd;
   }
   if(candidate.topic==="precip"&&candidate.alertFamilies&&
@@ -7619,8 +7628,6 @@ function bottomLineWindowAction(candidate,outdoor){
   if(!outdoor) return "";
   if(outdoor.windowEnd){
     if(candidate.topic==="heat") return "If outdoor work is necessary, finish by "+outdoor.windowEnd+".";
-    if(candidate.topic==="storm"||candidate.topic==="precip")
-      return "Finish weather-sensitive outdoor tasks by "+outdoor.windowEnd+".";
     if(candidate.topic==="wind") return "Handle weather-sensitive outdoor tasks by "+outdoor.windowEnd+".";
   }
   return outdoor.mergeAction||"";
@@ -7648,17 +7655,30 @@ function buildBottomLine(candidates,localAlert){
   var lead=sourceLead?Object.assign({},sourceLead):null;
   if(!lead) return {lead:null,supports:[]};
   var outdoor=unique.filter(function(c){ return c.topic==="outdoors"&&c.mergeAction; })[0]||null;
-  var mergeOutdoor=!!(outdoor&&{heat:1,precip:1,storm:1,wind:1}[lead.topic]);
+  /* A scored comfort window can be a useful cutoff for heat or wind. It is not storm timing:
+     rain may already be in progress or may end hours before that window, so its endpoint must not
+     become "finish by" guidance for a storm/rain lead. */
+  var mergeOutdoor=!!(outdoor&&{heat:1,wind:1}[lead.topic]);
   var alertAware=bottomLineAlertMatch(localAlert,lead);
+  var urgentStorm=bottomLineUrgentStormAlert(localAlert,lead);
   if(alertAware){
-    lead.headline=bottomLineAlertHeadline(lead,mergeOutdoor?outdoor:null);
+    lead.headline=bottomLineAlertHeadline(lead,mergeOutdoor?outdoor:null,localAlert);
     lead.detail="Alert active locally"+(lead.detail?" · "+lead.detail:"");
     lead.alertAware=true;
+    if(urgentStorm){
+      lead.action=/tornado/i.test(localAlert.event||"")
+        ?"Go to a basement or small interior room away from windows."
+        :"Stay indoors and away from windows until the warning passes.";
+    }
   }else if(mergeOutdoor){
     lead.action=bottomLineWindowAction(lead,outdoor)+(lead.action?" "+lead.action:"");
   }
+  /* During any matching storm alert, the alert and forecast timing own the scarce briefing slots.
+     Do not reintroduce the unrelated comfort window as a supporting cue after declining to turn it
+     into a deadline. Outside an alert it remains useful, explicitly labelled supporting evidence. */
+  var suppressOutdoor=!!(outdoor&&alertAware&&(lead.topic==="storm"||lead.topic==="precip"));
   var rest=unique.filter(function(c){
-    return c.topic!==lead.topic&&!c.context&&(!mergeOutdoor||c.topic!=="outdoors");
+    return c.topic!==lead.topic&&!c.context&&((!mergeOutdoor&&!suppressOutdoor)||c.topic!=="outdoors");
   });
   rest.sort(function(a,b){
     var ar=typeof a.supportRank==="number"?a.supportRank:1;

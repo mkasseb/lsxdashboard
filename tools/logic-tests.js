@@ -74,7 +74,8 @@ const SUBJECT = new Function(`
   ${lift(/^function bottomLineLocalAlert\(groups\)\{[\s\S]*?^\}/m, 'bottomLineLocalAlert()')}
   ${lift(/^function bottomLineCmp\(a,b\)\{[\s\S]*?^\}/m, 'bottomLineCmp()')}
   ${lift(/^function bottomLineAlertMatch\(alert,candidate\)\{[\s\S]*?^\}/m, 'bottomLineAlertMatch()')}
-  ${lift(/^function bottomLineAlertHeadline\(candidate,outdoor\)\{[\s\S]*?^\}/m, 'bottomLineAlertHeadline()')}
+  ${lift(/^function bottomLineUrgentStormAlert\(alert,candidate\)\{[\s\S]*?^\}/m, 'bottomLineUrgentStormAlert()')}
+  ${lift(/^function bottomLineAlertHeadline\(candidate,outdoor,alert\)\{[\s\S]*?^\}/m, 'bottomLineAlertHeadline()')}
   ${lift(/^function bottomLineWindowAction\(candidate,outdoor\)\{[\s\S]*?^\}/m, 'bottomLineWindowAction()')}
   ${lift(/^function buildBottomLine\(candidates,localAlert\)\{[\s\S]*?^\}/m, 'buildBottomLine()')}
   ${lift(/^function extractAFD\(text\)\{[\s\S]*?^\}/m, 'extractAFD()')}
@@ -833,12 +834,17 @@ check('the previous v12 snapshot is explicitly discarded',
     c('heat', 100, false, 'Dangerous heat', {icon: 'heat', tone: 'danger'}),
     c('precip', 95, false, 'Thunderstorms likely', {icon: 'storm', tone: 'danger'})
   ], {family: 'convective', event: 'Severe Thunderstorm Warning', level: 'warning'}),
-    {lead: 'precip:Be ready to move plans indoors', supports: ['heat:Dangerous heat']});
+    {lead: 'precip:Take shelter indoors now', supports: ['heat:Dangerous heat']});
   check('a local winter warning outranks unrelated dangerous heat', shape([
     c('heat', 100, false, 'Dangerous heat', {icon: 'heat', tone: 'danger'}),
     c('winter', 89, false, 'Moderate winter impacts', {icon: 'snow', tone: 'danger'})
   ], {family: 'winter', event: 'Winter Storm Warning', level: 'warning'}),
     {lead: 'winter:Allow extra time for winter travel', supports: ['heat:Dangerous heat']});
+  check('a winter warning cannot borrow immediate convective-warning copy', shape([
+    c('precip', 96, false, 'Thunderstorms with wintry precipitation',
+      {icon: 'storm', tone: 'danger', alertFamilies: ['convective', 'winter']})
+  ], {family: 'winter', event: 'Winter Storm Warning', level: 'warning'}),
+    {lead: 'precip:Prepare for storms and slick travel', supports: []});
   check('a watch does not displace a more consequential unrelated lead', shape([
     c('heat', 100, false, 'Dangerous heat', {icon: 'heat', tone: 'danger'}),
     c('storm', 80, false, 'Severe storms possible', {icon: 'storm', tone: 'warning'})
@@ -929,9 +935,10 @@ check('the previous v12 snapshot is explicitly discarded',
   check('alert-aware lead retains local provenance', alerted.lead.detail,
     'Alert active locally · Heat index around 111°.');
 
-  /* Copy matrix: every hazard that can own the lead. A usable outdoor window should become a
-     natural cutoff only for conditions it helps avoid; without one, the alert becomes a concise
-     condition-specific action. The product title itself always stays in the alert banner. */
+  /* Copy matrix: every hazard that can own the lead. Heat and wind may use a scored outdoor
+     window as a practical cutoff. Storm/rain alerts must use the alert's immediate plan instead:
+     the comfort window says nothing about storm onset or end. The product title itself always
+     stays in the alert banner. */
   const windowCue = c('outdoors', 58, false, 'Best window', {
     mergeAction: 'Use 7am–9am tomorrow for weather-sensitive plans.',
     windowLabel: '7am–9am tomorrow', windowEnd: '9am tomorrow'
@@ -941,11 +948,11 @@ check('the previous v12 snapshot is explicitly discarded',
       alert: {family: 'heat', event: 'Extreme Heat Warning'},
       headline: 'Finish strenuous outdoor work by 9am tomorrow'},
     {name: 'severe storms', candidate: c('storm', 97, false, 'Severe storms likely', {icon: 'storm', tone: 'danger'}),
-      alert: {family: 'convective', event: 'Severe Thunderstorm Warning'},
-      headline: 'Finish weather-sensitive outdoor tasks by 9am tomorrow'},
+      alert: {family: 'convective', event: 'Severe Thunderstorm Warning', level: 'warning'},
+      headline: 'Take shelter indoors now'},
     {name: 'thunderstorm timing', candidate: c('precip', 95, false, 'Thunderstorms likely', {icon: 'storm', tone: 'danger'}),
-      alert: {family: 'convective', event: 'Severe Thunderstorm Watch'},
-      headline: 'Finish weather-sensitive outdoor tasks by 9am tomorrow'},
+      alert: {family: 'convective', event: 'Severe Thunderstorm Watch', level: 'watch'},
+      headline: 'Be ready to move plans indoors'},
     {name: 'wind', candidate: c('wind', 78, false, 'Very windy', {icon: 'wind', tone: 'danger'}),
       alert: {family: 'wind', event: 'High Wind Warning'},
       headline: 'Handle outdoor setup by 9am tomorrow'}
@@ -959,16 +966,40 @@ check('the previous v12 snapshot is explicitly discarded',
   [
     {name: 'heat', candidate: c('heat', 100, false, 'Dangerous heat', {tone: 'danger', action: 'Limit exertion.'}),
       action: 'If outdoor work is necessary, finish by 9am tomorrow. Limit exertion.'},
-    {name: 'storm outlook', candidate: c('storm', 97, false, 'Severe storms likely', {tone: 'danger', action: 'Keep alerts enabled.'}),
-      action: 'Finish weather-sensitive outdoor tasks by 9am tomorrow. Keep alerts enabled.'},
-    {name: 'ordinary rain', candidate: c('precip', 60, false, 'Rain likely', {icon: 'rain', tone: 'warning', action: 'Plan around rain.'}),
-      action: 'Finish weather-sensitive outdoor tasks by 9am tomorrow. Plan around rain.'},
     {name: 'wind', candidate: c('wind', 78, false, 'Very windy', {tone: 'danger', action: 'Secure loose objects.'}),
       action: 'Handle weather-sensitive outdoor tasks by 9am tomorrow. Secure loose objects.'}
   ].forEach(x => {
     const m = B([x.candidate, windowCue]);
     check(`${x.name} uses the cutoff without an alert`, m.lead.action, x.action);
   });
+
+  [
+    {name: 'storm outlook', candidate: c('storm', 97, false, 'Severe storms likely', {tone: 'danger', action: 'Keep alerts enabled.'})},
+    {name: 'ordinary rain', candidate: c('precip', 60, false, 'Rain likely', {icon: 'rain', tone: 'warning', action: 'Plan around rain.'})}
+  ].forEach(x => {
+    const m = B([x.candidate, windowCue]);
+    check(`${x.name} keeps its evidence-based action`, m.lead.action, x.candidate.action);
+    check(`${x.name} does not turn a comfort window into a deadline`, /\b9am\b/.test(m.lead.headline + ' ' + m.lead.action), false);
+    check(`${x.name} keeps the outdoor window explicitly supporting`, m.supports.map(s => s.topic).includes('outdoors'), true);
+  });
+
+  /* Regression: at 9:24pm on Aug 16, O'Fallon had a Severe Thunderstorm Warning and an hourly wet
+     block through 3am. The old copy promoted tomorrow's 7–9am comfort window into the headline,
+     telling someone under the warning to finish outdoor work by morning. */
+  const activeStormWarning = B([
+    c('precip', 95, false, 'Thunderstorms likely', {icon: 'storm', tone: 'danger',
+      detail: 'now–3am tomorrow', action: 'Keep outdoor plans flexible and be ready to move inside.'}),
+    windowCue,
+    c('storm', 59, false, 'Isolated severe storms possible', {icon: 'storm', tone: 'warning'})
+  ], {family: 'convective', event: 'Severe Thunderstorm Warning', level: 'warning'});
+  check('active storm warning gives immediate shelter guidance', activeStormWarning.lead.headline,
+    'Take shelter indoors now');
+  check('active storm warning keeps the warning action immediate', activeStormWarning.lead.action,
+    'Stay indoors and away from windows until the warning passes.');
+  check('active storm warning never exposes the later comfort cutoff',
+    /\b9am\b/.test(JSON.stringify(activeStormWarning)), false);
+  check('active storm warning suppresses the unrelated outdoor-window support',
+    activeStormWarning.supports.map(s => s.topic).includes('outdoors'), false);
 
   [
     {name: 'heat', topic: 'heat', headline: 'Dangerous heat', alert: {family: 'heat', event: 'Heat Advisory'},

@@ -180,12 +180,14 @@ Duplicate topics collapse before selection, so two ways of describing the same c
 episode cannot consume the card.
 
 The synthesized outdoor window now searches the full forecast horizon, including tomorrow after
-an evening page load. When a heat, storm/rain or wind lead would otherwise say only “use cooler
-hours” or “keep plans flexible,” that candidate is folded into the lead as an exact two-hour plan
-and removed from the support list. The Alerts section remains the safety authority; the strongest
-active local alert only changes matching Bottom Line wording into an action (“finish strenuous
-outdoor work by 9am”), without copying the alert product title. The endpoint is the decision; the
-scored two-hour range remains evidence, not an invitation to schedule recreation at dawn.
+an evening page load. For heat and wind, that candidate can be folded into the lead as an exact
+two-hour plan and removed from the support list. Rain and storm timing stay separate: the endpoint
+of the most comfortable pair of hours is not evidence that a storm begins then, so it can only
+appear as an explicitly labelled supporting window and never as “finish by” guidance. A matching
+storm alert suppresses that comfort cue entirely. The Alerts section remains the safety authority;
+the strongest active local alert changes matching Bottom Line wording into an action without
+copying the product title, and a short-fuse storm warning always says to shelter now rather than
+allowing any later forecast window to qualify the warning.
 Historical context fills a spare support slot
 only when the lead itself is neutral or good; a warning never spends scarce space on a record fact.
 Below 600px that optional context cue yields the space entirely because the same information
