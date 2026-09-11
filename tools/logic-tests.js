@@ -33,6 +33,7 @@ function lift(pattern, label) {
 }
 
 const SUBJECT = new Function(`
+  ${lift(/^function riskCalendarDays\(now\)\{[\s\S]*?^\}/m, 'riskCalendarDays()')}
   ${lift(/^function rangeMark\(lo,hi,now\)\{[\s\S]*?^\}/m, 'rangeMark()')}
   ${lift(/^function rangeRow\(d0,d1,now\)\{[\s\S]*?^\}/m, 'rangeRow()')}
   ${lift(/^function alertParas\(txt\)\{[\s\S]*?^\}/m, 'alertParas()')}
@@ -84,7 +85,7 @@ const SUBJECT = new Function(`
   ${lift(/^function geomTouchesEnv\(geom,env\)\{[\s\S]*?^\}/m, 'geomTouchesEnv()')}
   ${lift(/^function watchBoundary\(feats\)\{[\s\S]*?^\}/m, 'watchBoundary()')}
   ${lift(/^function chaikinRing\(ring,iters\)\{[\s\S]*?^\}/m, 'chaikinRing()')}
-  return { rangeMark, rangeRow, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr,
+  return {riskCalendarDays, rangeMark, rangeRow, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr,
            FAMILY_CFG, coldVerdict, parseMph, heatIndexF, windChillF, feelsLikeF,
            compactDayName, compactCondition, summaryPop, forecastImpact,
            summaryPopText, buildForecastSummary, nwsWallTime, hourlyByDate, hrWord,
@@ -102,12 +103,16 @@ function check(name, actual, expected) {
   failed++;
 }
 
-/* Restored snapshots contain rendered HTML, so a Bottom Line DOM migration must reject the old
-   shape rather than painting v12 pills under v13 briefing styles. */
-check('Bottom Line markup migration bumps the snapshot key',
-  /var SNAP_KEY="lsxSnap_v13"/.test(SRC), true);
-check('the previous v12 snapshot is explicitly discarded',
-  /"lsxSnap_v12"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
+/* Cached risk markup must not restore the old relative-date labels. */
+check('risk date markup migration bumps the snapshot key',
+  /var SNAP_KEY="lsxSnap_v14"/.test(SRC), true);
+check('the previous v13 snapshot is explicitly discarded',
+  /"lsxSnap_v13"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
+
+check('risk dates use Central time before UTC midnight rolls locally', SUBJECT.riskCalendarDays(new Date('2026-09-12T02:00:00Z')), ['Fri · Sep 11','Sat · Sep 12','Sun · Sep 13']);
+check('risk dates cross the spring DST boundary', SUBJECT.riskCalendarDays(new Date('2026-03-07T18:00:00Z')), ['Sat · Mar 7','Sun · Mar 8','Mon · Mar 9']);
+check('risk dates cross the fall DST boundary', SUBJECT.riskCalendarDays(new Date('2026-10-31T18:00:00Z')), ['Sat · Oct 31','Sun · Nov 1','Mon · Nov 2']);
+check('risk dates cross the year boundary', SUBJECT.riskCalendarDays(new Date('2026-12-31T18:00:00Z')), ['Thu · Dec 31','Fri · Jan 1','Sat · Jan 2']);
 
 /* ============ rangeMark ============ */
 // The hero's range bar. Left end is the earlier reading, right end the later one.
