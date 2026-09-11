@@ -198,7 +198,7 @@ Radio* — applies to every copy, and forks are asked to keep it intact.
 ## Layout and station map
 
 The full-width hourly forecast follows current conditions and radar. The wider seven-day
-forecast comes next, beside the NWS discussion on wide screens. Phones show the same order:
+forecast comes next, followed by the NWS discussion. Both span the page to avoid an empty column. Phones show the same order:
 current conditions and radar, next 24 hours, seven-day forecast, then deeper context.
 The compact header retains location search, geolocation, refresh, and appearance controls.
 Station geography uses [USGS The National Map](https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer),

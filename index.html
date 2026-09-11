@@ -1606,8 +1606,8 @@
     header #geoBtn .g-txt{display:none}
     header #geoBtn{padding:10px 12px}
   }
-  .forecast-primary{grid-column:span 6;min-width:0}
-  .forecast-context{grid-column:span 6;display:flex;flex-direction:column;gap:16px;min-width:0}
+  .forecast-primary{grid-column:span 12;min-width:0}
+  .forecast-context{grid-column:span 12;display:flex;flex-direction:column;gap:16px;min-width:0}
   @media(max-width:1100px){
     .forecast-primary,.forecast-context{grid-column:span 12}
   }
@@ -1929,7 +1929,7 @@
     <h2>Next 24 hours <span id="h24loc"></span></h2>
     <div id="hourly24"><div class="loading">Loading hourly…</div></div>
   </section>
-  <!-- Keep the weekly forecast wide, alongside the deeper forecast discussion on desktop. -->
+  <!-- Full-width sections avoid a blank column when the discussion is shorter than the week. -->
   <section class="card forecast-primary" id="forecastCard">
     <h2>7-Day Forecast</h2>
     <div class="daily" id="daily"><div class="loading">Loading forecast…</div></div>
