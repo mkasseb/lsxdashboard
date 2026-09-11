@@ -194,3 +194,11 @@ clause is the reason a fork is the forker's problem: a stale copy still serving 
 during a severe event is the failure this project can neither detect nor control. The footer line —
 *not an official NWS product; during severe weather defer to official warnings and a NOAA Weather
 Radio* — applies to every copy, and forks are asked to keep it intact.
+
+## Layout and station map
+
+The seven-day forecast sits immediately below current conditions and radar, beside the hourly
+chart and NWS discussion on wide screens. Phones show these in that same reading order.
+The compact header retains location search, geolocation, refresh, and appearance controls.
+Station geography uses [USGS The National Map](https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer),
+a public-domain basemap that does not require an API key. Radar layers retain their existing sources.
