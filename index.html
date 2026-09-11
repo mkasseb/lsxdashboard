@@ -238,43 +238,21 @@
   .skip:focus{top:0;text-decoration:none}
   #main:focus{outline:none}   /* the jump itself is the feedback; a ring round the whole page isn't */
 
-  /* ===== Jump nav =====
-     A scroll-snapping pill row, not a menu: on a phone it holds six labels in one swipeable line
-     rather than wrapping to two and costing another 40px of a viewport that is already carrying
-     the page it navigates. --jump-h is the number the cards' scroll-margin is written against, so
-     the bar's height and the landing offset can never drift apart. */
-  :root{--jump-h:54px}   /* 44px link + 4px padding + 1px border, twice */
-  .jump{position:sticky;top:0;z-index:40;display:flex;gap:4px;margin:0 0 16px;padding:4px;
-    overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;
-    background:linear-gradient(180deg,var(--panel),var(--panel-2));
-    border:1px solid var(--border);border-radius:var(--r-pill);box-shadow:var(--shadow)}
+  /* A full-width sticky strip reserves its own row and masks scrolling content. */
+  :root{--jump-h:54px}
+  .jump{position:sticky;top:0;z-index:40;display:flex;gap:4px;max-width:var(--maxw);
+    margin:0 auto 10px;padding:4px;min-height:var(--jump-h);overflow-x:auto;
+    overscroll-behavior-x:contain;scrollbar-width:none;background:var(--panel);
+    border-block:1px solid var(--border);box-shadow:0 3px 8px rgba(0,0,0,.08)}
   .jump::-webkit-scrollbar{display:none}
   .jump a{flex:0 0 auto;display:inline-flex;align-items:center;min-height:44px;padding:0 15px;
-    border-radius:var(--r-pill);font-size:var(--fs-sm);font-weight:700;color:var(--muted);
+    border-bottom:3px solid transparent;font-size:var(--fs-sm);font-weight:700;color:var(--muted);
     white-space:nowrap;text-decoration:none}
   .jump a:hover,.jump a:focus-visible{color:var(--text);background:var(--chip);text-decoration:none}
+  .jump a[aria-current="location"]{color:var(--accent);border-bottom-color:var(--accent)}
   .jump a:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-  /* The Sky card is permanent furniture now, so this entry is an ordinary anchor like the other
-     five — it used to come and go with a card the weather had to earn. */
-  /* Every jump target clears the bar. On .card generally rather than the six ids, because the
-     radar-polygon and "+N more" jumps land on cards too and were already landing a little high. */
   .card,#main{scroll-margin-top:calc(var(--jump-h) + 12px)}
-  @media(max-width:480px){.jump a{padding:0 13px}}
-  /* Above phone widths the bar hugs its six links instead of ruling off a column it fills a
-     quarter of — at 1920 the links used 393px of an 1884px pill, and that empty stretch was the
-     loudest thing on the page. It aligns to the shell's LEFT edge rather than centring: the brand
-     above it and the grid below it both start there, and a pill centred between two edge-aligned
-     blocks reads as an accident. The left margin recomputes the shell's own gutter instead of
-     inheriting it, because a sticky element has to stay a direct child of <body> (see the markup
-     note) and therefore cannot sit inside a centring wrapper; below the shell width that term is 0.
-     Held above 680px on purpose. The slack this fixes is only worth fixing when it is vast — at
-     480px the bar runs 77px past its links, and a pill inset from cards that are all flush to the
-     column would look like a mistake rather than a decision. On a phone the bar stays full-width
-     and keeps scrolling exactly as it does today. */
-  @media(min-width:681px){
-    .jump{width:max-content;max-width:100%;
-      margin-left:max(0px, calc((100% - var(--maxw)) / 2));margin-right:auto}
-  }
+  @media(max-width:480px){.jump a{padding-inline:11px}}
 
   header .top{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-bottom:16px}
   /* In installed/standalone web-app mode iOS overlays the status bar — guarantee clearance */
@@ -1610,6 +1588,72 @@
     .day .dt{gap:2px;font-size:var(--fs-xs)}
   }
   footer a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+
+  /* Compact header, keeping all controls at least 44px tall. */
+  header .top{margin-bottom:8px;gap:10px}
+  .locbar{margin-bottom:8px}
+  .jump{margin-bottom:10px}
+  .rail-now{margin-block:0;padding-block:0}
+  @media(min-width:1101px){
+    header{display:grid;grid-template-columns:auto minmax(260px,1fr) auto;gap:18px;align-items:center;margin-bottom:8px}
+    header .top{display:contents}
+    header .brand{grid-column:1;grid-row:1}
+    header .locbar{grid-column:2;grid-row:1;margin:0;flex-wrap:nowrap}
+    header .header-right{grid-column:3;grid-row:1;gap:10px}
+    header .brand .sub{max-width:240px}
+    header .locbar .locNow{display:none} /* Location remains in the Right now heading. */
+    header .locsearch{min-width:0}
+    header #geoBtn .g-txt{display:none}
+    header #geoBtn{padding:10px 12px}
+  }
+  .forecast-primary{grid-column:span 12;min-width:0}
+  .forecast-context{grid-column:span 12;display:flex;flex-direction:column;gap:16px;min-width:0}
+  @media(max-width:1100px){
+    .forecast-primary,.forecast-context{grid-column:span 12}
+  }
+  @media(max-width:480px){
+    header .top{flex-wrap:nowrap;gap:8px}
+    header .header-right{width:auto;flex-wrap:nowrap;gap:6px}
+    header .brand{gap:8px;min-width:0}
+    header .brand h1{font-size:16px}
+    header .brand .sub,header .clock,header #refreshLabel{display:none}
+    header .logo{width:36px;height:36px;flex-basis:36px}
+    header .logo svg{width:36px;height:36px}
+    header .refresh-btn,header #themeBtn{padding:10px 12px;min-width:44px}
+  }
+  .station-basemap{filter:saturate(.3)}
+  [data-theme="dark"] .station-basemap{filter:saturate(.25) brightness(.65)}
+
+  /* Keep major cards; use unboxed measurements and divided rows within them. */
+  .cc-item,.cc-uv,.aqi-mini,.fc-fact,.dd-item,.cn-cell,.cpc-item{background:transparent;border:0;border-radius:0;box-shadow:none}
+  .cc-item,.cc-uv,.aqi-mini{border-bottom:1px solid var(--border);padding:9px 2px}
+  .cn-cell,.cpc-item{padding:9px 2px;border-bottom:1px solid var(--border)}
+  .fc-fact{padding:7px 2px;border-bottom:1px solid var(--border)}
+  .fc-signal{background:transparent;border:0;border-radius:0;box-shadow:none}
+  .daily{gap:0}
+  .fc-overview{margin-bottom:8px}
+  .day-item{background:transparent;border:0;border-bottom:1px solid var(--border);border-radius:0;overflow:visible}
+  .day-item:last-child{border-bottom:0}
+  .day{padding-inline:2px;border-radius:0}
+  .day:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .h24-pill,.h24-pill.h24-now{background:transparent;border:0;border-radius:0;padding:6px 7px}
+  .spc-pill{border-radius:4px}
+  .spc-day{white-space:normal;line-height:1.35;text-overflow:clip}
+  .spc-date{display:block;white-space:nowrap;font-size:var(--fs-xs);font-weight:400}
+  @media(max-width:480px){.spc-date{display:inline;margin-left:6px}}
+  .quicklinks{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:0 20px}
+  .quicklinks a{border:0;border-bottom:1px solid var(--border);border-radius:0;background:transparent;
+    padding:10px 0;min-height:44px}
+
+  .fc-days{min-width:0}
+  @media(min-width:1000px){
+    #daily{display:grid;grid-template-columns:280px minmax(0,1fr);gap:32px;align-items:start;max-width:1100px;margin-inline:auto;width:100%}
+    #daily .fc-overview{gap:16px;margin:0;padding:8px 24px 0 0;border-right:1px solid var(--border)}
+    #daily .fc-facts{grid-template-columns:1fr}
+    #daily .fc-meta{flex-wrap:wrap;gap:4px}
+    #daily .day{grid-template-columns:minmax(100px,1fr) 28px 58px minmax(80px,280px) 78px 12px;gap:8px}
+    #daily .day .dcond{-webkit-line-clamp:2}
+  }
 </style>
 </head>
 <body>
@@ -1716,7 +1760,7 @@
     </div>
   </div>
   <div class="header-right">
-    <button class="refresh-btn" id="refresh" title="Refresh everything now">
+    <button class="refresh-btn" id="refresh" aria-label="Refresh weather" title="Refresh everything now">
       <span class="dot" id="statusDot"></span><span id="refreshLabel">Refresh</span>
     </button>
     <button id="themeBtn" title="Theme: auto (tap to change)" aria-label="Toggle light/dark theme"><svg class="ic" aria-hidden="true"><use href="#i-theme-auto"/></svg></button>
@@ -1747,7 +1791,7 @@
 <nav class="jump" id="jumpNav" aria-label="Jump to a section">
   <a href="#alertsCard">Alerts</a>
   <a href="#currentCard">Now</a>
-  <a href="#radarCard">Sky</a>
+  <a href="#radarCard">Radar</a>
   <a href="#forecastCard">7-Day</a>
   <a href="#riversCard">Rivers</a>
   <a href="#climateCard">Climate</a>
@@ -1890,52 +1934,29 @@
   </section>
   </div>
 
-  <!-- ── NEXT 24 HOURS — its own full-width band again.
-       This chart was folded into the conditions card to save a card's worth of chrome, and at the
-       time that was free: the page had no width ceiling, so the column it moved into was 617px at
-       1920 and the Sky card opposite grew tall enough to roughly match it. The shell cap removed
-       both halves of that. The column is now 456px at every desktop width — narrow enough that the
-       chart has to thin its hour labels — while the map, whose height follows its width, came back
-       to 503px and left the pair ~240px unequal with the whitespace under the map.
-       Full width answers both with one move: 24 points get ~58px each instead of ~19, and the pair
-       balances to within ~70px without touching the map's shape, which is the thing the Sky card's
-       aspect rules exist to protect. It sits BELOW the pair rather than between the two columns:
-       the band reads conditions-and-sky first, then what the next day does, then the week.
-       Still a sibling of #current rather than a child, for the same reason as before — loadCurrent()
-       rebuilds #current wholesale and would take the chart down with it. ── -->
+  <!-- Near-term weather comes first in both visual and document order. -->
   <section class="card col-12" id="h24Card">
     <h2>Next 24 hours <span id="h24loc"></span></h2>
     <div id="hourly24"><div class="loading">Loading hourly…</div></div>
   </section>
-
-  <!-- ── THE WEEK AHEAD & DEEPER CONTEXT ── -->
-  <div class="railhead col-12">
-    <span class="rail-t">The week ahead &amp; deeper context</span>
-    <span class="rail-s">forecast discussion, outlooks, rivers, drought, climate</span>
-  </div>
-
-  <!-- THE PULSE — the NWS forecaster's reasoning now follows Current Conditions and the
-       full-width 24-hour chart, immediately before the 7-day forecast band. This order lets the
-       observations and hourly evolution establish what is happening first, then uses the human
-       discussion to explain why before the reader reaches the day-by-day week.
-       It stays full-width and outside the masonry so its prose reads as one continuous briefing
-       and the 7-day card remains the first packed weekly product.
-       extractAFD prefers Key Messages, then Synopsis, then Short Term. Its Short-Term fallback
-       accepts both LSX's qualified `.SHORT TERM /THROUGH THURSDAY/...` form and the plain
-       `.SHORT TERM...` heading, with both forms covered by the pure logic tests.) -->
-  <section class="card col-12" id="afdCard">
-    <h2>The Pulse — NWS Forecast Discussion
-      <a class="link" href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener">Full discussion ↗</a>
-    </h2>
-    <div id="afd"><div class="loading">Loading discussion…</div></div>
+  <!-- Full-width sections avoid a blank column when the discussion is shorter than the week. -->
+  <section class="card forecast-primary" id="forecastCard">
+    <h2>7-Day Forecast</h2>
+    <div class="daily" id="daily"><div class="loading">Loading forecast…</div></div>
   </section>
-
-  <!-- ── Self-packing masonry band: cards flow into the shortest column (no manual balancing, no gaps) ── -->
-  <div class="masonry col-12">
-    <section class="card" id="forecastCard">
-      <h2>7-Day Forecast</h2>
-      <div class="daily" id="daily"><div class="loading">Loading forecast…</div></div>
+  <div class="forecast-context">
+    <section class="card" id="afdCard">
+      <h2>The Pulse — NWS Forecast Discussion
+        <a class="link" href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener">Full discussion ↗</a>
+      </h2>
+      <div id="afd"><div class="loading">Loading discussion…</div></div>
     </section>
+  </div>
+  <div class="railhead col-12">
+    <span class="rail-t">Across the region &amp; beyond</span>
+    <span class="rail-s">outlooks, rivers, drought, climate</span>
+  </div>
+  <div class="masonry col-12">
     <section class="card" id="riskCard">
       <h2>Risk Outlook
         <a class="link" href="https://www.spc.noaa.gov/products/outlook/day1otlk.html" target="_blank" rel="noopener">Maps ↗</a>
@@ -1998,8 +2019,11 @@
       <div id="cpc"><div class="loading">Loading outlooks…</div></div>
       <div class="imgcap"><span>Climate Prediction Center</span><span>6–14 days out</span></div>
     </section>
-    <!-- QUICK LINKS (folded into masonry so it packs instead of stranding) -->
-    <section class="card" id="linksCard">
+
+  </div>
+
+  <!-- Resources follow every weather panel, outside masonry backfilling. -->
+    <section class="card col-12" id="linksCard">
       <h2>Deep-Dive Links</h2>
       <div class="quicklinks">
         <a href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg>Forecast Discussion (<abbr title="Area Forecast Discussion — the forecasters’ own written reasoning">AFD</abbr>)</a>
@@ -2013,8 +2037,6 @@
         <a href="https://water.noaa.gov/#@=-90.3,38.6,7" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-flood"/></svg>Flood Map</a>
       </div>
     </section>
-  </div>
-
 
 </div>
 
@@ -2574,6 +2596,43 @@ function timeAgo(ts){
   if(m<60)return m+" min ago";
   return Math.round(m/60)+" hr ago";
 }
+
+/* Track the current jump destination without moving keyboard focus or changing the URL. */
+(function initJumpNavigation(){
+  var nav=document.getElementById("jumpNav");
+  var links=[].slice.call(nav.querySelectorAll("a"));
+  var pending=false, previous=null;
+  function update(){
+    pending=false;
+    var line=nav.getBoundingClientRect().bottom+16;
+    var entries=links.map(function(link){return {link:link,el:document.querySelector(link.getAttribute("href"))};})
+      .filter(function(x){return x.el&&x.el.getClientRects().length;})
+      .map(function(x){return {link:x.link,top:x.el.getBoundingClientRect().top};})
+      .sort(function(a,b){return a.top-b.top;});
+    var chosen=null;
+    entries.forEach(function(x){
+      if(x.top<=line&&(!chosen||x.top>chosen.top+1||
+        (Math.abs(x.top-chosen.top)<=1&&x.link.getAttribute("href")===location.hash)))chosen=x;
+    });
+    var active=chosen?chosen.link:(entries.length?entries[0].link:null);
+    if(active&&active!==previous){
+      var box=nav.getBoundingClientRect(), item=active.getBoundingClientRect();
+      if(item.left<box.left)nav.scrollLeft+=item.left-box.left-4;
+      else if(item.right>box.right)nav.scrollLeft+=item.right-box.right+4;
+      previous=active;
+    }
+    links.forEach(function(link){
+      if(link===active)link.setAttribute("aria-current","location");
+      else link.removeAttribute("aria-current");
+    });
+  }
+  function schedule(){if(!pending){pending=true;requestAnimationFrame(update);}}
+  window.addEventListener("scroll",schedule,{passive:true});
+  window.addEventListener("resize",schedule);
+  window.addEventListener("hashchange",schedule);
+  if(typeof ResizeObserver!=="undefined")new ResizeObserver(schedule).observe(document.getElementById("main"));
+  schedule();
+})();
 
 /* ============ MAP LOCKS (Fix 1) ============ */
 function bindMapLock(w){
@@ -3803,7 +3862,7 @@ function loadForecast(){
           if(it.classList.contains("open")) open.push(i);
           if(it.contains(document.activeElement)) focused=i;
         });
-        daily.innerHTML=forecastOverview()+paintDays();
+        daily.innerHTML=forecastOverview()+'<div class="fc-days">'+paintDays()+'</div>';
         var items=daily.querySelectorAll(".day-item");
         open.forEach(function(i){ if(items[i]) setOpen(items[i],items[i].querySelector(".day"),true); });   // keep expanded rows expanded
         // …and keep the keyboard where it was. This repaint fires on its own schedule (whenever
@@ -4870,6 +4929,17 @@ function riskPill(info,denom){
   var txt=info.t+(info.lvl>0?" \u00b7 "+info.lvl+"/"+denom:"");
   return '<span class="spc-pill" style="background:'+bg+';color:'+fg+'">'+txt+'</span>';
 }
+/* Calendar dates in the forecast area's timezone, independent of the viewer's timezone.
+   Advance UTC calendar components at noon to avoid DST adding or repeating a day. */
+function riskCalendarDays(now){
+  var parts=new Intl.DateTimeFormat("en-US",{timeZone:"America/Chicago",year:"numeric",month:"numeric",day:"numeric"}).formatToParts(now);
+  var p={}; parts.forEach(function(v){p[v.type]=v.value;});
+  return [0,1,2].map(function(offset){
+    var d=new Date(Date.UTC(+p.year,+p.month-1,+p.day+offset,12));
+    return d.toLocaleDateString("en-US",{timeZone:"UTC",weekday:"short"})+" · "+
+      d.toLocaleDateString("en-US",{timeZone:"UTC",month:"short",day:"numeric"});
+  });
+}
 function loadSpc(){
   var fresh=locGuard();
   var el=document.getElementById("spc");
@@ -4894,10 +4964,10 @@ function loadSpc(){
        Bottom Line-only — a Winter column in the matrix would sit empty most of the year. */
     callRisk={spc:[r[0]||0,r[1]||0], ero:[r[3]||0,r[4]||0], fire:[r[6]||0,r[7]||0],
               wssi:[r[9]||0,r[10]||0]};
-    var days=["Today","Tomorrow","Day 3"];
+    var days=riskCalendarDays(new Date());
     var html='<div class="spc-row rhead"><span></span><span class="rh">'+ic("storm")+'Storm</span><span class="rh">'+ic("flood")+'Flood</span><span class="rh">'+ic("fire")+'Fire</span></div>';
     for(var i=0;i<3;i++){
-      html+='<div class="spc-row"><span class="spc-day">'+days[i]+'</span>'
+      html+='<div class="spc-row"><span class="spc-day">'+days[i].replace(' · ','<span class="spc-date">')+'</span></span>'
         +riskPill(spcRisk(r[i]),5)
         +riskPill(eroRisk(r[3+i]),4)
         +riskPill(fireRisk(r[6+i]),3)
@@ -5982,6 +6052,7 @@ var STN_LIST=[
 var STN_NAMES={};
 STN_LIST.forEach(function(s){ STN_NAMES[s.id]=s.n; });
 function stnName(id){ return STN_NAMES[id]||""; }
+var STATION_BASE_URL="https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer/tile/{z}/{y}/{x}";
 var stnMap=null, stnBase=null, stnLayer=null;
 var stnObs=[], stnMode="temp";
 function rhFromTd(tF,tdF){   // Magnus — lets us derive feels-like from what METAR actually reports
@@ -6160,14 +6231,13 @@ function initStationMap(){
   var stnBounds=L.latLngBounds(STN_LIST.map(function(s){ return [s.lat,s.lon]; }));
   function fitStations(){ if(stnMap) stnMap.fitBounds(stnBounds,{padding:[30,26]}); }
   fitStations();
-  stnBase=L.tileLayer(baseUrl(),{subdomains:"abcd",maxZoom:12,
-    attribution:'&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a> &middot; obs: <a href="https://www.weather.gov" target="_blank" rel="noopener">NOAA/NWS</a>'}).addTo(stnMap);
+  stnBase=L.tileLayer(STATION_BASE_URL,{maxZoom:12,className:"station-basemap",
+    attribution:'USGS <a href="https://www.usgs.gov/programs/national-geospatial-program/national-map" target="_blank" rel="noopener">The National Map</a> &middot; obs: <a href="https://www.weather.gov" target="_blank" rel="noopener">NOAA/NWS</a>'}).addTo(stnMap);
   setTimeout(function(){ if(stnMap){ stnMap.invalidateSize(); fitStations(); } },250);
   setTimeout(function(){ if(stnMap){ stnMap.invalidateSize(); fitStations(); } },1200);  // after masonry settles the card width
   initStnTools();
   // no loadStationPlot() here — refreshAll() runs right after init and fetches the obs once
 }
-function updateStationBase(){ if(stnBase) stnBase.setUrl(baseUrl()); }
 /* Staleness cutoffs. /observations/latest never admits how old "latest" is — a wedged ASOS keeps
    serving its final report, and it plotted here with the same standing as a five-minute-old ob,
    eligible to win "Warmest". Two hours (a missed hourly cycle, plus slack for the specials-only
@@ -7807,10 +7877,9 @@ function renderTheCall(){
 // element even though today's renderer no longer creates it.
 // v12: the loose summary sentences became a tone icon, labeled fact grid and separated source
 // footer. A v11 snapshot would restore the old floating text under the new summary styles.
-// v13: #callRow changed from an equal-weight pill cloud to a lead briefing plus semantic support
-// list. A v12 snapshot would restore the old pills under rules that deliberately no longer exist.
-var SNAP_KEY="lsxSnap_v13", snapRestored=false, NET_OK=false;
-try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
+// v15: daily rows have their own wrapper for a compact desktop summary/list layout.
+var SNAP_KEY="lsxSnap_v15", snapRestored=false, NET_OK=false;
+try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13","lsxSnap_v14"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
 var SNAP_PARTS=[
   {id:"afd",      ttl:6*3600000},
   {id:"alerts",   ttl:15*60000},     // safety-critical: short leash
@@ -8047,7 +8116,6 @@ function applyTheme(pref){
   var meta=document.querySelector('meta[name="theme-color"]');
   if(meta) meta.setAttribute("content", t==="light"?"#eef1f6":"#0a0e14");
   if(typeof updateRadarBase==="function") updateRadarBase();
-  if(typeof updateStationBase==="function") updateStationBase();
 }
 function initTheme(){
   var t="auto";
@@ -8200,21 +8268,19 @@ function layoutMasonry(){
   // would force a synchronous reflow for every card instead of one for the whole batch
   data.forEach(function(d){ d.h=d.c.offsetHeight; });
   // Pass 2: order for packing.
-  //  Importance tiers come FIRST (so critical outlooks stay high and Deep-Dive Links stays at the bottom),
+  //  Importance tiers come FIRST (so critical outlooks stay high),
   //  then within a tier we pack tallest-first (desktop/tablet) for an even bottom, or natural order (mobile).
   // Explicit widget hierarchy: lower rank = more important = packed higher.
-  //  (Alerts/Pulse/Current/Radar/Hourly are fixed heroes above this masonry.)
+  //  Alerts, current conditions, radar and forecasts are outside this masonry.
   function tier(id){
     var RANK={
-      forecastCard:1,   // 7-day forecast — most-checked product
       riskCard:2,       // severe storm/flood/fire risk
       hazardsCard:3,    // hazards outlook (days 3–14)
       obsCard:4,        // station plot — current regional obs
       riversCard:5,     // river/flood gauges
       droughtCard:6,    // drought outlook
       climateCard:7,    // climate vs normal
-      cpcCard:8,        // week-ahead leanings
-      linksCard:10      // deep-dive links — reference, lowest
+      cpcCard:8         // week-ahead leanings
     };
     return (RANK[id]!=null) ? RANK[id] : 50;
   }

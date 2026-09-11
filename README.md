@@ -194,3 +194,19 @@ clause is the reason a fork is the forker's problem: a stale copy still serving 
 during a severe event is the failure this project can neither detect nor control. The footer line —
 *not an official NWS product; during severe weather defer to official warnings and a NOAA Weather
 Radio* — applies to every copy, and forks are asked to keep it intact.
+
+## Layout and station map
+
+The full-width hourly forecast follows current conditions and radar. The wider seven-day
+forecast comes next, followed by the NWS discussion. Both span the page to avoid an empty column. Phones show the same order:
+current conditions and radar, next 24 hours, seven-day forecast, then deeper context.
+The compact header retains location search, geolocation, refresh, and appearance controls.
+Station geography uses [USGS The National Map](https://basemap.nationalmap.gov/arcgis/rest/services/USGSTopo/MapServer),
+a public-domain basemap that does not require an API key. Radar layers retain their existing sources.
+
+The sticky navigation uses a full-width strip and marks the current section. Measurements and
+forecast rows use dividers inside the main cards. Risk dates use America/Chicago calendar dates;
+resource links follow all regional weather panels and are excluded from masonry packing.
+
+On desktop, the weekly summary sits beside the daily list inside a single card; temperature
+bars are capped at 280px. On smaller screens the summary precedes the rows.
