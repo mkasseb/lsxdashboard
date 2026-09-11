@@ -1644,6 +1644,16 @@
   .quicklinks{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:0 20px}
   .quicklinks a{border:0;border-bottom:1px solid var(--border);border-radius:0;background:transparent;
     padding:10px 0;min-height:44px}
+
+  .fc-days{min-width:0}
+  @media(min-width:1000px){
+    #daily{display:grid;grid-template-columns:280px minmax(0,1fr);gap:32px;align-items:start;max-width:1100px;margin-inline:auto;width:100%}
+    #daily .fc-overview{gap:16px;margin:0;padding:8px 24px 0 0;border-right:1px solid var(--border)}
+    #daily .fc-facts{grid-template-columns:1fr}
+    #daily .fc-meta{flex-wrap:wrap;gap:4px}
+    #daily .day{grid-template-columns:minmax(100px,1fr) 28px 58px minmax(80px,280px) 78px 12px;gap:8px}
+    #daily .day .dcond{-webkit-line-clamp:2}
+  }
 </style>
 </head>
 <body>
@@ -3852,7 +3862,7 @@ function loadForecast(){
           if(it.classList.contains("open")) open.push(i);
           if(it.contains(document.activeElement)) focused=i;
         });
-        daily.innerHTML=forecastOverview()+paintDays();
+        daily.innerHTML=forecastOverview()+'<div class="fc-days">'+paintDays()+'</div>';
         var items=daily.querySelectorAll(".day-item");
         open.forEach(function(i){ if(items[i]) setOpen(items[i],items[i].querySelector(".day"),true); });   // keep expanded rows expanded
         // …and keep the keyboard where it was. This repaint fires on its own schedule (whenever
@@ -7867,9 +7877,9 @@ function renderTheCall(){
 // element even though today's renderer no longer creates it.
 // v12: the loose summary sentences became a tone icon, labeled fact grid and separated source
 // footer. A v11 snapshot would restore the old floating text under the new summary styles.
-// v14: risk rows show explicit calendar dates; discard older relative-date markup.
-var SNAP_KEY="lsxSnap_v14", snapRestored=false, NET_OK=false;
-try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
+// v15: daily rows have their own wrapper for a compact desktop summary/list layout.
+var SNAP_KEY="lsxSnap_v15", snapRestored=false, NET_OK=false;
+try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13","lsxSnap_v14"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
 var SNAP_PARTS=[
   {id:"afd",      ttl:6*3600000},
   {id:"alerts",   ttl:15*60000},     // safety-critical: short leash

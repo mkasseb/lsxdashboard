@@ -104,10 +104,10 @@ function check(name, actual, expected) {
 }
 
 /* Cached risk markup must not restore the old relative-date labels. */
-check('risk date markup migration bumps the snapshot key',
-  /var SNAP_KEY="lsxSnap_v14"/.test(SRC), true);
-check('the previous v13 snapshot is explicitly discarded',
-  /"lsxSnap_v13"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
+check('forecast wrapper migration bumps the snapshot key',
+  /var SNAP_KEY="lsxSnap_v15"/.test(SRC), true);
+check('the previous v14 snapshot is explicitly discarded',
+  /"lsxSnap_v14"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
 
 check('risk dates use Central time before UTC midnight rolls locally', SUBJECT.riskCalendarDays(new Date('2026-09-12T02:00:00Z')), ['Fri · Sep 11','Sat · Sep 12','Sun · Sep 13']);
 check('risk dates cross the spring DST boundary', SUBJECT.riskCalendarDays(new Date('2026-03-07T18:00:00Z')), ['Sat · Mar 7','Sun · Mar 8','Mon · Mar 9']);

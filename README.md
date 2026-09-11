@@ -207,3 +207,6 @@ a public-domain basemap that does not require an API key. Radar layers retain th
 The sticky navigation uses a full-width strip and marks the current section. Measurements and
 forecast rows use dividers inside the main cards. Risk dates use America/Chicago calendar dates;
 resource links follow all regional weather panels and are excluded from masonry packing.
+
+On desktop, the weekly summary sits beside the daily list inside a single card; temperature
+bars are capped at 280px. On smaller screens the summary precedes the rows.
