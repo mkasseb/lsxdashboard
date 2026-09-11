@@ -1924,17 +1924,17 @@
   </section>
   </div>
 
-  <!-- Weekly forecast is a primary product, outside the regional masonry. The DOM order
-       also gives phones and keyboard users the forecast before the hourly chart and discussion. -->
+  <!-- Near-term weather comes first in both visual and document order. -->
+  <section class="card col-12" id="h24Card">
+    <h2>Next 24 hours <span id="h24loc"></span></h2>
+    <div id="hourly24"><div class="loading">Loading hourly…</div></div>
+  </section>
+  <!-- Keep the weekly forecast wide, alongside the deeper forecast discussion on desktop. -->
   <section class="card forecast-primary" id="forecastCard">
     <h2>7-Day Forecast</h2>
     <div class="daily" id="daily"><div class="loading">Loading forecast…</div></div>
   </section>
   <div class="forecast-context">
-    <section class="card" id="h24Card">
-      <h2>Next 24 hours <span id="h24loc"></span></h2>
-      <div id="hourly24"><div class="loading">Loading hourly…</div></div>
-    </section>
     <section class="card" id="afdCard">
       <h2>The Pulse — NWS Forecast Discussion
         <a class="link" href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener">Full discussion ↗</a>
