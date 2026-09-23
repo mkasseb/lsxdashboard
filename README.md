@@ -14,9 +14,9 @@ inline.
 - **No build step.** No bundler, no transpiler, no `package.json`. Edit the file, reload the page.
 - **No API keys.** Every feed was chosen because it is keyless and CORS-open, so the whole thing
   runs as a static page with no server and no secrets.
-- **Two runtime dependencies**, both from a CDN with SRI hashes: Leaflet 1.9.4 for the maps, and
-  Meteocons for the sky-condition icons. Both degrade gracefully if the CDN is unreachable — every
-  other icon on the page comes from an inline sprite that ships with the file.
+- **Three pinned map dependencies** from CDNs with SRI hashes: Leaflet 1.9.4, MapLibre GL, and its
+  Leaflet adapter. Meteocons sky-condition icons load separately from a CDN with an inline fallback.
+  The maps link to the official NWS view if the map libraries fail to load.
 - **Installable PWA** via [`manifest.webmanifest`](manifest.webmanifest). There is deliberately no
   service worker — return visits paint instantly from a `localStorage` snapshot instead.
 
@@ -83,7 +83,7 @@ All public-domain or openly licensed, all keyless.
 | Open-Meteo | Air quality, UV index, and the location geocoder |
 | `gibs.earthdata.nasa.gov` (WMTS) | GOES-19 ABI GeoColor satellite tiles, in the map's own projection |
 
-Basemap © CARTO & OpenStreetMap contributors.
+Basemap via OpenFreeMap: © OpenMapTiles, data from OpenStreetMap contributors.
 
 Two icon sets, both MIT: sky conditions are [Meteocons](https://github.com/basmilius/weather-icons)
 (© Bas Milius), loaded from a CDN; everything else is the inline `<svg id="sprite">` in
@@ -174,7 +174,7 @@ in [`tools/`](tools), and the weather-specific glyphs in the inline sprite.
 Everything that came from somewhere else keeps its own terms. This table is the canonical credits
 list — the page footer links here instead of repeating it, and keeps on the page only what has to
 be there: Open-Meteo's CC BY attribution (its data renders in the page itself) and the basemap
-credit on each map, where CARTO's terms ask for it. MIT's one condition is that the copyright
+credit on each map. MIT's one condition is that the copyright
 notice travels with the work, which this table and [`LICENSE`](LICENSE) satisfy now that the
 repository is public:
 
@@ -183,11 +183,13 @@ repository is public:
 | [Meteocons](https://github.com/basmilius/weather-icons) sky icons | MIT, © Bas Milius |
 | Interface & generic data glyphs, drawn from or after [Feather](https://feathericons.com) | MIT, © 2013–2023 Cole Bemis |
 | [Leaflet](https://leafletjs.com) 1.9.4 | BSD-2-Clause |
+| [MapLibre GL JS](https://maplibre.org/) 5.24.0 | BSD-3-Clause |
+| [MapLibre GL Leaflet](https://github.com/maplibre/maplibre-gl-leaflet) 0.1.4 | ISC |
 | NWS/NOAA feeds — `api.weather.gov`, NCEP, NWPS, SPC/WPC/CPC, NESDIS/GOES | Public domain, as U.S. government work |
 | NASA GIBS GOES-19 ABI tiles | Public domain |
 | Open-Meteo air quality, UV & geocoding | CC BY 4.0 |
 | [RCC-ACIS](https://www.rcc-acis.org/) normals, records & rankings | Open access |
-| CARTO basemap tiles | CARTO terms; underlying data © OpenStreetMap contributors, ODbL |
+| [OpenFreeMap](https://openfreemap.org/) basemap | Public keyless tiles; © OpenMapTiles, data from OpenStreetMap contributors. The public instance offers no SLA. |
 
 **The warranty disclaimer is load-bearing, not boilerplate.** This is a weather page, and the `AS IS`
 clause is the reason a fork is the forker's problem: a stale copy still serving last week's warnings

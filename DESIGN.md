@@ -440,9 +440,9 @@ Three details of that endpoint shape the code:
   that blanks the layer, and a dated URL is cacheable — the opposite of what a live panel wants.
   Undated + `no-store` means a fresh layer object always fetches current pixels with no cache-buster.
 
-GeoColor is opaque, so it hides the basemap's geography. CARTO publishes the label half of the same
-basemap separately (`*_only_labels`), so the labels go back on *top* of the imagery rather than the
-imagery being made translucent, which would only turn both layers to mud.
+GeoColor is opaque, so it hides the basemap's geography. OpenFreeMap's vector style is split into
+geometry below the imagery and symbol labels above it. This keeps names visible over radar and
+satellite without making the imagery translucent.
 
 Reflectivity lives in its own Leaflet pane (`radarPane`, z-index 350 — above the tiles at 200,
 below the overlays at 400). The pane is for **stacking only**: a pane rather than another `zIndex`
@@ -562,8 +562,8 @@ freeze the loop for good.
 The NOAA and NASA lines used to ride along in the Leaflet attribution, and on a 375px phone all
 four wrapped to three lines: 46px over a 236px map, a fifth of the picture. They were never
 load-bearing — `#rsCap` names every source that is drawing and the
-[licence table](README.md#license) lists all of them — so CARTO and OSM stay (their terms ask for
-a link on the map itself) and the rest moved to the caption. The bar is one 15px line now. This
+[licence table](README.md#license) lists all of them — so OpenMapTiles and OpenStreetMap stay in
+the map attribution, and the rest moved to the caption. The bar is one 15px line now. This
 also un-broke the map lock: `.maplock` sat at z-index 3 while Leaflet's control containers sit at
 1000, and `#radar` sets no z-index so it never opens a stacking context to trap them. The controls
 won, the attribution landed exactly where a bottom-centred pill lands, and `elementFromPoint` on

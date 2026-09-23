@@ -70,7 +70,6 @@ SITEMAP = os.path.join(ROOT, "sitemap.xml")
 # but they must be named here so a genuinely new *feed* can't hide among them.
 NAV_ONLY = {
     "https://aviationweather.gov",
-    "https://carto.com",
     "https://droughtmonitor.unl.edu",
     "https://feathericons.com",
     "https://forecast.weather.gov",
@@ -81,6 +80,8 @@ NAV_ONLY = {
     # a different host and is declared in img-src; this one is only ever an <a href>.
     "https://www.earthdata.nasa.gov",
     "https://open-meteo.com",
+    "https://openfreemap.org",
+    "https://openmaptiles.org",
     "https://radar.weather.gov",
     "https://water.noaa.gov",
     "https://www.blitzortung.org",
