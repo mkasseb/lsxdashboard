@@ -2196,6 +2196,12 @@ function tChip(t){ return "hsl("+tHue(t)+",78%,62%)"; }   // filled chips that c
    instant someone flips the toggle, with nothing to re-render. */
 function tvAttr(t,cls){ return 'class="tv'+(cls?" "+cls:"")+'" style="--th:'+tHue(t)+'"'; }
 /* Slim temperature sparkline that sits under the scrollable hour cards */
+function precipChance(p){
+  var v=p&&p.value;
+  if(v==null||v==="") return null;
+  v=Number(v);
+  return isFinite(v)?Math.max(0,Math.min(100,Math.round(v))):null;
+}
 /* ── Next 24 Hours: full-width integrated hourly chart ──
    Smooth temp curve (per-hour color gradient) + day/night bands + precip bars
    + hour icons + now marker + hover readout. Re-renders on resize. */
@@ -2209,10 +2215,11 @@ function renderHourly24(hrs){
     return;
   }
   var n=Math.min(24,hrs.length), i;
-  var hi=-999, lo=999, peak=0, temps=[], pops=[], feels=[], maxDiv=0, feelsHi=-999;
+  var hi=-999, lo=999, peak=0, popMissing=false, popKnown=false, temps=[], pops=[], feels=[], maxDiv=0, feelsHi=-999;
   for(i=0;i<n;i++){
     var t=hrs[i].temperature; temps.push(t); if(t>hi)hi=t; if(t<lo)lo=t;
-    var pp=hrs[i].probabilityOfPrecipitation; var v=(pp&&pp.value!=null)?pp.value:0; pops.push(v); if(v>peak)peak=v;
+    var v=precipChance(hrs[i].probabilityOfPrecipitation);
+    pops.push(v); if(v==null) popMissing=true; else{ popKnown=true; if(v>peak) peak=v; }
     var hrh=(hrs[i].relativeHumidity&&hrs[i].relativeHumidity.value!=null)?hrs[i].relativeHumidity.value:null;
     var fl=feelsLikeF(t,hrh,parseMph(hrs[i].windSpeed)); feels.push(fl);
     if(fl!=null){ if(Math.abs(fl-t)>maxDiv) maxDiv=Math.abs(fl-t); if(fl>feelsHi) feelsHi=fl; }
@@ -2221,7 +2228,7 @@ function renderHourly24(hrs){
   var sum='<div class="h24-sum">'
     +'<span class="h24-pill">▲ High <b '+tvAttr(hi)+'>'+hi+'°</b></span>'
     +'<span class="h24-pill">▼ Low <b '+tvAttr(lo)+'>'+lo+'°</b></span>'
-    +'<span class="h24-pill">'+ic("drop")+'Peak rain <b style="color:var(--accent)">'+peak+'%</b></span>'
+    +'<span class="h24-pill">'+ic("drop")+(popMissing?(popKnown?'Rain chance incomplete · known peak <b style="color:var(--accent)">'+peak+'%</b>':'Rain chance unavailable'):'Peak rain <b style="color:var(--accent)">'+peak+'%</b>')+'</span>'
     +(showFeels?'<span class="h24-pill">'+ic("heat")+'Feels high <b '+tvAttr(feelsHi)+'>'+feelsHi+'°</b></span>':'')
     +'<span class="h24-pill h24-now">'+wxImg(hrs[0].shortForecast,hrs[0].isDaytime,20)+' Now <b>'+hrs[0].temperature+'°</b></span>'
     +'</div>';
@@ -2277,7 +2284,7 @@ function renderHourly24(hrs){
   // precip bars + labels
   var bars="";
   for(i=0;i<n;i++){
-    if(pops[i]<=0) continue;
+    if(pops[i]==null||pops[i]<=0) continue;
     var bh=Math.max(3,barMax*pops[i]/100), bw=Math.min(18,slot*0.5), bx=X(i)-bw/2;
     bars+='<rect class="h24-bar" x="'+bx.toFixed(1)+'" y="'+(barBase-bh).toFixed(1)+'" width="'+bw.toFixed(1)+'" height="'+bh.toFixed(1)+'" rx="3" fill="var(--accent)" opacity=".38"/>';
     if(pops[i]>=15&&i%step===0) bars+='<text class="h24-poplbl" x="'+X(i).toFixed(1)+'" y="'+(barBase-bh-4).toFixed(1)+'" text-anchor="middle" fill="var(--accent)">'+pops[i]+'%</text>';
@@ -2330,7 +2337,7 @@ function renderHourly24(hrs){
     var when=(idx===0)?"Now":d.toLocaleTimeString([], {hour:"numeric"});
     tip.innerHTML='<b>'+esc(when)+'</b> · <b '+tvAttr(temps[idx])+'>'+temps[idx]+'°</b>'
       +((feels[idx]!=null&&Math.abs(feels[idx]-temps[idx])>=2)?' · <span '+tvAttr(feels[idx])+'>feels '+feels[idx]+'°</span>':'')
-      +(pops[idx]>0?' · <span style="color:var(--accent)">'+ic("drop")+pops[idx]+'%</span>':'')
+      +(pops[idx]==null?' · rain chance unavailable':(pops[idx]>0?' · <span style="color:var(--accent)">'+ic("drop")+pops[idx]+'%</span>':''))
       +' · '+esc(hrs[idx].shortForecast||"");
     tip.style.display="block";
     var px=(hx/W)*r.width, tw=tip.offsetWidth;
@@ -3934,6 +3941,34 @@ function ccGap(what){
 function ccNone(label,why){
   return '<span class="cc-gap" title="'+esc(why)+'">'+esc(label)+'</span>';
 }
+/* The NWS /observations/latest endpoint can return an hours-old report with HTTP 200. A
+   timestamp and a temperature are both required before the hero may call it "Now". */
+function currentObservationFresh(o,nowMs){
+  var p=o&&o.properties, ts=p&&Date.parse(p.timestamp);
+  return !!p&&isFinite(ts)&&ts>0&&ts<=nowMs+10*60000&&nowMs-ts<=STN_STALE_MS
+    &&p.temperature&&p.temperature.value!=null&&isFinite(Number(p.temperature.value));
+}
+function currentObservation(){
+  var station=current.station, lat=current.lat, lon=current.lon, signal=locSignal();
+  function read(id){ return getJSON(API+"/stations/"+id+"/observations/latest",HEADERS,signal); }
+  return read(station).catch(function(){ return null; }).then(function(primary){
+    if(currentObservationFresh(primary,Date.now())) return {station:station,observation:primary};
+    // Check three verified-nearby reports before giving up; a distant fresh report is not "now" here.
+    return observationStationsFor(lat,lon,35).then(function(ids){
+      return Promise.all(ids.filter(function(id){ return id!==station; }).slice(0,3).map(function(id){
+        return read(id).then(function(o){ return {station:id,observation:o}; })
+          .catch(function(){ return null; });
+      }));
+    }).then(function(alternates){
+      for(var i=0;i<alternates.length;i++){
+        if(alternates[i]&&currentObservationFresh(alternates[i].observation,Date.now())) return alternates[i];
+      }
+      return {station:station,observation:null,lastTimestamp:primary&&primary.properties&&primary.properties.timestamp};
+    }).catch(function(){
+      return {station:station,observation:null,lastTimestamp:primary&&primary.properties&&primary.properties.timestamp};
+    });
+  });
+}
 function loadCurrent(){
   var fresh=locGuard();
   var el=document.getElementById("current"), stEl=document.getElementById("ccStation");
@@ -3954,8 +3989,18 @@ function loadCurrent(){
       if(el) el.innerHTML='<div class="empty">Couldn\'t find a nearby reporting station. This will retry automatically.</div>';
     });
   }
-  return getJSON(API+"/stations/"+current.station+"/observations/latest",HEADERS,locSignal()).then(function(o){
+  return currentObservation().then(function(result){
     if(!fresh()) return;   // user moved while this was in flight
+    if(!result.observation){
+      stEl.textContent=result.station||"—";
+      heroNow.temp=null;
+      el.innerHTML='<div class="empty" role="status"><b>Current observation unavailable.</b> '
+        +(result.lastTimestamp&&isFinite(Date.parse(result.lastTimestamp))?'Last report from '+esc(result.station)+' was '+esc(timeAgo(result.lastTimestamp))+'. ':'')
+        +'Nearby stations will be checked again on refresh.</div>';
+      return;
+    }
+    if(result.station!==current.station){ current.station=result.station; saveLoc(current); }
+    var o=result.observation;
     var p=o.properties, c2f=function(c){return c==null?null:Math.round(c*9/5+32);};
     var temp=c2f(p.temperature&&p.temperature.value), dew=c2f(p.dewpoint&&p.dewpoint.value);
     var rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?Math.round(p.relativeHumidity.value):null;
@@ -4714,13 +4759,12 @@ var ERO_URL="https://mapservices.weather.noaa.gov/vector/rest/services/hazards/w
 var FIRE_URL="https://mapservices.weather.noaa.gov/vector/rest/services/fire_weather/SPC_firewx/MapServer/";
 var WSSI_URL="https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/wpc_wssi/MapServer/";
 var MCD_URL="https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/spc_mesoscale_discussion/MapServer/";
-/* Layer ids drift when NOAA republishes these services — and a wrong id fails SILENTLY as
-   "no risk" (each query's catch returns 0). Resolve ids by layer NAME at startup; the
-   hardcoded values (verified against the live services, July 2026) are only the fallback. */
+/* Layer ids drift when NOAA republishes these services. Only a named, verified layer may
+   establish a zero-risk result; fallback ids alone cannot certify an empty point query. */
 var RISK_LAYERS={spc:[1,9,17], ero:[0,1,2], fireCat:[1,4], fireD3:{dry:7,wind:8}, wssi:[1,2], mcd:0, wwa:1};
-/* Memoised and awaitable: loadSpc has to be able to WAIT for this. Each branch swallows its own
-   failure, so the returned promise always fulfils — an unresolvable service just keeps its
-   fallback ids. */
+var RISK_READY={spc:false,ero:false,fire:false,wssi:false};
+/* Memoised and awaitable: loadSpc waits for names before querying. A failed metadata lookup
+   leaves that service unavailable and is retried on the next scheduled refresh. */
 var _riskLayersP=null;
 function resolveRiskLayers(){
   if(_riskLayersP) return _riskLayersP;
@@ -4728,12 +4772,12 @@ function resolveRiskLayers(){
   getJSON(SPC_URL+"?f=json").then(function(d){
     var ids={};
     (d.layers||[]).forEach(function(l){ var m=/^Day\s*([123])\s+Categorical/i.exec(l.name||""); if(m) ids[m[1]]=l.id; });
-    if(ids[1]!=null&&ids[2]!=null&&ids[3]!=null) RISK_LAYERS.spc=[ids[1],ids[2],ids[3]];
+    if(ids[1]!=null&&ids[2]!=null&&ids[3]!=null){ RISK_LAYERS.spc=[ids[1],ids[2],ids[3]]; RISK_READY.spc=true; }
   }).catch(function(){}),
   getJSON(ERO_URL+"?f=json").then(function(d){
     var ids={};
     (d.layers||[]).forEach(function(l){ var m=/^Excessive Rainfall Day\s*([123])/i.exec(l.name||""); if(m) ids[m[1]]=l.id; });
-    if(ids[1]!=null&&ids[2]!=null&&ids[3]!=null) RISK_LAYERS.ero=[ids[1],ids[2],ids[3]];
+    if(ids[1]!=null&&ids[2]!=null&&ids[3]!=null){ RISK_LAYERS.ero=[ids[1],ids[2],ids[3]]; RISK_READY.ero=true; }
   }).catch(function(){}),
   getJSON(FIRE_URL+"?f=json").then(function(d){
     var cat={}, d3={};
@@ -4743,13 +4787,14 @@ function resolveRiskLayers(){
       if(/^Day\s*3\s+Dry\s*Thunderstorm$/i.test(n)) d3.dry=l.id;
       if(/^Day\s*3\s+Winds and Low Humidity$/i.test(n)) d3.wind=l.id;
     });
-    if(cat[1]!=null&&cat[2]!=null) RISK_LAYERS.fireCat=[cat[1],cat[2]];
-    if(d3.dry!=null&&d3.wind!=null) RISK_LAYERS.fireD3=d3;
+    if(cat[1]!=null&&cat[2]!=null&&d3.dry!=null&&d3.wind!=null){
+      RISK_LAYERS.fireCat=[cat[1],cat[2]]; RISK_LAYERS.fireD3=d3; RISK_READY.fire=true;
+    }
   }).catch(function(){}),
   getJSON(WSSI_URL+"?f=json").then(function(d){
     var ids={};
     (d.layers||[]).forEach(function(l){ var m=/^Overall_Impact_Day_([12])$/i.exec(l.name||""); if(m) ids[m[1]]=l.id; });
-    if(ids[1]!=null&&ids[2]!=null) RISK_LAYERS.wssi=[ids[1],ids[2]];
+    if(ids[1]!=null&&ids[2]!=null){ RISK_LAYERS.wssi=[ids[1],ids[2]]; RISK_READY.wssi=true; }
   }).catch(function(){}),
   getJSON(MCD_URL+"?f=json").then(function(d){
     (d.layers||[]).forEach(function(l){ if(/Mesoscale Discussion/i.test(l.name||"")) RISK_LAYERS.mcd=l.id; });
@@ -4758,6 +4803,7 @@ function resolveRiskLayers(){
     (d.layers||[]).forEach(function(l){ if(/^WatchesWarnings$/i.test(l.name||"")) RISK_LAYERS.wwa=l.id; });
   }).catch(function(){})
   ]);
+  _riskLayersP.then(function(){ if(!RISK_READY.spc||!RISK_READY.ero||!RISK_READY.fire||!RISK_READY.wssi) _riskLayersP=null; });
   return _riskLayersP;
 }
 function fireRisk(dn){
@@ -4766,14 +4812,14 @@ function fireRisk(dn){
     8: {t:"Critical", lvl:2, bg:"#ff5a1f"},
     5: {t:"Elevated", lvl:1, bg:"#ffb020"}
   };
-  return m[dn]||{t:"No Fire Risk",lvl:0,bg:"",muted:true};
+  return m[dn]||(dn===0?{t:"No Fire Risk",lvl:0,bg:"",muted:true}:{t:"Unavailable",lvl:null,bg:"",muted:true});
 }
 function fireQuery(layer){
   return pointQuery(FIRE_URL,layer,"dn").then(function(d){
     var maxdn=0;
     (d.features||[]).forEach(function(f){var dn=f.attributes&&f.attributes.dn;if(dn&&dn>maxdn)maxdn=dn;});
     return maxdn;
-  }).catch(function(){return 0;});   // isolate failure: one dead service ≠ blank matrix
+  }).catch(function(){return null;});   // a failed query cannot certify zero risk
 }
 /* Day 3 fire has NO categorical "Outlook" layer — only two probabilistic leaves whose dn is a
    FRACTION (winds/low-RH: 0.40=Marginal, 0.70=Critical · dry t-storm: 0.10=Marginal, 0.40=Critical).
@@ -4785,12 +4831,12 @@ function fireDay3Query(){
       var mx=0;
       (d.features||[]).forEach(function(f){ var dn=+(f.attributes&&f.attributes.dn)||0; if(dn>mx) mx=dn; });
       return mx;
-    }).catch(function(){return 0;});
+    }).catch(function(){return null;});
   }
   return Promise.all([probMax(RISK_LAYERS.fireD3.dry),probMax(RISK_LAYERS.fireD3.wind)]).then(function(r){
     if(r[1]>=0.70||r[0]>=0.40) return 8;   // Critical
     if(r[1]>=0.40||r[0]>=0.10) return 5;   // Elevated
-    return 0;
+    return r[0]==null||r[1]==null?null:0;
   });
 }
 function spcRisk(dn){
@@ -4802,7 +4848,7 @@ function spcRisk(dn){
     3:{t:"Marginal Risk", lvl:1, bg:"#7bbf7b"},
     2:{t:"General Storms",lvl:0, bg:"#a9dca9"}
   };
-  return m[dn]||{t:"No Severe Risk",lvl:-1,bg:"",muted:true};
+  return m[dn]||(dn===0?{t:"No Severe Risk",lvl:-1,bg:"",muted:true}:{t:"Unavailable",lvl:null,bg:"",muted:true});
 }
 function eroRisk(rank){
   var m={
@@ -4811,9 +4857,9 @@ function eroRisk(rank){
     2:{t:"Slight Risk",   bg:"#ffd23f"},
     1:{t:"Marginal Risk", bg:"#66bb6a"}
   };
+  if(rank==null||(!m[rank]&&rank!==0)) return {t:"Unavailable",lvl:null,bg:"",muted:true};
   var r=m[rank]||{t:"No Flood Risk",bg:"",muted:true};
-  r.lvl=rank||0;
-  return r;
+  return {t:r.t,lvl:rank,bg:r.bg,muted:r.muted};
 }
 function textOn(bg){
   if(!bg||bg.charAt(0)!=="#") return "var(--text)";
@@ -4824,14 +4870,17 @@ function pointQuery(base,layer,fields){
   // every one of these is a point query against `current` — cancellable by definition
   return getJSON(base+layer+"/query?geometry="+current.lon+","+current.lat
     +"&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects"
-    +"&outFields="+(fields||"*")+"&returnGeometry=false&f=json", null, locSignal());
+    +"&outFields="+(fields||"*")+"&returnGeometry=false&f=json", null, locSignal()).then(function(d){
+      if(!d||d.error||!Array.isArray(d.features)) throw new Error("Invalid ArcGIS point response");
+      return d;
+    });
 }
 function spcQuery(layer){
   return pointQuery(SPC_URL,layer,"dn").then(function(d){
     var maxdn=0;
     (d.features||[]).forEach(function(f){var dn=f.attributes&&f.attributes.dn;if(dn&&dn>maxdn)maxdn=dn;});
     return maxdn;
-  }).catch(function(){return 0;});
+  }).catch(function(){return null;});
 }
 function eroQuery(layer){
   // Field names vary across NOAA services; scan all string attributes for category keywords
@@ -4848,7 +4897,7 @@ function eroQuery(layer){
       }
     });
     return rank;
-  }).catch(function(){return 0;});
+  }).catch(function(){return null;});
 }
 /* WSSI "Overall Impact" polygons carry a string `impact` field: WINTER WEATHER AREA (snow on
    the map, nothing to act on — the TSTM of winter), then MINOR/MODERATE/MAJOR/EXTREME. Nested
@@ -4862,7 +4911,7 @@ function wssiQuery(layer){
       if(RANK[v]) rank=Math.max(rank,RANK[v]);
     });
     return rank;
-  }).catch(function(){return 0;});   // isolate failure: one dead service ≠ blank matrix
+  }).catch(function(){return null;});   // a failed query cannot certify zero impact
 }
 function riskPill(info,denom){
   var fg=info.muted?"var(--muted)":textOn(info.bg);
@@ -4874,26 +4923,25 @@ function loadSpc(){
   var fresh=locGuard();
   var el=document.getElementById("spc");
   document.getElementById("spcLoc").textContent="For "+current.name.replace(" (home)","");
-  // Wait for the layer ids to resolve by NAME before querying. A wrong id returns zero features,
-  // which renders as "No Severe Risk" — a silent false negative on a severe-weather card is far
-  // worse than a slower first paint, so the card holds its loading state until the ids are known.
+  // Wait for named layer ids. If metadata fails, that service stays unavailable until retry.
   return resolveRiskLayers().then(function(){
     if(!fresh()) return null;
-    return Promise.all([spcQuery(RISK_LAYERS.spc[0]),spcQuery(RISK_LAYERS.spc[1]),spcQuery(RISK_LAYERS.spc[2]),
-            eroQuery(RISK_LAYERS.ero[0]),eroQuery(RISK_LAYERS.ero[1]),eroQuery(RISK_LAYERS.ero[2]),
-            fireQuery(RISK_LAYERS.fireCat[0]),fireQuery(RISK_LAYERS.fireCat[1]),fireDay3Query(),
-            wssiQuery(RISK_LAYERS.wssi[0]),wssiQuery(RISK_LAYERS.wssi[1])]);
+    var missing=function(){return Promise.resolve(null);};
+    return Promise.all([RISK_READY.spc?spcQuery(RISK_LAYERS.spc[0]):missing(),RISK_READY.spc?spcQuery(RISK_LAYERS.spc[1]):missing(),RISK_READY.spc?spcQuery(RISK_LAYERS.spc[2]):missing(),
+            RISK_READY.ero?eroQuery(RISK_LAYERS.ero[0]):missing(),RISK_READY.ero?eroQuery(RISK_LAYERS.ero[1]):missing(),RISK_READY.ero?eroQuery(RISK_LAYERS.ero[2]):missing(),
+            RISK_READY.fire?fireQuery(RISK_LAYERS.fireCat[0]):missing(),RISK_READY.fire?fireQuery(RISK_LAYERS.fireCat[1]):missing(),RISK_READY.fire?fireDay3Query():missing(),
+            RISK_READY.wssi?wssiQuery(RISK_LAYERS.wssi[0]):missing(),RISK_READY.wssi?wssiQuery(RISK_LAYERS.wssi[1]):missing()]);
   }).then(function(r){
     if(!r) return;             // stale generation — nothing to paint
     if(!fresh()) return;   // user moved while this was in flight
-    smart.spcRisk=r[0]||0;
-    smart.eroRisk=r[3]||0;
-    smart.fireRisk=r[6]||0;
+    smart.spcRisk=r[0];
+    smart.eroRisk=r[3];
+    smart.fireRisk=r[6];
     /* Day 1 AND day 2 for the Bottom Line: the matrix below paints day 2 and throws it away,
        but tomorrow's outlook is exactly what the card's 24 hourly periods cannot see. WSSI is
        Bottom Line-only — a Winter column in the matrix would sit empty most of the year. */
-    callRisk={spc:[r[0]||0,r[1]||0], ero:[r[3]||0,r[4]||0], fire:[r[6]||0,r[7]||0],
-              wssi:[r[9]||0,r[10]||0]};
+    callRisk={spc:[r[0],r[1]], ero:[r[3],r[4]], fire:[r[6],r[7]],
+              wssi:[r[9],r[10]]};
     var days=["Today","Tomorrow","Day 3"];
     var html='<div class="spc-row rhead"><span></span><span class="rh">'+ic("storm")+'Storm</span><span class="rh">'+ic("flood")+'Flood</span><span class="rh">'+ic("fire")+'Fire</span></div>';
     for(var i=0;i<3;i++){
@@ -6623,20 +6671,33 @@ function updateLocNow(){
   // the visitor having to find the location bar.
   var r=document.getElementById("railNowSub"); if(r) r.textContent=current.name.replace(" (home)","");
 }
-function stationFor(lat,lon){
+function stationMiles(lat1,lon1,lat2,lon2){
+  var r=Math.PI/180, dLat=(lat2-lat1)*r, dLon=(lon2-lon1)*r;
+  var a=Math.sin(dLat/2)*Math.sin(dLat/2)
+    +Math.cos(lat1*r)*Math.cos(lat2*r)*Math.sin(dLon/2)*Math.sin(dLon/2);
+  return 3959*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function observationStationsFor(lat,lon,maxMiles){
   return pointsFor(lat,lon).then(function(pt){
     return getJSON(pt.properties.observationStations,HEADERS,locSignal());
   }).then(function(s){
     if(s.features&&s.features.length){
-      var p0=s.features[0].properties;
-      // The name arrives in the same response the identifier does; remember it for the tooltip
-      // rather than fetching /stations/<id> again later to ask what we were already told.
-      if(p0.stationIdentifier&&p0.name) STN_NAMES[p0.stationIdentifier]=p0.name;
-      return p0.stationIdentifier;
+      return s.features.map(function(f){
+        var p=f.properties||{};
+        if(p.stationIdentifier&&p.name) STN_NAMES[p.stationIdentifier]=p.name;
+        if(maxMiles!=null){
+          var c=f.geometry&&f.geometry.coordinates;
+          if(!c||!isFinite(c[0])||!isFinite(c[1])||stationMiles(lat,lon,+c[1],+c[0])>maxMiles) return null;
+        }
+        return p.stationIdentifier;
+      }).filter(Boolean);
     }
-    if(s.observationStations&&s.observationStations.length){ var u=s.observationStations[0]; return u.substring(u.lastIndexOf("/")+1); }
-    return null;
+    // The URL-only form has no coordinates, so it cannot certify a nearby fallback.
+    return maxMiles!=null?[]:(s.observationStations||[]).map(function(u){ return u.substring(u.lastIndexOf("/")+1); });
   });
+}
+function stationFor(lat,lon){
+  return observationStationsFor(lat,lon).then(function(ids){ return ids[0]||null; });
 }
 /* ===== Location generation guard =====
    Every location-scoped fetch captures the generation it was issued under. If the user moves
@@ -7389,10 +7450,7 @@ function bottomLineHours(hrs){
     if(isNaN(d.getTime())) return;
     var rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?Number(p.relativeHumidity.value):null;
     if(rh!=null&&!isFinite(rh)) rh=null;
-    var pop=(p.probabilityOfPrecipitation&&p.probabilityOfPrecipitation.value!=null)
-      ?Number(p.probabilityOfPrecipitation.value):0;
-    if(!isFinite(pop)) pop=0;
-    pop=Math.max(0,Math.min(100,pop));
+    var pop=precipChance(p.probabilityOfPrecipitation);
     var mph=parseMph(p.windSpeed), sf=p.shortForecast||"", t=p.temperature;
     H.push({t:t,d:d,hr:d.getHours(),pop:pop,rh:rh,mph:mph,
             dew:dewF(t,rh),fl:feelsLikeF(t,rh,mph),
@@ -7413,11 +7471,13 @@ function bottomLineHourlyCandidates(H,opts){
   function when(d){ return whenWord(d,now); }
 
   // Rain/storm window. One wet block owns its weather type; a later storm cannot relabel it.
-  var wet0=-1, wetEnd=-1, hasThunder=false, hasWintry=false, maxPop=0;
+  var wet0=-1, wetEnd=-1, hasThunder=false, hasWintry=false, maxPop=0, popMissing=false, popKnown=false;
   for(i=0;i<n;i++){
+    if(H[i].pop==null) popMissing=true;
+    else popKnown=true;
     if(H[i].pop>maxPop) maxPop=H[i].pop;
     if(wet0<0&&H[i].pop>=40) wet0=i;
-    if(wet0>=0&&wetEnd<0&&i>wet0&&H[i].pop<30) wetEnd=i;
+    if(wet0>=0&&wetEnd<0&&i>wet0&&H[i].pop!=null&&H[i].pop<30) wetEnd=i;
   }
   for(i=(wet0<0?n:wet0);i<(wetEnd>wet0?wetEnd:n);i++){
     if(H[i].pop>=30&&H[i].thund) hasThunder=true;
@@ -7425,9 +7485,15 @@ function bottomLineHourlyCandidates(H,opts){
   }
   if(n){
     if(wet0<0){
-      push(40,"sun","precip","Rain","No rain expected",
-        "Dry through "+when(H[n-1].d)+(maxPop>=25?"; peak chance "+maxPop+"%":""),
-        "No umbrella needed in the forecast window.","neutral");
+      if(popMissing) push(40,"rain","precip","Rain","Rain chance incomplete",
+        popKnown?"Some hours have no rain-chance data; known peak chance "+maxPop+"%.":"No hourly rain chances were reported.",
+        "Check the updated forecast before weather-sensitive plans.","neutral");
+      else if(maxPop>=20) push(40,"rain","precip","Rain","Rain possible",
+        "Peak chance "+maxPop+"% through "+when(H[n-1].d)+".",
+        "Keep an eye on the forecast for outdoor plans.","neutral");
+      else push(40,"sun","precip","Rain","Rain unlikely",
+        "Chance stays below 20% through "+when(H[n-1].d)+".",
+        "Outdoor plans look favorable for rain.","neutral");
     }else{
       var span=(wetEnd>wet0)
         ?(wet0===0?"now":"~"+when(H[wet0].d))+"–"+when(H[wetEnd].d)
@@ -7435,6 +7501,7 @@ function bottomLineHourlyCandidates(H,opts){
       var wet2=-1;
       if(wetEnd>0){ for(i=wetEnd;i<n;i++){ if(H[i].pop>=40){ wet2=i; break; } } }
       var more=(wet2>0)?" · another round ~"+when(H[wet2].d):"";
+      if(popMissing) more+=" · some rain chances unavailable";
       if(hasThunder&&hasWintry) push(96,"storm","precip","Storm & travel weather",
         "Thunderstorms with wintry precipitation",span+more,
         "Be ready to move inside and watch for slick roads.","danger",false,
@@ -7502,7 +7569,7 @@ function bottomLineHourlyCandidates(H,opts){
     var ok=true,muggy=false,lo=999;
     night.forEach(function(h){
       if(h.t<lo) lo=h.t;
-      if(h.t<50||h.t>72||h.pop>=25||(h.mph!=null&&h.mph>14)||h.dew==null||h.dew>64) ok=false;
+      if(h.t<50||h.t>72||h.pop==null||h.pop>=25||(h.mph!=null&&h.mph>14)||h.dew==null||h.dew>64) ok=false;
       if(h.dew!=null&&h.dew>=67&&h.t>=70) muggy=true;
     });
     if(ok&&!muggy) push(50,"moon","overnight","Tonight","Comfortable overnight",
@@ -7517,7 +7584,7 @@ function bottomLineHourlyCandidates(H,opts){
     var dhi=-999,nice=true;
     dayH.forEach(function(h){
       if(h.t!=null&&h.t>dhi) dhi=h.t;
-      if(h.t==null||h.pop>=20||h.t<58||h.t>88||(h.fl!=null&&h.fl>=95)||(h.mph!=null&&h.mph>15)||(h.dew!=null&&h.dew>66)) nice=false;
+      if(h.t==null||h.pop==null||h.pop>=20||h.t<58||h.t>88||(h.fl!=null&&h.fl>=95)||(h.mph!=null&&h.mph>15)||(h.dew!=null&&h.dew>66)) nice=false;
     });
     if(nice) push(55,"check","outdoors","Outdoor plans","Excellent outdoor conditions",
       dhi+"° and dry "+(now.getHours()>=12?"the rest of the day":"all day")+".",
@@ -7528,7 +7595,7 @@ function bottomLineHourlyCandidates(H,opts){
     var windowHours=[];
     for(i=0;i<n;i++){
       var hb=H[i];
-      if(!hb.day||hb.hr<7||hb.hr>20) continue;
+      if(!hb.day||hb.hr<7||hb.hr>20||hb.pop==null) continue;
       var fl2=(hb.fl!=null)?hb.fl:hb.t;
       if(fl2==null) continue;
       var sc=Math.abs(fl2-70)*1.3;
@@ -7809,20 +7876,19 @@ function renderTheCall(){
 // footer. A v11 snapshot would restore the old floating text under the new summary styles.
 // v13: #callRow changed from an equal-weight pill cloud to a lead briefing plus semantic support
 // list. A v12 snapshot would restore the old pills under rules that deliberately no longer exist.
-var SNAP_KEY="lsxSnap_v13", snapRestored=false, NET_OK=false;
-try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
+// v14: outage-aware risk, rain and current-observation markup must replace old reassuring cards.
+// Current readings, risk outlooks and the Bottom Line are fetched fresh on every open: their
+// rendered timestamps and conclusions cannot be revalidated from a saved HTML snapshot.
+var SNAP_KEY="lsxSnap_v14", snapRestored=false, NET_OK=false;
+try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
 var SNAP_PARTS=[
   {id:"afd",      ttl:6*3600000},
   {id:"alerts",   ttl:15*60000},     // safety-critical: short leash
-  {id:"current",  ttl:45*60000},
-  {id:"ccStation",ttl:45*60000},
   {id:"hourly24", ttl:3*3600000},
   {id:"h24loc",   ttl:3*3600000},
   {id:"daily",    ttl:6*3600000},
   {id:"rivers",   ttl:3*3600000},
   {id:"aqi",      ttl:3*3600000},
-  {id:"spc",      ttl:6*3600000},
-  {id:"spcLoc",   ttl:6*3600000},
   {id:"mcd",      ttl:15*60000},     // an MD lives 1–3 h; restore only when nearly current
   {id:"cpc",      ttl:24*3600000},
   {id:"hazards",  ttl:24*3600000},
@@ -7833,8 +7899,7 @@ var SNAP_PARTS=[
   {id:"qpf7",     ttl:12*3600000},
   {id:"drNow",    ttl:48*3600000},
   {id:"drMonth",  ttl:48*3600000},
-  {id:"drSeason", ttl:48*3600000},
-  {id:"callRow",  ttl:3*3600000}
+  {id:"drSeason", ttl:48*3600000}
 ];
 function saveSnapshot(){
   // Mid-transition the DOM still shows the OLD place while `current` is already the new one --
