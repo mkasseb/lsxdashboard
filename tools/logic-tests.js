@@ -50,6 +50,7 @@ const SUBJECT = new Function(`
   ${lift(/^var LAYERS_MAX=\d+;/m, 'LAYERS_MAX')}
   ${lift(/^function coldVerdict\(nowT,mMin,cMin\)\{[\s\S]*?^\}/m, 'coldVerdict()')}
   ${lift(/^function parseMph\(s\)\{.*\}$/m, 'parseMph()')}
+  ${lift(/^function precipChance\(p\)\{[\s\S]*?^\}/m, 'precipChance()')}
   ${lift(/^function heatIndexF\(t,rh\)\{[\s\S]*?^\}/m, 'heatIndexF()')}
   ${lift(/^function windChillF\(t,mph\)\{[\s\S]*?^\}/m, 'windChillF()')}
   ${lift(/^function feelsLikeF\(t,rh,mph\)\{[\s\S]*?^\}/m, 'feelsLikeF()')}
@@ -70,6 +71,9 @@ const SUBJECT = new Function(`
   ${lift(/^function outlookVerdict\(cfg,l0,l1\)\{[\s\S]*?^\}/m, 'outlookVerdict()')}
   ${lift(/^function bottomCandidate\(pri,ico,topic,label,headline,detail,action,tone,context,opts\)\{[\s\S]*?^\}/m, 'bottomCandidate()')}
   ${lift(/^function bottomLineHours\(hrs\)\{[\s\S]*?^\}/m, 'bottomLineHours()')}
+  var STN_STALE_MS=2*60*60000;
+  ${lift(/^function currentObservationFresh\(o,nowMs\)\{[\s\S]*?^\}/m, 'currentObservationFresh()')}
+  ${lift(/^function stationMiles\(lat1,lon1,lat2,lon2\)\{[\s\S]*?^\}/m, 'stationMiles()')}
   ${lift(/^function bottomLineHourlyCandidates\(H,opts\)\{[\s\S]*?^\}/m, 'bottomLineHourlyCandidates()')}
   ${lift(/^function bottomLineLocalAlert\(groups\)\{[\s\S]*?^\}/m, 'bottomLineLocalAlert()')}
   ${lift(/^function bottomLineCmp\(a,b\)\{[\s\S]*?^\}/m, 'bottomLineCmp()')}
@@ -89,7 +93,8 @@ const SUBJECT = new Function(`
            compactDayName, compactCondition, summaryPop, forecastImpact,
            summaryPopText, buildForecastSummary, nwsWallTime, hourlyByDate, hrWord,
            whenWord, windowSpan, bottomLineHorizon, dewF,
-           OUTLOOK_CFG, outlookVerdict, bottomLineHours, bottomLineHourlyCandidates,
+           OUTLOOK_CFG, outlookVerdict, precipChance, bottomLineHours, bottomLineHourlyCandidates,
+           currentObservationFresh, stationMiles,
            bottomLineLocalAlert, buildBottomLine,
            extractAFD, parseMcd, mcdValidEnd, geomTouchesEnv, watchBoundary, chaikinRing };
 `)();
@@ -102,12 +107,15 @@ function check(name, actual, expected) {
   failed++;
 }
 
-/* Restored snapshots contain rendered HTML, so a Bottom Line DOM migration must reject the old
-   shape rather than painting v12 pills under v13 briefing styles. */
-check('Bottom Line markup migration bumps the snapshot key',
-  /var SNAP_KEY="lsxSnap_v13"/.test(SRC), true);
-check('the previous v12 snapshot is explicitly discarded',
-  /"lsxSnap_v12"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
+/* Restored snapshots contain rendered HTML. Old reassuring risk/rain/observation cards must
+   be discarded so an outage cannot paint a stale "all clear" before live data arrives. */
+check('data-trust markup migration bumps the snapshot key',
+  /var SNAP_KEY="lsxSnap_v14"/.test(SRC), true);
+check('the previous v13 snapshot is explicitly discarded',
+  /"lsxSnap_v13"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
+const snapParts = lift(/^var SNAP_PARTS=\[[\s\S]*?^\];/m, 'SNAP_PARTS');
+check('saved HTML cannot restore stale current readings, risk or briefing',
+  ['current', 'ccStation', 'spc', 'callRow'].every(id => !snapParts.includes(`id:"${id}"`)), true);
 
 /* ============ rangeMark ============ */
 // The hero's range bar. Left end is the earlier reading, right end the later one.
@@ -690,12 +698,25 @@ check('the previous v12 snapshot is explicitly discarded',
   check('hour normalization identifies storm, winter and fog signals',
     [normalized[0].thund, normalized[0].wint, normalized[0].fog], [true, true, true]);
   check('hour normalization preserves the official daylight flag', normalized.map(h => h.day), [true, false]);
+  check('missing and invalid rain chances remain unknown',
+    [SUBJECT.precipChance(null), SUBJECT.precipChance({value: null}), SUBJECT.precipChance({value: 'bad'}), SUBJECT.precipChance({value: 0})],
+    [null, null, null, 0]);
+  check('hour normalization does not turn missing rain data into zero',
+    SUBJECT.bottomLineHours([{startTime: '2026-08-13T14:00:00-05:00', temperature: 70}])[0].pop, null);
 
   let H = hours(NOW, 12, i => ({pop: i === 2 ? 39 : 0}));
-  check('39 percent stays a dry-window call', topic(weather(H), 'precip').headline, 'No rain expected');
+  check('39 percent is communicated as possible rain', topic(weather(H), 'precip').headline, 'Rain possible');
+  H = hours(NOW, 12, i => ({pop: i === 2 ? null : 0}));
+  check('a missing hour prevents a dry-weather assurance', topic(weather(H), 'precip').headline, 'Rain chance incomplete');
+  H = hours(NOW, 12, () => ({pop: null}));
+  check('all missing rain chances do not invent a zero peak', topic(weather(H), 'precip').detail,
+    'No hourly rain chances were reported.');
   H = hours(NOW, 12, i => ({pop: i === 2 ? 40 : (i === 3 ? 29 : 0)}));
   check('40 percent starts a rain block', topic(weather(H), 'precip').headline, 'Rain likely');
   check('below 30 percent ends a rain block', topic(weather(H), 'precip').detail, '~2pm–3pm');
+  H = hours(NOW, 12, i => ({pop: i === 2 ? 40 : (i === 3 ? null : (i === 4 ? 20 : 0))}));
+  check('missing rain data cannot end a known wet block', topic(weather(H), 'precip').detail,
+    '~2pm–4pm · some rain chances unavailable');
   H = hours(NOW, 12, i => ({pop: i === 2 ? 50 : (i === 3 ? 35 : (i === 4 ? 20 : (i === 8 ? 35 : 0))), thund: i === 8}));
   check('thunder outside the first wet block cannot relabel rain', topic(weather(H), 'precip').headline, 'Rain likely');
   H = hours(NOW, 12, i => ({pop: i === 2 ? 50 : (i === 3 ? 20 : 0), thund: i === 2}));
@@ -711,9 +732,9 @@ check('the previous v12 snapshot is explicitly discarded',
   check('a second wet round is disclosed instead of merged into the first',
     topic(weather(H), 'precip').detail.includes('another round ~7pm'), true);
   H = hours(NOW, 12, i => ({pop: i === 3 ? 24 : 0}));
-  check('24 percent does not get a peak-chance qualifier', topic(weather(H), 'precip').detail.includes('peak chance'), false);
+  check('24 percent is communicated as possible rain', topic(weather(H), 'precip').headline, 'Rain possible');
   H = hours(NOW, 12, i => ({pop: i === 3 ? 25 : 0}));
-  check('25 percent gets an honest peak-chance qualifier', topic(weather(H), 'precip').detail.includes('peak chance 25%'), true);
+  check('25 percent gets an honest peak-chance qualifier', topic(weather(H), 'precip').detail.includes('Peak chance 25%'), true);
 
   for (const [feels, expected] of [[98, null], [99, 'High heat near 2pm'], [104, 'High heat near 2pm'], [105, 'Dangerous heat near 2pm']]) {
     H = hours(NOW, 12, i => ({fl: i === 2 ? feels : 70}));
@@ -753,6 +774,8 @@ check('the previous v12 snapshot is explicitly discarded',
   H = hours(NIGHT, 6, () => ({t: 65, fl: 65, dew: 50, pop: 0, mph: 5, day: false}));
   check('four continuous mild dry night hours support window-opening guidance',
     topic(C(H, {now: NIGHT}), 'overnight').headline, 'Comfortable overnight');
+  H = hours(NIGHT, 6, i => ({t: 65, fl: 65, dew: 50, pop: i === 2 ? null : 0, mph: 5, day: false}));
+  check('missing overnight rain data cannot certify a dry window', !!topic(C(H, {now: NIGHT}), 'overnight'), false);
   H = hours(NIGHT, 6, () => ({t: 65, fl: 65, dew: null, pop: 0, mph: 5, day: false}));
   check('missing dew point cannot be described as dry air', !!topic(C(H, {now: NIGHT}), 'overnight'), false);
   H = hours(NIGHT, 6, () => ({t: 72, fl: 72, dew: 68, pop: 0, mph: 5, day: false}));
@@ -768,6 +791,8 @@ check('the previous v12 snapshot is explicitly discarded',
     'Excellent outdoor conditions');
   H = hours(MORNING, 6, i => i === 2 ? {pop: 20} : {});
   check('20 percent rain prevents an all-day excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
+  H = hours(MORNING, 6, i => i === 2 ? {pop: null} : {});
+  check('missing rain data prevents an all-day excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
   H = hours(MORNING, 6, i => i === 2 ? {fl: 95} : {});
   check('feels-like 95 prevents an all-day excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
   H = hours(MORNING, 6, i => i === 2 ? {mph: 16} : {});
@@ -1244,8 +1269,155 @@ LAT...LON   38759474 39039367 39299179 39519038
   check('chaikinRing degenerate input passes through', C([[1, 2], [3, 4]], 2).length, 2);
 }
 
-if (failed) {
-  console.error(`\n${failed} logic test(s) failed`);
-  process.exit(1);
+/* ============ live-feed failure paths ============ */
+function riskHarness(getJSON) {
+  const els = {spc: {innerHTML: ''}, spcLoc: {textContent: ''}};
+  return new Function('getJSON', 'els', `
+    var SPC_URL='spc/', ERO_URL='ero/', FIRE_URL='fire/', WSSI_URL='wssi/';
+    var current={name:'Lake St. Louis, MO',lat:38.8,lon:-90.79};
+    var RISK_LAYERS={spc:[1,9,17],ero:[0,1,2],fireCat:[1,4],fireD3:{dry:7,wind:8},wssi:[1,2]};
+    var RISK_READY={spc:false,ero:false,fire:false,wssi:false};
+    var smart={},callRisk=null;
+    var document={getElementById:function(id){return els[id];}};
+    function locSignal(){return null;}
+    function locGuard(){return function(){return true;};}
+    function resolveRiskLayers(){return Promise.resolve();}
+    function renderTheCall(){}
+    function ic(){return '';}
+    ${lift(/^function pointQuery\(base,layer,fields\)\{[\s\S]*?^\}/m, 'pointQuery()')}
+    ${lift(/^function spcQuery\(layer\)\{[\s\S]*?^\}/m, 'spcQuery()')}
+    ${lift(/^function eroQuery\(layer\)\{[\s\S]*?^\}/m, 'eroQuery()')}
+    ${lift(/^function fireQuery\(layer\)\{[\s\S]*?^\}/m, 'fireQuery()')}
+    ${lift(/^function fireDay3Query\(\)\{[\s\S]*?^\}/m, 'fireDay3Query()')}
+    ${lift(/^function wssiQuery\(layer\)\{[\s\S]*?^\}/m, 'wssiQuery()')}
+    ${lift(/^function spcRisk\(dn\)\{[\s\S]*?^\}/m, 'spcRisk()')}
+    ${lift(/^function eroRisk\(rank\)\{[\s\S]*?^\}/m, 'eroRisk()')}
+    ${lift(/^function fireRisk\(dn\)\{[\s\S]*?^\}/m, 'fireRisk()')}
+    ${lift(/^function textOn\(bg\)\{[\s\S]*?^\}/m, 'textOn()')}
+    ${lift(/^function riskPill\(info,denom\)\{[\s\S]*?^\}/m, 'riskPill()')}
+    ${lift(/^function loadSpc\(\)\{[\s\S]*?^\}/m, 'loadSpc()')}
+    return {spcQuery,eroQuery,fireQuery,fireDay3Query,wssiQuery,spcRisk,eroRisk,fireRisk,
+      loadSpc,RISK_READY,els,getCallRisk:function(){return callRisk;}};
+  `)(getJSON, els);
 }
-console.log('ok    logic: rangeMark, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr, FAMILY_CFG,\n             compact forecast decisions, regime summaries, hourly extrema, coldVerdict, outlookVerdict,\n             Bottom Line hourly candidates, local-alert routing, buildBottomLine, extractAFD, parseMcd,\n             mcdValidEnd, geomTouchesEnv, watchBoundary and chaikinRing behave');
+
+function riskMetadataHarness(getJSON) {
+  return new Function('getJSON', `
+    var SPC_URL='spc/', ERO_URL='ero/', FIRE_URL='fire/', WSSI_URL='wssi/', MCD_URL='mcd/', WWA_URL='wwa/';
+    var RISK_LAYERS={spc:[1,9,17],ero:[0,1,2],fireCat:[1,4],fireD3:{dry:7,wind:8},wssi:[1,2],mcd:0,wwa:1};
+    var RISK_READY={spc:false,ero:false,fire:false,wssi:false}, _riskLayersP=null;
+    ${lift(/^function resolveRiskLayers\(\)\{[\s\S]*?^\}/m, 'resolveRiskLayers()')}
+    return {resolveRiskLayers,RISK_READY};
+  `)(getJSON);
+}
+
+function observationHarness(getJSON, ids) {
+  return new Function('getJSON', 'ids', `
+    var API='https://api.weather.gov', HEADERS={};
+    var current={station:'KSUS',lat:38.8,lon:-90.79};
+    var STN_STALE_MS=2*60*60000;
+    function locSignal(){return null;}
+    function observationStationsFor(){return Promise.resolve(ids);}
+    ${lift(/^function currentObservationFresh\(o,nowMs\)\{[\s\S]*?^\}/m, 'currentObservationFresh()')}
+    ${lift(/^function currentObservation\(\)\{[\s\S]*?^\}/m, 'currentObservation()')}
+    return currentObservation;
+  `)(getJSON, ids);
+}
+
+function currentCardHarness(result) {
+  const els = {current: {innerHTML: ''}, ccStation: {textContent: ''}};
+  return new Function('result', 'els', `
+    var current={station:'KSUS',lat:38.8,lon:-90.79};
+    var heroNow={temp:83};
+    var document={getElementById:function(id){return els[id];}};
+    function locGuard(){return function(){return true;};}
+    function currentObservation(){return Promise.resolve(result);}
+    function esc(s){return String(s);}
+    function timeAgo(){return '3 hr ago';}
+    ${lift(/^function loadCurrent\(\)\{[\s\S]*?^\}/m, 'loadCurrent()')}
+    return {run:loadCurrent,els,getTemp:function(){return heroNow.temp;}};
+  `)(result, els);
+}
+
+async function checkLiveFeedFailures() {
+  const now = Date.now();
+  const ob = (ageMinutes, temp = 20) => ({properties: {
+    timestamp: new Date(now - ageMinutes * 60000).toISOString(), temperature: {value: temp}
+  }});
+  check('recent station observation is current', SUBJECT.currentObservationFresh(ob(30), now), true);
+  check('zero Celsius is a valid current temperature', SUBJECT.currentObservationFresh(ob(5, 0), now), true);
+  check('two-hour-old station observation is stale', SUBJECT.currentObservationFresh(ob(121), now), false);
+  check('far-future station timestamp is not current', SUBJECT.currentObservationFresh(ob(-20), now), false);
+  check('missing observation timestamp is not current', SUBJECT.currentObservationFresh({properties: {temperature: {value: 20}}}, now), false);
+  check('missing observation temperature is not current', SUBJECT.currentObservationFresh(ob(5, null), now), false);
+  check('nearby fallback distance uses miles', Math.round(SUBJECT.stationMiles(38.8, -90.79, 38.93056, -90.4325)), 21);
+
+  const fallback = observationHarness(url => Promise.resolve(url.includes('/KSUS/') ? ob(180) : ob(10)), ['KSUS', 'KSET']);
+  check('stale primary observation selects a fresh nearby station', (await fallback()).station, 'KSET');
+  const noFresh = observationHarness(() => Promise.resolve(ob(180)), ['KSUS', 'KSET']);
+  check('all stale stations produce no current observation', (await noFresh()).observation, null);
+  const card = currentCardHarness({station: 'KSUS', observation: null, lastTimestamp: ob(180).properties.timestamp});
+  await card.run();
+  check('stale reading paints a prominent unavailable state', card.els.current.innerHTML.includes('Current observation unavailable.'), true);
+  check('stale reading clears the hero temperature', card.getTemp(), null);
+  check('stale reading never paints the previous temperature', card.els.current.innerHTML.includes('83°'), false);
+
+  let spcMetadataCalls = 0;
+  const metadata = riskMetadataHarness(url => {
+    let names = [];
+    if (url.startsWith('spc/')) {
+      spcMetadataCalls++;
+      if (spcMetadataCalls === 1) return Promise.resolve({error: {code: 500}});
+      names = ['Day 1 Categorical Outlook', 'Day 2 Categorical Outlook', 'Day 3 Categorical Outlook'];
+    } else if (url.startsWith('ero/')) {
+      names = ['Excessive Rainfall Day 1', 'Excessive Rainfall Day 2', 'Excessive Rainfall Day 3'];
+    } else if (url.startsWith('fire/')) {
+      names = ['Day 1 Outlook', 'Day 2 Outlook', 'Day 3 Dry Thunderstorm', 'Day 3 Winds and Low Humidity'];
+    } else if (url.startsWith('wssi/')) {
+      names = ['Overall_Impact_Day_1', 'Overall_Impact_Day_2'];
+    }
+    return Promise.resolve({layers: names.map((name, id) => ({name, id}))});
+  });
+  await metadata.resolveRiskLayers();
+  check('failed layer metadata cannot certify a zero-risk storm layer', metadata.RISK_READY.spc, false);
+  await metadata.resolveRiskLayers();
+  check('failed metadata is retried on the next refresh', spcMetadataCalls, 2);
+  check('verified NOAA layer names allow risk queries', metadata.RISK_READY.spc, true);
+
+  let risk = riskHarness(() => Promise.reject(new Error('network down')));
+  check('network failure does not become zero storm risk', await risk.spcQuery(1), null);
+  check('network failure does not become zero flood risk', await risk.eroQuery(0), null);
+  check('network failure does not become zero fire risk', await risk.fireQuery(1), null);
+  check('network failure does not become zero winter impact', await risk.wssiQuery(1), null);
+  risk = riskHarness(() => Promise.resolve({error: {code: 500, message: 'ArcGIS error'}}));
+  check('HTTP 200 ArcGIS error does not become zero storm risk', await risk.spcQuery(1), null);
+  risk = riskHarness(() => Promise.resolve({features: []}));
+  check('valid empty polygon list is a real zero risk', await risk.spcQuery(1), 0);
+  check('zero risk and unavailable have different labels', [risk.spcRisk(0).t, risk.spcRisk(null).t],
+    ['No Severe Risk', 'Unavailable']);
+  check('flood and fire keep unavailable distinct from zero', [risk.eroRisk(null).t, risk.fireRisk(null).t],
+    ['Unavailable', 'Unavailable']);
+  await risk.loadSpc();
+  check('unverified metadata cannot paint a quiet risk matrix', risk.els.spc.innerHTML.includes('No Severe Risk'), false);
+  check('unverified metadata paints unavailable risk cells', (risk.els.spc.innerHTML.match(/Unavailable/g) || []).length, 9);
+
+  risk = riskHarness(url => Promise.resolve(url.includes('spc/1/query') ? {error: {code: 400}} : {features: []}));
+  risk.RISK_READY.spc = true;
+  await risk.loadSpc();
+  check('one failed day remains unknown while another valid day is zero', risk.getCallRisk().spc, [null, 0]);
+
+  risk = riskHarness(url => Promise.resolve(url.includes('fire/7/query') ? {error: {code: 400}} : {features: []}));
+  check('partial Day 3 fire outage cannot certify no fire risk', await risk.fireDay3Query(), null);
+  risk = riskHarness(url => Promise.resolve(url.includes('fire/7/query') ? {error: {code: 400}}
+    : {features: [{attributes: {dn: 0.7}}]}));
+  check('known critical Day 3 fire risk survives another failed leaf', await risk.fireDay3Query(), 8);
+}
+
+checkLiveFeedFailures().then(() => {
+  if (failed) {
+    console.error(`\n${failed} logic test(s) failed`);
+    process.exitCode = 1;
+  } else {
+    console.log('ok    logic: forecast decisions, risk-feed failures, stale station fallback and weather guidance behave');
+  }
+}).catch(e => { console.error(e); process.exitCode = 1; });
