@@ -786,32 +786,6 @@
      the accessibility tree. First used by the 7-day rows' Low/High labels. */
   .sr{position:absolute;width:1px;height:1px;margin:0;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
   .daily{display:flex;flex-direction:column;gap:8px}
-  .fc-overview{display:grid;gap:10px;margin-bottom:2px;padding:1px 1px 3px}
-  .fc-story{display:flex;align-items:flex-start;gap:9px;color:var(--text);text-wrap:pretty}
-  .fc-signal{display:grid;place-items:center;width:32px;height:32px;flex:0 0 32px;border:1px solid var(--border);
-    border-radius:10px;background:var(--inset);color:var(--muted);box-shadow:inset 3px 0 currentColor}
-  .fc-signal .ic{width:17px;height:17px}
-  .fc-overview[data-tone="hot"] .fc-signal{color:var(--sev)}
-  .fc-overview[data-tone="cold"] .fc-signal,.fc-overview[data-tone="snow"] .fc-signal,
-  .fc-overview[data-tone="rain"] .fc-signal,.fc-overview[data-tone="wintry"] .fc-signal{color:var(--accent)}
-  .fc-overview[data-tone="storm"] .fc-signal{color:var(--warn)}
-  .fc-overview[data-tone="dry"] .fc-signal{color:var(--good)}
-  .fc-headline{padding-top:5px;font-size:var(--fs-lg);font-weight:800;line-height:1.35}
-  .fc-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
-  .fc-fact{display:grid;grid-template-columns:19px minmax(0,1fr);align-items:center;gap:7px;min-height:48px;
-    padding:7px 8px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--inset)}
-  .fc-fact:last-child:nth-child(odd){grid-column:1 / -1}
-  .fc-fact>.ic{width:15px;height:15px;color:var(--muted)}
-  .fc-fact[data-tone="hot"]>.ic{color:var(--sev)}
-  .fc-fact[data-tone="cold"]>.ic,.fc-fact[data-tone="rain"]>.ic,
-  .fc-fact[data-tone="snow"]>.ic,.fc-fact[data-tone="wintry"]>.ic{color:var(--accent)}
-  .fc-fact[data-tone="storm"]>.ic{color:var(--warn)}
-  .fc-fact[data-tone="dry"]>.ic{color:var(--good)}
-  .fc-fact .k{font-size:var(--fs-2xs);font-weight:800;text-transform:uppercase;letter-spacing:var(--ls-eyebrow);color:var(--muted)}
-  .fc-fact .v{margin-top:2px;font-size:var(--fs-sm);font-weight:750;line-height:1.25;color:var(--text);font-variant-numeric:tabular-nums}
-  .fc-meta{display:flex;justify-content:space-between;gap:10px;padding-top:8px;border-top:1px solid var(--border);
-    font-size:var(--fs-2xs);color:var(--muted);white-space:nowrap}
-  .fc-meta span:first-child{font-weight:750;color:var(--text)}
   .day-item{background:var(--inset);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden}
   .day{display:grid;grid-template-columns:minmax(52px,72px) 26px 52px minmax(26px,1fr) 66px 12px;align-items:center;gap:6px;
     width:100%;text-align:left;background:transparent;border:0;color:var(--text);
@@ -3570,120 +3544,6 @@ function summaryPopText(pop){
   if(rounded==null) return "";
   return (Math.round(pop)===rounded?"":"~")+rounded+"%";
 }
-/* Turn a week of already-derived facts into one editorial hierarchy. The renderer supplies facts;
-   this function decides what deserves the headline and which supporting facts are non-redundant.
-   Keeping that judgment pure makes hot, cold, snow, dry and
-   overnight-heavy weeks testable without waiting for each one to happen over St. Louis. */
-function buildForecastSummary(facts){
-  var F=(facts||[]).filter(function(f){ return !!f; });
-  if(!F.length) return {headline:"Forecast summary unavailable",facts:[],tone:"neutral",icon:"info"};
-  function name(i){ return (F[i]&&F[i].name)||("Day "+(i+1)); }
-  function nightName(i){ return /^tonight$/i.test(name(i))?"Tonight":name(i)+" night"; }
-  function periodName(p){ return p.part==="night"?nightName(p.i):name(p.i); }
-  function shortLabel(label){
-    return String(label||"").replace(/^(Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)/,
-      function(day){ return compactDayName(day); });
-  }
-  function shortPeriodName(p){
-    return shortLabel(periodName(p));
-  }
-  function periodSpan(a,b){
-    if(a.i===b.i&&a.part!==b.part) return name(a.i)+" into "+nightName(a.i);
-    return periodName(a)===periodName(b)?periodName(a):periodName(a)+"–"+periodName(b);
-  }
-  function shortPeriodSpan(a,b){
-    if(a.i===b.i&&a.part!==b.part) return compactDayName(name(a.i))+" day–night";
-    return shortPeriodName(a)===shortPeriodName(b)?shortPeriodName(a):shortPeriodName(a)+"–"+shortPeriodName(b);
-  }
-  function numberRange(values){
-    var v=values.filter(function(x){return x!=null;}).map(function(x){return Math.round(x);});
-    if(!v.length) return "";
-    var lo=Math.min.apply(null,v),hi=Math.max.apply(null,v);
-    return lo===hi?lo+"°":lo+"–"+hi+"°";
-  }
-  var maxFeels=null,maxFeelsI=-1,minFeels=null,minFeelsI=-1;
-  F.forEach(function(f,i){
-    if(f.feelsHigh!=null&&(maxFeels==null||f.feelsHigh>maxFeels)){ maxFeels=f.feelsHigh; maxFeelsI=i; }
-    if(f.feelsLow!=null&&(minFeels==null||f.feelsLow<minFeels)){ minFeels=f.feelsLow; minFeelsI=i; }
-  });
-
-  var periods=[];
-  F.forEach(function(f,i){
-    if(f.dayPop!=null) periods.push({i:i,part:"day",pop:+f.dayPop||0,condition:f.dayCondition||""});
-    if(f.nightPop!=null) periods.push({i:i,part:"night",pop:+f.nightPop||0,condition:f.nightCondition||""});
-  });
-  var maxPop=0;
-  periods.forEach(function(p){ if(p.pop>maxPop) maxPop=p.pop; });
-  var precip=null;
-  if(maxPop>=20){
-    var floor=Math.max(20,maxPop-10), clusters=[], run=[];
-    periods.forEach(function(p){
-      if(p.pop>=floor) run.push(p);
-      else if(run.length){ clusters.push(run); run=[]; }
-    });
-    if(run.length) clusters.push(run);
-    clusters=clusters.filter(function(c){ return c.some(function(p){ return p.pop===maxPop; }); });
-    clusters.sort(function(a,b){ return b.length-a.length; });
-    var win=clusters[0]||[], wx=win.map(function(p){return p.condition;}).join(" ").toLowerCase();
-    var family=/freezing|sleet|ice|wintry/.test(wx)?"wintry":(/snow|flurr/.test(wx)?"snow":
-      (/thunder|storm|tornado/.test(wx)?"storm":(/rain|shower|drizzle/.test(wx)?"rain":"precip")));
-    var lead={wintry:"Wintry precipitation",snow:"Snow chances",storm:"Storm chances",
-              rain:"Rain chances",precip:"Precipitation chances"}[family];
-    precip={family:family,text:lead+" "+periodSpan(win[0],win[win.length-1])+" ("+summaryPopText(maxPop)+")",
-      short:shortPeriodSpan(win[0],win[win.length-1])+" · "+summaryPopText(maxPop)};
-  }
-
-  var hot=[], firstHot=-1,lastHot=-1;
-  F.forEach(function(f,i){
-    if((f.hi!=null&&f.hi>=95)||(f.feelsHigh!=null&&f.feelsHigh>=100)){
-      hot.push(i); if(firstHot<0) firstHot=i; lastHot=i;
-    }
-  });
-  var heatHeadline="";
-  if(hot.length>=2){
-    var sustained=true;
-    for(var h=firstHot;h<=lastHot;h++){
-      if(!((F[h].hi!=null&&F[h].hi>=90)||(F[h].feelsHigh!=null&&F[h].feelsHigh>=100))){ sustained=false; break; }
-    }
-    if(sustained) heatHeadline="Very hot "+(firstHot===0||(firstHot===1&&F[0].hi==null)
-      ?"through "+name(lastHot):name(firstHot)+"–"+name(lastHot));
-  }
-  var hotImpact=maxFeelsI>=0?forecastImpact(maxFeels,F[maxFeelsI].hi):null;
-  if(!heatHeadline&&hotImpact&&hotImpact.kind==="hot") heatHeadline="Feels up to "+Math.round(maxFeels)+"° "+name(maxFeelsI);
-  var coldImpact=minFeelsI>=0?forecastImpact(minFeels,F[minFeelsI].lo!=null?F[minFeelsI].lo:F[minFeelsI].hi):null;
-
-  var headline="",tone="neutral",icon="info";
-  if(coldImpact&&coldImpact.kind==="cold"){
-    headline="Wind chills down to "+Math.round(minFeels)+"° "+(F[minFeelsI].feelsLowLabel||nightName(minFeelsI)); tone="cold"; icon="cold";
-  }else if(heatHeadline){ headline=heatHeadline; tone="hot"; icon="heat"; }
-  else if(precip){ headline=precip.text; tone=precip.family; icon=precip.family==="storm"?"storm":(precip.family==="rain"?"rain":(precip.family==="precip"?"drop":"snow")); }
-  else { headline="Mainly dry this week"; tone="dry"; icon="sun"; }
-
-  var bestChange=null;
-  for(var i=1;i<F.length;i++){
-    if(F[i-1].hi==null||F[i].hi==null) continue;
-    var delta=Math.round(F[i].hi-F[i-1].hi);
-    if(Math.abs(delta)>=10&&(!bestChange||Math.abs(delta)>Math.abs(bestChange.delta))) bestChange={i:i,delta:delta};
-  }
-  var summaryFacts=[];
-  function addFact(label,value,factIcon,factTone){
-    if(value&&summaryFacts.length<4) summaryFacts.push({label:label,value:value,icon:factIcon,tone:factTone||"neutral"});
-  }
-  if(hotImpact&&hotImpact.kind==="hot") addFact("Peak feels",Math.round(maxFeels)+"° "+compactDayName(name(maxFeelsI)),"heat","hot");
-  else if(coldImpact&&coldImpact.kind==="cold") addFact("Lowest feels",Math.round(minFeels)+"° "+
-    shortLabel(F[minFeelsI].feelsLowLabel||nightName(minFeelsI)),"cold","cold");
-  if(precip){
-    var pLabel={wintry:"Wintry window",snow:"Snow window",storm:"Storm window",rain:"Rain window",precip:"Precip window"}[precip.family];
-    var pIcon=precip.family==="storm"?"storm":(precip.family==="rain"?"rain":(precip.family==="precip"?"drop":"snow"));
-    addFact(pLabel,precip.short,pIcon,precip.family);
-  }else addFact("Rain signal","Mostly dry","sun","dry");
-  addFact("Highs",numberRange(F.map(function(f){return f.hi;})),"heat","temp");
-  addFact("Night lows",numberRange(F.map(function(f){return f.lo;})),"moon","night");
-  if(bestChange&&summaryFacts.length<4) addFact("Temperature trend",Math.abs(bestChange.delta)+"° "+
-    (bestChange.delta<0?"cooler ":"warmer ")+compactDayName(name(bestChange.i)),"stats","temp");
-
-  return {headline:headline,facts:summaryFacts,tone:tone,icon:icon};
-}
 /* Keep every NWS day/night period for the Bottom Line. The visible forecast card intentionally
    shows only seven rows, but after an evening load the feed can end with an eighth, day-only row. */
 function pairForecastPeriods(periods){
@@ -3837,22 +3697,6 @@ function loadForecast(){
                 pop:Math.max(dayPop!=null?dayPop:0,nightPop!=null?nightPop:0),
                 wind:main?(((main.windDirection?main.windDirection+" ":"")+(main.windSpeed||"")).trim()||"—"):"—"};
       }
-      function forecastOverview(){
-        var summary=buildForecastSummary(days.map(factsFor));
-        var updated=f&&f.properties&&(f.properties.updated||f.properties.updateTime||f.properties.generatedAt);
-        var stamp=updated?new Date(updated).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):"live feed";
-        return '<div class="fc-overview" data-tone="'+esc(summary.tone)+'">'
-          +'<div class="fc-story">'
-            +'<div class="fc-signal" aria-hidden="true">'+ic(summary.icon)+'</div>'
-            +'<div class="fc-headline"><span class="sr">Week summary: </span>'+esc(summary.headline)+'</div>'
-          +'</div>'
-          +(summary.facts.length?'<div class="fc-facts">'+summary.facts.map(function(k){
-            return '<div class="fc-fact" data-tone="'+esc(k.tone)+'">'+ic(k.icon)
-              +'<div><div class="k">'+esc(k.label)+'</div><div class="v">'+esc(k.value)+'</div></div></div>';
-          }).join("")+'</div>':'')
-          +'<div class="fc-meta"><span>NWS forecast</span><span>Updated '+esc(stamp)+'</span></div>'
-        +'</div>';
-      }
       // Stored as a repaintable closure: climate context (per-day normals) usually lands AFTER the
       // forecast, and renderContext calls this again so the "vs Normal" cell can appear.
       loadForecast._paint=function(){
@@ -3861,7 +3705,7 @@ function loadForecast(){
           if(it.classList.contains("open")) open.push(i);
           if(it.contains(document.activeElement)) focused=i;
         });
-        daily.innerHTML=forecastOverview()+paintDays();
+        daily.innerHTML=paintDays();
         var items=daily.querySelectorAll(".day-item");
         open.forEach(function(i){ if(items[i]) setOpen(items[i],items[i].querySelector(".day"),true); });   // keep expanded rows expanded
         // …and keep the keyboard where it was. This repaint fires on its own schedule (whenever

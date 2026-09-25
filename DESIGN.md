@@ -176,6 +176,9 @@ Those cues name the forecast day, avoid exact timing and use softer planning lan
 warnings never borrow them as evidence. The daily feed can still populate the card when the hourly
 feed fails. Bottom Line keeps the feed's final day-only period after an evening load even though
 the seven-row forecast card leaves that incomplete row off its display.
+Because that briefing now owns the cross-week synthesis, the seven-day card starts directly with
+its expandable day rows. The former forecast summary repeated the same headline, precipitation
+window, and weekly temperature range without adding a distinct decision, so it was removed.
 If a later forecast refresh fails, the saved in-memory week and hourly guidance is cleared before
 the briefing repaints; a failed hourly request also clears the old 24-hour chart.
 
