@@ -3684,6 +3684,23 @@ function buildForecastSummary(facts){
 
   return {headline:headline,facts:summaryFacts,tone:tone,icon:icon};
 }
+/* Keep every NWS day/night period for the Bottom Line. The visible forecast card intentionally
+   shows only seven rows, but after an evening load the feed can end with an eighth, day-only row. */
+function pairForecastPeriods(periods){
+  var days=[],i=0,ps=periods||[];
+  while(i<ps.length){
+    var p=ps[i];
+    if(p.isDaytime){
+      var n=(i+1<ps.length&&!ps[i+1].isDaytime)?ps[i+1]:null;
+      days.push({name:p.name.replace("This ","").replace("Afternoon","Aft."),day:p,night:n});
+      i+=n?2:1;
+    }else{
+      days.push({name:p.name,day:null,night:p});
+      i++;
+    }
+  }
+  return days;
+}
 /* One walk over the hourly forecast, two recoveries per local date:
    — rh: the humidity nearest midday (1pm). NWS removed relativeHumidity from the twice-daily
      /forecast periods (API discussion #752), so the day's headline humidity comes from here.
@@ -3762,27 +3779,17 @@ function loadForecast(){
       var f=res[0], h=res[1];
       var hByDate=h?hourlyByDate(h.properties.periods):{};
       var ps=f.properties.periods.slice(0,15);
-      /* Pair day + night periods into single calendar days — seven rows, capped ON PURPOSE.
+      /* Pair day + night periods into single calendar days — seven visible rows, capped ON PURPOSE.
          After sunset the feed leads with a night-only "Tonight" and ends on a day-only tail
          (a Thursday with a high and no low — its night isn't issued yet, and the forecast grid
          holds nothing to recover one from: minTemperature and even the hourly temperature
          series stop at the same edge). An eighth row carrying that tail was tried and read as
          broken — a lone high and a dash where every other row shows a pair — so the tail stays
-         dropped: Tonight plus six full days, and the seventh day arrives whole in the morning.
-         The day-with-no-night rendering below survives for a feed that is genuinely short. */
-      var days=[], i=0;
-      while(i<ps.length && days.length<7){
-        var p=ps[i];
-        if(p.isDaytime){
-          var n=(i+1<ps.length && !ps[i+1].isDaytime)?ps[i+1]:null;
-          days.push({name:p.name.replace("This ","").replace("Afternoon","Aft."), day:p, night:n});
-          i+= n?2:1;
-        }else{
-          days.push({name:p.name, day:null, night:p});
-          i++;
-        }
-      }
-      smart.days=days;   // read by the hero's range bar and the hazard-outlook corroboration
+         dropped from the card: Tonight plus six full days, and the seventh day arrives whole in
+         the morning. The Bottom Line keeps the final period because its seven-day scope needs it. */
+      var weekDays=pairForecastPeriods(ps),days=weekDays.slice(0,7);
+      smart.weekDays=weekDays;
+      smart.days=days;
       renderHeroToday(); // today's high/low is now known — fill the hero's range bar
       // Week-wide temp range for bar scaling
       var wMin=999, wMax=-999;
@@ -3955,10 +3962,11 @@ function loadForecast(){
       if(h){ // hourly strip only when the hourly feed succeeded
         var hrs=h.properties.periods.slice(0,24);
         smart.hourly=hrs;
+        smart.hourlyAll=h.properties.periods;
         renderHourly24(hrs);
         var hl=document.getElementById("h24loc"); if(hl) hl.textContent=current.name.replace(" (home)","");
-        if(typeof renderTheCall==="function") renderTheCall();
-      }
+      }else{ smart.hourly=[]; smart.hourlyAll=[]; }
+      if(typeof renderTheCall==="function") renderTheCall();
     });
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
@@ -6788,7 +6796,7 @@ function resetLocationState(){
        monWet:[], monWarm:[], monMtd:null, monMean:null, monName:"", years:0,
        dry:null, hist:null, normWeek:{}, recStation:""};
   uv={now:null, peak:null, daily:{}};
-  smart.hourly=[]; smart.days=[];
+  smart.hourly=[]; smart.hourlyAll=[]; smart.days=[]; smart.weekDays=[];
   heroNow.temp=null;   // the old city's reading must not mark the new city's range
   aqiState={val:null, pm:null, err:false}; callAqi=null; callRisk=null; callLocalAlert=null;
   lastMcds=[];   // "inside this area" was ray-cast against the OLD point; loadMcd re-answers
@@ -7280,7 +7288,7 @@ function initLocation(){
 }
 
 // Shared forecast/hazard state, read by most renderers below.
-var smart={spcRisk:0,eroRisk:0,fireRisk:0,hourly:[]};
+var smart={spcRisk:0,eroRisk:0,fireRisk:0,hourly:[],hourlyAll:[],days:[],weekDays:[]};
 /* ============ SUN TIMES ============
    Outlived the card they were written for. Two callers: the hero's sun line (renderHeroToday) and
    the day/night variant of the current-conditions icon. fmtT/fmtDur serve the same line. */
@@ -7344,11 +7352,13 @@ function loadUv(){
     for(var j=0;j<dts.length;j++){ if(dvs[j]!=null) map[dts[j]]=dvs[j]; }
     uv.daily=map;
     renderUvNow();
+    if(typeof renderTheCall==="function") renderTheCall();
     // The 7-day may already be on screen; repaint it so each day picks up its UV figure.
     if(typeof loadForecast._paint==="function") loadForecast._paint();
   }).catch(function(){
     if(!fresh()) return;
     uv.now=null; uv.peak=null; uv.daily={}; renderUvNow();
+    if(typeof renderTheCall==="function") renderTheCall();
   });
 }
 /* Painted into the hero. Both this and loadCurrent can run first, so it renders from whatever
@@ -7387,10 +7397,10 @@ function renderUvNow(){
       +sub.join('</span> <span class="ex-sep">·</span> <span class="ex-b">')+'</span>':'')+'</div>';
 }
 /* ============ BOTTOM LINE (né The Call — plain-English verdicts from data on hand) ============
-   Rules fire off the next ~24 hourly periods (smart.hourly) + the latest AQI + the SPC/WPC
-   outlook levels (callRisk, fed by loadSpc). Each verdict is a structured candidate; one leads
-   and up to three distinct topics support it. The rain/umbrella call always exists, so the
-   briefing is never empty once the hourly feed has loaded. */
+   Near-term rules use the next ~24 hourly periods; later rules use NWS seven-day periods. AQI,
+   local alerts and outlooks refine that picture. One candidate leads and up to three distinct
+   topics support it. The hourly rain call is the near-term fallback; the daily feed can still
+   give a briefing when the hourly service is unavailable. */
 var callAqi=null;
 var callRisk=null;   // {spc, ero, fire, wssi}, each [day1,day2] — raw dn/rank values from loadSpc
 var callLocalAlert=null; // strongest active LSX alert covering the selected location, if known
@@ -7412,9 +7422,36 @@ function windowSpan(a,b,base){
   return a.getDate()===base.getDate()?span:span+" tomorrow";
 }
 function bottomLineHorizon(d){
-  if(!d||isNaN(d.getTime())) return "Next 24 hours";
+  var wall=typeof d==="string"?nwsWallTime(d):null;
+  if(wall){
+    var day=new Date(Number(wall.key.slice(0,4)),wall.month,wall.day);
+    var hour=hrWord(wall.hour).replace(/(am|pm)$/i,function(m){ return " "+m.toUpperCase(); });
+    return "Through "+day.toLocaleDateString([], {weekday:"short"})+" "+hour;
+  }
+  if(!d||typeof d==="string"||isNaN(d.getTime())) return "Next 24 hours";
   var clock=hrWord(d).replace(/(am|pm)$/i,function(m){ return " "+m.toUpperCase(); });
   return "Through "+d.toLocaleDateString([], {weekday:"short"})+" "+clock;
+}
+function bottomLineWeekHorizon(days){
+  var last=null,lastText="";
+  (days||[]).forEach(function(d){
+    [d&&d.day,d&&d.night].forEach(function(p){
+      if(!p) return;
+      var end=new Date(p.endTime||p.startTime);
+      if(!isNaN(end.getTime())&&(!last||end>last)){
+        last=end; lastText=p.endTime||p.startTime;
+      }
+    });
+  });
+  if(!last) return "Next 7 days";
+  var wall=nwsWallTime(lastText);
+  var date=wall?new Date(Number(wall.key.slice(0,4)),wall.month,wall.day):last;
+  return "Through "+date.toLocaleDateString([], {weekday:"short",month:"short",day:"numeric"});
+}
+function bottomLineBriefingHorizon(days,H,weekEnabled,hasRisk){
+  if(weekEnabled&&days&&days.length) return bottomLineWeekHorizon(days);
+  if(H&&H.length>=6) return bottomLineHorizon(H[H.length-1].endText||H[H.length-1].end);
+  return hasRisk?"Today and tomorrow":"Forecast outlook";
 }
 function dewF(tF,rh){ // Magnus approximation, good to ~±1° in this range
   if(tF==null||rh==null||rh<=0) return null;
@@ -7490,7 +7527,7 @@ function bottomCandidate(pri,ico,topic,label,headline,detail,action,tone,context
           detail:detail||"",action:action||"",tone:tone||"neutral",context:!!context,
           supportRank:opts.supportRank,mergeAction:opts.mergeAction||"",
           windowLabel:opts.windowLabel||"",windowEnd:opts.windowEnd||"",
-          alertFamilies:opts.alertFamilies||[]};
+          alertFamilies:opts.alertFamilies||[],horizon:opts.horizon||"hourly"};
 }
 /* Normalize the NWS hourly shape once. Invalid timestamps are ignored rather than becoming an
    "Invalid Date" timing claim, and missing optional values stay missing so the decisions below
@@ -7501,11 +7538,13 @@ function bottomLineHours(hrs){
     p=p||{};
     var d=new Date(p.startTime);
     if(isNaN(d.getTime())) return;
+    var end=new Date(p.endTime);
+    if(isNaN(end.getTime())||end<=d) end=new Date(d.getTime()+3600000);
     var rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?Number(p.relativeHumidity.value):null;
     if(rh!=null&&!isFinite(rh)) rh=null;
     var pop=precipChance(p.probabilityOfPrecipitation);
     var mph=parseMph(p.windSpeed), sf=p.shortForecast||"", t=p.temperature;
-    H.push({t:t,d:d,hr:d.getHours(),pop:pop,rh:rh,mph:mph,
+    H.push({t:t,d:d,end:end,endText:p.endTime||"",hr:d.getHours(),pop:pop,rh:rh,mph:mph,
             dew:dewF(t,rh),fl:feelsLikeF(t,rh,mph),
             thund:/thunder|t-?storm/i.test(sf),wint:/snow|sleet|wintry|freezing/i.test(sf),
             fog:/fog/i.test(sf),day:!!p.isDaytime});
@@ -7676,6 +7715,107 @@ function bottomLineHourlyCandidates(H,opts){
   }
   return candidates;
 }
+/* The NWS seven-day day/night periods extend the briefing beyond the hourly edge. When one spans
+   that edge, only its uncovered tail is evaluated, using the additional hourly records already
+   supplied by NWS. A gap in those records leaves the crossing period out: whole-period daily
+   values cannot honestly be attributed to its tail. Later periods keep day-level wording. */
+function bottomLineWeekCandidates(days,cutoff,hourly){
+  var cut=cutoff instanceof Date?cutoff.getTime():Number(cutoff);
+  if(!isFinite(cut)) cut=Date.now();
+  var P=[];
+  (days||[]).forEach(function(d){
+    [d&&d.day,d&&d.night].forEach(function(p){
+      if(!p) return;
+      var start=new Date(p.startTime).getTime(), end=new Date(p.endTime).getTime();
+      if(!isFinite(start)||!isFinite(end)||end<=start||end<=cut) return;
+      var partial=start<cut, tail=[];
+      if(partial){
+        tail=bottomLineHours((hourly||[]).filter(function(h){
+          var t=new Date(h&&h.startTime).getTime();
+          return isFinite(t)&&t>=cut&&t<end;
+        }));
+        var needed=Math.ceil((end-cut)/3600000);
+        if(!needed||needed>24||tail.length!==needed||tail[0].d.getTime()!==cut||
+           tail[tail.length-1].end.getTime()<end) return;
+        for(var k=1;k<tail.length;k++){
+          if(tail[k].d.getTime()!==tail[k-1].end.getTime()) return;
+        }
+      }
+      var pop=partial?(tail.every(function(h){return h.pop!=null;})?
+        Math.max.apply(null,tail.map(function(h){return h.pop;})):null):
+        precipChance(p.probabilityOfPrecipitation);
+      var temp=partial?(tail.every(function(h){return h.t!=null&&isFinite(h.t);})?
+        Math[!!p.isDaytime?"max":"min"].apply(null,tail.map(function(h){return h.t;})):null):
+        (p.temperature==null?null:Number(p.temperature));
+      if(temp!=null&&!isFinite(temp)) temp=null;
+      var name=String(p.name||d.name||"later this week").replace(/ Night$/, " night");
+      P.push({start:start,name:name,day:!!p.isDaytime,pop:pop,temp:temp,
+              mph:partial?(tail.every(function(h){return h.mph!=null;})?
+                Math.max.apply(null,tail.map(function(h){return h.mph;})):null):parseMph(p.windSpeed),
+              forecast:partial?tail.map(function(h){return (h.thund?" thunderstorms":"")+
+                (h.wint?" snow":"")+(h.fog?" fog":"");}).join(" "):String(p.shortForecast||""),partial:partial});
+    });
+  });
+  if(!P.length) return [];
+  function strongest(list,value){
+    return list.sort(function(a,b){ return value(b)-value(a)||a.start-b.start; })[0]||null;
+  }
+  var out=[], opts={horizon:"week"};
+  var wet=P.filter(function(p){return p.pop>=40;});
+  var wintry=strongest(wet.filter(function(p){return /freezing|sleet|ice|wintry|snow|flurr/i.test(p.forecast);}),
+    function(p){return p.pop;});
+  var stormy=strongest(wet.filter(function(p){return /thunder|storm|tornado/i.test(p.forecast)&&
+    !/freezing|sleet|ice|wintry|snow|flurr/i.test(p.forecast);}),
+    function(p){return p.pop;});
+  var rainy=!wintry&&!stormy?strongest(wet,function(p){return p.pop;}):null;
+  if(wintry) out.push(bottomCandidate(58,"snow","winter","Week ahead · Travel weather",
+    "Wintry weather possible "+wintry.name,
+    (wintry.partial?"Peak remaining hourly chance ":"NWS precipitation chance ")+wintry.pop+"%.",
+    "Allow flexibility for travel and check updates closer to the day.","warning",false,opts));
+  if(stormy) out.push(bottomCandidate(57,"storm","storm","Week ahead · Storms",
+    "Storms possible "+stormy.name,
+    (stormy.partial?"Peak remaining hourly chance ":"NWS precipitation chance ")+stormy.pop+"%.",
+    "Keep plans flexible and check updates closer to the day.","warning",false,opts));
+  if(rainy) out.push(bottomCandidate(51,"rain","precip","Week ahead · Rain",
+    "Rain possible "+rainy.name,
+    (rainy.partial?"Peak remaining hourly chance ":"NWS precipitation chance ")+rainy.pop+"%.",
+    "Keep plans flexible and check updates closer to the day.","warning",false,opts));
+  var hot=strongest(P.filter(function(p){return p.day&&p.temp!=null&&p.temp>=95;}),function(p){return p.temp;});
+  if(hot) out.push(bottomCandidate(hot.temp>=100?57:53,"heat","heat","Week ahead · Heat",
+    "Hot weather "+hot.name,"Forecast high near "+Math.round(hot.temp)+"°.",
+    "Plan strenuous outdoor work for cooler hours.","warning",false,opts));
+  var cold=strongest(P.filter(function(p){return !p.day&&p.temp!=null&&p.temp<=32;}),function(p){return -p.temp;});
+  if(cold) out.push(bottomCandidate(55,"cold","cold","Week ahead · Cold",
+    "Freezing "+cold.name,"Forecast low near "+Math.round(cold.temp)+"°.",
+    "Plan for freezing temperatures.","warning",false,opts));
+  var wind=strongest(P.filter(function(p){return p.mph!=null&&p.mph>=25;}),function(p){return p.mph;});
+  if(wind) out.push(bottomCandidate(49,"wind","wind","Week ahead · Wind",
+    "Windy "+wind.name,"Forecast sustained wind around "+wind.mph+" mph.",
+    "Secure loose outdoor objects before it arrives.","warning",false,opts));
+  var highs=P.filter(function(p){return p.day&&p.temp!=null;}).sort(function(a,b){return a.start-b.start;});
+  var change=null;
+  for(var i=1;i<highs.length;i++){
+    var delta=Math.round(highs[i].temp-highs[i-1].temp);
+    if(Math.abs(delta)>=15&&(!change||Math.abs(delta)>Math.abs(change.delta)))
+      change={from:highs[i-1],to:highs[i],delta:delta};
+  }
+  if(change&&!hot&&!cold) out.push(bottomCandidate(46,"stats","trend","Week ahead · Temperature",
+    (change.delta<0?"Cooler":"Warmer")+" by "+change.to.name,
+    "Forecast high "+Math.round(change.from.temp)+"° to "+Math.round(change.to.temp)+"°.",
+    "Plan for the temperature change.","neutral",false,opts));
+  if(!out.length){
+    var known=P.filter(function(p){return p.pop!=null;});
+    if(known.length===P.length){
+      var peak=strongest(known,function(p){return p.pop;});
+      out.push(bottomCandidate(peak.pop>=20?38:35,peak.pop>=20?"rain":"sun","week","Week ahead",
+        peak.pop>=20?"Some rain possible later this week":"Mainly dry later this week",
+        peak.pop>=20?"Highest NWS rain chance "+peak.pop+"% "+peak.name+".":
+          "NWS rain chances stay below 20% in the later forecast periods.",
+        peak.pop>=20?"Check the forecast before outdoor plans.":"","neutral",false,opts));
+    }
+  }
+  return out;
+}
 function bottomLineLocalAlert(groups){
   var local=null,bestKey=null,ranks={emergency:0,warning:1,watch:2,advisory:3,statement:4};
   (groups||[]).forEach(function(g){
@@ -7700,6 +7840,7 @@ function bottomLineCmp(a,b){
 }
 function bottomLineAlertMatch(alert,candidate){
   if(!alert||!candidate) return false;
+  if(candidate.horizon==="week") return false;
   var ev=(alert.event||"").toLowerCase();
   /* These products fall into a presentation family by default, but semantically they are
      exclusive: a Dense Smoke Advisory must not rewrite a fire-weather outlook, and a Dense Fog
@@ -7819,13 +7960,19 @@ function renderTheCall(){
   var card=document.getElementById("callCard"), row=document.getElementById("callRow");
   if(!card||!row) return;
   var now=new Date(), H=bottomLineHours(smart.hourly);
-  if(H.length<6){ card.classList.remove("has"); return; }
-  var candidates=bottomLineHourlyCandidates(H,{now:now,uvPeak:uv.peak,aqi:callAqi});
+  var hourlyReady=H.length>=6;
+  var candidates=hourlyReady?bottomLineHourlyCandidates(H,{now:now,uvPeak:uv.peak,aqi:callAqi}):[];
+  var cutoff=hourlyReady?H[H.length-1].end:now;
+  /* A local warning or emergency owns the immediate reading. Later forecasts cannot corroborate
+     its timing, and should not compete for scarce space directly under the alert banner. */
+  var weekEnabled=!callLocalAlert||!(callLocalAlert.level==="warning"||callLocalAlert.level==="emergency");
+  if(weekEnabled)
+    candidates=candidates.concat(bottomLineWeekCandidates(smart.weekDays,cutoff,smart.hourlyAll));
   function push(pri,ico,topic,label,headline,detail,action,tone,context,opts){
     candidates.push(bottomCandidate(pri,ico,topic,label,headline,detail,action,tone,context,opts));
   }
   var horizon=document.getElementById("callHorizon");
-  if(horizon) horizon.textContent=bottomLineHorizon(H[H.length-1].d);
+  if(horizon) horizon.textContent=bottomLineBriefingHorizon(smart.weekDays,H,weekEnabled,!!callRisk);
 
   /* The outlook desks see hazards beyond the hourly edge. Their pure verdicts join the hourly
      candidates before one deterministic selector chooses the lead and supports. */
