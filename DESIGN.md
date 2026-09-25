@@ -153,11 +153,10 @@ Sizes come from `--fs-*`, radii from `--r-*`, spacing from `--sp-*`. There were 
 sizes and 19 pill classes that each defined their own geometry from scratch, which is how chips
 sitting side by side in one card ended up with radii between 8px and 22px. The pill classes all
 still exist by name — the JS builds them by name and restored snapshots carry those names — but
-they now declare only what differs. Anything naming a region of the page (card titles, band rails,
-the Bottom Line's own label) is the *eyebrow*: `--fs-xs`, 700, uppercase, `--ls-eyebrow`, muted.
-There used to be three idioms for that one job. Chart and station-plot internals deliberately stay
-on explicit pixels: those values are tuned to SVG geometry, not to the text system, and folding
-them into the type scale would be a category error.
+they now declare only what differs. Section rails use larger sentence-case text; card headings
+form a smaller second step; uppercase micro-labels remain inside data displays. Briefing and
+expanded forecast prose use a 15px reading size while compact chart and station-plot internals
+stay on explicit pixels: those values are tuned to SVG geometry.
 
 ## The page is ordered by what a visitor came for
 
