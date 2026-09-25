@@ -7934,8 +7934,10 @@ function renderTheCall(){
 // v14: outage-aware risk, rain and current-observation markup must replace old reassuring cards.
 // Current readings, risk outlooks and the Bottom Line are fetched fresh on every open: their
 // rendered timestamps and conclusions cannot be revalidated from a saved HTML snapshot.
-var SNAP_KEY="lsxSnap_v14", snapRestored=false, NET_OK=false;
-try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
+// v15: #daily no longer includes the forecast overview. A v14 snapshot would restore that
+// duplicate summary without its removed styles before the fresh forecast arrives.
+var SNAP_KEY="lsxSnap_v15", snapRestored=false, NET_OK=false;
+try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13","lsxSnap_v14"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
 var SNAP_PARTS=[
   {id:"afd",      ttl:6*3600000},
   {id:"alerts",   ttl:15*60000},     // safety-critical: short leash

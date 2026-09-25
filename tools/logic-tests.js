@@ -110,12 +110,12 @@ function check(name, actual, expected) {
   failed++;
 }
 
-/* Restored snapshots contain rendered HTML. Old reassuring risk/rain/observation cards must
-   be discarded so an outage cannot paint a stale "all clear" before live data arrives. */
-check('data-trust markup migration bumps the snapshot key',
-  /var SNAP_KEY="lsxSnap_v14"/.test(SRC), true);
-check('the previous v13 snapshot is explicitly discarded',
-  /"lsxSnap_v13"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
+/* Restored snapshots contain rendered HTML. The removed forecast overview must not
+   reappear from a v14 snapshot before the fresh daily forecast arrives. */
+check('forecast markup migration bumps the snapshot key',
+  /var SNAP_KEY="lsxSnap_v15"/.test(SRC), true);
+check('the previous v14 snapshot is explicitly discarded',
+  /"lsxSnap_v14"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
 const snapParts = lift(/^var SNAP_PARTS=\[[\s\S]*?^\];/m, 'SNAP_PARTS');
 check('saved HTML cannot restore stale current readings, risk or briefing',
   ['current', 'ccStation', 'spc', 'callRow'].every(id => !snapParts.includes(`id:"${id}"`)), true);
