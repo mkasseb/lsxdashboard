@@ -1533,7 +1533,40 @@ async function checkLiveFeedFailures() {
   check('known critical Day 3 fire risk survives another failed leaf', await risk.fireDay3Query(), 8);
 }
 
-checkLiveFeedFailures().then(() => {
+/* A scheduled refresh can fail after a successful forecast. Replaying that failure through the
+   real loader verifies that its old week, hourly strip, and repaint closure cannot survive. */
+async function checkForecastRefreshFailure() {
+  const smart = {days:[{name:'old'}], weekDays:[{name:'old'}],
+    hourly:[{startTime:'old'}], hourlyAll:[{startTime:'old'}]};
+  const climate = {fcHi:90, fcLo:70, fcHiLabel:' (tmrw)'};
+  const els = {daily:{innerHTML:'old forecast'}, hourly24:{innerHTML:'old chart'}};
+  const painted = [];
+  const load = new Function('smart','climate','els','painted', `
+    var current={lat:38.8,lon:-90.8}, HEADERS={};
+    var document={getElementById:function(id){return els[id]||null;}};
+    var renderHourly24=function(){}; renderHourly24._hrs=[{startTime:'old'}];
+    function locGuard(){return function(){return true;};}
+    function pointsFor(){return Promise.reject(new Error('NWS unavailable'));}
+    function renderHeroToday(){painted.push('hero');}
+    function renderVsNormal(){painted.push('normals');}
+    function renderContext(){painted.push('context');}
+    function renderTheCall(){painted.push('bottom');}
+    ${lift(/^function loadForecast\(\)\{[\s\S]*?^\}/m, 'loadForecast()')}
+    return {loadForecast,renderHourly24};
+  `)(smart,climate,els,painted);
+  load.loadForecast._paint = function(){painted.push('old paint');};
+  await load.loadForecast();
+  check('failed refresh clears old forecast and hourly state',
+    [smart.days,smart.weekDays,smart.hourly,smart.hourlyAll], [[],[],[],[]]);
+  check('failed refresh cannot repaint old seven-day forecast',load.loadForecast._paint,null);
+  check('failed refresh clears forecast-derived climate figures',
+    [climate.fcHi,climate.fcLo,climate.fcHiLabel],[null,null,'']);
+  check('failed refresh replaces stale hourly chart and recomputes Bottom Line',
+    [els.hourly24.innerHTML,painted.includes('bottom')],
+    ['<div class="empty">Hourly forecast unavailable.</div>',true]);
+}
+
+checkLiveFeedFailures().then(checkForecastRefreshFailure).then(() => {
   if (failed) {
     console.error(`\n${failed} logic test(s) failed`);
     process.exitCode = 1;

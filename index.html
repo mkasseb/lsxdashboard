@@ -3965,12 +3965,23 @@ function loadForecast(){
         smart.hourlyAll=h.properties.periods;
         renderHourly24(hrs);
         var hl=document.getElementById("h24loc"); if(hl) hl.textContent=current.name.replace(" (home)","");
-      }else{ smart.hourly=[]; smart.hourlyAll=[]; }
+      }else{
+        smart.hourly=[]; smart.hourlyAll=[]; renderHourly24._hrs=null;
+        var strip=document.getElementById("hourly24");
+        if(strip) strip.innerHTML='<div class="empty">Hourly forecast unavailable.</div>';
+      }
       if(typeof renderTheCall==="function") renderTheCall();
     });
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
+    smart.days=[]; smart.weekDays=[]; smart.hourly=[]; smart.hourlyAll=[];
+    loadForecast._paint=null; renderHourly24._hrs=null;
+    climate.fcHi=null; climate.fcLo=null; climate.fcHiLabel="";
+    var strip=document.getElementById("hourly24");
+    if(strip) strip.innerHTML='<div class="empty">Hourly forecast unavailable.</div>';
     daily.innerHTML='<div class="empty">Forecast unavailable. <a href="https://forecast.weather.gov/MapClick.php?lat='+current.lat+'&lon='+current.lon+'" target="_blank" rel="noopener">Open NWS forecast ↗</a></div>';
+    renderHeroToday(); renderVsNormal(); renderContext();
+    if(typeof renderTheCall==="function") renderTheCall();
   });
 }
 

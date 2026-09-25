@@ -176,6 +176,8 @@ Those cues name the forecast day, avoid exact timing and use softer planning lan
 warnings never borrow them as evidence. The daily feed can still populate the card when the hourly
 feed fails. Bottom Line keeps the feed's final day-only period after an evening load even though
 the seven-row forecast card leaves that incomplete row off its display.
+If a later forecast refresh fails, the saved in-memory week and hourly guidance is cleared before
+the briefing repaints; a failed hourly request also clears the old 24-hour chart.
 
 Its presentation is a decision briefing, not a pill cloud. `buildBottomLine()` receives structured
 candidates and chooses one actionable lead; climate context can never take that slot, and the
