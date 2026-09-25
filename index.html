@@ -64,7 +64,8 @@
        phrased as information; --fs-2xs is reserved for the uppercase tracked micro-labels (WARNING,
        COUNTIES, WHAT), where all-caps buys back the x-height the point size gives up. */
     --fs-display:clamp(56px,7.2vw,76px);--fs-hero:46px;
-    --fs-xl:20px;--fs-lg:15px;--fs-md:13px;--fs-sm:12px;--fs-xs:12px;--fs-2xs:11px;
+    --fs-xl:20px;--fs-lead:18px;--fs-section:16px;--fs-lg:15px;--fs-card-title:14px;
+    --fs-md:13px;--fs-sm:12px;--fs-xs:12px;--fs-2xs:11px;
     --sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:24px;
     --r-sm:8px;--r-md:12px;--r-lg:16px;--r-pill:999px;
     --ls-eyebrow:.08em;
@@ -79,6 +80,8 @@
     --shadow:0 6px 24px rgba(0,0,0,.4);
     --inset:rgba(255,255,255,.03);--chip:rgba(255,255,255,.12);--glow:rgba(74,163,255,.08);
     --glass1:rgba(19,25,36,.62);--glass2:rgba(26,34,49,.54);--gline:rgba(255,255,255,.09);--gspec:rgba(255,255,255,.11);
+    --reading-top:#151c28;--reading-bottom:#17202d;
+    --secondary-shadow:0 3px 14px rgba(0,0,0,.22);
     /* Logo mark — dark variant: deeper tile, quieter rings so the bolt carries the contrast */
     --logo-bg1:#1b3f70;--logo-bg2:#122b4e;--logo-ring:#7fb6ff;--logo-bolt:#ffcf3d;
   }
@@ -102,6 +105,8 @@
     --shadow:0 6px 20px rgba(20,32,58,.10),0 1px 3px rgba(20,32,58,.06);
     --inset:rgba(16,23,37,.045);--chip:rgba(16,23,37,.075);--glow:rgba(30,99,201,.10);
     --glass1:rgba(255,255,255,.88);--glass2:rgba(247,250,254,.82);--gline:rgba(16,23,37,.10);--gspec:rgba(255,255,255,.95);
+    --reading-top:#ffffff;--reading-bottom:#f8faff;
+    --secondary-shadow:0 3px 12px rgba(20,32,58,.07);
     /* Logo mark — brighter tile for light backgrounds; the bolt gold is shared across both */
     --logo-bg1:#2f7ae0;--logo-bg2:#1e63c9;--logo-ring:#dbeeff;--logo-bolt:#ffcf3d;
   }
@@ -307,9 +312,9 @@
   @media (prefers-reduced-motion: reduce){.logo .lg-sweep{animation:none}}
   .brand h1{font-size:var(--fs-xl);margin:0;line-height:1.1}
   .brand .sub{font-size:var(--fs-sm);color:var(--muted);margin-top:2px;line-height:1.4}
-  .header-right{margin-left:auto;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .header-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
   .clock{text-align:right;font-variant-numeric:tabular-nums}
-  .clock .time{font-size:var(--fs-xl);font-weight:700;letter-spacing:.5px}
+  .clock .time{font-size:var(--fs-lg);font-weight:650;letter-spacing:.3px;color:var(--muted)}
   .clock .date{font-size:var(--fs-sm);color:var(--muted)}
   /* :where(:not(.ab-head)) throughout: the banner head is a <button> for semantics, but its face
      IS the banner — the glass background, bevel and radius here painted a frosted strip inside
@@ -346,23 +351,20 @@
   }
   .card{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--border);
     border-radius:var(--r-lg);padding:var(--sp-4);box-shadow:var(--shadow);min-width:0}
-  /* ===== The eyebrow =====
-     Every label that names a region of the page — card titles, band rails, the Bottom Line's own
-     tag — is this one thing. There used to be three: 12px caps at 1.2px tracking, 13px title case
-     at 800, and an 11px caps label tinted with the link colour. Three idioms for one job reads as
-     three different authors. */
-  .card h2,.rail-t{font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;
-    letter-spacing:var(--ls-eyebrow);color:var(--muted)}
-  .card h2{margin:0 0 var(--sp-3);display:flex;align-items:center;justify-content:space-between;gap:8px}
+  /* Section names lead the scan; card names are a smaller, consistent second step. Compact
+     uppercase labels remain inside data displays, where they label values rather than regions. */
+  .card h2,.rail-t{text-transform:none;letter-spacing:0;color:var(--text)}
+  .card h2{margin:0 0 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;
+    font-size:var(--fs-card-title);font-weight:700;line-height:1.3}
   .card h2 .link{font-size:var(--fs-sm);text-transform:none;letter-spacing:0;font-weight:400}
 
   /* ===== Band rails =====
      Twenty-odd cards at identical visual weight read as a data dump. Naming the bands gives the
      scroll a spine — "Right now", "Next 24 hours", "The week ahead" — so a first-time visitor can
      tell what they're looking at without reading every card title. */
-  .railhead{display:flex;align-items:baseline;gap:12px;margin:10px 2px 0;flex-wrap:wrap}
+  .railhead{display:flex;align-items:baseline;gap:12px;margin:12px 2px 0;flex-wrap:wrap}
   .railhead:first-child{margin-top:0}
-  .rail-t{flex:0 0 auto}
+  .rail-t{flex:0 0 auto;font-size:var(--fs-section);font-weight:750;line-height:1.25}
   .rail-s{font-size:var(--fs-sm);color:var(--muted);font-weight:400}
   .rail-s:empty{display:none}
   .railhead::after{content:"";flex:1 1 40px;height:1px;background:linear-gradient(90deg,var(--border),transparent)}
@@ -629,12 +631,12 @@
   /* Bottom Line — one decision first, then the evidence that changes the plan. The old version
      rendered every verdict as an equal pill; that made a record comparison look as important as
      dangerous heat, and the rounded shapes looked interactive even though none were controls. */
-  #callCard{padding:12px 16px;display:none}
+  #callCard{padding:16px 18px;display:none}
   #callCard.has{display:block}
   .call-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:8px}
   #callCard .call-head h2{margin:0}
   .call-horizon{font-size:var(--fs-sm);color:var(--muted);font-weight:500}
-  .callrow{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1.45fr);gap:14px;align-items:center}
+  .callrow{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1.45fr);gap:18px;align-items:center}
   .bl-lead{--bl-tone:var(--muted);display:grid;grid-template-columns:auto minmax(0,1fr);gap:13px;
     align-items:start;align-content:center;padding:4px 0 4px 12px;border-left:3px solid var(--bl-tone)}
   .bl-lead-ico{width:32px;height:32px;display:grid;place-items:center;border-radius:var(--r-sm);
@@ -642,21 +644,21 @@
   .bl-lead-ico .ic{width:18px;height:18px}
   .bl-kicker,.bl-slabel{font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;
     letter-spacing:var(--ls-eyebrow);color:var(--muted)}
-  .bl-headline{margin-top:2px;font-size:var(--fs-lg);font-weight:750;line-height:1.2;
+  .bl-headline{margin-top:2px;font-size:var(--fs-lead);font-weight:750;line-height:1.25;
     letter-spacing:-.015em;text-wrap:pretty}
-  .bl-detail,.bl-action{display:inline;font-size:var(--fs-sm);line-height:1.4;text-wrap:pretty}
+  .bl-detail,.bl-action{display:inline;font-size:var(--fs-lg);line-height:1.5;text-wrap:pretty}
   .bl-detail{color:var(--muted)}
   .bl-action{font-weight:650}
   .bl-detail+.bl-action::before{content:" · ";color:var(--muted);font-weight:400}
   .bl-support{list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:0;
     margin:0;padding:0}
   .bl-support li{--bl-tone:var(--muted);display:grid;grid-template-columns:auto minmax(0,1fr);gap:9px;
-    align-items:start;min-width:0;padding:4px 10px;border-left:1px solid var(--border)}
+    align-items:start;min-width:0;padding:7px 10px;border-left:1px solid var(--border)}
   .bl-sico{color:var(--bl-tone);margin-top:1px}
   .bl-sico .ic{width:17px;height:17px}
   .bl-slabel{display:inline}
-  .bl-sheadline{display:inline;margin-left:7px;font-size:var(--fs-sm);font-weight:650;line-height:1.3;text-wrap:pretty}
-  .bl-sdetail{margin-top:3px;font-size:var(--fs-sm);color:var(--muted);line-height:1.4;text-wrap:pretty}
+  .bl-sheadline{display:inline;margin-left:7px;font-size:var(--fs-card-title);font-weight:650;line-height:1.4;text-wrap:pretty}
+  .bl-sdetail{margin-top:3px;font-size:var(--fs-card-title);color:var(--muted);line-height:1.5;text-wrap:pretty}
   .bl-sdetail strong{display:inline;color:var(--text);font-weight:600}
   .bl-sdetail span+strong::before{content:" · ";color:var(--muted);font-weight:400}
   .bl-tone-danger{--bl-tone:var(--danger)}
@@ -677,12 +679,12 @@
     .bl-sheadline{margin:3px 0 0}
   }
   @media(max-width:480px){
-    #callCard{padding:11px 12px}
+    #callCard{padding:14px}
     .call-head{margin-bottom:7px}
     .callrow{gap:8px}
     .bl-lead{padding:3px 0 6px 10px;gap:9px}
     .bl-lead-ico{width:30px;height:30px}
-    .bl-headline{font-size:var(--fs-lg)}
+    .bl-headline{font-size:17px}
     .bl-support{gap:0}
   }
 
@@ -831,6 +833,11 @@
   .day .dn .dnd{font-weight:600;font-size:var(--fs-xs);color:var(--muted);margin-left:6px}
   .daily.no-dnd .dnd{display:none}
   .day .di{font-size:21px;text-align:center;display:flex;align-items:center;justify-content:center}
+  /* The filled forecast artwork includes near-white clouds. Give only the 7-day icons a
+     dark surface in light mode; the local sprite fallback inherits the light icon colour. */
+  :root[data-theme="light"] .day .di{width:30px;height:30px;justify-self:center;
+    border-radius:8px;background:#293d54;color:#f5f8ff;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
   .day .dp{font-size:var(--fs-xs);color:var(--accent);text-align:center;font-variant-numeric:tabular-nums;min-width:0}
   .tbar{position:relative;height:7px;border-radius:4px;background:var(--chip);min-width:0}
   .tbar .tfill{position:absolute;top:0;bottom:0;border-radius:4px;min-width:8px}
@@ -850,7 +857,7 @@
   .day-item.open .chev{transform:rotate(180deg)}
   .day-detail{display:none;padding:0 12px 12px;border-top:1px solid var(--border)}
   .day-item.open .day-detail{display:block}
-  .dd-text{font-size:var(--fs-md);line-height:1.55;color:var(--text);margin:11px 0}
+  .dd-text{font-size:var(--fs-lg);line-height:1.6;color:var(--text);margin:11px 0}
   .dd-text b{color:var(--muted);font-weight:700;text-transform:uppercase;font-size:var(--fs-xs);letter-spacing:.5px;margin-right:4px}
   .dd-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .dd-item{background:var(--panel-2);border:1px solid var(--border);border-radius:var(--r-sm);padding:7px 10px}
@@ -958,11 +965,12 @@
     font-weight:600;color:var(--muted)}
   .rw-chip i{width:10px;height:10px;border-radius:3px;flex:0 0 auto;border:1px solid rgba(0,0,0,.3)}
   /* Radar loop scrubber — sits BELOW the map so it never fights the maplock overlay for taps */
-  .radar-ctl{display:none;align-items:center;gap:11px;margin-top:9px}
+  .radar-ctl{display:none;align-items:center;gap:11px;margin:10px 0 6px;padding:3px 9px;
+    border:1px solid var(--border);border-radius:var(--r-md);background:var(--inset)}
   .radar-ctl.ready{display:flex}
   .radar-ctl button{min-height:44px;padding:7px 13px;font-size:var(--fs-md);line-height:1;flex:0 0 auto}
   .radar-ctl input[type=range]{flex:1 1 auto;min-width:0;height:44px;margin:0;cursor:pointer;accent-color:var(--accent);background:none;border:0}
-  .radar-ctl .rc-t{flex:0 0 auto;font-size:var(--fs-sm);font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums;min-width:62px;text-align:right}
+  .radar-ctl .rc-t{flex:0 0 auto;font-size:var(--fs-sm);font-weight:700;color:var(--text);font-variant-numeric:tabular-nums;min-width:62px;text-align:right}
   .radar-ctl .rc-load{flex:0 0 auto;font-size:var(--fs-xs);color:var(--muted)}
   @media(max-width:480px){.radar-ctl{gap:8px}.radar-ctl .rc-t{min-width:54px;font-size:var(--fs-xs)}}
   .imgcap{font-size:var(--fs-sm);color:var(--muted);margin-top:8px;display:flex;justify-content:space-between;gap:8px}
@@ -1054,7 +1062,13 @@
   @media(max-width:680px){
     #radarCard .imgwrap{aspect-ratio:4/3}
   }
-  .rs-right{display:inline-flex;align-items:center;gap:12px;margin-left:auto}
+  .rs-head{display:flex;align-items:center;gap:8px 14px;margin-bottom:14px;min-width:0}
+  .rs-head h2{margin:0;flex:0 0 auto}
+  .rs-right{display:inline-flex;align-items:center;gap:12px}
+  .rs-right .link{font-size:var(--fs-sm);font-weight:400;white-space:nowrap}
+  .rs-right a{position:relative}
+  .rs-right a::after{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:100%;height:100%;min-width:44px;min-height:44px}
   .rs-full{padding:5px 11px;font-size:var(--fs-xs);font-weight:700;
     background:var(--inset);border:1px solid var(--border);color:var(--muted);font-family:inherit;
     cursor:pointer;text-transform:none;letter-spacing:0;line-height:1.3;white-space:nowrap}
@@ -1063,7 +1077,13 @@
   /* Expand when inline, close when fullscreen — the class that moves the card picks the mark. */
   body.radar-full #rsFull .ic-show,
   body:not(.radar-full) #rsFull .ic-hide{display:none}
-  @media(max-width:600px){.rs-full .rsf-t{display:none}.rs-full{padding:5px 9px;font-size:var(--fs-md)}}
+  @media(max-width:600px){
+    .rs-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 8px}
+    .rs-head h2{grid-column:1;grid-row:1}
+    .rs-head .rs-right{grid-column:2;grid-row:1}
+    .rs-head .rs-tabs{grid-column:1 / -1;grid-row:2;justify-self:start;margin-left:0}
+    .rs-full .rsf-t{display:none}.rs-full{padding:5px 9px;font-size:var(--fs-md)}
+  }
 
   /* ===== Radar fullscreen =====
      The card lifts out of the grid and covers the viewport. Nothing about the map changes, so the
@@ -1091,7 +1111,7 @@
      The dot is doing the work a tab's selected-background used to do. Colour alone would carry it
      for most people, but "which of these two is on" is exactly the distinction that fails at AA
      for a red-green viewer, so on/off differs in fill AND ring, not just hue. */
-  .rs-tabs{display:inline-flex;gap:4px;background:var(--inset);border:1px solid var(--border);
+  .rs-tabs{display:inline-flex;gap:4px;margin-left:auto;background:var(--inset);border:1px solid var(--border);
     border-radius:var(--r-lg);padding:3px}
   .rs-tab{min-height:0;padding:5px 11px;font-size:var(--fs-xs);font-weight:700;text-transform:uppercase;
     letter-spacing:.7px;border:0;border-radius:13px;background:transparent;color:var(--muted);
@@ -1494,6 +1514,15 @@
       backdrop-filter:blur(10px);
     }
   }
+  /* Text-heavy cards need a still surface even while the weather scene moves behind them. */
+  .card.hero,#callCard,#afdCard,#h24Card,#alertsCard.calm{
+    background:linear-gradient(180deg,var(--reading-top),var(--reading-bottom));
+    -webkit-backdrop-filter:none;backdrop-filter:none}
+  .masonry>.card{padding-block:18px;box-shadow:var(--secondary-shadow);
+    border-color:color-mix(in srgb,var(--border) 78%,transparent)}
+  header .header-right button{background:var(--inset);box-shadow:none;border-color:var(--border)}
+  header .locsearch #locSearch{background:var(--panel);border-color:var(--border);font-size:var(--fs-card-title)}
+  button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   /* users who prefer opacity get solid panels back */
   @media (prefers-reduced-transparency: reduce){
     .card,select,button:where(:not(.ab-head)),.locsearch #locSearch,.locsug{
@@ -1541,6 +1570,7 @@
   .locsearch #locSearch{width:100%;background:var(--panel-2);color:var(--text);
     border:1px solid var(--border);border-radius:var(--r-md);padding:10px 14px;font-size:var(--fs-md);min-height:44px;font-family:inherit;box-sizing:border-box}
   .locsearch #locSearch:focus{outline:none;border-color:var(--accent)}
+  .locsearch #locSearch:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   .locsug{display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;z-index:50;
     background:var(--panel);border:1px solid var(--border);border-radius:var(--r-md);box-shadow:var(--shadow);
     overflow:hidden;max-height:320px;overflow-y:auto}
@@ -1554,15 +1584,19 @@
   .locsug .sug .sname{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .locsug .sug .swhere{font-size:var(--fs-sm);color:var(--muted);white-space:nowrap;flex:0 0 auto}
   .locsug .sug-note{padding:12px 14px;font-size:var(--fs-md);color:var(--muted)}
-  .locbar .locNow{font-size:var(--fs-md);color:var(--muted);font-weight:600;margin-left:auto;white-space:nowrap}
-  .locNow-label{display:none}
+  .locbar .locNow{justify-content:flex-end;flex-wrap:wrap;gap:5px 7px;min-width:0;
+    font-size:var(--fs-card-title);color:var(--text);font-weight:600;margin-left:auto;line-height:1.3;white-space:normal}
+  .locNow-label{display:inline;color:var(--muted);font-size:var(--fs-sm);font-weight:600}
+  .locNow-place{display:inline-flex;align-items:center;gap:5px;min-width:0}
+  .locNow-place .ic{color:var(--muted)}
+  .locNow-place strong{font-size:var(--fs-section);font-weight:750;overflow-wrap:anywhere}
 
   /* Forecast Discussion "pulse" */
-  #afdCard .afd-body{font-size:var(--fs-md);line-height:1.62;color:var(--text)}
+  #afdCard .afd-body{font-size:var(--fs-lg);line-height:1.65;color:var(--text)}
   #afdCard .afd-body p{margin:0 0 10px}
   #afdCard .afd-body p:last-child{margin-bottom:0}
   .afd-list{margin:0;padding-left:20px}
-  .afd-list li{margin:0 0 8px;line-height:1.55;font-size:var(--fs-md)}
+  .afd-list li{margin:0 0 10px;line-height:1.6;font-size:var(--fs-lg)}
   .afd-list li:last-child{margin-bottom:0}
   .afd-meta{font-size:var(--fs-sm);color:var(--muted);margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
   /* ===== Why there is no clamp here =====
@@ -1580,9 +1614,9 @@
        safety net with none of that. (The one thing that actually extends past the right edge is
        #wxbg's blobs, and #wxbg has clipped its own overflow since it was written.) */
     html{overflow-x:hidden}
-    .brand h1{font-size:var(--fs-lg)}
+    .brand h1{font-size:var(--fs-lead)}
     .header-right{gap:10px}
-    .clock .time{font-size:var(--fs-xl)}
+    .clock .time{font-size:var(--fs-lg)}
     /* A droplet plus the longest compact label ("~90%" / "100%") needs about 50px at the 12px
        type floor. The old 34px track let it paint across the temperature rail on every wet row. */
     .day{grid-template-columns:68px 24px 52px minmax(38px,1fr) 64px 12px;gap:5px;padding:9px 10px}
@@ -1601,9 +1635,8 @@
     /* Keep the search compact, then name the selected place directly beneath it. Alert coverage
        depends on that place, so a visitor should see it before reading the alert banners. */
     .locbar{gap:8px}
-    .locbar .locNow{order:3;flex:0 0 100%;margin-left:0;white-space:normal;color:var(--text);gap:4px}
+    .locbar .locNow{order:3;flex:0 0 100%;margin-left:0;justify-content:flex-start;gap:4px}
     .locbar .locNow .ic{display:none}
-    .locNow-label{display:inline;color:var(--muted);font-weight:400}
     #geoBtn .g-txt{display:none}
     #geoBtn{flex:0 0 auto;padding:10px 13px;font-size:var(--fs-lg);line-height:1}
     .locsearch{flex:1 1 120px;min-width:0}
@@ -1625,6 +1658,7 @@
   @media(max-width:380px){
     .day{grid-template-columns:minmax(52px,1.15fr) 22px 48px minmax(26px,1fr) 58px 10px;
       gap:4px;padding:9px 8px}
+    :root[data-theme="light"] .day .di{width:26px;height:26px}
     .day .dp{gap:2px}
     .day .dt{gap:2px;font-size:var(--fs-xs)}
   }
@@ -1849,7 +1883,8 @@
        it registers with the radar at every zoom and pan and the tabs became layer toggles. -->
   <div class="stack col-8">
   <section class="card hero" id="radarCard">
-    <h2>
+    <div class="rs-head">
+      <h2>Sky</h2>
       <span class="rs-tabs" id="rsTabs" role="group" aria-label="Map layers">
         <button type="button" class="rs-tab on" data-l="radar" aria-pressed="true">Radar</button>
         <button type="button" class="rs-tab on" data-l="sat" aria-pressed="true">Satellite</button>
@@ -1869,7 +1904,7 @@
           ><span class="rsf-t">Fullscreen</span></button>
         <span class="link" id="rsLink"><a href="https://radar.weather.gov/station/KLSX/standard" target="_blank" rel="noopener">Official KLSX ↗</a></span>
       </span>
-    </h2>
+    </div>
     <div class="rs-view" id="rsRadar">
       <div class="imgwrap maplock-wrap">
         <div id="radar" class="frame"></div>
@@ -6714,7 +6749,8 @@ function readLoc(){ try{ var s=localStorage.getItem(LOC_KEY); return s?JSON.pars
 var TITLE_BASE="LSX Dashboard";
 function updateLocNow(){
   var el=document.getElementById("locNow");
-  if(el) el.innerHTML='<span class="locNow-label">Weather for</span>'+ic("pin")+esc(current.name);
+  if(el) el.innerHTML='<span class="locNow-label">Forecast for</span><span class="locNow-place">'
+    +ic("pin")+'<strong>'+esc(current.name)+'</strong></span>';
   // A pinned tab should say WHOSE weather it is. Safe to write here rather than behind a
   // fresh() guard: this runs synchronously from setLocation with the location it just set,
   // never from a fetch that a later location could have superseded.
