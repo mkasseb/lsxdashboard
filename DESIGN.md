@@ -170,6 +170,14 @@ burn clock, wind, air quality, a temperature-crash warning, climate records — 
 verdict that scores every daylight hour on comfort, rain risk and wind to name the best two-hour
 window to be outside, spoken only when the day has adversity worth dodging. It ranks directly
 under safety, so the card is on the first screen whatever the weather is doing.
+The same briefing now reads the NWS seven-day day/night periods after the hourly edge. Later-week
+rain, storms, wintry weather, heat, freezing cold and wind can lead when the next day is quiet.
+Those cues name the forecast day, avoid exact timing and use softer planning language; current
+warnings never borrow them as evidence. The daily feed can still populate the card when the hourly
+feed fails. Bottom Line keeps the feed's final day-only period after an evening load even though
+the seven-row forecast card leaves that incomplete row off its display.
+If a later forecast refresh fails, the saved in-memory week and hourly guidance is cleared before
+the briefing repaints; a failed hourly request also clears the old 24-hour chart.
 
 Its presentation is a decision briefing, not a pill cloud. `buildBottomLine()` receives structured
 candidates and chooses one actionable lead; climate context can never take that slot, and the
@@ -193,8 +201,13 @@ only when the lead itself is neutral or good; a warning never spends scarce spac
 Below 600px that optional context cue yields the space entirely because the same information
 remains available in the Climate section.
 
-The header’s horizon is computed from the last hourly period (“Through Fri 9 PM”) rather than
-promising a generic 24 hours. The renderer preserves the hierarchy in DOM order — heading, lead,
+The header’s horizon is computed from the last seven-day period (“Through Fri, Oct 2”) when that
+feed is available, and from the last hourly period's end when it is not. An outlook-only briefing
+says “Today and tomorrow” until the NWS forecast arrives. During a local warning or emergency,
+the later-week cues yield and the header returns to the near-term horizon. NWS timestamp date and
+hour fields set the header, so a visitor's browser timezone cannot shift the forecast's end date.
+The renderer
+preserves the hierarchy in DOM order — heading, lead,
 semantic support list — and uses severity colour only when the underlying candidate warrants it.
 The blocks are deliberately not pill-shaped and have no hover state: they are readings, not
 controls.
@@ -209,6 +222,11 @@ emergency has no matching evidence to translate, the briefing yields rather than
 unrelated recommendation directly below the emergency banner. Air-quality, smoke and fog products
 use exclusive semantic matches so their fallback alert styling cannot accidentally rewrite storm
 or fire-weather guidance.
+`bottomLineWeekCandidates()` is the matching pure boundary for the coarser NWS day/night periods.
+When a period crosses the 24-hour cutoff, the extra NWS hourly records assess only its remaining
+hours; a gap in that tail suppresses the period instead of assigning its whole-period high, low or
+rain chance to the tail. Missing precipitation chances stay unknown, and later-week hazards rank
+below urgent hourly ones.
 
 **The Pulse rides directly behind it in calm weather, at full length.** `#afdCard` is the same kind
 of card as the Bottom Line — one verdict computed by this page, one written by a human at NWS

@@ -60,12 +60,15 @@ const SUBJECT = new Function(`
   ${lift(/^function forecastImpact\(feels,air\)\{[\s\S]*?^\}/m, 'forecastImpact()')}
   ${lift(/^function summaryPopText\(pop\)\{[\s\S]*?^\}/m, 'summaryPopText()')}
   ${lift(/^function buildForecastSummary\(facts\)\{[\s\S]*?^\}/m, 'buildForecastSummary()')}
+  ${lift(/^function pairForecastPeriods\(periods\)\{[\s\S]*?^\}/m, 'pairForecastPeriods()')}
   ${lift(/^function nwsWallTime\(value\)\{[\s\S]*?^\}/m, 'nwsWallTime()')}
   ${lift(/^function hourlyByDate\(hrs\)\{[\s\S]*?^\}/m, 'hourlyByDate()')}
   ${lift(/^function hrWord\(d\)\{[\s\S]*?^\}/m, 'hrWord()')}
   ${lift(/^function whenWord\(d,base\)\{[\s\S]*?^\}/m, 'whenWord()')}
   ${lift(/^function windowSpan\(a,b,base\)\{[\s\S]*?^\}/m, 'windowSpan()')}
   ${lift(/^function bottomLineHorizon\(d\)\{[\s\S]*?^\}/m, 'bottomLineHorizon()')}
+  ${lift(/^function bottomLineWeekHorizon\(days\)\{[\s\S]*?^\}/m, 'bottomLineWeekHorizon()')}
+  ${lift(/^function bottomLineBriefingHorizon\(days,H,weekEnabled,hasRisk\)\{[\s\S]*?^\}/m, 'bottomLineBriefingHorizon()')}
   ${lift(/^function dewF\(tF,rh\)\{[\s\S]*?^\}/m, 'dewF()')}
   ${lift(/^var OUTLOOK_CFG=\{[\s\S]*?^\};/m, 'OUTLOOK_CFG')}
   ${lift(/^function outlookVerdict\(cfg,l0,l1\)\{[\s\S]*?^\}/m, 'outlookVerdict()')}
@@ -75,6 +78,7 @@ const SUBJECT = new Function(`
   ${lift(/^function currentObservationFresh\(o,nowMs\)\{[\s\S]*?^\}/m, 'currentObservationFresh()')}
   ${lift(/^function stationMiles\(lat1,lon1,lat2,lon2\)\{[\s\S]*?^\}/m, 'stationMiles()')}
   ${lift(/^function bottomLineHourlyCandidates\(H,opts\)\{[\s\S]*?^\}/m, 'bottomLineHourlyCandidates()')}
+  ${lift(/^function bottomLineWeekCandidates\(days,cutoff,hourly\)\{[\s\S]*?^\}/m, 'bottomLineWeekCandidates()')}
   ${lift(/^function bottomLineLocalAlert\(groups\)\{[\s\S]*?^\}/m, 'bottomLineLocalAlert()')}
   ${lift(/^function bottomLineCmp\(a,b\)\{[\s\S]*?^\}/m, 'bottomLineCmp()')}
   ${lift(/^function bottomLineAlertMatch\(alert,candidate\)\{[\s\S]*?^\}/m, 'bottomLineAlertMatch()')}
@@ -91,11 +95,11 @@ const SUBJECT = new Function(`
   return { rangeMark, rangeRow, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr,
            FAMILY_CFG, coldVerdict, parseMph, heatIndexF, windChillF, feelsLikeF,
            compactDayName, compactCondition, summaryPop, forecastImpact,
-           summaryPopText, buildForecastSummary, nwsWallTime, hourlyByDate, hrWord,
-           whenWord, windowSpan, bottomLineHorizon, dewF,
-           OUTLOOK_CFG, outlookVerdict, precipChance, bottomLineHours, bottomLineHourlyCandidates,
+           summaryPopText, buildForecastSummary, pairForecastPeriods, nwsWallTime, hourlyByDate, hrWord,
+           whenWord, windowSpan, bottomLineHorizon, bottomLineWeekHorizon, bottomLineBriefingHorizon, dewF,
+           OUTLOOK_CFG, outlookVerdict, precipChance, bottomLineHours, bottomLineHourlyCandidates, bottomLineWeekCandidates,
            currentObservationFresh, stationMiles,
-           bottomLineLocalAlert, buildBottomLine,
+           bottomLineLocalAlert, bottomLineAlertMatch, buildBottomLine,
            extractAFD, parseMcd, mcdValidEnd, geomTouchesEnv, watchBoundary, chaikinRing };
 `)();
 
@@ -819,6 +823,122 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
   check('empty hourly data produces no weather claims', C([], {now: NOW}), []);
 }
 
+/* ============ Bottom Line seven-day decisions ============ */
+{
+  const W = SUBJECT.bottomLineWeekCandidates;
+  const start = new Date('2026-08-13T06:00:00-05:00');
+  const cutoff = new Date('2026-08-14T06:00:00-05:00');
+  function nwsIso(d) {
+    return new Date(d.getTime()-5*3600000).toISOString().slice(0,19)+'-05:00';
+  }
+  function period(offset, name, day, temp, pop, forecast, wind) {
+    const a = new Date(start.getTime() + offset * 12 * 3600000);
+    return {name, isDaytime: day, startTime: nwsIso(a),
+      endTime: nwsIso(new Date(a.getTime() + 12 * 3600000)), temperature: temp,
+      probabilityOfPrecipitation: pop == null ? null : {value: pop},
+      shortForecast: forecast || '', windSpeed: wind || '5 mph'};
+  }
+  const days = [
+    {name: 'Thursday', day: period(0, 'Thursday', true, 82, 80, 'Thunderstorms'),
+      night: period(1, 'Thursday Night', false, 65, 10, 'Clear')},
+    {name: 'Friday', day: period(2, 'Friday', true, 98, 10, 'Sunny'),
+      night: period(3, 'Friday Night', false, 58, 10, 'Clear')},
+    {name: 'Saturday', day: period(4, 'Saturday', true, 73, 60, 'Rain Showers'),
+      night: period(5, 'Saturday Night', false, 28, 45, 'Snow', '28 mph')}
+  ];
+  const eveningPeriods = [period(1, 'Tonight', false, 55, 10, 'Clear')];
+  for(let i=0;i<7;i++){
+    eveningPeriods.push(period(2+i*2, 'Day '+i, true, 75, 10, 'Sunny'));
+    if(i<6) eveningPeriods.push(period(3+i*2, 'Night '+i, false, 55, 10, 'Clear'));
+  }
+  const paired = SUBJECT.pairForecastPeriods(eveningPeriods);
+  check('evening forecast retains the final day-only period for the briefing',
+    [paired.length, paired[7].day.name, paired[7].night], [8, 'Day 6', null]);
+  const week = W(days, cutoff);
+  check('week candidates start after the hourly edge', week.some(x => /Thursday/.test(x.headline)), false);
+  check('wintry weather outranks a larger later rain chance',
+    week.find(x => x.topic === 'winter').headline, 'Wintry weather possible Saturday night');
+  check('weekly temperature and wind hazards use named periods',
+    week.map(x => x.topic), ['winter', 'heat', 'cold', 'wind']);
+  check('week candidates cannot be treated as current local-alert evidence',
+    SUBJECT.bottomLineAlertMatch({event: 'Winter Storm Warning', family: 'winter'}, week[0]), false);
+  const splitHazards = W([{name:'Friday',day:period(2,'Friday',true,75,60,'Thunderstorms')},
+    {name:'Saturday',night:period(5,'Saturday Night',false,30,50,'Snow')}], cutoff);
+  check('distinct later storm and winter events both survive',
+    splitHazards.map(x => x.topic), ['winter', 'storm', 'cold']);
+  check('later hazards can lead over a quiet hourly rain fallback',
+    SUBJECT.buildBottomLine([{topic:'precip', priority:40, headline:'Rain unlikely'}, ...week]).lead.topic,
+    'winter');
+  check('near-term dangerous heat still leads over later hazards',
+    SUBJECT.buildBottomLine([{topic:'heat', priority:100, headline:'Dangerous heat'}, ...week]).lead.topic,
+    'heat');
+  check('the horizon uses the last NWS period end',
+    SUBJECT.bottomLineWeekHorizon(days), 'Through Sun, Aug 16');
+  check('the seven-day horizon uses the forecast location date',
+    SUBJECT.bottomLineWeekHorizon([{day:{startTime:'2026-08-16T06:00:00-05:00',
+      endTime:'2026-08-16T18:00:00-05:00'}}]), 'Through Sun, Aug 16');
+  check('the hourly horizon uses the forecast location clock',
+    SUBJECT.bottomLineHorizon('2026-08-16T18:00:00-05:00'), 'Through Sun 6 PM');
+  check('outlook-only loading cannot claim seven-day coverage',
+    SUBJECT.bottomLineBriefingHorizon([], [], true, true), 'Today and tomorrow');
+  check('hourly-only horizon uses the last hour end',
+    SUBJECT.bottomLineBriefingHorizon([], Array.from({length:6}, (_, i) => ({
+      end:new Date(2026, 7, 14, 15+i)})), true, false), 'Through Fri 8 PM');
+  check('a local warning shortens the displayed horizon',
+    SUBJECT.bottomLineBriefingHorizon(days, Array.from({length:6}, (_, i) => ({
+      end:new Date(2026, 7, 14, 15+i)})), false, true), 'Through Fri 8 PM');
+
+  const dry = W([{name:'Friday',day:period(2,'Friday',true,75,10,'Sunny')}], cutoff);
+  check('later dry periods provide a quiet-week fallback', dry[0].headline, 'Mainly dry later this week');
+  check('sub-threshold week rain still gets a qualified outlook',
+    W([{name:'Friday',day:period(2,'Friday',true,75,30,'Chance Rain')}], cutoff)[0].headline,
+    'Some rain possible later this week');
+  check('a large shift in ordinary highs becomes planning guidance',
+    W([{name:'Friday',day:period(2,'Friday',true,83,10,'Sunny')},
+      {name:'Saturday',day:period(4,'Saturday',true,62,10,'Sunny')}], cutoff)
+      .find(x => x.topic === 'trend').headline, 'Cooler by Saturday');
+  check('missing week rain chances cannot certify a dry week',
+    W([{name:'Friday',day:period(2,'Friday',true,75,null,'Sunny')}], cutoff), []);
+  check('past periods cannot produce week guidance', W(days, new Date(2026, 7, 20)), []);
+
+  const crossing = {name:'Thursday',night:period(1,'Thursday Night',false,45,80,'Thunderstorms')};
+  const edge = new Date('2026-08-13T23:00:00-05:00');
+  function tailHour(i, pop, forecast) {
+    const a = new Date(edge.getTime() + i * 3600000);
+    return {startTime:nwsIso(a),endTime:nwsIso(new Date(a.getTime()+3600000)),
+      temperature:45,windSpeed:'5 mph',isDaytime:false,
+      probabilityOfPrecipitation:{value:pop},shortForecast:forecast};
+  }
+  const dryTail = Array.from({length:7}, (_, i) => tailHour(i, 0, 'Clear'));
+  const wetTail = dryTail.map((h, i) => i === 2 ? tailHour(i, 60, 'Thunderstorms') : h);
+  check('crossing period uses remaining hourly weather, not whole-night storm wording',
+    W([crossing], edge, dryTail).some(x => x.topic === 'storm'), false);
+  check('a storm in the uncovered tail is retained with hourly provenance',
+    W([crossing], edge, wetTail).find(x => x.topic === 'storm').detail,
+    'Peak remaining hourly chance 60%.');
+  check('a missing hourly tail cannot borrow whole-period daily values',
+    W([crossing], edge, wetTail.slice(1)), []);
+  check('a daily period starting exactly at the cutoff uses its own forecast',
+    W([{name:'Friday',day:period(2,'Friday',true,75,55,'Rain')}], cutoff)
+      .find(x => x.topic === 'precip').detail, 'NWS precipitation chance 55%.');
+  const springNight = {name:'Saturday',night:{name:'Saturday Night',isDaytime:false,
+    startTime:'2026-03-07T18:00:00-06:00',endTime:'2026-03-08T06:00:00-05:00',
+    temperature:40,windSpeed:'5 mph',shortForecast:'Thunderstorms',
+    probabilityOfPrecipitation:{value:70}}};
+  const springHours = [
+    ['2026-03-07T23:00:00-06:00','2026-03-08T00:00:00-06:00'],
+    ['2026-03-08T00:00:00-06:00','2026-03-08T01:00:00-06:00'],
+    ['2026-03-08T01:00:00-06:00','2026-03-08T03:00:00-05:00'],
+    ['2026-03-08T03:00:00-05:00','2026-03-08T04:00:00-05:00'],
+    ['2026-03-08T04:00:00-05:00','2026-03-08T05:00:00-05:00'],
+    ['2026-03-08T05:00:00-05:00','2026-03-08T06:00:00-05:00']
+  ].map(([startTime,endTime]) => ({startTime,endTime,temperature:40,windSpeed:'5 mph',
+    isDaytime:false,probabilityOfPrecipitation:{value:50},shortForecast:'Thunderstorms'}));
+  check('spring-forward night crosses the cutoff without a phantom hour',
+    W([springNight], new Date('2026-03-07T23:00:00-06:00'), springHours)
+      .find(x => x.topic === 'storm').detail, 'Peak remaining hourly chance 50%.');
+}
+
 /* ============ Bottom Line local-alert selection ============ */
 {
   const L = SUBJECT.bottomLineLocalAlert;
@@ -1413,7 +1533,40 @@ async function checkLiveFeedFailures() {
   check('known critical Day 3 fire risk survives another failed leaf', await risk.fireDay3Query(), 8);
 }
 
-checkLiveFeedFailures().then(() => {
+/* A scheduled refresh can fail after a successful forecast. Replaying that failure through the
+   real loader verifies that its old week, hourly strip, and repaint closure cannot survive. */
+async function checkForecastRefreshFailure() {
+  const smart = {days:[{name:'old'}], weekDays:[{name:'old'}],
+    hourly:[{startTime:'old'}], hourlyAll:[{startTime:'old'}]};
+  const climate = {fcHi:90, fcLo:70, fcHiLabel:' (tmrw)'};
+  const els = {daily:{innerHTML:'old forecast'}, hourly24:{innerHTML:'old chart'}};
+  const painted = [];
+  const load = new Function('smart','climate','els','painted', `
+    var current={lat:38.8,lon:-90.8}, HEADERS={};
+    var document={getElementById:function(id){return els[id]||null;}};
+    var renderHourly24=function(){}; renderHourly24._hrs=[{startTime:'old'}];
+    function locGuard(){return function(){return true;};}
+    function pointsFor(){return Promise.reject(new Error('NWS unavailable'));}
+    function renderHeroToday(){painted.push('hero');}
+    function renderVsNormal(){painted.push('normals');}
+    function renderContext(){painted.push('context');}
+    function renderTheCall(){painted.push('bottom');}
+    ${lift(/^function loadForecast\(\)\{[\s\S]*?^\}/m, 'loadForecast()')}
+    return {loadForecast,renderHourly24};
+  `)(smart,climate,els,painted);
+  load.loadForecast._paint = function(){painted.push('old paint');};
+  await load.loadForecast();
+  check('failed refresh clears old forecast and hourly state',
+    [smart.days,smart.weekDays,smart.hourly,smart.hourlyAll], [[],[],[],[]]);
+  check('failed refresh cannot repaint old seven-day forecast',load.loadForecast._paint,null);
+  check('failed refresh clears forecast-derived climate figures',
+    [climate.fcHi,climate.fcLo,climate.fcHiLabel],[null,null,'']);
+  check('failed refresh replaces stale hourly chart and recomputes Bottom Line',
+    [els.hourly24.innerHTML,painted.includes('bottom')],
+    ['<div class="empty">Hourly forecast unavailable.</div>',true]);
+}
+
+checkLiveFeedFailures().then(checkForecastRefreshFailure).then(() => {
   if (failed) {
     console.error(`\n${failed} logic test(s) failed`);
     process.exitCode = 1;
