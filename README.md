@@ -6,6 +6,8 @@ inside the CWA.
 
 Not an official NWS product. During severe weather, defer to official warnings and a NOAA Weather Radio.
 
+[Open the dashboard](https://lsxdashboard.com/).
+
 ## What it is
 
 One file. [`index.html`](index.html) is the entire application — all CSS, markup, and JavaScript,
@@ -18,12 +20,14 @@ inline.
   Leaflet adapter. Meteocons sky-condition icons load separately from a CDN with an inline fallback.
   The maps link to the official NWS view if the map libraries fail to load.
 - **Installable PWA** via [`manifest.webmanifest`](manifest.webmanifest). There is deliberately no
-  service worker — return visits paint instantly from a `localStorage` snapshot instead.
+  service worker — return visits paint from a `localStorage` snapshot once the page loads, but the
+  page itself is not available offline.
 
 ## Running it locally
 
-Serve it over `localhost` rather than opening the file directly — `file://` breaks geolocation and
-the snapshot cache, both of which need a secure context.
+Serve it over `localhost` rather than opening the file directly. Browsers handle geolocation and
+`localStorage` differently for `file://` pages; `localhost` gives the app a consistent origin and
+counts as a secure context for geolocation.
 
 ```bash
 python3 -m http.server 8787
@@ -35,15 +39,14 @@ With no build step there is nothing between an edit and production, so the mista
 ship silently are checked mechanically. CI runs both on every pull request:
 
 ```bash
-python3 tools/check.py        # syntax, CSP origins, icon names, root files
+python3 tools/check.py        # HTML/CSS comments, JS syntax, CSP, icons, root files
 node tools/logic-tests.js     # the functions that decide something
 ```
 
-[`tools/check.py`](tools/check.py) catches the four footguns this repo's shape creates — a syntax
-error in the inline script, an origin the CSP doesn't declare, an icon name with no `<symbol>`, and
-a missing or self-contradicting file at the site root. [`tools/logic-tests.js`](tools/logic-tests.js)
-covers the pure decision functions (`rangeRow()`, `alertLevel()`, `cardCmp()`, `coldVerdict()`);
-anything that paints is reviewed by eye.
+[`tools/check.py`](tools/check.py) checks HTML/CSS comment balance, inline JavaScript syntax, CSP
+origins, sprite references, and the site root files and URLs. [`tools/logic-tests.js`](tools/logic-tests.js)
+covers pure decisions such as alert scope, forecast summaries, radar geometry, and temperature
+calculations; visual rendering is reviewed by eye.
 
 ## Deploying
 
@@ -71,13 +74,14 @@ line — and `tools/check.py` fails if they stop agreeing; moving the site means
 
 ## Data sources
 
-All public-domain or openly licensed, all keyless.
+All feeds are keyless. The sources have different attribution and reuse terms; see [License](#license).
 
 | Feed | Used for |
 |---|---|
 | `api.weather.gov` | Forecast, hourly, station obs, active alerts, AFD + mesoscale discussion text, county zones |
 | `opengeo.ncep.noaa.gov` (WMS) | Official NWS radar, including the time dimension driving the loop |
-| `mapservices.weather.noaa.gov` | SPC convective + fire outlooks and mesoscale discussion polygons, convective watch county fills, WPC excessive rainfall, CPC 6–10/8–14 day, CPC hazards & drought, WPC QPF |
+| `mapservices.weather.noaa.gov` | SPC convective and fire outlooks and mesoscale discussion polygons; watch county fills; WPC excessive rainfall, winter storm severity, and QPF; CPC 6–10/8–14 day, hazards, and drought outlooks |
+| `services5.arcgis.com` | Current U.S. Drought Monitor classification |
 | `api.water.noaa.gov` (NWPS) | River gauge stages and crest forecasts |
 | `data.rcc-acis.org` | 1991–2020 normals, daily records, rankings, dry streaks |
 | Open-Meteo | Air quality, UV index, and the location geocoder |
@@ -96,7 +100,7 @@ links.
 ## Design
 
 The script is sectioned by `/* ==== BANNER ==== */` comments and reads top to bottom: config →
-helpers → ~15 per-card loaders → derived renderers → orchestration → scheduler → layout engine.
+helpers → loaders → derived renderers → orchestration → scheduler → layout engine.
 The full design rationale — what each decision replaced, and why — lives in
 [`DESIGN.md`](DESIGN.md). The invariants worth knowing before changing anything:
 
@@ -105,7 +109,7 @@ The full design rationale — what each decision replaced, and why — lives in
   `tools/check.py` verifies every reference resolves and every symbol is used.
 - **Severity is one ramp.** `alertLevel()` returns `emergency → warning → watch → advisory →
   statement` and sets `--lv` on the card; everything tinted reads that one variable. CAP severity
-  may escalate a step, never demote — and never touches a watch.
+  can escalate an alert, but a watch stays a watch.
 - **Location outranks severity.** `cardCmp()` ranks coverage above level, and coverage alone
   (`alertCoversMe()`) decides which section a card lands in. If `/points` fails, coverage fails
   **open**: nothing is ranked down and the list goes flat — a cluttered list beats a hidden warning.
@@ -113,8 +117,8 @@ The full design rationale — what each decision replaced, and why — lives in
   elsewhere; neither speaks for the other.
 - **Colour is scarce.** Saturated colour means severity, links are blue; that is the whole budget.
   Type carries the hierarchy through the `--fs-*`/`--r-*`/`--sp-*` scales.
-- **The page is ordered by what a visitor came for.** Alerts, the Bottom Line, The Pulse, the hero
-  band, the 24-hour chart, then the masonry — in DOM order, with no CSS `order` anywhere.
+- **The page is ordered by what a visitor came for.** Alerts and any active mesoscale discussion,
+  the Bottom Line, Now and Sky, the 24-hour chart, The Pulse, then the masonry — in DOM order.
 - **Radar is a peek, not the product.** The map's height is an aspect ratio, never leftover space;
   radar and satellite stack on one Leaflet map; the loop targets a 60-minute span, not a sweep
   count; and a dead tile layer is detected per layer so it can never read as clear skies.
@@ -124,8 +128,8 @@ The full design rationale — what each decision replaced, and why — lives in
   DOM, so one town's numbers can never appear under another town's label.
 - **Nothing unverified is printed.** Sample-size gates, missing-day checks, borrowed figures
   attributed by name. Suppression beats false precision.
-- **Instant paint.** Return visits paint from a `localStorage` snapshot before any network
-  request; reshaping a card's DOM means bumping `SNAP_KEY`.
+- **Instant paint.** Return visits paint from a `localStorage` snapshot before live data refreshes;
+  reshaping a card's DOM means bumping `SNAP_KEY`.
 
 **Adding a card** means touching five places: the markup, the `RANK` map in `layoutMasonry`'s
 `tier()`, `SNAP_PARTS`, the `SCHED` table, and `clearLocationUI`/`resetLocationState`. **Adding a
@@ -134,7 +138,6 @@ in [`DESIGN.md`](DESIGN.md#adding-a-card-adding-a-loader).
 
 ## Known gaps
 
-- No `aria-expanded` on the expandable alert and forecast rows.
 - The hero pair only bottom-aligns in one direction. The reading column stretches to meet the Sky
   card, so the ordinary case is flush — but when the AQI card earns its slot the left column becomes
   the taller of the two, and the leftover reappears under the map. Stretching the map to absorb it
@@ -157,7 +160,7 @@ southwest Illinois.
 Both checks run on every pull request and must pass:
 
 ```bash
-python3 tools/check.py        # syntax, CSP origins, icon names, root files
+python3 tools/check.py        # HTML/CSS comments, JS syntax, CSP, icons, root files
 node tools/logic-tests.js     # the functions that decide something
 ```
 
@@ -187,6 +190,7 @@ repository is public:
 | [MapLibre GL Leaflet](https://github.com/maplibre/maplibre-gl-leaflet) 0.1.4 | ISC |
 | NWS/NOAA feeds — `api.weather.gov`, NCEP, NWPS, SPC/WPC/CPC, NESDIS/GOES | Public domain, as U.S. government work |
 | NASA GIBS GOES-19 ABI tiles | Public domain |
+| [U.S. Drought Monitor](https://droughtmonitor.unl.edu/DmData/GISData.aspx) classifications | Credit NDMC, USDA, and NOAA when using the GIS data |
 | Open-Meteo air quality, UV & geocoding | CC BY 4.0 |
 | [RCC-ACIS](https://www.rcc-acis.org/) normals, records & rankings | Open access |
 | [OpenFreeMap](https://openfreemap.org/) basemap | Public keyless tiles; © OpenMapTiles, data from OpenStreetMap contributors. The public instance offers no SLA. |
