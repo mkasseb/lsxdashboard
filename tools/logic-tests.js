@@ -51,6 +51,16 @@ const SUBJECT = new Function(`
   ${lift(/^function coldVerdict\(nowT,mMin,cMin\)\{[\s\S]*?^\}/m, 'coldVerdict()')}
   ${lift(/^function parseMph\(s\)\{.*\}$/m, 'parseMph()')}
   ${lift(/^function precipChance\(p\)\{[\s\S]*?^\}/m, 'precipChance()')}
+  ${lift(/^function gridInterval\(validTime\)\{[\s\S]*?^\}/m, 'gridInterval()')}
+  ${lift(/^function gridSeries\(layer,kind\)\{[\s\S]*?^\}/m, 'gridSeries()')}
+  ${lift(/^function gridAmount\(series,start,end\)\{[\s\S]*?^\}/m, 'gridAmount()')}
+  ${lift(/^function gridGustAt\(series,at\)\{[\s\S]*?^\}/m, 'gridGustAt()')}
+  ${lift(/^function precipEventSummary\(grid,nowMs,horizonHours\)\{[\s\S]*?^\}/m, 'precipEventSummary()')}
+  ${lift(/^function forecastWindowHours\(hrs,hours,nowMs\)\{[\s\S]*?^\}/m, 'forecastWindowHours()')}
+  ${lift(/^function spcUtcTime\(value\)\{[\s\S]*?^\}/m, 'spcUtcTime()')}
+  ${lift(/^function spcOutlookPeriod\(attrs,day,nowMs\)\{[\s\S]*?^\}/m, 'spcOutlookPeriod()')}
+  ${lift(/^function spcThreatProbability\(data,period\)\{[\s\S]*?^\}/m, 'spcThreatProbability()')}
+  ${lift(/^function spcThreatText\(prob,kind\)\{[\s\S]*?^\}/m, 'spcThreatText()')}
   ${lift(/^function heatIndexF\(t,rh\)\{[\s\S]*?^\}/m, 'heatIndexF()')}
   ${lift(/^function windChillF\(t,mph\)\{[\s\S]*?^\}/m, 'windChillF()')}
   ${lift(/^function feelsLikeF\(t,rh,mph\)\{[\s\S]*?^\}/m, 'feelsLikeF()')}
@@ -97,7 +107,8 @@ const SUBJECT = new Function(`
            summaryPopText, pairForecastPeriods, nwsWallTime, hourlyByDate, hrWord,
            whenWord, windowSpan, bottomLineHorizon, bottomLineWeekHorizon, bottomLineBriefingHorizon, dewF,
            OUTLOOK_CFG, outlookVerdict, precipChance, bottomLineHours, bottomLineHourlyCandidates, bottomLineWeekCandidates,
-           currentObservationFresh, stationMiles,
+           currentObservationFresh, stationMiles, gridInterval, gridSeries, gridAmount, gridGustAt,
+           precipEventSummary, forecastWindowHours, spcUtcTime, spcOutlookPeriod, spcThreatProbability, spcThreatText,
            bottomLineLocalAlert, bottomLineAlertMatch, buildBottomLine,
            extractAFD, parseMcd, mcdValidEnd, geomTouchesEnv, watchBoundary, chaikinRing };
 `)();
@@ -110,15 +121,89 @@ function check(name, actual, expected) {
   failed++;
 }
 
-/* Restored snapshots contain rendered HTML. The removed forecast overview must not
-   reappear from a v14 snapshot before the fresh daily forecast arrives. */
-check('forecast markup migration bumps the snapshot key',
-  /var SNAP_KEY="lsxSnap_v15"/.test(SRC), true);
-check('the previous v14 snapshot is explicitly discarded',
-  /"lsxSnap_v14"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
+/* Restored chart markup must carry its duration and details rather than a prior fixed view. */
+check('extended hourly markup migration bumps the snapshot key',
+  /var SNAP_KEY="lsxSnap_v16"/.test(SRC), true);
+check('the previous v15 snapshot is explicitly discarded',
+  /"lsxSnap_v15"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
 const snapParts = lift(/^var SNAP_PARTS=\[[\s\S]*?^\];/m, 'SNAP_PARTS');
 check('saved HTML cannot restore stale current readings, risk or briefing',
-  ['current', 'ccStation', 'spc', 'callRow'].every(id => !snapParts.includes(`id:"${id}"`)), true);
+  ['current', 'ccStation', 'spc', 'spcThreats', 'precipEvents', 'callRow'].every(id => !snapParts.includes(`id:"${id}"`)), true);
+
+/* Accumulation is a period total, not a rate. Missing values must stay unknown, and snow/ice
+   must never be mislabeled as rainfall. These also cover period edges and merged gust samples. */
+{
+  const hour = 3600000, base = Date.parse('2026-09-29T12:00:00Z');
+  const layer = (values, uom='wmoUnit:mm') => ({uom, values: values.map(([start, duration, value]) =>
+    ({validTime: new Date(base + start*hour).toISOString() + '/PT' + duration + 'H', value}))});
+  const grid = (values, snow=[[0,96,0]], ice=[[0,96,0]]) => ({quantitativePrecipitation: layer(values),
+    snowfallAmount: layer(snow), iceAccumulation: layer(ice)});
+  const summary = g => SUBJECT.precipEventSummary(g, base, 72);
+  const rounded = v => Math.round(v*10000)/10000;
+
+  check('ISO day/hour duration', SUBJECT.gridInterval('2026-09-29T12:00:00Z/P1DT6H'), {start:base,end:base+30*hour});
+  check('zero duration is rejected', SUBJECT.gridInterval('2026-09-29T12:00:00Z/PT0H'), null);
+  check('invalid timestamp is rejected', SUBJECT.gridInterval('broken/PT6H'), null);
+  check('unknown accumulation units do not become inches', SUBJECT.gridSeries(layer([[0,6,1]], 'wmoUnit:unknown'), 'amount'), []);
+  check('overlapping intervals are rejected', SUBJECT.gridSeries(layer([[0,6,1],[3,6,1]]), 'amount'), []);
+  check('null and negative amounts remain unknown', SUBJECT.gridSeries(layer([[0,6,null],[6,6,-1]]), 'amount').map(v=>v.value), [null,null]);
+
+  const event = summary(grid([[0,6,0],[6,6,25.4],[12,6,12.7],[18,78,0]]));
+  check('adjacent wet periods form one event', event.events.length, 1);
+  check('6-hour totals are added once, not multiplied by duration', rounded(event.events[0].amount), 1.5);
+  check('rain event preserves source period bounds', [event.events[0].start,event.events[0].end], [base+6*hour,base+18*hour]);
+  check('verified zero snow and ice allow rainfall label', event.events[0].rain, true);
+  check('dry complete forecast is an explicit zero', summary(grid([[0,96,0]])).dry, true);
+  check('missing forecast cannot assert dry', summary({}).dry, false);
+  check('null precipitation cannot assert dry', summary(grid([[0,96,null]])).dry, false);
+  check('uncovered period cannot assert dry', summary(grid([[6,90,0]])).dry, false);
+  check('short coverage is marked incomplete', summary(grid([[0,24,0]])).complete, false);
+  check('missing interval splits rather than invents a continuous event',
+    summary(grid([[0,6,25.4],[6,6,null],[12,6,25.4],[18,78,0]])).events.map(e=>e.partial), [true,true]);
+  check('long dry gap separates events', summary(grid([[0,6,25.4],[6,12,0],[18,6,25.4],[24,72,0]])).events.length, 2);
+  check('event extending beyond view retains its full total', rounded(summary(grid([[0,66,0],[66,12,25.4],[78,18,0]])).events[0].amount), 1);
+  check('event extending beyond view is labeled', summary(grid([[0,66,0],[66,12,25.4],[78,18,0]])).events[0].beyondView, true);
+  check('wet forecast edge is not presented as final event total', summary(grid([[0,66,0],[66,6,25.4]])).events[0].continues, true);
+  const ongoing = SUBJECT.precipEventSummary(grid([[0,6,25.4],[6,90,0]]), base+3*hour,72).events[0];
+  check('ongoing interval keeps full period total without assumed hourly rate', [rounded(ongoing.amount),ongoing.ongoing], [1,true]);
+  check('snow accumulation is distinct from liquid equivalent', summary(grid([[0,6,25.4],[6,90,0]],[[0,6,152.4],[6,90,0]])).events[0].rain, false);
+  check('unknown frozen precipitation keeps liquid-equivalent label', summary(grid([[0,6,25.4],[6,90,0]],[])).events[0].rain, false);
+  check('partial positive snow period is not prorated', SUBJECT.gridAmount(SUBJECT.gridSeries(layer([[0,6,152.4]]),'amount'),base+hour,base+6*hour), null);
+  const gusts = SUBJECT.gridSeries(layer([[0,3,32.18688]],'wmoUnit:km_h-1'),'wind');
+  check('merged gust interval retains speed, not total', Math.round(SUBJECT.gridGustAt(gusts,base+2*hour)), 20);
+  check('gust value does not leak past interval end', SUBJECT.gridGustAt(gusts,base+3*hour), null);
+
+  const hrs = Array.from({length:80},(_,i)=>({startTime:new Date(base+(i-2)*hour).toISOString(),temperature:70}));
+  [24,48,72].forEach(hours=>check(hours+'-hour selection includes exactly its future window', SUBJECT.forecastWindowHours(hrs,hours,base+15*60000).length,hours));
+  check('hourly selection drops elapsed periods', SUBJECT.forecastWindowHours(hrs,24,base)[0].startTime,new Date(base).toISOString());
+  check('invalid or missing temperature cannot poison the chart', SUBJECT.forecastWindowHours([{startTime:'invalid',temperature:70},{startTime:new Date(base).toISOString(),temperature:null}],24,base),[]);
+}
+
+/* A stale or malformed SPC response cannot become zero risk. An empty, verified point query
+   is below the lowest published contour; Day 2 has a future validity window by design. */
+{
+  const now=Date.parse('2026-09-29T21:00:00Z');
+  const attrs={valid:'202609292000',expire:'202609301200',issue:'202609291945'};
+  const period=SUBJECT.spcOutlookPeriod(attrs,1,now);
+  check('current Day 1 product is usable', !!period,true);
+  check('expired SPC product is rejected', SUBJECT.spcOutlookPeriod(attrs,1,now+86400000),null);
+  check('future-issued SPC product is rejected', SUBJECT.spcOutlookPeriod({...attrs,issue:'202609292200'},1,now),null);
+  check('future Day 2 period is usable', !!SUBJECT.spcOutlookPeriod({valid:'202609301200',expire:'202610011200',issue:'202609291700'},2,now),true);
+  check('invalid calendar date cannot roll forward', SUBJECT.spcUtcTime('202602301200'),null);
+  const hit = dn => ({attributes:{...attrs,dn}});
+  check('overlapping threat contours use highest probability', SUBJECT.spcThreatProbability({features:[hit(2),hit(5)]},period),5);
+  check('verified empty point query is below contour', SUBJECT.spcThreatProbability({features:[]},period),0);
+  check('failed query remains unavailable', SUBJECT.spcThreatProbability({error:{code:500}},period),null);
+  check('missing features remain unavailable', SUBJECT.spcThreatProbability({},period),null);
+  check('truncated query remains unavailable', SUBJECT.spcThreatProbability({features:[],exceededTransferLimit:true},period),null);
+  check('old contour is rejected', SUBJECT.spcThreatProbability({features:[{attributes:{...attrs,valid:'202609281200',dn:15}}]},period),null);
+  check('missing probability is not zero', SUBJECT.spcThreatProbability({features:[hit(null)]},period),null);
+  check('probability cannot exceed 100', SUBJECT.spcThreatProbability({features:[hit(101)]},period),null);
+  check('missing validity cannot verify an empty query', SUBJECT.spcThreatProbability({features:[]},null),null);
+  check('tornado below-contour display is not zero', SUBJECT.spcThreatText(0,'tornado'),'<2%');
+  check('wind below-contour display is not zero', SUBJECT.spcThreatText(0,'wind'),'<5%');
+  check('unavailable display is explicit', SUBJECT.spcThreatText(null,'hail'),'Unavailable');
+}
 
 /* ============ rangeMark ============ */
 // The hero's range bar. Left end is the earlier reading, right end the later one.
@@ -1294,12 +1379,13 @@ LAT...LON   38759474 39039367 39299179 39519038
 
 /* ============ live-feed failure paths ============ */
 function riskHarness(getJSON) {
-  const els = {spc: {innerHTML: ''}, spcLoc: {textContent: ''}};
+  const els = {spc: {innerHTML: ''}, spcLoc: {textContent: ''}, spcThreats: {innerHTML: ''}};
   return new Function('getJSON', 'els', `
     var SPC_URL='spc/', ERO_URL='ero/', FIRE_URL='fire/', WSSI_URL='wssi/';
     var current={name:'Lake St. Louis, MO',lat:38.8,lon:-90.79};
     var RISK_LAYERS={spc:[1,9,17],ero:[0,1,2],fireCat:[1,4],fireD3:{dry:7,wind:8},wssi:[1,2]};
-    var RISK_READY={spc:false,ero:false,fire:false,wssi:false};
+    var RISK_READY={spc:false,threats:false,ero:false,fire:false,wssi:false};
+    var SPC_THREAT_LAYERS=[{tornado:3,wind:7,hail:5},{tornado:11,wind:15,hail:13}];
     var smart={},callRisk=null;
     var document={getElementById:function(id){return els[id];}};
     function locSignal(){return null;}
@@ -1307,6 +1393,9 @@ function riskHarness(getJSON) {
     function resolveRiskLayers(){return Promise.resolve();}
     function renderTheCall(){}
     function ic(){return '';}
+    function esc(s){return String(s);}
+    function forecastClock(t){return new Date(t).toISOString();}
+    function timeAgo(){return 'recently';}
     ${lift(/^function pointQuery\(base,layer,fields\)\{[\s\S]*?^\}/m, 'pointQuery()')}
     ${lift(/^function spcQuery\(layer\)\{[\s\S]*?^\}/m, 'spcQuery()')}
     ${lift(/^function eroQuery\(layer\)\{[\s\S]*?^\}/m, 'eroQuery()')}
@@ -1318,6 +1407,12 @@ function riskHarness(getJSON) {
     ${lift(/^function fireRisk\(dn\)\{[\s\S]*?^\}/m, 'fireRisk()')}
     ${lift(/^function textOn\(bg\)\{[\s\S]*?^\}/m, 'textOn()')}
     ${lift(/^function riskPill\(info,denom\)\{[\s\S]*?^\}/m, 'riskPill()')}
+    ${lift(/^function spcUtcTime\(value\)\{[\s\S]*?^\}/m, 'spcUtcTime()')}
+    ${lift(/^function spcOutlookPeriod\(attrs,day,nowMs\)\{[\s\S]*?^\}/m, 'spcOutlookPeriod()')}
+    ${lift(/^function spcThreatProbability\(data,period\)\{[\s\S]*?^\}/m, 'spcThreatProbability()')}
+    ${lift(/^function spcThreatText\(prob,kind\)\{[\s\S]*?^\}/m, 'spcThreatText()')}
+    ${lift(/^function fetchSpcThreats\(\)\{[\s\S]*?^\}/m, 'fetchSpcThreats()')}
+    ${lift(/^function renderSpcThreats\(days\)\{[\s\S]*?^\}/m, 'renderSpcThreats()')}
     ${lift(/^function loadSpc\(\)\{[\s\S]*?^\}/m, 'loadSpc()')}
     return {spcQuery,eroQuery,fireQuery,fireDay3Query,wssiQuery,spcRisk,eroRisk,fireRisk,
       loadSpc,RISK_READY,els,getCallRisk:function(){return callRisk;}};
@@ -1328,9 +1423,10 @@ function riskMetadataHarness(getJSON) {
   return new Function('getJSON', `
     var SPC_URL='spc/', ERO_URL='ero/', FIRE_URL='fire/', WSSI_URL='wssi/', MCD_URL='mcd/', WWA_URL='wwa/';
     var RISK_LAYERS={spc:[1,9,17],ero:[0,1,2],fireCat:[1,4],fireD3:{dry:7,wind:8},wssi:[1,2],mcd:0,wwa:1};
-    var RISK_READY={spc:false,ero:false,fire:false,wssi:false}, _riskLayersP=null;
+    var RISK_READY={spc:false,threats:false,ero:false,fire:false,wssi:false}, _riskLayersP=null;
+    var SPC_THREAT_LAYERS=[{},{}];
     ${lift(/^function resolveRiskLayers\(\)\{[\s\S]*?^\}/m, 'resolveRiskLayers()')}
-    return {resolveRiskLayers,RISK_READY};
+    return {resolveRiskLayers,RISK_READY,getThreatLayers:function(){return SPC_THREAT_LAYERS;}};
   `)(getJSON);
 }
 
@@ -1391,7 +1487,10 @@ async function checkLiveFeedFailures() {
     if (url.startsWith('spc/')) {
       spcMetadataCalls++;
       if (spcMetadataCalls === 1) return Promise.resolve({error: {code: 500}});
-      names = ['Day 1 Categorical Outlook', 'Day 2 Categorical Outlook', 'Day 3 Categorical Outlook'];
+      names = ['Day 1 Categorical Outlook', 'Day 2 Categorical Outlook', 'Day 3 Categorical Outlook',
+        'Day 1 Probabilistic Tornado Outlook', 'Day 1 Probabilistic Wind Outlook', 'Day 1 Probabilistic Hail Outlook',
+        'Day 2 Probabilistic Tornado Outlook', 'Day 2 Probabilistic Wind Outlook', 'Day 2 Probabilistic Hail Outlook',
+        'Day 1 Tornado Conditional Intensity'];
     } else if (url.startsWith('ero/')) {
       names = ['Excessive Rainfall Day 1', 'Excessive Rainfall Day 2', 'Excessive Rainfall Day 3'];
     } else if (url.startsWith('fire/')) {
@@ -1406,6 +1505,9 @@ async function checkLiveFeedFailures() {
   await metadata.resolveRiskLayers();
   check('failed metadata is retried on the next refresh', spcMetadataCalls, 2);
   check('verified NOAA layer names allow risk queries', metadata.RISK_READY.spc, true);
+  check('separate probability layers are resolved by name', metadata.getThreatLayers(),
+    [{tornado:3,wind:4,hail:5},{tornado:6,wind:7,hail:8}]);
+  check('conditional intensity layer is not a probability layer', metadata.RISK_READY.threats, true);
 
   let risk = riskHarness(() => Promise.reject(new Error('network down')));
   check('network failure does not become zero storm risk', await risk.spcQuery(1), null);
@@ -1423,6 +1525,8 @@ async function checkLiveFeedFailures() {
   await risk.loadSpc();
   check('unverified metadata cannot paint a quiet risk matrix', risk.els.spc.innerHTML.includes('No Severe Risk'), false);
   check('unverified metadata paints unavailable risk cells', (risk.els.spc.innerHTML.match(/Unavailable/g) || []).length, 9);
+  check('unverified metadata cannot paint reassuring threat probabilities', risk.els.spcThreats.innerHTML.includes('<2%'), false);
+  check('all six threat cells remain unavailable on metadata failure', (risk.els.spcThreats.innerHTML.match(/Unavailable/g)||[]).length, 6);
 
   risk = riskHarness(url => Promise.resolve(url.includes('spc/1/query') ? {error: {code: 400}} : {features: []}));
   risk.RISK_READY.spc = true;
@@ -1454,6 +1558,7 @@ async function checkForecastRefreshFailure() {
     function renderVsNormal(){painted.push('normals');}
     function renderContext(){painted.push('context');}
     function renderTheCall(){painted.push('bottom');}
+    function syncHourlyControls(){}
     ${lift(/^function loadForecast\(\)\{[\s\S]*?^\}/m, 'loadForecast()')}
     return {loadForecast,renderHourly24};
   `)(smart,climate,els,painted);
@@ -1469,11 +1574,46 @@ async function checkForecastRefreshFailure() {
     ['<div class="empty">Hourly forecast unavailable.</div>',true]);
 }
 
-checkLiveFeedFailures().then(checkForecastRefreshFailure).then(() => {
+async function checkGridLoaderIsolation() {
+  function harness(read) {
+    const painted=[];
+    return new Function('read','painted', `
+      var current={lat:38.8,lon:-90.8},HEADERS={},generation=0;
+      var forecastGrid={status:'ready',properties:{old:true},gusts:[{value:40}]};
+      function locGuard(){var captured=generation;return function(){return captured===generation;};}
+      function locSignal(){return null;}
+      function pointsFor(){return Promise.resolve({properties:{forecastGridData:'grid'}});}
+      function getJSON(){return read();}
+      function renderPrecipEvents(){painted.push('amounts');}
+      function renderHourly24(){painted.push('hourly');}
+      ${lift(/^function gridInterval\(validTime\)\{[\s\S]*?^\}/m, 'gridInterval()')}
+      ${lift(/^function gridSeries\(layer,kind\)\{[\s\S]*?^\}/m, 'gridSeries()')}
+      ${lift(/^function loadForecastGrid\(\)\{[\s\S]*?^\}/m, 'loadForecastGrid()')}
+      return {run:loadForecastGrid,getState:function(){return forecastGrid;},
+        move:function(){generation++;forecastGrid={status:'loading',properties:null,gusts:[]};},painted:painted};
+    `)(read,painted);
+  }
+  const down=harness(()=>Promise.reject(new Error('grid down')));
+  await down.run();
+  check('grid failure clears old event totals and gusts',down.getState(),{status:'unavailable',properties:null,gusts:[]});
+  check('grid failure repaints only dependent displays',down.painted,['amounts','hourly']);
+  const malformed=harness(()=>Promise.resolve({error:'bad response'}));
+  await malformed.run();
+  check('malformed grid cannot preserve prior totals',malformed.getState().properties,null);
+  let resolveOld;
+  const moved=harness(()=>new Promise(resolve=>{resolveOld=resolve;}));
+  const oldRequest=moved.run();
+  await Promise.resolve(); await Promise.resolve();
+  moved.move(); resolveOld({properties:{old:true}}); await oldRequest;
+  check('old location grid response cannot paint a new town',moved.painted,[]);
+  check('old location grid response cannot change new town state',moved.getState(),{status:'loading',properties:null,gusts:[]});
+}
+
+checkLiveFeedFailures().then(checkForecastRefreshFailure).then(checkGridLoaderIsolation).then(() => {
   if (failed) {
     console.error(`\n${failed} logic test(s) failed`);
     process.exitCode = 1;
   } else {
-    console.log('ok    logic: forecast decisions, risk-feed failures, stale station fallback and weather guidance behave');
+    console.log('ok    logic: forecast decisions, precipitation totals, hourly windows, severe threats and feed-failure isolation behave');
   }
 }).catch(e => { console.error(e); process.exitCode = 1; });
