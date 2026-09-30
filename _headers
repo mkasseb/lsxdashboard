@@ -3,8 +3,8 @@
 # The policy is deliberately permissive about INLINE code and strict about ORIGINS, because that
 # split matches where the risk actually is here:
 #
-#   · The whole application is one inline <script> and one inline <style>, and hundreds of inline
-#     style="" attributes. Hashing them would work, but Cloudflare injects its own bot-detection
+#   · The application uses plain same-origin scripts and styles, a small inline theme bootstrap,
+#     inline event handlers and style attributes. Cloudflare injects its own bot-detection
 #     script whose inline body embeds a per-request ray id — its hash changes every request, so no
 #     static hash list can ever cover it, and a strict script-src would break bot detection on the
 #     custom domain. 'unsafe-inline' is the honest choice rather than a policy that silently fails.

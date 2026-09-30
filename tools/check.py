@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Pre-deploy checks for a repo with no build step.
 
-`index.html` is served to production byte-for-byte, so nothing between an edit and a
+The HTML, CSS and JavaScript files are served to production byte-for-byte, so nothing between an edit and a
 visitor's browser would notice a mistake. These are the six mistakes worth catching
 mechanically:
 
-  0. An unbalanced comment in the inline <style>. CSS has no nesting: the FIRST `*/`
+  0. An unbalanced comment in a served stylesheet. CSS has no nesting: the FIRST `*/`
      closes the comment, so appending a paragraph to an existing block leaves its text
      as live declarations and takes the next rule down with it. Nothing reports this —
      not the parser, not the console — the rule is simply gone, which in practice means
@@ -19,8 +19,8 @@ mechanically:
      with no error anywhere. Both are caught here, because check 0 caught neither and
      CI stayed green through a deploy of the first one.
 
-  1. A syntax error in an inline <script>. The whole application is one script block.
-     A stray character doesn't degrade one card, it blanks the entire dashboard.
+  1. A syntax error in a served script. A stray character can prevent its declarations
+     from loading and blank the dashboard. Local script files and inline boot code are checked.
 
   2. An external origin that isn't declared in the Content-Security-Policy. A new feed
      works locally (no CSP on localhost, and Pages only applies `_headers` when it
@@ -40,8 +40,8 @@ mechanically:
      audiences that never compare notes, so nothing else would notice them drifting.
 
 Checks 2 and 3 work by classification, not by guessing which URLs are fetched or which
-icons are reachable: every https origin in the HTML Pages serves — index.html and 404.html,
-since `_headers` applies the CSP to both — must be declared somewhere in the CSP or listed
+icons are reachable: every https origin in the pages and their local assets — including 404.html,
+since `_headers` applies the CSP to all responses — must be declared somewhere in the CSP or listed
 in NAV_ONLY below as a link target, and every icon-shaped string literal must name a symbol
 that exists. Adding a feed introduces an origin in neither set, so the check fails until it
 is put in one — which is the point.
@@ -54,6 +54,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from urllib.parse import urlsplit
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INDEX = os.path.join(ROOT, "index.html")
@@ -122,7 +123,7 @@ def fail(lines):
     return False
 
 
-def check_style_comments(html):
+def check_style_comments(html, source_name="index.html"):
     """Every `*/` in an inline <style> closes a comment that was actually open.
 
     Walks the block rather than counting delimiters, because the counts balance in exactly
@@ -154,9 +155,9 @@ def check_style_comments(html):
             unterminated.append(base + css.count("\n") + 1)
 
     if stray or unterminated:
-        lines = ["FAIL  css: comment delimiters don't balance in the inline <style>:", ""]
-        lines += ["        index.html:%d  `*/` with no comment open" % n for n in stray]
-        lines += ["        index.html:%d  comment never closed" % n for n in unterminated]
+        lines = ["FAIL  css: comment delimiters don't balance in " + source_name + ":", ""]
+        lines += ["        %s:%d  `*/` with no comment open" % (source_name, n) for n in stray]
+        lines += ["        %s:%d  comment never closed" % (source_name, n) for n in unterminated]
         lines += [
             "",
             "      A stray `*/` leaves the text before it as live declarations and eats the",
@@ -166,7 +167,7 @@ def check_style_comments(html):
         return fail(lines)
 
     total = sum(len(m.group(1).splitlines()) for m in blocks)
-    print("ok    css: %d inline <style> block(s), %d lines, comments balance" % (len(blocks), total))
+    print("ok    css: %s, %d lines, comments balance" % (source_name, total))
     return True
 
 
@@ -302,9 +303,9 @@ def covered_by(origin, allowed):
 
 
 def check_csp_covers_origins(served_html, headers_text):
-    """Every https origin in the HTML Pages serves is declared in the CSP or listed as nav-only.
+    """Every https origin in the served pages and assets is declared in the CSP or listed as nav-only.
 
-    `served_html` is index.html and 404.html concatenated. The `/*` rule in _headers applies the
+    `served_html` includes index.html, its local assets and 404.html. The `/*` rule in _headers applies the
     same policy to both, so an external font or image added to the error page would be blocked
     exactly as silently as one added to the dashboard — and on a page whose whole job is to
     render when something has already gone wrong.
@@ -320,7 +321,7 @@ def check_csp_covers_origins(served_html, headers_text):
     undeclared = [o for o in found if o not in NAV_ONLY and not covered_by(o, declared)]
     if undeclared:
         return fail(
-            ["FAIL  csp: origin(s) in the served HTML declared nowhere in the CSP:", ""]
+            ["FAIL  csp: origin(s) in the served pages and assets declared nowhere in the CSP:", ""]
             + ["        " + o for o in undeclared]
             + [
                 "",
@@ -335,13 +336,13 @@ def check_csp_covers_origins(served_html, headers_text):
     unused = [o for o in connect if o.startswith("https://") and o not in found]
     if unused:
         return fail(
-            ["FAIL  csp: connect-src allows origin(s) the served HTML never references:", ""]
+            ["FAIL  csp: connect-src allows origin(s) the served pages and assets never reference:", ""]
             + ["        " + o for o in unused]
             + ["", "      Remove them from _headers — the allowlist should stay minimal."]
         )
 
     print(
-        "ok    csp: %d origin(s) in index.html + 404.html, all declared (%d fetchable via connect-src)"
+        "ok    csp: %d origin(s) in served pages and assets, all declared (%d fetchable via connect-src)"
         % (len(found), len([o for o in connect if o.startswith("https://")]))
     )
     return True
@@ -485,18 +486,55 @@ def check_root_files(html):
     return True
 
 
+def local_assets(html):
+    assets = []
+    for tag in re.findall(r"<(?:script|link)\b[^>]*>", html):
+        if tag.startswith("<link") and 'rel="stylesheet"' not in tag:
+            continue
+        match = re.search(r'(?:src|href)="([^"]+)"', tag)
+        if not match or match[1].startswith(("https://", "http://", "//")):
+            continue
+        name = urlsplit(match[1]).path.lstrip("/")
+        path = os.path.realpath(os.path.join(ROOT, name))
+        if not path.startswith(os.path.realpath(ROOT) + os.sep) or not os.path.isfile(path):
+            raise ValueError("Missing or invalid static asset: " + name)
+        assets.append((name, path, read(path)))
+    return assets
+
+
+def check_asset_scripts(assets):
+    ok = True
+    for name, path, _ in assets:
+        if not name.endswith(".js"):
+            continue
+        result = subprocess.run(["node", "--check", path], capture_output=True, text=True)
+        if result.returncode:
+            ok = fail(["FAIL  syntax: " + name, result.stderr])
+    if ok:
+        print("ok    assets: local scripts exist and parse")
+    return ok
+
+
 def main():
     html = read(INDEX)
     headers_text = read(HEADERS)
     # _headers applies `/*` to every response, so the CSP governs the error page too. Read it
     # only if it's there — its absence is check_root_files's failure to report, not a traceback.
-    served_html = html + (read(NOT_FOUND) if os.path.exists(NOT_FOUND) else "")
+    try:
+        assets = local_assets(html)
+    except ValueError as exc:
+        fail(["FAIL  assets: " + str(exc)])
+        return 1
+    combined = html + "\n" + "\n".join(content for _, _, content in assets)
+    served_html = combined + (read(NOT_FOUND) if os.path.exists(NOT_FOUND) else "")
+    styles = [(name, content) for name, _, content in assets if name.endswith(".css")]
     results = [
-        check_style_comments(html),
+        all(check_style_comments("<style>" + content + "</style>", name) for name, content in styles) if styles else check_style_comments(html),
         check_html_comments(html),
         check_inline_script_syntax(html),
+        check_asset_scripts(assets),
         check_csp_covers_origins(served_html, headers_text),
-        check_icons_resolve(html),
+        check_icons_resolve(combined),
         check_root_files(html),
     ]
     if not all(results):

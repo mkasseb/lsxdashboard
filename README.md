@@ -10,10 +10,13 @@ Not an official NWS product. During severe weather, defer to official warnings a
 
 ## What it is
 
-One file. [`index.html`](index.html) is the entire application — all CSS, markup, and JavaScript,
-inline.
+A static page with plain assets: [`index.html`](index.html) contains the markup,
+[`assets/dashboard.css`](assets/dashboard.css) the styles,
+[`assets/weather-core.js`](assets/weather-core.js) the decision functions,
+[`assets/weather-feeds.js`](assets/weather-feeds.js) the feed registry and loaders, and
+[`assets/dashboard.js`](assets/dashboard.js) the rendering, interactions, maps and startup.
 
-- **No build step.** No bundler, no transpiler, no `package.json`. Edit the file, reload the page.
+- **No build step.** No bundler, no transpiler, no runtime `package.json`. Edit a plain file and reload.
 - **No API keys.** Every feed was chosen because it is keyless and CORS-open, so the whole thing
   runs as a static page with no server and no secrets.
 - **Three pinned map dependencies** from CDNs with SRI hashes: Leaflet 1.9.4, MapLibre GL, and its
@@ -36,20 +39,22 @@ python3 -m http.server 8787
 Then open <http://localhost:8787>.
 
 With no build step there is nothing between an edit and production, so the mistakes that would
-ship silently are checked mechanically. CI runs both on every pull request:
+ship silently are checked mechanically. CI runs static and logic checks on every pull request:
 
 ```bash
 python3 tools/check.py        # HTML/CSS comments, JS syntax, CSP, icons, root files
 node tools/logic-tests.js     # the functions that decide something
 ```
 
-The optional browser suite runs the production dashboard against intercepted NWS/ArcGIS-shaped
+The browser suite runs in CI alongside the static and logic checks, against intercepted NWS/ArcGIS-shaped
 weather scenarios and a recorded LSX response set. It covers heavy rain, snow and ice, warning
 expiration, SPC issuance changes, AQI/UV, river trends, feed failures, daylight-saving changes,
 phone/tablet/desktop widths, rapid location changes and repeated refresh/chart work. Freshness
 checks cover full and partial outages, request timeouts, saved-view TTLs and per-feed verification.
 Weather timing is checked in Chicago, UTC, Los Angeles and Tokyo browser timezones, including UV
-samples across both daylight-saving transitions. It also checks
+samples across both daylight-saving transitions. Interaction checks cover focus and selected-hour
+preservation, briefing disclosures, sticky location context, favorites, shared URLs and river pins.
+It also checks
 2,000 seeded accumulation cases against a separate oracle. The fixture records its source URLs
 and retrieval time; extreme scenarios are synthetic. Maps exercise their unavailable fallbacks,
 so this suite does not verify live tiles, animations or browser-specific rendering outside Chromium.
@@ -68,10 +73,13 @@ Set `WEATHER_STRESS_REPORT` to choose the JSON report path (default:
 names for debugging; omit it for the full suite. Network responses are intercepted, so a test run
 does not depend on live weather services.
 
-[`tools/check.py`](tools/check.py) checks HTML/CSS comment balance, inline JavaScript syntax, CSP
+[`tools/check.py`](tools/check.py) checks HTML/CSS comment balance, served JavaScript syntax, CSP
 origins, sprite references, and the site root files and URLs. [`tools/logic-tests.js`](tools/logic-tests.js)
 covers pure decisions such as alert scope, forecast summaries, radar geometry, and temperature
 calculations; visual rendering is reviewed by eye.
+`tools/source.js` reads the same local scripts and styles referenced by the page, so the tests
+exercise the served assets. CI installs Playwright outside the app and saves its scenario report.
+Locally, omit `CHROMIUM_PATH` to use a browser installed with Playwright's `install chromium` command.
 
 ## Deploying
 
@@ -124,8 +132,10 @@ links.
 
 ## Design
 
-The script is sectioned by `/* ==== BANNER ==== */` comments and reads top to bottom: config →
-helpers → loaders → derived renderers → orchestration → scheduler → layout engine.
+Plain scripts load in dependency order: weather decisions, feed adapters, then the UI.
+`FEEDS` supplies loader names, cadence, location scope, freshness limits, failure policy,
+location reset targets and snapshot eligibility. Manual refresh, location refresh and the scheduler
+derive their work from that registry.
 The full design rationale — what each decision replaced, and why — lives in
 [`DESIGN.md`](DESIGN.md). The invariants worth knowing before changing anything:
 
@@ -156,6 +166,14 @@ The full design rationale — what each decision replaced, and why — lives in
   product dates retain their stated day; daylight-saving changes never shorten a climate day.
 - **Location generations.** Every location-scoped fetch checks `fresh()` before writing to the
   DOM, so one town's numbers can never appear under another town's label.
+- **Inspectable advice.** The Bottom Line labels its dashboard-generated guidance, separates
+  near-term advice from expandable later-week planning, and explains inputs, source age and
+  uncertainty in “Why this recommendation?”. The Pulse contains NWS-authored guidance.
+- **Visible, shareable locations.** The sticky navigation retains the selected town. Favorites
+  and river pins persist locally; location URLs carry the selected point and override a saved
+  location after LSX validation. City searches use representative points; geolocation is more precise.
+- **Refresh preserves interaction.** The hourly slider retains its forecast timestamp and focus;
+  disclosures keep their open state. Risk explanations support touch and keyboard interaction.
 - **Nothing unverified is printed.** Sample-size gates, missing-day checks, borrowed figures
   attributed by name. Suppression beats false precision.
 - **Instant paint.** Return visits paint eligible forecast/context cards from a `localStorage`
@@ -164,10 +182,10 @@ The full design rationale — what each decision replaced, and why — lives in
   are fetched live. Saved labels persist until their own feed is verified or cleared. Reshaping
   a card’s DOM or freshness metadata means bumping `SNAP_KEY`.
 
-**Adding a card** means registering its feed in `FEEDS` and marking validated outcomes with
-`feedUpdate()`, plus touching the markup, the `RANK` map in `layoutMasonry`’s `tier()`, `SNAP_PARTS`,
-the `SCHED` table, and `clearLocationUI`/`resetLocationState`. **Adding a location-scoped loader**
-also means updating the `jobs` array inside `setLocation()` — the reasons are
+**Adding a card** means registering its lifecycle in `FEEDS`, marking validated outcomes with
+`feedUpdate()`, adding its markup and masonry rank, and clearing any derived weather state on
+location changes. Refresh, scheduling, reset markup and snapshot lists are generated from `FEEDS`;
+the reasons are
 in [`DESIGN.md`](DESIGN.md#adding-a-card-adding-a-loader).
 
 ## Known gaps
@@ -191,7 +209,7 @@ US location is a different project — most of what makes this one useful (the C
 river gauges that matter here, `climStation()`'s search radius) is tuned to eastern Missouri and
 southwest Illinois.
 
-Both checks run on every pull request and must pass:
+Static, logic and Chromium browser checks run on every pull request and must pass:
 
 ```bash
 python3 tools/check.py        # HTML/CSS comments, JS syntax, CSP, icons, root files
@@ -206,7 +224,7 @@ only paints is reviewed by eye; there is no snapshot suite to update. Read
 ## License
 
 [MIT](LICENSE) for everything original to this repository — [`index.html`](index.html), the scripts
-in [`tools/`](tools), and the weather-specific glyphs in the inline sprite.
+in [`assets/`](assets) and [`tools/`](tools), and the weather-specific glyphs in the inline sprite.
 
 Everything that came from somewhere else keeps its own terms. This table is the canonical credits
 list — the page footer links here instead of repeating it, and keeps on the page only what has to
