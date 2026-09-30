@@ -42,10 +42,12 @@ function feeds(c, id='0') {
     const time=start+i*H, hour=Number(stamp(time).slice(11,13));
     return {number:i+1,name:'',startTime:stamp(time),endTime:stamp(time+H),isDaytime:hour>=7&&hour<19,temperature:c.temp+(c.wave?Math.round(Math.sin(i/6)*c.wave):0),temperatureUnit:'F',temperatureTrend:null,probabilityOfPrecipitation:{unitCode:'wmoUnit:percent',value:c.pop},dewpoint:{unitCode:'wmoUnit:degC',value:10},relativeHumidity:{unitCode:'wmoUnit:percent',value:80},windSpeed:c.wind,windDirection:'SW',icon:'',shortForecast:c.condition,detailedForecast:''};
   });
+  if(c.delayedRain)periods.forEach((p,i)=>{p.probabilityOfPrecipitation.value=i>=6&&i<12?80:0;p.shortForecast=i>=6&&i<12?'Rain':'Sunny';});
   if(c.missingHourly) { periods[4].temperature=null; periods[10].probabilityOfPrecipitation.value=null; }
   const daily=Array.from({length:14},(_,i)=>{
     const p=clone(periods[i*12]);p.name=i===0?'Today':i%2?'Tonight':'Thursday';p.detailedForecast='Scenario '+c.name;p.endTime=stamp(start+(i+1)*12*H);return p;
   });
+  if(c.hourlyExpired)periods.forEach(p=>{p.startTime=stamp(Date.parse(p.startTime)-8*24*H);p.endTime=stamp(Date.parse(p.endTime)-8*24*H);});
   return {
     points:{properties:{forecast:'https://api.weather.gov/gridpoints/LSX/'+id+'/forecast',forecastHourly:'https://api.weather.gov/gridpoints/LSX/'+id+'/forecast/hourly',forecastGridData:'https://api.weather.gov/gridpoints/LSX/'+id,observationStations:'https://api.weather.gov/gridpoints/LSX/'+id+'/stations',county:'https://api.weather.gov/zones/county/MOC183',forecastZone:'https://api.weather.gov/zones/forecast/MOZ052',fireWeatherZone:'https://api.weather.gov/zones/fire/MOZ052',timeZone:'America/Chicago',cwa:'LSX',relativeLocation:{properties:{city:'Lake St. Louis',state:'MO'}}}},
     hourly:{properties:{periods}},daily:{properties:{periods:daily}},
@@ -67,9 +69,10 @@ const features=a=>({features:a.map(attributes=>({attributes}))});
 const results=[];
 let browser;
 async function open(c, width=390) {
-  const context=await browser.newContext({viewport:{width,height:900},timezoneId:'America/Chicago'});
+  const context=await browser.newContext({viewport:{width,height:900},timezoneId:c.timezone||'America/Chicago'});
   const page=await context.newPage();
   await page.clock.install({time:new Date(c.now)});
+  if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v17',snapshot),c.snapshot);
   const errors=[],requests=[];
   page.on('pageerror',e=>errors.push(e.message));
   let active=c;
@@ -83,7 +86,7 @@ async function open(c, width=390) {
     const reply=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)}).catch(()=>{});
     if(c.offline) return reply({error:'simulated outage'},503);
     if(u.hostname==='air-quality-api.open-meteo.com'&&c.aqi!=null) return reply({current:{us_aqi:c.aqi,pm2_5:75,pm10:90}});
-    if(u.hostname==='api.open-meteo.com'&&c.uv!=null) return reply({hourly:{time:[stamp(c.now).slice(0,19),stamp(c.now+H).slice(0,19)],uv_index:[c.uv,c.uv+1]},daily:{time:Array.from({length:7},(_,i)=>stamp(c.now+i*24*H).slice(0,10)),uv_index_max:Array(7).fill(c.uv+1)}});
+    if(u.hostname==='api.open-meteo.com'&&c.uv!=null) return reply({hourly:{time:[c.now/1000,(c.now+H)/1000],uv_index:[c.uv,c.uv+1]},daily:{time:Array.from({length:7},(_,i)=>stamp(c.now+i*24*H).slice(0,10)),uv_index_max:Array(7).fill(c.uv+1)}});
     if(u.hostname==='api.water.noaa.gov'&&c.river){
       if(u.pathname.endsWith('/stageflow/forecast')) return reply({data:c.river.map((primary,i)=>({primary,validTime:new Date(c.now+i*24*H).toISOString()}))});
       return reply({status:{observed:{primary:20,primaryUnit:'ft',floodCategory:'minor'}},flood:{categories:{action:{stage:16},minor:{stage:18},moderate:{stage:24},major:{stage:30}}}});
@@ -96,15 +99,22 @@ async function open(c, width=390) {
       const f=chosen.recorded?clone(recorded.responses):feeds(chosen,id);
       if(chosen.delay) await new Promise(resolve=>setTimeout(resolve,chosen.delay));
       if(u.pathname.startsWith('/points/')) return reply(f.points);
+      if(u.pathname.endsWith('/forecast/hourly')&&chosen.hourlyHang)return;
       if(u.pathname.endsWith('/forecast/hourly')) return reply(chosen.hourlyDown||chosen.hourlyMalformed?{}:chosen.hourlyEmpty?{properties:{periods:[]}}:f.hourly,chosen.hourlyDown?503:200);
       if(u.pathname.endsWith('/forecast')) return reply(chosen.dailyDown?{}:f.daily,chosen.dailyDown?503:200);
-      if(u.pathname.startsWith('/gridpoints/')&&!u.pathname.endsWith('/stations')) return reply(chosen.gridDown?{}:f.grid,chosen.gridDown?503:200);
+      if(u.pathname.startsWith('/gridpoints/')&&!u.pathname.endsWith('/stations')) return reply(chosen.gridDown?{}:chosen.gridMalformed?{properties:{}}:f.grid,chosen.gridDown?503:200);
       if(u.pathname.endsWith('/observations/latest')) return reply(f.observation);
       if(u.pathname.endsWith('/stations')) return reply({features:[{geometry:{type:'Point',coordinates:[-90.79,38.8]},properties:{stationIdentifier:'KSUS',name:'Test station'}}]});
-      if(u.pathname==='/alerts/active') return reply({features:c.alerts});
+      if(u.pathname==='/alerts/active') return reply(c.alertsMalformed?{}:c.alertsBrokenFeature?{features:[null]}:{features:c.alerts},c.alertsDown?503:200);
       return reply({error:'ancillary feed intentionally unavailable'},503);
     }
     if(u.hostname==='mapservices.weather.noaa.gov') {
+      if(/cpc_(6_10|8_14)_day_outlk/.test(u.pathname)&&u.pathname.includes('/query')){
+        if(c.cpcDelay)await new Promise(resolve=>setTimeout(resolve,c.cpcDelay));
+        const key=(u.pathname.includes('6_10')?'6':'8')+':'+u.pathname.split('/').at(-2);
+        if(c.cpcDown?.includes(key))return reply({error:{code:500}},503);
+        return reply(features(c.cpcAbove?[{cat:'Above Normal',prob:50}]:[]));
+      }
       if(u.pathname.includes('/SPC_wx_outlks/MapServer')) {
         if(!u.pathname.includes('/query')) return reply(SPC);
         const id=Number(u.pathname.split('/').at(-2)),day=id<9?1:2,a=attrs(c.now,day);
@@ -130,7 +140,7 @@ async function open(c, width=390) {
     return route.abort().catch(()=>{}); // Maps and unrelated third-party widgets use their real fallbacks.
   });
   await page.goto('https://lsx-weather-test.invalid/',{waitUntil:'domcontentloaded'});
-  await page.waitForFunction(()=>typeof refreshInFlight!=='undefined'&&refreshInFlight===null);
+  if(!c.skipWait)await page.waitForFunction(()=>typeof refreshInFlight!=='undefined'&&refreshInFlight===null);
   return {page,context,errors,requests,change:c=>{active=c;}};
 }
 async function expectText(page,selector,pattern) {
@@ -248,6 +258,8 @@ async function main() {
     });
     await run('SPC update mismatches, missing products and failures',config('spc transition',{probabilities:[[10,15,5],[5,0,0]],staleThreats:[11],emptyThreats:[13],threatDown:[7]}),async({page})=>{
       assert.deepEqual(await page.locator('.spc-threat-value').allTextContents(),['10%','Unavailable','5%','Unavailable','<5%','Unavailable']);
+      assert.equal(await page.locator('#fresh-risk').getAttribute('data-state'),'partial');
+      await expectText(page,'#fresh-risk',/Some data unavailable/);
     },320);
     await run('grid outage leaves hourly forecasts usable',config('grid outage',{gridDown:true}),async({page})=>{
       await expectText(page,'#precipEvents',/unavailable/);await durations(page);await expectText(page,'#hourlyDetail',/Gusts unavailable/);
@@ -257,6 +269,9 @@ async function main() {
     });
     await run('malformed hourly response leaves the daily forecast available',config('malformed hourly',{hourlyMalformed:true}),async({page})=>{
       await expectText(page,'#hourly24',/unavailable/);assert.equal(await page.locator('#daily .day').count(),7);
+    });
+    await run('elapsed hourly response cannot verify a current forecast',config('elapsed hourly',{hourlyExpired:true}),async({page})=>{
+      await expectText(page,'#hourly24',/unavailable/);assert.equal(await page.locator('#fresh-hourly').getAttribute('data-state'),'unavailable');assert.equal(await page.locator('#daily .day').count(),7);
     });
     await run('empty hourly refresh clears a previous chart',config('empty hourly'),async session=>{
       session.change(config('empty hourly',{hourlyEmpty:true}));await session.page.evaluate(()=>refreshAll());
@@ -334,8 +349,119 @@ async function main() {
       assert.equal(await session.page.evaluate(()=>renderHourly24._hrs[0].temperature),47);
       await expectText(session.page,'.precip-total',/0\.80″ rain/);await expectText(session.page,'#precipEvents',/Town 7/);
     });
+    await run('partial CPC outage stays unknown independently',config('CPC partial',{cpcDown:['6:0'],cpcAbove:true}),async({page})=>{
+      await expectText(page,'#cpc',/Unavailable/);
+      assert.equal(await page.locator('#cpc .cpc-pill').filter({hasText:'Unavailable'}).count(),1);
+      assert.equal(await page.locator('#cpc .cpc-pill').filter({hasText:/Leaning warm|Leaning wet/}).count(),3);
+      assert.equal(await page.evaluate(()=>feedChecks.cpc.status),'partial');
+    });
+    await run('malformed alerts cannot certify a successful check',config('alerts malformed',{alertsMalformed:true}),async({page})=>{
+      assert.equal(await page.evaluate(()=>feedChecks.alerts.successAt),0);
+      assert.equal(await page.evaluate(()=>feedChecks.alerts.status),'unavailable');
+      await expectText(page,'#alerts',/Couldn.t load alerts/);
+      assert.notEqual(await page.locator('#statusDot').getAttribute('data-state'),'ready');
+    });
+    await run('malformed alert features remain unverified',config('broken alerts',{alertsBrokenFeature:true}),async({page})=>{
+      assert.equal(await page.evaluate(()=>feedChecks.alerts.successAt),0);
+      await expectText(page,'#alerts',/Couldn.t load alerts/);
+    });
+    await run('empty grid payload remains unavailable',config('empty grid',{gridMalformed:true}),async({page})=>{
+      assert.equal(await page.evaluate(()=>feedChecks.grid.status),'unavailable');
+      await expectText(page,'#fresh-grid',/Unavailable/);
+      await expectText(page,'#precipEvents',/unavailable/);
+      assert.equal(await page.evaluate(()=>feedChecks.hourly.status),'ready');
+    });
+    await run('failed refresh preserves last success without claiming freshness',config('last success'),async session=>{
+      const before=await session.page.evaluate(()=>feedChecks.hourly.successAt);
+      session.change(config('offline after success',{offline:true}));
+      await session.page.evaluate(()=>refreshAll());
+      assert.equal(await session.page.evaluate(()=>feedChecks.hourly.successAt),before);
+      assert.equal(await session.page.locator('#statusDot').getAttribute('data-state'),'unavailable');
+      await expectText(session.page,'#fresh-hourly',/Unavailable.*last successful check/);
+      assert(!/Last updated/.test(await session.page.locator('#lastUpdate').innerText()));
+    });
+    await run('stopped checks age into overdue status',config('overdue'),async({page})=>{
+      await page.evaluate(()=>stopSchedule());
+      await page.clock.setSystemTime(new Date(base+3*60000));
+      await page.evaluate(()=>freshnessCheck());
+      await expectText(page,'#fresh-alerts',/Check overdue/);
+      assert.notEqual(await page.locator('#statusDot').getAttribute('data-state'),'ready');
+    });
+    await run('request timeout leaves independent daily forecast usable',config('timeout',{hourlyHang:true,skipWait:true}),async({page})=>{
+      await page.waitForFunction(()=>refreshInFlight!==null);
+      await page.clock.fastForward(21000);
+      await page.waitForFunction(()=>refreshInFlight===null);
+      await expectText(page,'#daily',/Today/);
+      await expectText(page,'#hourly24',/unavailable/);
+      assert.equal(await page.evaluate(()=>feedChecks.hourly.status),'unavailable');
+      assert.equal(await page.evaluate(()=>feedChecks.daily.status),'ready');
+      assert(!(await page.locator('#refresh').isDisabled()));
+    });
+    await run('snapshot check ages survive resaving and expire independently',config('snapshot ages'),async({page})=>{
+      const original=await page.evaluate(()=>{stopSchedule();saveSnapshot();return JSON.parse(localStorage.getItem(SNAP_KEY));});
+      assert(!original.parts.alerts&&!original.parts.mcd);
+      await page.clock.setSystemTime(new Date(base+4*H));
+      const later=await page.evaluate(()=>{saveSnapshot();return JSON.parse(localStorage.getItem(SNAP_KEY));});
+      assert.equal(later.feeds.daily.successAt,original.feeds.daily.successAt);
+      assert(!later.parts.hourly24,'a fresh save cannot renew a four-hour-old hourly check');
+      assert(!later.parts.h24loc);
+    });
+    await run('snapshot warning waits for its own feed verification',config('cache labels'),async session=>{
+      const snapshot=await session.page.evaluate(()=>{saveSnapshot();return localStorage.getItem(SNAP_KEY);});
+      const cached=await open(config('delayed cached CPC',{now:base+60000,snapshot,aqi:35,cpcDelay:1500,skipWait:true}));
+      try{
+        await cached.page.waitForFunction(()=>feedChecks.aqi.status==='ready');
+        assert.equal(await cached.page.evaluate(()=>feedState(feedChecks.cpc,Date.now(),FEEDS.cpc.age)),'saved');
+        assert(await cached.page.locator('#snapBar').evaluate(el=>el.classList.contains('show')));
+        await expectText(cached.page,'#fresh-cpc',/Saved data/);
+        await cached.page.waitForFunction(()=>refreshInFlight===null);
+        assert.equal(await cached.page.evaluate(()=>feedChecks.cpc.saved),false);
+        assert(!(await cached.page.locator('#snapBar').evaluate(el=>el.classList.contains('show'))));
+        assert.deepEqual(cached.errors,[]);
+      }finally{await cached.context.close();}
+    });
+    await run('climate context cache retains partial checks and expires',config('context cache'),async({page})=>{
+      const checkedAt=base-H;
+      await page.evaluate(checkedAt=>{
+        stopSchedule();
+        const cached={...ctx,ready:true,recHi:{v:90,y:'2020'}};
+        localStorage.setItem(CTX_KEY,JSON.stringify({key:'KSTL|KSTL|'+ctxTodayKey(),ctx:cached,status:'partial',checkedAt}));
+        return loadClimateContext();
+      },checkedAt);
+      assert.equal(await page.evaluate(()=>feedChecks.context.successAt),checkedAt);
+      assert.equal(await page.locator('#fresh-context').getAttribute('data-state'),'partial');
+      await page.clock.setSystemTime(new Date(base+11.5*H));
+      await page.evaluate(()=>loadClimateContext());
+      assert.equal(await page.evaluate(()=>feedChecks.context.successAt),checkedAt);
+      assert.equal(await page.locator('#fresh-context').getAttribute('data-state'),'unavailable');
+      assert.equal(await page.evaluate(()=>ctx.ready),false);
+    });
+    for(const timezone of ['America/Chicago','UTC','America/Los_Angeles','Asia/Tokyo']){
+      await run('Central weather timing in '+timezone,config('Central timing',{timezone,delayedRain:true,uv:6,aqi:35}),async({page})=>{
+        await expectText(page,'#callRow',/~7pm–1am tomorrow/);
+        await expectText(page,'#hourlyDetail',/Wed 1:00 PM/);
+        await expectText(page,'#clock',/01:00 PM CT/);
+        assert.equal(await page.evaluate(()=>uv.now),6);
+        assert.equal(await page.evaluate(()=>ctxTodayKey()),'2026-09-30');
+        assert.deepEqual(await page.evaluate(()=>climPeriods()),{mtd:30,ytd:273,std:92});
+      });
+      await run('Central warning expiration in '+timezone,config('Central warning',{timezone,alerts:[alert('Tornado Warning',base)]}),async({page})=>{
+        await expectText(page,'#alerts',/until Wed 2:00 PM/);
+      });
+    }
+    for(const [name,now]of [['fall','2026-11-01T06:30:00Z'],['spring','2026-03-08T07:30:00Z']]){
+      await run('Unix UV samples cross '+name+' DST in UTC browser',config('UV DST',{now:Date.parse(now),timezone:'UTC',uv:8}),async({page})=>{
+        assert.equal(await page.evaluate(()=>uv.now),8);
+        assert.equal(await page.evaluate(()=>uv.peak.t),Date.parse(now)+H);
+      });
+    }
     await run('complete outage renders explicit unavailable states',config('offline',{offline:true}),async({page})=>{
       await expectText(page,'#hourly24',/unavailable/);await expectText(page,'#precipEvents',/unavailable/);assert.equal(await page.locator('.spc-threat-value').filter({hasText:'Unavailable'}).count(),6);assert(!(await page.locator('#refresh').isDisabled()));
+      assert.equal(await page.locator('#statusDot').getAttribute('data-state'),'unavailable');
+      await expectText(page,'#lastUpdate',/Weather data unavailable/);
+      assert(!/Last updated/.test(await page.locator('#lastUpdate').innerText()));
+      assert.equal(await page.locator('#cpc .cpc-pill').filter({hasText:'Unavailable'}).count(),4);
+      assert(!/No hazards flagged/.test(await page.locator('#hazards').innerText()));
     },320);
   } finally {await browser.close();}
   const report={testedAt:new Date().toISOString(),recordedSourceAt:recorded.recordedAt,scope:'Production dashboard in Chromium; synthetic weather extremes and one recorded live LSX replay. AQI, UV and rivers are simulated in selected cases; maps and other ancillary feeds exercise unavailable fallbacks.',passed:results.filter(r=>r.status==='passed').length,failed:results.filter(r=>r.status==='failed').length,results};

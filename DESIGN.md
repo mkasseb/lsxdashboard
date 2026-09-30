@@ -444,24 +444,47 @@ Climate statistics are gated on minimum sample sizes, ACIS departures carry miss
 that are checked before use, and a figure borrowed from a different station is attributed by name.
 Suppression beats false precision.
 
+## Freshness and the region’s clock
+
+`FEEDS` records validated loader outcomes, not HTTP traffic or fulfilled task promises. Cards show
+successful-check times separately from source issuance/observation times; unavailable and partial
+results remain explicit. The refresh indicator summarizes those states, and the footer identifies
+refresh attempts without claiming that the data updated. A check ages into overdue status after
+its feed’s grace period. Location changes clear only location-scoped states, and the existing
+location-generation guards protect freshness updates as well as numbers.
+
+CPC failures cannot become equal chances or near normal. A validated empty point query means
+equal chances; unrecognized attributes remain unknown. A hazards group needs all contributing
+queries before claiming no hazards. JSON requests, including ACIS POSTs, abort after 20 seconds;
+timeouts are distinct from a deliberate location cancellation so loaders render their failures.
+
+All weather instants use `America/Chicago`: the header clock, warnings, radar/satellite times,
+river crests, UV and briefing guidance. `weatherParts()` supplies the region’s calendar date and
+hour for decisions. Open-Meteo UV uses Unix timestamps, avoiding ambiguous offset-free timestamps
+around DST. NOAA day-boundary products and ACIS calendar-only dates retain their stated day;
+calendar arithmetic uses UTC noon so a spring/fall day still counts as one full climate day.
+
 ## Instant paint
 
-Each refresh serialises the rendered HTML of ~22 cards into `localStorage`, so a return visit
-paints a full dashboard before any network request. Each card carries its own TTL (alerts expire
-after 15 minutes; drought after 48 hours). The warning banner is *never* restored, because it
-asserts something about right now.
+Eligible rendered forecast/context fragments are stored in `localStorage`. Each fragment names
+its feed, and the snapshot carries that feed’s original successful-check and source timestamps.
+The TTL is measured from that successful check, not from serialization, so repeated saves cannot
+renew old data. Alerts, current observations and short-fused discussions are fetched live.
 
-A snapshot is restored *markup*, painted under whatever stylesheet ships today — so reshaping a
-card's DOM means bumping `SNAP_KEY`. Skip it and every returning visitor gets one visibly wrong
-first paint: yesterday's elements picking up today's rules with none of today's structure. One
-cold paint is the cheaper mistake.
+Restored cards explicitly say they contain saved data. The saved-view notice stays while any
+restored fragment remains unverified; a successful unrelated feed cannot dismiss it. A failed
+loader clears its restored fragments before painting unavailable data. The climate-context
+cache also preserves its original check time and partial-result status, and expires after 12 hours.
+
+A snapshot is restored markup under the current stylesheet, so changing markup or its freshness
+contract requires bumping `SNAP_KEY`. Version 17 discards earlier snapshots lacking the new times.
 
 ## Adding a card, adding a loader
 
-**Adding a card** means touching five places: the markup, the `RANK` map in `layoutMasonry`'s
-`tier()`, `SNAP_PARTS`, the `SCHED` table, and `clearLocationUI`/`resetLocationState`.
+**Adding a card** means registering `FEEDS` and validated `feedUpdate()` outcomes, plus touching
+the markup, the `RANK` map in `layoutMasonry`'s `tier()`, `SNAP_PARTS`, the `SCHED` table, and `clearLocationUI`/`resetLocationState`.
 
-**Adding a location-scoped loader** means a sixth: the `jobs` array inside `setLocation()`. `SCHED`
+**Adding a location-scoped loader** also means updating the `jobs` array inside `setLocation()`. `SCHED`
 only governs the periodic refresh, and `refreshAll()` only covers the initial paint — a loader
 missing from `setLocation` looks like it works, then silently never re-runs when the visitor
 changes town. Worse, it can appear broken on first load too: geolocation resolves *after* the first
