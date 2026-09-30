@@ -43,6 +43,28 @@ python3 tools/check.py        # HTML/CSS comments, JS syntax, CSP, icons, root f
 node tools/logic-tests.js     # the functions that decide something
 ```
 
+The optional browser suite runs the production dashboard against intercepted NWS/ArcGIS-shaped
+weather scenarios and a recorded LSX response set. It covers heavy rain, snow and ice, warning
+expiration, SPC issuance changes, AQI/UV, river trends, feed failures, daylight-saving changes,
+phone/tablet/desktop widths, rapid location changes and repeated refresh/chart work. It also checks
+2,000 seeded accumulation cases against a separate oracle. The fixture records its source URLs
+and retrieval time; extreme scenarios are synthetic. Maps exercise their unavailable fallbacks,
+so this suite does not verify live tiles, animations or browser-specific rendering outside Chromium.
+
+Install Playwright separately from the dashboard (which has no npm dependencies), then run with a
+local Chromium executable:
+
+```bash
+npm install --prefix /tmp/lsx-browser-tests playwright@1.62.1
+NODE_PATH=/tmp/lsx-browser-tests/node_modules CHROMIUM_PATH=/usr/bin/chromium \
+  node tools/weather-stress-tests.js
+```
+
+Set `WEATHER_STRESS_REPORT` to choose the JSON report path (default:
+`/tmp/lsx-weather-stress-report.json`). `WEATHER_CASE_FILTER=expiration` runs just matching case
+names for debugging; omit it for the full suite. Network responses are intercepted, so a test run
+does not depend on live weather services.
+
 [`tools/check.py`](tools/check.py) checks HTML/CSS comment balance, inline JavaScript syntax, CSP
 origins, sprite references, and the site root files and URLs. [`tools/logic-tests.js`](tools/logic-tests.js)
 covers pure decisions such as alert scope, forecast summaries, radar geometry, and temperature
@@ -78,9 +100,9 @@ All feeds are keyless. The sources have different attribution and reuse terms; s
 
 | Feed | Used for |
 |---|---|
-| `api.weather.gov` | Forecast, hourly, station obs, active alerts, AFD + mesoscale discussion text, county zones |
+| `api.weather.gov` | Forecast, 24–72-hour views, grid event precipitation totals + gusts, station obs, active alerts, AFD + mesoscale discussion text, county zones |
 | `opengeo.ncep.noaa.gov` (WMS) | Official NWS radar, including the time dimension driving the loop |
-| `mapservices.weather.noaa.gov` | SPC convective and fire outlooks and mesoscale discussion polygons; watch county fills; WPC excessive rainfall, winter storm severity, and QPF; CPC 6–10/8–14 day, hazards, and drought outlooks |
+| `mapservices.weather.noaa.gov` | SPC convective outlooks and separate tornado/wind/hail probabilities; fire outlooks and mesoscale discussion polygons; watch county fills; WPC excessive rainfall, winter storm severity, and QPF; CPC 6–10/8–14 day, hazards, and drought outlooks |
 | `services5.arcgis.com` | Current U.S. Drought Monitor classification |
 | `api.water.noaa.gov` (NWPS) | River gauge stages and crest forecasts |
 | `data.rcc-acis.org` | 1991–2020 normals, daily records, rankings, dry streaks |
@@ -118,7 +140,7 @@ The full design rationale — what each decision replaced, and why — lives in
 - **Colour is scarce.** Saturated colour means severity, links are blue; that is the whole budget.
   Type carries the hierarchy through the `--fs-*`/`--r-*`/`--sp-*` scales.
 - **The page is ordered by what a visitor came for.** Alerts and any active mesoscale discussion,
-  the Bottom Line, Now and Sky, the 24-hour chart, The Pulse, then the masonry — in DOM order.
+  the Bottom Line, Now and Sky, event precipitation and the 24–72-hour chart, The Pulse, then the masonry — in DOM order.
 - **Radar is a peek, not the product.** The map's height is an aspect ratio, never leftover space;
   radar and satellite stack on one Leaflet map; the loop targets a 60-minute span, not a sweep
   count; and a dead tile layer is detected per layer so it can never read as clear skies.

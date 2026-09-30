@@ -693,6 +693,7 @@
      for the document outline and the jump-nav target, clipped rather than display:none so it
      stays in the accessibility tree. In the calm state the card chrome comes back — a green
      reassurance line standing bare on the page background read as debris, not calm. */
+  #alertsCard>h2{flex-wrap:wrap}
   #alertsCard.bannered:not(.calm){background:none;border:0;box-shadow:none;padding:0}
   #alertsCard.bannered:not(.calm)>h2{position:absolute;width:1px;height:1px;margin:0;padding:0;
     overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
@@ -1124,7 +1125,7 @@
   .maplock-wrap.unlocked .maplock-toggle{display:block}
 
   /* Rivers */
-  .river{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:8px}
+  .river{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(320px,100%),1fr));gap:8px}
   .rlink{display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:44px;
     background:var(--inset);border:1px solid var(--border);border-left:5px solid var(--muted);
     border-radius:var(--r-md);padding:11px 13px;font-size:var(--fs-md);color:var(--text)}
@@ -1300,6 +1301,15 @@
   .spc-row>*{min-width:0}
   .spc-pill{font-size:var(--fs-xs);font-weight:600;padding:5px 8px;border-radius:var(--r-pill);text-align:center;
     white-space:normal;line-height:1.25;overflow-wrap:anywhere}
+  .spc-threats{margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
+  .spc-threat-title{font-size:var(--fs-md);font-weight:700;margin-bottom:8px}
+  .spc-threat-row{display:grid;grid-template-columns:74px repeat(3,minmax(0,1fr));gap:6px;align-items:center;padding:7px 0}
+  .spc-threat-row .rh{font-size:var(--fs-2xs);color:var(--muted);text-align:center}
+  .spc-threat-value{min-width:0;text-align:center;font-size:var(--fs-md);font-weight:700;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+  .spc-threat-value.elevated{color:var(--sev)}
+  .spc-threat-value.quiet{color:var(--muted);font-weight:500}
+  .spc-threat-note{font-size:var(--fs-xs);color:var(--muted);line-height:1.5;margin-top:8px}
+  .spc-threat-period{font-size:var(--fs-xs);color:var(--muted);line-height:1.45;margin-top:4px}
 
   /* SPC mesoscale discussion — the "next 1–3 hours" strip, riding the top of the grid directly
      under the alert banners and dressed as their peer: same standing-on-the-page tint, radius and
@@ -1372,6 +1382,23 @@
   .h24-svg .h24-poplbl{font-size:10px;font-weight:700}
   .h24-tip{position:absolute;top:2px;display:none;pointer-events:none;background:var(--bg);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border:1px solid var(--border);
     border-radius:var(--r-md);padding:7px 11px;font-size:var(--fs-sm);white-space:nowrap;box-shadow:var(--shadow);z-index:5}
+  .hourly-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+  .hourly-head h2{margin:0}
+  .hourly-options{display:flex;gap:4px}
+  .hourly-options button{min-height:44px;padding:7px 12px;font-size:var(--fs-sm)}
+  .hourly-options button[aria-pressed="true"]{background:var(--chip);border-color:var(--accent);color:var(--accent)}
+  .h24-detail{display:flex;flex-wrap:wrap;gap:5px 18px;font-size:var(--fs-md);line-height:1.5;padding:10px 0 4px;min-height:46px}
+  .h24-detail .muted{color:var(--muted)}
+  .h24-cursor{width:100%;min-height:32px;accent-color:var(--accent);cursor:pointer}
+  .h24-note{font-size:var(--fs-xs);color:var(--muted);line-height:1.5;margin-top:4px}
+  .precip-events{margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border)}
+  .precip-events:empty{display:none}
+  .precip-head{font-size:var(--fs-md);font-weight:700;margin-bottom:8px}
+  .precip-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+  .precip-event{padding:10px 12px;border:1px solid var(--border);border-radius:var(--r-sm);background:var(--inset)}
+  .precip-when{font-size:var(--fs-sm);color:var(--muted);line-height:1.5}
+  .precip-total{font-size:var(--fs-lg);font-weight:700;margin:4px 0}
+  .precip-note{font-size:var(--fs-xs);color:var(--muted);line-height:1.5;margin-top:7px}
 
   /* line-height 1.7 → 2.0 is a tap-target change, not a typographic one. The attribution links are
      inline in running prose, which both target-size criteria explicitly exempt — and rightly, since
@@ -1933,7 +1960,15 @@
        Still a sibling of #current rather than a child, for the same reason as before — loadCurrent()
        rebuilds #current wholesale and would take the chart down with it. ── -->
   <section class="card col-12" id="h24Card">
-    <h2>Next 24 hours <span id="h24loc"></span></h2>
+    <div class="hourly-head">
+      <h2><span id="h24Title">Next 24 hours</span> <span id="h24loc"></span></h2>
+      <div class="hourly-options" id="hourlyOptions" role="group" aria-label="Hourly forecast duration">
+        <button type="button" data-hours="24" aria-pressed="true" disabled>24 hours</button>
+        <button type="button" data-hours="48" aria-pressed="false" disabled>48 hours</button>
+        <button type="button" data-hours="72" aria-pressed="false" disabled>72 hours</button>
+      </div>
+    </div>
+    <div class="precip-events" id="precipEvents"><div class="loading">Loading precipitation amounts…</div></div>
     <div id="hourly24"><div class="loading">Loading hourly…</div></div>
   </section>
 
@@ -1970,6 +2005,7 @@
         <a class="link" href="https://www.spc.noaa.gov/products/outlook/day1otlk.html" target="_blank" rel="noopener">Maps ↗</a>
       </h2>
       <div id="spc"><div class="loading">Loading outlook…</div></div>
+      <div class="spc-threats" id="spcThreats"><div class="loading">Loading tornado, wind &amp; hail outlooks…</div></div>
       <div class="imgcap"><span id="spcLoc">SPC &middot; WPC</span><span>storm &middot; flood</span></div>
     </section>
     <section class="card" id="hazardsCard">
@@ -2237,23 +2273,182 @@ function precipChance(p){
 /* ── Next 24 Hours: full-width integrated hourly chart ──
    Smooth temp curve (per-hour color gradient) + day/night bands + precip bars
    + hour icons + now marker + hover readout. Re-renders on resize. */
+/* NWS grid intervals carry totals for precipitation, but a constant speed for gusts.
+   Never multiply a six-hour precipitation total by six or prorate it into an hourly forecast. */
+function gridInterval(validTime){
+  var parts=String(validTime||"").split("/"), start=Date.parse(parts[0]);
+  var m=/^P(?:(\d+(?:\.\d+)?)D)?(?:T(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(parts[1]||"");
+  if(parts.length!==2||!isFinite(start)||!m) return null;
+  var duration=((+m[1]||0)*86400+(+m[2]||0)*3600+(+m[3]||0)*60+(+m[4]||0))*1000;
+  return duration>0?{start:start,end:start+duration}:null;
+}
+function gridSeries(layer,kind){
+  if(!layer||!Array.isArray(layer.values)) return [];
+  var u=String(layer.uom||"").replace(/^wmoUnit:/,""), factor=null;
+  if(kind==="amount") factor={mm:1/25.4,cm:1/2.54,m:1/0.0254,in:1}[u];
+  if(kind==="wind") factor={"km_h-1":0.621371,"m_s-1":2.236936,"mi_h-1":1,kt:1.150779}[u];
+  if(factor==null) return [];
+  var out=[];
+  layer.values.forEach(function(p){
+    var t=gridInterval(p.validTime); if(!t) return;
+    t.value=typeof p.value==="number"&&isFinite(p.value)&&p.value>=0?p.value*factor:null;
+    out.push(t);
+  });
+  out.sort(function(a,b){return a.start-b.start;});
+  // Overlapping intervals cannot safely be added or sampled; reject the ambiguous series.
+  for(var i=1;i<out.length;i++) if(out[i].start<out[i-1].end) return [];
+  return out;
+}
+function gridAmount(series,start,end){
+  var cursor=start, amount=0;
+  for(var i=0;i<series.length&&cursor<end;i++){
+    var p=series[i]; if(p.end<=start||p.start>=end) continue;
+    if(p.start>cursor||p.value==null) return null;
+    // Zero can span a boundary. A nonzero total cannot be split without inventing its timing.
+    if(p.value>0&&(p.start<start||p.end>end)) return null;
+    amount+=p.value; cursor=Math.min(end,p.end);
+  }
+  return cursor>=end?amount:null;
+}
+function gridGustAt(series,at){
+  for(var i=0;i<series.length;i++) if(series[i].start<=at&&at<series[i].end) return series[i].value;
+  return null;
+}
+function precipEventSummary(grid,nowMs,horizonHours){
+  var q=gridSeries(grid&&grid.quantitativePrecipitation,"amount");
+  var snow=gridSeries(grid&&grid.snowfallAmount,"amount"), ice=gridSeries(grid&&grid.iceAccumulation,"amount");
+  var limit=nowMs+horizonHours*3600000, events=[], currentEvent=null, cursor=nowMs, complete=true, unknown=false, unknownEnd=nowMs;
+  q.forEach(function(p){
+    if(p.end<=nowMs) return;
+    var gap=p.start>cursor;
+    if((gap||p.value==null)&&cursor<limit){ complete=false; unknown=true; unknownEnd=p.value==null?p.end:p.start; }
+    if(gap||p.value==null){
+      if(currentEvent) currentEvent.partial=true;
+      currentEvent=null;
+    }
+    cursor=Math.max(cursor,p.end);
+    if(p.value==null) return;
+    if(p.value===0){
+      // More than six known dry hours closes an event, including its missing-data boundary.
+      // A later outage must not turn a completed earlier event into a subtotal.
+      if(currentEvent&&p.end-currentEvent.end>6*3600000) currentEvent=null;
+      if(unknown&&p.end-unknownEnd>6*3600000) unknown=false;
+      return;
+    }
+    if(!currentEvent||p.start-currentEvent.end>6*3600000){
+      if(p.start>=limit) { currentEvent=null; return; }
+      currentEvent={start:p.start,end:p.end,amount:p.value,partial:unknown,ongoing:p.start<nowMs};
+      events.push(currentEvent);
+    }else{
+      currentEvent.end=p.end; currentEvent.amount+=p.value;
+    }
+    unknown=false;
+  });
+  if(cursor<limit) complete=false;
+  var edge=q.length?q[q.length-1].end:nowMs;
+  events.forEach(function(e){
+    e.snow=gridAmount(snow,e.start,e.end); e.ice=gridAmount(ice,e.start,e.end);
+    e.continues=e.end===edge; e.beyondView=e.end>limit;
+    // Only call liquid-equivalent QPF "rain" when both frozen-precipitation layers verify zero.
+    e.rain=e.snow===0&&e.ice===0;
+  });
+  return {events:events,complete:complete,dry:complete&&events.length===0};
+}
+function forecastWindowHours(hrs,hours,nowMs){
+  var start=Math.floor(nowMs/3600000)*3600000, end=start+hours*3600000;
+  return (hrs||[]).filter(function(p){
+    var t=Date.parse(p.startTime);
+    return isFinite(t)&&t>=start&&t<end&&typeof p.temperature==="number"&&isFinite(p.temperature);
+  }).sort(function(a,b){return Date.parse(a.startTime)-Date.parse(b.startTime);});
+}
+var forecastGrid={status:"loading",properties:null,gusts:[]}, hourlyHours=24;
+function forecastClock(ms){
+  return new Date(ms).toLocaleString("en-US",{timeZone:"America/Chicago",weekday:"short",hour:"numeric",minute:"2-digit"});
+}
+function precipAmountText(amount){
+  return amount>0&&amount<0.01?"<0.01\u2033":amount.toFixed(2)+"\u2033";
+}
+function renderPrecipEvents(){
+  var el=document.getElementById("precipEvents"); if(!el) return;
+  if(forecastGrid.status==="loading"){ el.innerHTML='<div class="loading">Loading precipitation amounts\u2026</div>'; return; }
+  if(!forecastGrid.properties){
+    el.innerHTML='<div class="precip-note">Precipitation amounts unavailable. Rain chances remain in the hourly forecast.</div>'; return;
+  }
+  var p=forecastGrid.properties, summary=precipEventSummary(p,Date.now(),72), html='';
+  summary.events.forEach(function(e){
+    var notes=[];
+    if(e.ongoing) notes.push("Includes the current forecast period, including hours already elapsed");
+    if(e.partial) notes.push("Some amounts missing; this is a known subtotal");
+    if(e.continues) notes.push("Continues beyond the available forecast; total is incomplete");
+    else if(e.beyondView) notes.push("Full event total includes hours beyond the 72-hour view");
+    var extra=[];
+    if(e.snow>0) extra.push("Snow "+precipAmountText(e.snow));
+    if(e.ice>0) extra.push("Ice "+precipAmountText(e.ice));
+    html+='<div class="precip-event"><div class="precip-when">'+(e.ongoing?'Ongoing \u00b7 ':'')
+      +esc(forecastClock(e.start))+" \u2013 "+esc(forecastClock(e.end))+'</div>'
+      +'<div class="precip-total">'+(e.partial||e.continues?'Known ':'~')+precipAmountText(e.amount)
+      +' '+(e.rain?'rain':'liquid equivalent')+'</div>'
+      +(extra.length?'<div class="precip-when">'+esc(extra.join(" \u00b7 "))+'</div>':'')
+      +(notes.length?'<div class="precip-note">'+esc(notes.join(". "))+'.</div>':'')+'</div>';
+  });
+  el.innerHTML='<div class="precip-head">Upcoming precipitation \u00b7 events starting within 72 hours</div>'
+    +(html?'<div class="precip-list">'+html+'</div>':'<div class="precip-when">'
+      +(summary.dry?'No measurable precipitation forecast in the next 72 hours.':'Precipitation amounts incomplete; no reliable event total available.')+'</div>')
+    +'<div class="precip-note">NWS forecast amounts for '+esc(current.name.replace(" (home)",""))
+    +' \u00b7 '+(p.updateTime?'issued '+esc(timeAgo(p.updateTime))+' \u00b7 ':'')
+    +'Timing follows forecast accumulation periods; rain may be intermittent.'
+    +(!summary.complete?' Some periods are unavailable.':'')+'</div>';
+}
+function loadForecastGrid(){
+  var fresh=locGuard();
+  return pointsFor(current.lat,current.lon).then(function(pt){
+    if(!fresh()) return null;
+    var url=pt.properties.forecastGridData; if(!url) throw new Error("No forecast grid");
+    return getJSON(url,HEADERS,locSignal());
+  }).then(function(d){
+    if(!fresh()) return;
+    if(!d||!d.properties) throw new Error("Invalid forecast grid");
+    forecastGrid={status:"ready",properties:d.properties,gusts:gridSeries(d.properties.windGust,"wind")};
+    renderPrecipEvents(); renderHourly24();
+  }).catch(function(){
+    if(!fresh()) return;
+    forecastGrid={status:"unavailable",properties:null,gusts:[]};
+    renderPrecipEvents(); renderHourly24();
+  });
+}
+function syncHourlyControls(){
+  var wrap=document.querySelector("#hourly24 .h24-wrap"), hours=wrap?Number(wrap.getAttribute("data-hours")):hourlyHours;
+  var title=document.getElementById("h24Title"); if(title) title.textContent="Next "+hours+" hours";
+  document.querySelectorAll("#hourlyOptions button").forEach(function(b){
+    b.setAttribute("aria-pressed",String(Number(b.getAttribute("data-hours"))===hours));
+    b.disabled=!forecastWindowHours(renderHourly24._hrs,hourlyHours,Date.now()).length;
+  });
+}
+document.getElementById("hourlyOptions").addEventListener("click",function(ev){
+  var b=ev.target.closest("button[data-hours]"); if(!b||b.disabled) return;
+  hourlyHours=Number(b.getAttribute("data-hours")); renderHourly24._cursor=0; renderHourly24();
+});
 function renderHourly24(hrs){
   var el=document.getElementById("hourly24"); if(!el) return;
   if(hrs&&hrs.length) renderHourly24._hrs=hrs;
-  hrs=renderHourly24._hrs;
+  hrs=forecastWindowHours(renderHourly24._hrs,hourlyHours,Date.now());
   if(!hrs||!hrs.length){
     // A resize can fire before live data arrives — never overwrite a restored snapshot chart
-    if(!el.querySelector(".h24-svg")) el.innerHTML='<div class="empty">Hourly forecast unavailable.</div>';
-    return;
+    if(renderHourly24._hrs||!el.querySelector(".h24-svg")) el.innerHTML='<div class="empty">Hourly forecast unavailable.</div>';
+    syncHourlyControls(); return;
   }
-  var n=Math.min(24,hrs.length), i;
-  var hi=-999, lo=999, peak=0, popMissing=false, popKnown=false, temps=[], pops=[], feels=[], maxDiv=0, feelsHi=-999;
+  var n=hrs.length, i;
+  var hi=-999, lo=999, peak=0, popMissing=false, popKnown=false, temps=[], pops=[], feels=[], maxDiv=0, feelsHi=-999, maxWind=null, maxGust=null, gustMissing=false;
   for(i=0;i<n;i++){
     var t=hrs[i].temperature; temps.push(t); if(t>hi)hi=t; if(t<lo)lo=t;
     var v=precipChance(hrs[i].probabilityOfPrecipitation);
     pops.push(v); if(v==null) popMissing=true; else{ popKnown=true; if(v>peak) peak=v; }
     var hrh=(hrs[i].relativeHumidity&&hrs[i].relativeHumidity.value!=null)?hrs[i].relativeHumidity.value:null;
     var fl=feelsLikeF(t,hrh,parseMph(hrs[i].windSpeed)); feels.push(fl);
+    var wind=parseMph(hrs[i].windSpeed), gust=gridGustAt(forecastGrid.gusts,Date.parse(hrs[i].startTime));
+    if(wind!=null) maxWind=maxWind==null?wind:Math.max(maxWind,wind);
+    if(gust!=null) maxGust=maxGust==null?gust:Math.max(maxGust,gust);
+    else gustMissing=true;
     if(fl!=null){ if(Math.abs(fl-t)>maxDiv) maxDiv=Math.abs(fl-t); if(fl>feelsHi) feelsHi=fl; }
   }
   var showFeels = maxDiv>=3;   // ghost curve only when it meaningfully diverges
@@ -2261,16 +2456,18 @@ function renderHourly24(hrs){
     +'<span class="h24-pill">▲ High <b '+tvAttr(hi)+'>'+hi+'°</b></span>'
     +'<span class="h24-pill">▼ Low <b '+tvAttr(lo)+'>'+lo+'°</b></span>'
     +'<span class="h24-pill">'+ic("drop")+(popMissing?(popKnown?'Rain chance incomplete · known peak <b style="color:var(--accent)">'+peak+'%</b>':'Rain chance unavailable'):'Peak rain <b style="color:var(--accent)">'+peak+'%</b>')+'</span>'
+    +(maxWind!=null?'<span class="h24-pill">'+ic("wind")+'Wind up to <b>'+maxWind+' mph</b></span>':'')
+    +(maxGust!=null?'<span class="h24-pill">'+(gustMissing?'Known gusts':'Gusts')+' up to <b>'+Math.round(maxGust)+' mph</b></span>':'')
     +(showFeels?'<span class="h24-pill">'+ic("heat")+'Feels high <b '+tvAttr(feelsHi)+'>'+feelsHi+'°</b></span>':'')
-    +'<span class="h24-pill h24-now">'+wxImg(hrs[0].shortForecast,hrs[0].isDaytime,20)+' Now <b>'+hrs[0].temperature+'°</b></span>'
+    +'<span class="h24-pill h24-now">'+wxImg(hrs[0].shortForecast,hrs[0].isDaytime,20)+' Forecast <b>'+hrs[0].temperature+'°</b></span>'
     +'</div>';
 
   // ---- geometry (full container width; 1200 fallback pre-layout) ----
   var W=el.clientWidth||1200, narrow=W<=680;
   var H=narrow?190:236, padL=16, padR=16, innerW=W-padL-padR, denom=Math.max(1,n-1), slot=innerW/denom;
-  var iconPx=narrow?22:28, iconY=6;
+  var iconPx=narrow?22:28, iconY=25;
   var curveTop=iconY+iconPx+(narrow?18:24), baseY=H-58, barBase=H-26, barMax=narrow?26:34, timeY=H-8;
-  var step = slot>=48?1 : slot>=30?2 : slot>=20?3 : 4;   // label density adapts to width
+  var step = slot>=48?1 : slot>=30?2 : slot>=20?3 : slot>=12?6 : 12;
   var scLo=lo, scHi=hi;
   if(showFeels){ for(i=0;i<n;i++){ if(feels[i]!=null){ if(feels[i]<scLo)scLo=feels[i]; if(feels[i]>scHi)scHi=feels[i]; } } }
   var tMin=scLo-2, tMax=scHi+2, rng=Math.max(4,tMax-tMin);
@@ -2323,13 +2520,25 @@ function renderHourly24(hrs){
   }
 
   // icons, temp labels, time labels (density-stepped)
-  var icons="", tlabels="", times="";
+  var icons="", tlabels="", times="", dates="", lastDate="";
   for(i=0;i<n;i++){
+    var wall=nwsWallTime(hrs[i].startTime), dateKey=wall?wall.key:"";
+    if(dateKey&&dateKey!==lastDate){
+      var dayEnd=i+1;
+      while(dayEnd<n&&nwsWallTime(hrs[dayEnd].startTime)&&nwsWallTime(hrs[dayEnd].startTime).key===dateKey) dayEnd++;
+      var dx=(X(i)+X(dayEnd-1))/2;
+      var dateLabel=new Date(hrs[i].startTime).toLocaleDateString("en-US",{timeZone:"America/Chicago",weekday:"short"});
+      if((dayEnd-i)*slot>=45) dateLabel+=" "+wall.day;
+      dates+='<text x="'+dx.toFixed(1)+'" y="13" text-anchor="middle" font-size="11" font-weight="700" fill="var(--muted)">'
+        +esc(dateLabel)+'</text>';
+      if(i>0) dates+='<line x1="'+X(i).toFixed(1)+'" x2="'+X(i).toFixed(1)+'" y1="21" y2="'+barBase+'" stroke="var(--border)" stroke-dasharray="3 4"/>';
+      lastDate=dateKey;
+    }
     if(i%step!==0 && i!==0) continue;
     var hx=X(i), hh=hrs[i], d=new Date(hh.startTime);
     icons+='<image class="h24-ic" href="'+ICON_BASE+wxName(hh.shortForecast,hh.isDaytime)+'.svg" x="'+(hx-iconPx/2).toFixed(1)+'" y="'+iconY+'" width="'+iconPx+'" height="'+iconPx+'"/>';
     tlabels+='<text '+tvAttr(temps[i],"h24-tl")+' x="'+hx.toFixed(1)+'" y="'+(Y(temps[i])-9).toFixed(1)+'" text-anchor="middle">'+temps[i]+'°</text>';
-    var lbl=(i===0)?"Now":d.toLocaleTimeString([], {hour:"numeric"}).replace(" ","").toLowerCase();
+    var lbl=d.toLocaleTimeString("en-US", {timeZone:"America/Chicago",hour:"numeric"}).replace(" ","").toLowerCase();
     times+='<text class="h24-time'+(i===0?" is-now":"")+'" x="'+hx.toFixed(1)+'" y="'+timeY+'" text-anchor="middle">'+lbl+'</text>';
   }
 
@@ -2342,7 +2551,7 @@ function renderHourly24(hrs){
   var tracker='<line class="h24-track" x1="-99" y1="'+(curveTop-14)+'" x2="-99" y2="'+(barBase+2)+'" stroke="var(--accent)" stroke-width="1" opacity="0"/>'
     +'<circle class="h24-trackdot" cx="-99" cy="-99" r="4" fill="var(--accent)" opacity="0"/>';
 
-  var svg='<svg class="h24-svg" viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" role="img" aria-label="24 hour temperature and precipitation chart">'
+  var svg='<svg class="h24-svg" viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" role="img" aria-label="'+hourlyHours+' hour forecast: temperature curve, precipitation chance bars and shaded nights. Hourly details follow the chart.">'
     +'<defs><linearGradient id="h24g" x1="0" y1="0" x2="1" y2="0">'+grad+'</linearGradient>'
     +'<linearGradient id="h24a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+tCol(hi)+'" stop-opacity=".16"/><stop offset="1" stop-color="'+tCol(lo)+'" stop-opacity="0"/></linearGradient></defs>'
     +bands
@@ -2350,14 +2559,36 @@ function renderHourly24(hrs){
     +'<path d="'+area+'" fill="url(#h24a)"/>'
     +feelsPath
     +'<path class="h24-line" d="'+line+'" fill="none" stroke="url(#h24g)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'
-    +bars+icons+tlabels+times+nowMark+tracker
+    +bars+icons+tlabels+times+dates+nowMark+tracker
     +'</svg>';
 
-  el.innerHTML=sum+'<div class="h24-wrap">'+svg+'<div class="h24-tip" id="h24tip"></div></div>';
+  var coverage=n<hourlyHours?'Only '+n+' forecast hours are available in this window. ':'';
+  el.innerHTML=sum+'<div class="h24-wrap" data-hours="'+hourlyHours+'">'+svg+'<div class="h24-tip" id="h24tip"></div></div>'
+    +'<input class="h24-cursor" id="hourlyCursor" type="range" min="0" max="'+(n-1)+'" value="0" step="1" aria-label="Forecast hour">'
+    +'<div class="h24-detail" id="hourlyDetail" role="status" aria-live="polite"></div>'
+    +'<div class="h24-note">'+coverage+'Move across the chart or use the slider for hourly detail. NWS point forecast; gusts from the NWS forecast grid.</div>';
+  syncHourlyControls();
 
   // ---- hover / touch readout ----
   var wrap=el.querySelector(".h24-wrap"), tip=el.querySelector(".h24-tip");
   var trk=el.querySelector(".h24-track"), tdot=el.querySelector(".h24-trackdot");
+  var cursor=el.querySelector(".h24-cursor"), detail=el.querySelector(".h24-detail");
+  function describeHour(idx){
+    var h=hrs[idx], gust=gridGustAt(forecastGrid.gusts,Date.parse(h.startTime)), wind=((h.windDirection||"")+" "+(h.windSpeed||"")).trim();
+    return '<b>'+esc(forecastClock(Date.parse(h.startTime)))+'</b><span><b '+tvAttr(temps[idx])+'>'+temps[idx]+'°</b>'
+      +(feels[idx]!=null?' \u00b7 feels '+feels[idx]+'°':'')+'</span>'
+      +'<span>'+(pops[idx]==null?'Rain chance unavailable':'Rain '+pops[idx]+'%')+'</span>'
+      +'<span>Wind '+esc(wind||"unavailable")+'</span>'
+      +'<span>Gusts '+(gust==null?'unavailable':Math.round(gust)+' mph')+'</span>'
+      +'<span class="muted">'+esc(h.shortForecast||"")+'</span>';
+  }
+  function selectHour(idx){
+    renderHourly24._cursor=idx; cursor.value=idx;
+    cursor.setAttribute("aria-valuetext",forecastClock(Date.parse(hrs[idx].startTime)));
+    detail.innerHTML=describeHour(idx);
+  }
+  cursor.addEventListener("input",function(){ selectHour(Number(cursor.value)); });
+  selectHour(Math.min(n-1,renderHourly24._cursor||0));
   function showAt(clientX){
     var r=wrap.getBoundingClientRect(); if(!r.width) return;
     var sx=(clientX-r.left)*(W/r.width);
@@ -2365,8 +2596,8 @@ function renderHourly24(hrs){
     var hx=X(idx), hy=Y(temps[idx]);
     trk.setAttribute("x1",hx);trk.setAttribute("x2",hx);trk.setAttribute("opacity",".45");
     tdot.setAttribute("cx",hx);tdot.setAttribute("cy",hy.toFixed(1));tdot.setAttribute("opacity","1");
-    var d=new Date(hrs[idx].startTime);
-    var when=(idx===0)?"Now":d.toLocaleTimeString([], {hour:"numeric"});
+    selectHour(idx);
+    var when=forecastClock(Date.parse(hrs[idx].startTime));
     tip.innerHTML='<b>'+esc(when)+'</b> · <b '+tvAttr(temps[idx])+'>'+temps[idx]+'°</b>'
       +((feels[idx]!=null&&Math.abs(feels[idx]-temps[idx])>=2)?' · <span '+tvAttr(feels[idx])+'>feels '+feels[idx]+'°</span>':'')
       +(pops[idx]==null?' · rain chance unavailable':(pops[idx]>0?' · <span style="color:var(--accent)">'+ic("drop")+pops[idx]+'%</span>':''))
@@ -2379,6 +2610,8 @@ function renderHourly24(hrs){
   wrap.addEventListener("mousemove",function(e){ showAt(e.clientX); });
   wrap.addEventListener("mouseleave",hideTip);
   wrap.addEventListener("touchmove",function(e){ if(e.touches[0]) showAt(e.touches[0].clientX); },{passive:true});
+  wrap.addEventListener("touchstart",function(e){ if(e.touches[0]) showAt(e.touches[0].clientX); },{passive:true});
+  wrap.addEventListener("click",function(e){ showAt(e.clientX); });
   wrap.addEventListener("touchend",hideTip);
 
   // ---- re-render on resize so the chart always fills the card ----
@@ -3672,6 +3905,12 @@ function loadForecast(){
     return Promise.all([getJSON(fUrl,HEADERS,locSignal()), getJSON(hUrl,HEADERS,locSignal()).catch(function(){return null;})]).then(function(res){
       if(!fresh()) return;   // user moved while this was in flight
       var f=res[0], h=res[1];
+      // A malformed or empty HTTP 200 hourly response is still a failed enhancer.
+      // Keep the healthy daily forecast and clear any previous hourly chart.
+      if(h&&h.properties&&Array.isArray(h.properties.periods)){
+        h.properties.periods=h.properties.periods.filter(function(p){return !!p&&typeof p==="object";});
+        if(!h.properties.periods.length) h=null;
+      }else h=null;
       var hByDate=h?hourlyByDate(h.properties.periods):{};
       var ps=f.properties.periods.slice(0,15);
       /* Pair day + night periods into single calendar days — seven visible rows, capped ON PURPOSE.
@@ -3842,12 +4081,13 @@ function loadForecast(){
         var hrs=h.properties.periods.slice(0,24);
         smart.hourly=hrs;
         smart.hourlyAll=h.properties.periods;
-        renderHourly24(hrs);
+        renderHourly24(h.properties.periods);
         var hl=document.getElementById("h24loc"); if(hl) hl.textContent=current.name.replace(" (home)","");
       }else{
         smart.hourly=[]; smart.hourlyAll=[]; renderHourly24._hrs=null;
         var strip=document.getElementById("hourly24");
         if(strip) strip.innerHTML='<div class="empty">Hourly forecast unavailable.</div>';
+        syncHourlyControls();
       }
       if(typeof renderTheCall==="function") renderTheCall();
     });
@@ -3858,6 +4098,7 @@ function loadForecast(){
     climate.fcHi=null; climate.fcLo=null; climate.fcHiLabel="";
     var strip=document.getElementById("hourly24");
     if(strip) strip.innerHTML='<div class="empty">Hourly forecast unavailable.</div>';
+    syncHourlyControls();
     daily.innerHTML='<div class="empty">Forecast unavailable. <a href="https://forecast.weather.gov/MapClick.php?lat='+current.lat+'&lon='+current.lon+'" target="_blank" rel="noopener">Open NWS forecast ↗</a></div>';
     renderHeroToday(); renderVsNormal(); renderContext();
     if(typeof renderTheCall==="function") renderTheCall();
@@ -4167,7 +4408,7 @@ function loadAlerts(){
          the break landed mid-clause across the row's 10px gap. */
       card.classList.add("calm");
       paintAlerts(el,'<div class="calmrow"><span class="cdot"></span><span>No active watches, warnings or advisories <span class="cmut">anywhere in eastern Missouri or southwest Illinois.</span></span></div>');
-      callLocalAlert=null;
+      callLocalAlert=null; callAlertGroups=[];
       if(typeof renderTheCall==="function") renderTheCall();
       return;
     }
@@ -4283,7 +4524,8 @@ function loadAlerts(){
        strongest product that actually covers this location so it can turn that hazard into a
        plan instead of repeating the product title. In degraded flat mode every LSX product is
        intentionally treated as local, matching the fail-open list above. */
-    callLocalAlert=bottomLineLocalAlert(glist);
+    callAlertGroups=glist;
+    callLocalAlert=bottomLineLocalAlert(callAlertGroups);
     if(typeof renderTheCall==="function") renderTheCall();
 
     /* Which cards are ELSEWHERE. The rule is alertScope(), up beside alertCoversMe() and asserted
@@ -4496,7 +4738,7 @@ function loadAlerts(){
     paintAlerts(el,calmHTML+mineHTML+elseHTML);
   }).catch(function(){
     if(!fresh()) return;   // an old location's failed request must not replace the new alert list
-    callLocalAlert=null;
+    callLocalAlert=null; callAlertGroups=[];
     if(typeof renderTheCall==="function") renderTheCall();
     card.classList.remove("calm");
     paintAlerts(el,'<div class="empty">Couldn\'t load alerts. <a href="https://www.weather.gov/lsx/" target="_blank" rel="noopener">Check weather.gov/lsx ↗</a></div>');
@@ -4704,7 +4946,8 @@ var MCD_URL="https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/
 /* Layer ids drift when NOAA republishes these services. Only a named, verified layer may
    establish a zero-risk result; fallback ids alone cannot certify an empty point query. */
 var RISK_LAYERS={spc:[1,9,17], ero:[0,1,2], fireCat:[1,4], fireD3:{dry:7,wind:8}, wssi:[1,2], mcd:0, wwa:1};
-var RISK_READY={spc:false,ero:false,fire:false,wssi:false};
+var SPC_THREAT_LAYERS=[{},{}];
+var RISK_READY={spc:false,threats:false,ero:false,fire:false,wssi:false};
 /* Memoised and awaitable: loadSpc waits for names before querying. A failed metadata lookup
    leaves that service unavailable and is retried on the next scheduled refresh. */
 var _riskLayersP=null;
@@ -4713,8 +4956,15 @@ function resolveRiskLayers(){
   _riskLayersP=Promise.all([
   getJSON(SPC_URL+"?f=json").then(function(d){
     var ids={};
-    (d.layers||[]).forEach(function(l){ var m=/^Day\s*([123])\s+Categorical/i.exec(l.name||""); if(m) ids[m[1]]=l.id; });
+    var threats=[{},{}];
+    (d.layers||[]).forEach(function(l){
+      var m=/^Day\s*([123])\s+Categorical/i.exec(l.name||""); if(m) ids[m[1]]=l.id;
+      var t=/^Day\s*([12])\s+Probabilistic\s+(Tornado|Wind|Hail)\s+Outlook$/i.exec(l.name||"");
+      if(t&&l.subLayerIds==null) threats[Number(t[1])-1][t[2].toLowerCase()]=l.id;
+    });
     if(ids[1]!=null&&ids[2]!=null&&ids[3]!=null){ RISK_LAYERS.spc=[ids[1],ids[2],ids[3]]; RISK_READY.spc=true; }
+    SPC_THREAT_LAYERS=threats;
+    RISK_READY.threats=threats.every(function(t){return t.tornado!=null&&t.wind!=null&&t.hail!=null;});
   }).catch(function(){}),
   getJSON(ERO_URL+"?f=json").then(function(d){
     var ids={};
@@ -4745,7 +4995,7 @@ function resolveRiskLayers(){
     (d.layers||[]).forEach(function(l){ if(/^WatchesWarnings$/i.test(l.name||"")) RISK_LAYERS.wwa=l.id; });
   }).catch(function(){})
   ]);
-  _riskLayersP.then(function(){ if(!RISK_READY.spc||!RISK_READY.ero||!RISK_READY.fire||!RISK_READY.wssi) _riskLayersP=null; });
+  _riskLayersP.then(function(){ if(!RISK_READY.spc||!RISK_READY.threats||!RISK_READY.ero||!RISK_READY.fire||!RISK_READY.wssi) _riskLayersP=null; });
   return _riskLayersP;
 }
 function fireRisk(dn){
@@ -4861,6 +5111,90 @@ function riskPill(info,denom){
   var txt=info.t+(info.lvl>0?" \u00b7 "+info.lvl+"/"+denom:"");
   return '<span class="spc-pill" style="background:'+bg+';color:'+fg+'">'+txt+'</span>';
 }
+function spcUtcTime(value){
+  var m=/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(String(value||""));
+  if(!m) return null;
+  var t=Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5]);
+  // Date.UTC rolls invalid fields forward; reject those instead of legitimizing a bad timestamp.
+  var d=new Date(t);
+  return d.getUTCFullYear()===+m[1]&&d.getUTCMonth()===+m[2]-1&&d.getUTCDate()===+m[3]
+    &&d.getUTCHours()===+m[4]&&d.getUTCMinutes()===+m[5]?t:null;
+}
+function spcOutlookPeriod(attrs,day,nowMs){
+  if(!attrs) return null;
+  var start=spcUtcTime(attrs.valid), end=spcUtcTime(attrs.expire), issue=spcUtcTime(attrs.issue);
+  var d=new Date(nowMs), base=Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate(),12);
+  if(base>nowMs) base-=86400000;
+  var expectedEnd=base+day*86400000;
+  if(start==null||end!==expectedEnd||issue==null||issue>nowMs+10*60000) return null;
+  if(day===1&&(start<base||start>nowMs)) return null;
+  if(day===2&&start!==base+86400000) return null;
+  return {start:start,end:end,issue:issue,valid:attrs.valid,expire:attrs.expire};
+}
+function spcThreatProductCurrent(data,period){
+  if(!period||!data||data.error||data.exceededTransferLimit||!Array.isArray(data.features)||!data.features.length) return false;
+  return data.features.every(function(f){
+    var a=f&&f.attributes;
+    return !!a&&a.valid===period.valid&&a.expire===period.expire&&spcUtcTime(a.issue)===period.issue;
+  });
+}
+function spcThreatProbability(data,period,product){
+  if(!period||!data||data.error||data.exceededTransferLimit||!Array.isArray(data.features)) return null;
+  // An empty point query has no product timestamps. Only the same layer can verify its issuance.
+  if(!data.features.length) return spcThreatProductCurrent(product,period)?0:null;
+  if(!spcThreatProductCurrent(data,period)) return null;
+  var max=0;
+  for(var i=0;i<data.features.length;i++){
+    var a=data.features[i].attributes;
+    if(typeof a.dn!=="number"||!isFinite(a.dn)||a.dn<=0||a.dn>100) return null;
+    max=Math.max(max,a.dn);
+  }
+  return max;
+}
+function spcThreatText(prob,kind){
+  return prob==null?"Unavailable":prob===0?(kind==="tornado"?"<2%":"<5%"):prob+"%";
+}
+function fetchSpcThreats(){
+  var nowMs=Date.now();
+  return Promise.all([1,2].map(function(day){
+    if(!RISK_READY.spc||!RISK_READY.threats) return Promise.resolve(null);
+    // The categorical product sets the expected issuance; each threat layer must match it.
+    return getJSON(SPC_URL+RISK_LAYERS.spc[day-1]+"/query?where=1%3D1&outFields=valid,expire,issue&returnGeometry=false&resultRecordCount=1&f=json",null,locSignal())
+      .then(function(d){
+        if(!d||d.error||!Array.isArray(d.features)||!d.features.length) return null;
+        var period=spcOutlookPeriod(d.features[0].attributes,day,nowMs); if(!period) return null;
+        return Promise.all(["tornado","wind","hail"].map(function(kind){
+          var layer=SPC_THREAT_LAYERS[day-1][kind];
+          return pointQuery(SPC_URL,layer,"dn,valid,expire,issue").then(function(data){
+            if(data.features.length) return spcThreatProbability(data,period);
+            // Distinct timestamps also reject a layer mixing products during an update.
+            // A globally empty layer cannot prove its issuance and stays unavailable.
+            return getJSON(SPC_URL+layer+"/query?where=1%3D1&outFields=valid,expire,issue&returnDistinctValues=true&returnGeometry=false&f=json",null,locSignal())
+              .then(function(product){return spcThreatProbability(data,period,product);});
+          }).catch(function(){return null;});
+        })).then(function(values){return {period:period,values:values};});
+      }).catch(function(){return null;});
+  }));
+}
+function renderSpcThreats(days){
+  var el=document.getElementById("spcThreats"); if(!el) return;
+  var kinds=["tornado","wind","hail"], html='<div class="spc-threat-title">Severe-weather probabilities</div>'
+    +'<div class="spc-threat-row"><span></span><span class="rh">Tornado</span><span class="rh">Wind</span><span class="rh">Hail</span></div>', periods=[];
+  [0,1].forEach(function(i){
+    var day=days&&days[i];
+    html+='<div class="spc-threat-row"><span class="spc-day">Day '+(i+1)+'</span>';
+    kinds.forEach(function(kind,k){
+      var prob=day?day.values[k]:null;
+      html+='<span class="spc-threat-value '+(prob>0?'elevated':'quiet')+'">'+esc(spcThreatText(prob,kind))+'</span>';
+    });
+    html+='</div>';
+    if(day) periods.push('<div class="spc-threat-period">Day '+(i+1)+': '+esc(forecastClock(day.period.start))
+      +' \u2013 '+esc(forecastClock(day.period.end))+' \u00b7 issued '+esc(timeAgo(new Date(day.period.issue).toISOString()))+'</div>');
+  });
+  el.innerHTML=html+'<div class="spc-threat-note">Chance within <b>25 miles of this location</b> during each outlook period. '
+    +'Wind: damaging storm winds or gusts of 58+ mph. Hail: 1\u2033 or larger. Below the lowest contour still allows a small risk.</div>'
+    +periods.join("");
+}
 function loadSpc(){
   var fresh=locGuard();
   var el=document.getElementById("spc");
@@ -4872,7 +5206,8 @@ function loadSpc(){
     return Promise.all([RISK_READY.spc?spcQuery(RISK_LAYERS.spc[0]):missing(),RISK_READY.spc?spcQuery(RISK_LAYERS.spc[1]):missing(),RISK_READY.spc?spcQuery(RISK_LAYERS.spc[2]):missing(),
             RISK_READY.ero?eroQuery(RISK_LAYERS.ero[0]):missing(),RISK_READY.ero?eroQuery(RISK_LAYERS.ero[1]):missing(),RISK_READY.ero?eroQuery(RISK_LAYERS.ero[2]):missing(),
             RISK_READY.fire?fireQuery(RISK_LAYERS.fireCat[0]):missing(),RISK_READY.fire?fireQuery(RISK_LAYERS.fireCat[1]):missing(),RISK_READY.fire?fireDay3Query():missing(),
-            RISK_READY.wssi?wssiQuery(RISK_LAYERS.wssi[0]):missing(),RISK_READY.wssi?wssiQuery(RISK_LAYERS.wssi[1]):missing()]);
+            RISK_READY.wssi?wssiQuery(RISK_LAYERS.wssi[0]):missing(),RISK_READY.wssi?wssiQuery(RISK_LAYERS.wssi[1]):missing(),
+            fetchSpcThreats()]);
   }).then(function(r){
     if(!r) return;             // stale generation — nothing to paint
     if(!fresh()) return;   // user moved while this was in flight
@@ -4894,11 +5229,13 @@ function loadSpc(){
         +'</div>';
     }
     el.innerHTML=html;
+    renderSpcThreats(r[11]);
     if(typeof renderTheCall==="function") renderTheCall();   // outlook levels can add/remove a verdict pill
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
     el.innerHTML='<div class="empty">Risk outlooks unavailable. <a href="https://www.spc.noaa.gov/products/outlook/day1otlk.html" target="_blank" rel="noopener">Open SPC \u2197</a> \u00b7 <a href="https://www.spc.noaa.gov/products/fire_wx/" target="_blank" rel="noopener">Fire \u2197</a></div>';
     callRisk=null;                                           // never let a stale outlook keep a pill alive
+    renderSpcThreats(null);
     if(typeof renderTheCall==="function") renderTheCall();
   });
 }
@@ -6688,17 +7025,20 @@ function resetLocationState(){
        dry:null, hist:null, normWeek:{}, recStation:""};
   uv={now:null, peak:null, daily:{}};
   smart.hourly=[]; smart.hourlyAll=[]; smart.days=[]; smart.weekDays=[];
+  forecastGrid={status:"loading",properties:null,gusts:[]};
   heroNow.temp=null;   // the old city's reading must not mark the new city's range
-  aqiState={val:null, pm:null, err:false}; callAqi=null; callRisk=null; callLocalAlert=null;
+  aqiState={val:null, pm:null, err:false}; callAqi=null; callRisk=null; callLocalAlert=null; callAlertGroups=[];
   lastMcds=[];   // "inside this area" was ray-cast against the OLD point; loadMcd re-answers
   userZones={county:"",forecast:"",fire:""};
-  renderHourly24._hrs=null; loadForecast._paint=null;
+  renderHourly24._hrs=null; renderHourly24._cursor=0; loadForecast._paint=null;
 }
 /* ...and the on-screen numbers go back to a loading state, so nothing false is legible while
    the new place loads. */
 function clearLocationUI(){
   function load(id,txt){ var e=document.getElementById(id); if(e) e.innerHTML='<div class="loading">'+(txt||"Loading\u2026")+'</div>'; }
   load("current"); load("daily","Loading forecast\u2026"); load("hourly24","Loading hourly\u2026");
+  load("precipEvents","Loading precipitation amounts\u2026"); load("spcThreats","Loading tornado, wind &amp; hail outlooks\u2026");
+  syncHourlyControls();
   load("cnGrid","Loading departures\u2026"); load("spc","Loading outlook\u2026");
   load("hazards","Loading hazards\u2026"); load("cpc","Loading outlooks\u2026");
   ["cnCtx","cnSrc","ccCtx","ccUv","aqi","aqiMini","callRow","qpf7","h24loc","spcLoc","mcd"].forEach(function(id){
@@ -6725,7 +7065,7 @@ function setLocation(loc,opts){
   clearLocationUI();
   updateLocNow();
   if(opts.save) saveLoc(loc);
-  var jobs=[loadForecast(),loadAqi(),loadSpc(),loadMcd(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),
+  var jobs=[loadForecast(),loadForecastGrid(),loadAqi(),loadSpc(),loadMcd(),loadCpc(),loadQpf(),loadHazards(),loadDrought(),
             loadClimate(),loadAlerts(),loadClimateContext(),loadUv()];
   loadRadar();
   jobs.push(loadCurrent());      // discovers a missing station itself, and retries on later cycles
@@ -7295,6 +7635,7 @@ function renderUvNow(){
 var callAqi=null;
 var callRisk=null;   // {spc, ero, fire, wssi}, each [day1,day2] — raw dn/rank values from loadSpc
 var callLocalAlert=null; // strongest active LSX alert covering the selected location, if known
+var callAlertGroups=[]; // retained so an expiring warning can yield to another active local hazard
 function hrWord(d){
   if(typeof d==="number") return ((d%12)||12)+(d<12?"am":"pm");
   return d.toLocaleTimeString([], {hour:"numeric"}).replace(/\s/g,"").toLowerCase();
@@ -7707,15 +8048,22 @@ function bottomLineWeekCandidates(days,cutoff,hourly){
   }
   return out;
 }
-function bottomLineLocalAlert(groups){
+function bottomLineLocalAlert(groups,nowMs){
+  if(nowMs==null) nowMs=Date.now();
   var local=null,bestKey=null,ranks={emergency:0,warning:1,watch:2,advisory:3,statement:4};
   (groups||[]).forEach(function(g){
     if(!g||g.scope==="away") return;
-    var level=g.lv&&g.lv.k||"statement",rank=ranks[level]==null?5:ranks[level];
-    var sev=ALERT_SEV_RANK[g.sev],key=[rank,sev==null?5:sev,String(g.ev||"Alert")].join("|");
-    if(bestKey!=null&&key>=bestKey) return;
-    bestKey=key;
-    local={event:g.ev||"Alert",family:eventFamily(g.ev),level:level,ends:g.latest||0};
+    // A folded card's union end must not keep its expired higher tier active.
+    var phases=g.phases&&g.phases.length?g.phases:[g];
+    phases.forEach(function(p){
+      if(p.latest>0&&p.latest<=nowMs) return;
+      var level=p.lv&&p.lv.k||"statement",rank=ranks[level]==null?5:ranks[level];
+      var severity=p.best&&p.best.properties?p.best.properties.severity:p.sev||g.sev;
+      var sev=ALERT_SEV_RANK[severity],key=[rank,sev==null?5:sev,String(p.ev||"Alert")].join("|");
+      if(bestKey!=null&&key>=bestKey) return;
+      bestKey=key;
+      local={event:p.ev||"Alert",family:eventFamily(p.ev),level:level,ends:p.latest||0};
+    });
   });
   return local;
 }
@@ -7972,8 +8320,9 @@ function renderTheCall(){
 // rendered timestamps and conclusions cannot be revalidated from a saved HTML snapshot.
 // v15: #daily no longer includes the forecast overview. A v14 snapshot would restore that
 // duplicate summary without its removed styles before the fresh forecast arrives.
-var SNAP_KEY="lsxSnap_v15", snapRestored=false, NET_OK=false;
-try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13","lsxSnap_v14"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
+// v16: the hourly chart has duration controls, day boundaries and an accessible detail slider.
+var SNAP_KEY="lsxSnap_v16", snapRestored=false, NET_OK=false;
+try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13","lsxSnap_v14","lsxSnap_v15"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
 var SNAP_PARTS=[
   {id:"afd",      ttl:6*3600000},
   {id:"alerts",   ttl:15*60000},     // safety-critical: short leash
@@ -8070,6 +8419,10 @@ function restoreSnapshot(){
   var aq=document.getElementById("aqi"), aqc=document.getElementById("aqiCard");
   if(aqc) aqc.classList.toggle("show", !!(aq&&aq.querySelector("[data-aqibad]")));
   if(snap.wx) document.body.setAttribute("data-wx",snap.wx);
+  var hourlyWrap=document.querySelector("#hourly24 .h24-wrap"), restoredHours=hourlyWrap?Number(hourlyWrap.getAttribute("data-hours")):24;
+  if([24,48,72].indexOf(restoredHours)>=0) hourlyHours=restoredHours;
+  var restoredCursor=document.getElementById("hourlyCursor"); if(restoredCursor) restoredCursor.disabled=true;
+  syncHourlyControls();
   snapRestored=true;
   showSnapBar(snap.t);
   if(typeof scheduleMasonry==="function") scheduleMasonry();
@@ -8090,6 +8443,10 @@ function fmtSpan(ms){   // bare duration, no framing
 function fmtLeft(ms){ return ms<=0?null:(fmtSpan(ms)+(ms<60000?"":" left")); }
 function tickCountdowns(){
   var now=Date.now();
+  if(callLocalAlert&&callLocalAlert.ends>0&&callLocalAlert.ends<=now){
+    callLocalAlert=bottomLineLocalAlert(callAlertGroups,now);
+    renderTheCall();
+  }
   [].forEach.call(document.querySelectorAll("[data-exp]"),function(el){
     var t=+el.getAttribute("data-exp");
     if(!t){ el.textContent=""; return; }
@@ -8147,7 +8504,7 @@ var refreshInFlight=null, refreshSeq=0;
 function refreshAll(){
   if(refreshInFlight) return refreshInFlight;   // one caller owns the expensive full-page fan-out
   var seq=++refreshSeq, g=locSeq;
-  var fns=[loadAFD,loadAlerts,loadCurrent,loadForecast,loadRivers,loadAqi,loadSpc,loadMcd,loadCpc,loadQpf,
+  var fns=[loadAFD,loadAlerts,loadCurrent,loadForecast,loadForecastGrid,loadRivers,loadAqi,loadSpc,loadMcd,loadCpc,loadQpf,
            loadHazards,loadDrought,loadClimate,loadClimateContext,loadUv,loadStationPlot];
   var dot=document.getElementById("statusDot"), label=document.getElementById("refreshLabel");
   var btn=document.getElementById("refresh");
@@ -8313,6 +8670,7 @@ var SCHED=[
   {fn:loadAlerts,   every:60000},
   {fn:loadCurrent,  every:10*60000},
   {fn:loadForecast, every:30*60000},
+  {fn:loadForecastGrid, every:30*60000},
   {fn:loadRivers,   every:15*60000},
   {fn:loadAqi,      every:20*60000},
   {fn:loadSpc,      every:30*60000},

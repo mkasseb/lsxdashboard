@@ -198,6 +198,9 @@ storm alert suppresses that comfort cue entirely. The Alerts section remains the
 the strongest active local alert changes matching Bottom Line wording into an action without
 copying the product title, and a short-fuse storm warning always says to shelter now rather than
 allowing any later forecast window to qualify the warning.
+The live countdown reselects the strongest local alert at its verified expiration, without waiting
+for the next feed poll. Folded cards are evaluated phase by phase: a warning's expired tier cannot
+inherit a later advisory's end time. Unknown end times remain conservative.
 Historical context fills a spare support slot
 only when the lead itself is neutral or good; a warning never spends scarce space on a record fact.
 Below 600px that optional context cue yields the space entirely because the same information
@@ -267,11 +270,37 @@ constraint. `loadCurrent()` rebuilds `#current` wholesale — including on failu
 chart inside it would let a dead observation feed take the forecast chart down with it, breaking
 the failure-ownership rule below. Wherever the chart lives next, it does not live in there.
 
-The chart measures its own container and thins its labels to fit: all 24 hour labels at full width,
-12 when the layout stacks below 1100px, with per-hour detail on hover at every size. Worth knowing
+The chart offers 24-, 48-, and 72-hour windows and measures its own container to thin its labels.
+Day boundaries keep repeated clock times distinguishable. Hover, touch, and a keyboard-operable
+slider expose each hour's temperature, rain chance, wind, and grid-derived gusts. The Bottom Line
+continues to use its existing 24-hour inputs; choosing a chart duration does not change its rules.
+Worth knowing
 that the threshold it switches compact geometry at is 680px of *container*, not of viewport — in the
 hero column it was 617px before the page shell and 456px after, so a desktop was drawing the phone's
 chart. That, rather than the whitespace, is what moving it out actually fixed.
+
+## Event precipitation and separate severe threats
+
+`loadForecastGrid()` uses the selected point's NWS `forecastGridData` for accumulation amounts and
+gusts. It runs independently from `loadForecast()`, so either feed can fail without blanking the
+other. Consecutive wet accumulation periods, including a known dry break of at most six hours,
+form an event. Missing periods split events and label known subtotals. More than six known dry
+hours close the previous event and its missing-data boundary, so an outage
+later in the forecast cannot invalidate a completed earlier event. Events starting within
+72 hours show their full forecast-period totals, even if they end beyond the chart's view; an
+ongoing period includes its elapsed hours and says so. Amounts are not prorated into invented
+hourly rainfall. Snow and ice are separate accumulation depths; liquid-equivalent precipitation
+is called rain only when both frozen layers verify zero over the event.
+
+The risk card queries named SPC tornado, wind, and hail probability layers for days 1 and 2.
+A categorical product must first verify the current validity window, and each probability layer
+must match that product's issuance as well as its validity window. An empty point query also
+requires matching product timestamps from the same probability layer; a globally empty layer
+cannot verify its issuance and remains unavailable. Expired, mismatched, missing, or failed
+responses remain unavailable. A verified point outside all contours reads `<2%` for
+tornadoes and `<5%` for wind/hail, never zero risk. The explanation says probabilities apply
+within 25 miles and displays the actual outlook windows in Central time. New event totals and
+threat probabilities are fetched live instead of restored from rendered snapshots.
 
 ## UV and air quality are tiles beside the metric grid, not inside it
 
