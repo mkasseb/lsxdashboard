@@ -1304,7 +1304,7 @@
   .spc-threat-title{font-size:var(--fs-md);font-weight:700;margin-bottom:8px}
   .spc-threat-row{display:grid;grid-template-columns:74px repeat(3,minmax(0,1fr));gap:6px;align-items:center;padding:7px 0}
   .spc-threat-row .rh{font-size:var(--fs-2xs);color:var(--muted);text-align:center}
-  .spc-threat-value{text-align:center;font-size:var(--fs-md);font-weight:700;font-variant-numeric:tabular-nums}
+  .spc-threat-value{min-width:0;text-align:center;font-size:var(--fs-md);font-weight:700;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
   .spc-threat-value.elevated{color:var(--sev)}
   .spc-threat-value.quiet{color:var(--muted);font-weight:500}
   .spc-threat-note{font-size:var(--fs-xs);color:var(--muted);line-height:1.5;margin-top:8px}
@@ -5116,13 +5116,22 @@ function spcOutlookPeriod(attrs,day,nowMs){
   if(day===2&&start!==base+86400000) return null;
   return {start:start,end:end,issue:issue,valid:attrs.valid,expire:attrs.expire};
 }
-function spcThreatProbability(data,period){
+function spcThreatProductCurrent(data,period){
+  if(!period||!data||data.error||data.exceededTransferLimit||!Array.isArray(data.features)||!data.features.length) return false;
+  return data.features.every(function(f){
+    var a=f&&f.attributes;
+    return !!a&&a.valid===period.valid&&a.expire===period.expire&&spcUtcTime(a.issue)===period.issue;
+  });
+}
+function spcThreatProbability(data,period,product){
   if(!period||!data||data.error||data.exceededTransferLimit||!Array.isArray(data.features)) return null;
+  // An empty point query has no product timestamps. Only the same layer can verify its issuance.
+  if(!data.features.length) return spcThreatProductCurrent(product,period)?0:null;
+  if(!spcThreatProductCurrent(data,period)) return null;
   var max=0;
   for(var i=0;i<data.features.length;i++){
     var a=data.features[i].attributes;
-    if(!a||a.valid!==period.valid||a.expire!==period.expire||typeof a.dn!=="number"
-      ||!isFinite(a.dn)||a.dn<=0||a.dn>100) return null;
+    if(typeof a.dn!=="number"||!isFinite(a.dn)||a.dn<=0||a.dn>100) return null;
     max=Math.max(max,a.dn);
   }
   return max;
@@ -5134,15 +5143,20 @@ function fetchSpcThreats(){
   var nowMs=Date.now();
   return Promise.all([1,2].map(function(day){
     if(!RISK_READY.spc||!RISK_READY.threats) return Promise.resolve(null);
-    // A current categorical product verifies the outlook period even outside all risk polygons.
-    // No matching threat polygon then means below SPC's lowest contour, never literal zero risk.
+    // The categorical product sets the expected issuance; each threat layer must match it.
     return getJSON(SPC_URL+RISK_LAYERS.spc[day-1]+"/query?where=1%3D1&outFields=valid,expire,issue&returnGeometry=false&resultRecordCount=1&f=json",null,locSignal())
       .then(function(d){
         if(!d||d.error||!Array.isArray(d.features)||!d.features.length) return null;
         var period=spcOutlookPeriod(d.features[0].attributes,day,nowMs); if(!period) return null;
         return Promise.all(["tornado","wind","hail"].map(function(kind){
-          return pointQuery(SPC_URL,SPC_THREAT_LAYERS[day-1][kind],"dn,valid,expire")
-            .then(function(data){return spcThreatProbability(data,period);}).catch(function(){return null;});
+          var layer=SPC_THREAT_LAYERS[day-1][kind];
+          return pointQuery(SPC_URL,layer,"dn,valid,expire,issue").then(function(data){
+            if(data.features.length) return spcThreatProbability(data,period);
+            // Distinct timestamps also reject a layer mixing products during an update.
+            // A globally empty layer cannot prove its issuance and stays unavailable.
+            return getJSON(SPC_URL+layer+"/query?where=1%3D1&outFields=valid,expire,issue&returnDistinctValues=true&returnGeometry=false&f=json",null,locSignal())
+              .then(function(product){return spcThreatProbability(data,period,product);});
+          }).catch(function(){return null;});
         })).then(function(values){return {period:period,values:values};});
       }).catch(function(){return null;});
   }));

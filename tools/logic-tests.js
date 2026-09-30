@@ -59,7 +59,8 @@ const SUBJECT = new Function(`
   ${lift(/^function forecastWindowHours\(hrs,hours,nowMs\)\{[\s\S]*?^\}/m, 'forecastWindowHours()')}
   ${lift(/^function spcUtcTime\(value\)\{[\s\S]*?^\}/m, 'spcUtcTime()')}
   ${lift(/^function spcOutlookPeriod\(attrs,day,nowMs\)\{[\s\S]*?^\}/m, 'spcOutlookPeriod()')}
-  ${lift(/^function spcThreatProbability\(data,period\)\{[\s\S]*?^\}/m, 'spcThreatProbability()')}
+  ${lift(/^function spcThreatProductCurrent\(data,period\)\{[\s\S]*?^\}/m, 'spcThreatProductCurrent()')}
+  ${lift(/^function spcThreatProbability\(data,period,product\)\{[\s\S]*?^\}/m, 'spcThreatProbability()')}
   ${lift(/^function spcThreatText\(prob,kind\)\{[\s\S]*?^\}/m, 'spcThreatText()')}
   ${lift(/^function heatIndexF\(t,rh\)\{[\s\S]*?^\}/m, 'heatIndexF()')}
   ${lift(/^function windChillF\(t,mph\)\{[\s\S]*?^\}/m, 'windChillF()')}
@@ -192,11 +193,22 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
   check('invalid calendar date cannot roll forward', SUBJECT.spcUtcTime('202602301200'),null);
   const hit = dn => ({attributes:{...attrs,dn}});
   check('overlapping threat contours use highest probability', SUBJECT.spcThreatProbability({features:[hit(2),hit(5)]},period),5);
-  check('verified empty point query is below contour', SUBJECT.spcThreatProbability({features:[]},period),0);
+  const product={features:[{attributes:attrs}]};
+  check('verified empty point query is below contour', SUBJECT.spcThreatProbability({features:[]},period,product),0);
+  check('unverified empty point query remains unavailable', SUBJECT.spcThreatProbability({features:[]},period),null);
+  check('globally empty layer cannot verify below-contour risk', SUBJECT.spcThreatProbability({features:[]},period,{features:[]}),null);
+  check('failed product lookup cannot verify below-contour risk', SUBJECT.spcThreatProbability({features:[]},period,{error:{code:500}}),null);
+  check('truncated product lookup cannot verify below-contour risk', SUBJECT.spcThreatProbability({features:[]},period,{...product,exceededTransferLimit:true}),null);
+  check('missing product timestamp cannot verify below-contour risk', SUBJECT.spcThreatProbability({features:[]},period,{features:[{attributes:{...attrs,issue:null}}]}),null);
   check('failed query remains unavailable', SUBJECT.spcThreatProbability({error:{code:500}},period),null);
   check('missing features remain unavailable', SUBJECT.spcThreatProbability({},period),null);
   check('truncated query remains unavailable', SUBJECT.spcThreatProbability({features:[],exceededTransferLimit:true},period),null);
   check('old contour is rejected', SUBJECT.spcThreatProbability({features:[{attributes:{...attrs,valid:'202609281200',dn:15}}]},period),null);
+  const older={...attrs,issue:'202609291600'};
+  check('older issuance with matching validity is rejected', SUBJECT.spcThreatProbability({features:[{attributes:{...older,dn:5}}]},period),null);
+  check('older layer cannot verify an empty point query', SUBJECT.spcThreatProbability({features:[]},period,{features:[{attributes:older}]}),null);
+  check('mixed product issuances cannot verify an empty point query', SUBJECT.spcThreatProbability({features:[]},period,{features:[{attributes:attrs},{attributes:older}]}),null);
+  check('missing contour issuance stays unavailable', SUBJECT.spcThreatProbability({features:[{attributes:{...attrs,issue:null,dn:5}}]},period),null);
   check('missing probability is not zero', SUBJECT.spcThreatProbability({features:[hit(null)]},period),null);
   check('probability cannot exceed 100', SUBJECT.spcThreatProbability({features:[hit(101)]},period),null);
   check('missing validity cannot verify an empty query', SUBJECT.spcThreatProbability({features:[]},null),null);
@@ -1378,9 +1390,10 @@ LAT...LON   38759474 39039367 39299179 39519038
 }
 
 /* ============ live-feed failure paths ============ */
-function riskHarness(getJSON) {
+function riskHarness(getJSON, nowMs=Date.now()) {
   const els = {spc: {innerHTML: ''}, spcLoc: {textContent: ''}, spcThreats: {innerHTML: ''}};
-  return new Function('getJSON', 'els', `
+  return new Function('getJSON', 'els', 'nowMs', `
+    var Date=class extends globalThis.Date { static now(){return nowMs;} };
     var SPC_URL='spc/', ERO_URL='ero/', FIRE_URL='fire/', WSSI_URL='wssi/';
     var current={name:'Lake St. Louis, MO',lat:38.8,lon:-90.79};
     var RISK_LAYERS={spc:[1,9,17],ero:[0,1,2],fireCat:[1,4],fireD3:{dry:7,wind:8},wssi:[1,2]};
@@ -1409,14 +1422,15 @@ function riskHarness(getJSON) {
     ${lift(/^function riskPill\(info,denom\)\{[\s\S]*?^\}/m, 'riskPill()')}
     ${lift(/^function spcUtcTime\(value\)\{[\s\S]*?^\}/m, 'spcUtcTime()')}
     ${lift(/^function spcOutlookPeriod\(attrs,day,nowMs\)\{[\s\S]*?^\}/m, 'spcOutlookPeriod()')}
-    ${lift(/^function spcThreatProbability\(data,period\)\{[\s\S]*?^\}/m, 'spcThreatProbability()')}
+    ${lift(/^function spcThreatProductCurrent\(data,period\)\{[\s\S]*?^\}/m, 'spcThreatProductCurrent()')}
+    ${lift(/^function spcThreatProbability\(data,period,product\)\{[\s\S]*?^\}/m, 'spcThreatProbability()')}
     ${lift(/^function spcThreatText\(prob,kind\)\{[\s\S]*?^\}/m, 'spcThreatText()')}
     ${lift(/^function fetchSpcThreats\(\)\{[\s\S]*?^\}/m, 'fetchSpcThreats()')}
     ${lift(/^function renderSpcThreats\(days\)\{[\s\S]*?^\}/m, 'renderSpcThreats()')}
     ${lift(/^function loadSpc\(\)\{[\s\S]*?^\}/m, 'loadSpc()')}
     return {spcQuery,eroQuery,fireQuery,fireDay3Query,wssiQuery,spcRisk,eroRisk,fireRisk,
-      loadSpc,RISK_READY,els,getCallRisk:function(){return callRisk;}};
-  `)(getJSON, els);
+      loadSpc,fetchSpcThreats,RISK_READY,els,getCallRisk:function(){return callRisk;}};
+  `)(getJSON, els, nowMs);
 }
 
 function riskMetadataHarness(getJSON) {
@@ -1540,6 +1554,49 @@ async function checkLiveFeedFailures() {
   check('known critical Day 3 fire risk survives another failed leaf', await risk.fireDay3Query(), 8);
 }
 
+async function checkSpcThreatProducts() {
+  const now=Date.parse('2026-09-30T18:00:00Z');
+  const day1={valid:'202609301630',expire:'202610011200',issue:'202609301625'};
+  const day2={valid:'202610011200',expire:'202610021200',issue:'202609301725'};
+  const older={...day2,issue:'202609300541'};
+  const response=attrs=>({features:[{attributes:attrs}]});
+  const requests=[];
+  const risk=riskHarness(url=>{
+    const query=new URL(url,'https://test.invalid/');
+    const layer=Number(query.pathname.split('/')[2]);
+    requests.push({layer,fields:query.searchParams.get('outFields'),product:query.searchParams.get('returnDistinctValues')==='true'});
+    if(layer===1) return Promise.resolve(response(day1));
+    if(layer===9) return Promise.resolve(response(day2));
+    if(layer===11) return Promise.resolve(response({...older,dn:5}));
+    if(layer===7) return Promise.resolve(response({...day1,dn:15}));
+    if(query.searchParams.get('returnDistinctValues')==='true') {
+      return Promise.resolve(response(layer===13?older:layer===15?day2:day1));
+    }
+    return Promise.resolve({features:[]});
+  },now);
+  risk.RISK_READY.spc=true; risk.RISK_READY.threats=true;
+  const days=await risk.fetchSpcThreats();
+  check('current threats and independently verified empty point queries remain available',days[0].values,[0,15,0]);
+  check('Day 2 old contours and old empty-query products stay unavailable',days[1].values,[null,0,null]);
+  check('point queries request the probability product issuance',requests.filter(r=>!r.product&&r.layer!==1&&r.layer!==9).every(r=>r.fields==='dn,valid,expire,issue'),true);
+  check('only empty point responses request their own layer product',requests.filter(r=>r.product).map(r=>r.layer).sort((a,b)=>a-b),[3,5,13,15]);
+
+  const failed=riskHarness(url=>{
+    const query=new URL(url,'https://test.invalid/');
+    const layer=Number(query.pathname.split('/')[2]);
+    if(layer===1) return Promise.resolve(response(day1));
+    if(layer===9) return Promise.resolve(response(day2));
+    if(query.searchParams.get('returnDistinctValues')==='true') {
+      if(layer===15) return Promise.reject(new Error('product query failed'));
+      return Promise.resolve(layer===13?{features:[]}:response(layer<9?day1:day2));
+    }
+    return Promise.resolve({features:[]});
+  },now);
+  failed.RISK_READY.spc=true; failed.RISK_READY.threats=true;
+  check('globally empty and failed probability products stay unavailable independently',
+    (await failed.fetchSpcThreats()).map(d=>d.values),[[0,0,0],[0,null,null]]);
+}
+
 /* A scheduled refresh can fail after a successful forecast. Replaying that failure through the
    real loader verifies that its old week, hourly strip, and repaint closure cannot survive. */
 async function checkForecastRefreshFailure() {
@@ -1609,7 +1666,7 @@ async function checkGridLoaderIsolation() {
   check('old location grid response cannot change new town state',moved.getState(),{status:'loading',properties:null,gusts:[]});
 }
 
-checkLiveFeedFailures().then(checkForecastRefreshFailure).then(checkGridLoaderIsolation).then(() => {
+checkLiveFeedFailures().then(checkSpcThreatProducts).then(checkForecastRefreshFailure).then(checkGridLoaderIsolation).then(() => {
   if (failed) {
     console.error(`\n${failed} logic test(s) failed`);
     process.exitCode = 1;

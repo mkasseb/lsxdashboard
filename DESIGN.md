@@ -288,8 +288,11 @@ hourly rainfall. Snow and ice are separate accumulation depths; liquid-equivalen
 is called rain only when both frozen layers verify zero over the event.
 
 The risk card queries named SPC tornado, wind, and hail probability layers for days 1 and 2.
-A categorical product must first verify the current validity window. Expired, mismatched, missing,
-or failed responses remain unavailable. A valid point outside all contours reads `<2%` for
+A categorical product must first verify the current validity window, and each probability layer
+must match that product's issuance as well as its validity window. An empty point query also
+requires matching product timestamps from the same probability layer; a globally empty layer
+cannot verify its issuance and remains unavailable. Expired, mismatched, missing, or failed
+responses remain unavailable. A verified point outside all contours reads `<2%` for
 tornadoes and `<5%` for wind/hail, never zero risk. The explanation says probabilities apply
 within 25 miles and displays the actual outlook windows in Central time. New event totals and
 threat probabilities are fetched live instead of restored from rendered snapshots.
