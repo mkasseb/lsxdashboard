@@ -43,6 +43,28 @@ python3 tools/check.py        # HTML/CSS comments, JS syntax, CSP, icons, root f
 node tools/logic-tests.js     # the functions that decide something
 ```
 
+The optional browser suite runs the production dashboard against intercepted NWS/ArcGIS-shaped
+weather scenarios and a recorded LSX response set. It covers heavy rain, snow and ice, warning
+expiration, SPC issuance changes, AQI/UV, river trends, feed failures, daylight-saving changes,
+phone/tablet/desktop widths, rapid location changes and repeated refresh/chart work. It also checks
+2,000 seeded accumulation cases against a separate oracle. The fixture records its source URLs
+and retrieval time; extreme scenarios are synthetic. Maps exercise their unavailable fallbacks,
+so this suite does not verify live tiles, animations or browser-specific rendering outside Chromium.
+
+Install Playwright separately from the dashboard (which has no npm dependencies), then run with a
+local Chromium executable:
+
+```bash
+npm install --prefix /tmp/lsx-browser-tests playwright@1.62.1
+NODE_PATH=/tmp/lsx-browser-tests/node_modules CHROMIUM_PATH=/usr/bin/chromium \
+  node tools/weather-stress-tests.js
+```
+
+Set `WEATHER_STRESS_REPORT` to choose the JSON report path (default:
+`/tmp/lsx-weather-stress-report.json`). `WEATHER_CASE_FILTER=expiration` runs just matching case
+names for debugging; omit it for the full suite. Network responses are intercepted, so a test run
+does not depend on live weather services.
+
 [`tools/check.py`](tools/check.py) checks HTML/CSS comment balance, inline JavaScript syntax, CSP
 origins, sprite references, and the site root files and URLs. [`tools/logic-tests.js`](tools/logic-tests.js)
 covers pure decisions such as alert scope, forecast summaries, radar geometry, and temperature

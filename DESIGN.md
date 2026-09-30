@@ -198,6 +198,9 @@ storm alert suppresses that comfort cue entirely. The Alerts section remains the
 the strongest active local alert changes matching Bottom Line wording into an action without
 copying the product title, and a short-fuse storm warning always says to shelter now rather than
 allowing any later forecast window to qualify the warning.
+The live countdown reselects the strongest local alert at its verified expiration, without waiting
+for the next feed poll. Folded cards are evaluated phase by phase: a warning's expired tier cannot
+inherit a later advisory's end time. Unknown end times remain conservative.
 Historical context fills a spare support slot
 only when the lead itself is neutral or good; a warning never spends scarce space on a record fact.
 Below 600px that optional context cue yields the space entirely because the same information
@@ -281,7 +284,9 @@ chart. That, rather than the whitespace, is what moving it out actually fixed.
 `loadForecastGrid()` uses the selected point's NWS `forecastGridData` for accumulation amounts and
 gusts. It runs independently from `loadForecast()`, so either feed can fail without blanking the
 other. Consecutive wet accumulation periods, including a known dry break of at most six hours,
-form an event. Missing periods split events and label known subtotals. Events starting within
+form an event. Missing periods split events and label known subtotals. More than six known dry
+hours close the previous event and its missing-data boundary, so an outage
+later in the forecast cannot invalidate a completed earlier event. Events starting within
 72 hours show their full forecast-period totals, even if they end beyond the chart's view; an
 ongoing period includes its elapsed hours and says so. Amounts are not prorated into invented
 hourly rainfall. Snow and ice are separate accumulation depths; liquid-equivalent precipitation

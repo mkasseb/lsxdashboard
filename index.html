@@ -693,6 +693,7 @@
      for the document outline and the jump-nav target, clipped rather than display:none so it
      stays in the accessibility tree. In the calm state the card chrome comes back — a green
      reassurance line standing bare on the page background read as debris, not calm. */
+  #alertsCard>h2{flex-wrap:wrap}
   #alertsCard.bannered:not(.calm){background:none;border:0;box-shadow:none;padding:0}
   #alertsCard.bannered:not(.calm)>h2{position:absolute;width:1px;height:1px;margin:0;padding:0;
     overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
@@ -1124,7 +1125,7 @@
   .maplock-wrap.unlocked .maplock-toggle{display:block}
 
   /* Rivers */
-  .river{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:8px}
+  .river{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(320px,100%),1fr));gap:8px}
   .rlink{display:flex;justify-content:space-between;align-items:center;gap:10px;min-height:44px;
     background:var(--inset);border:1px solid var(--border);border-left:5px solid var(--muted);
     border-radius:var(--r-md);padding:11px 13px;font-size:var(--fs-md);color:var(--text)}
@@ -2316,17 +2317,24 @@ function gridGustAt(series,at){
 function precipEventSummary(grid,nowMs,horizonHours){
   var q=gridSeries(grid&&grid.quantitativePrecipitation,"amount");
   var snow=gridSeries(grid&&grid.snowfallAmount,"amount"), ice=gridSeries(grid&&grid.iceAccumulation,"amount");
-  var limit=nowMs+horizonHours*3600000, events=[], currentEvent=null, cursor=nowMs, complete=true, unknown=false;
+  var limit=nowMs+horizonHours*3600000, events=[], currentEvent=null, cursor=nowMs, complete=true, unknown=false, unknownEnd=nowMs;
   q.forEach(function(p){
     if(p.end<=nowMs) return;
     var gap=p.start>cursor;
-    if((gap||p.value==null)&&cursor<limit){ complete=false; unknown=true; }
+    if((gap||p.value==null)&&cursor<limit){ complete=false; unknown=true; unknownEnd=p.value==null?p.end:p.start; }
     if(gap||p.value==null){
       if(currentEvent) currentEvent.partial=true;
       currentEvent=null;
     }
     cursor=Math.max(cursor,p.end);
-    if(p.value==null||p.value===0) return;
+    if(p.value==null) return;
+    if(p.value===0){
+      // More than six known dry hours closes an event, including its missing-data boundary.
+      // A later outage must not turn a completed earlier event into a subtotal.
+      if(currentEvent&&p.end-currentEvent.end>6*3600000) currentEvent=null;
+      if(unknown&&p.end-unknownEnd>6*3600000) unknown=false;
+      return;
+    }
     if(!currentEvent||p.start-currentEvent.end>6*3600000){
       if(p.start>=limit) { currentEvent=null; return; }
       currentEvent={start:p.start,end:p.end,amount:p.value,partial:unknown,ongoing:p.start<nowMs};
@@ -3897,6 +3905,12 @@ function loadForecast(){
     return Promise.all([getJSON(fUrl,HEADERS,locSignal()), getJSON(hUrl,HEADERS,locSignal()).catch(function(){return null;})]).then(function(res){
       if(!fresh()) return;   // user moved while this was in flight
       var f=res[0], h=res[1];
+      // A malformed or empty HTTP 200 hourly response is still a failed enhancer.
+      // Keep the healthy daily forecast and clear any previous hourly chart.
+      if(h&&h.properties&&Array.isArray(h.properties.periods)){
+        h.properties.periods=h.properties.periods.filter(function(p){return !!p&&typeof p==="object";});
+        if(!h.properties.periods.length) h=null;
+      }else h=null;
       var hByDate=h?hourlyByDate(h.properties.periods):{};
       var ps=f.properties.periods.slice(0,15);
       /* Pair day + night periods into single calendar days — seven visible rows, capped ON PURPOSE.
@@ -4394,7 +4408,7 @@ function loadAlerts(){
          the break landed mid-clause across the row's 10px gap. */
       card.classList.add("calm");
       paintAlerts(el,'<div class="calmrow"><span class="cdot"></span><span>No active watches, warnings or advisories <span class="cmut">anywhere in eastern Missouri or southwest Illinois.</span></span></div>');
-      callLocalAlert=null;
+      callLocalAlert=null; callAlertGroups=[];
       if(typeof renderTheCall==="function") renderTheCall();
       return;
     }
@@ -4510,7 +4524,8 @@ function loadAlerts(){
        strongest product that actually covers this location so it can turn that hazard into a
        plan instead of repeating the product title. In degraded flat mode every LSX product is
        intentionally treated as local, matching the fail-open list above. */
-    callLocalAlert=bottomLineLocalAlert(glist);
+    callAlertGroups=glist;
+    callLocalAlert=bottomLineLocalAlert(callAlertGroups);
     if(typeof renderTheCall==="function") renderTheCall();
 
     /* Which cards are ELSEWHERE. The rule is alertScope(), up beside alertCoversMe() and asserted
@@ -4723,7 +4738,7 @@ function loadAlerts(){
     paintAlerts(el,calmHTML+mineHTML+elseHTML);
   }).catch(function(){
     if(!fresh()) return;   // an old location's failed request must not replace the new alert list
-    callLocalAlert=null;
+    callLocalAlert=null; callAlertGroups=[];
     if(typeof renderTheCall==="function") renderTheCall();
     card.classList.remove("calm");
     paintAlerts(el,'<div class="empty">Couldn\'t load alerts. <a href="https://www.weather.gov/lsx/" target="_blank" rel="noopener">Check weather.gov/lsx ↗</a></div>');
@@ -7012,7 +7027,7 @@ function resetLocationState(){
   smart.hourly=[]; smart.hourlyAll=[]; smart.days=[]; smart.weekDays=[];
   forecastGrid={status:"loading",properties:null,gusts:[]};
   heroNow.temp=null;   // the old city's reading must not mark the new city's range
-  aqiState={val:null, pm:null, err:false}; callAqi=null; callRisk=null; callLocalAlert=null;
+  aqiState={val:null, pm:null, err:false}; callAqi=null; callRisk=null; callLocalAlert=null; callAlertGroups=[];
   lastMcds=[];   // "inside this area" was ray-cast against the OLD point; loadMcd re-answers
   userZones={county:"",forecast:"",fire:""};
   renderHourly24._hrs=null; renderHourly24._cursor=0; loadForecast._paint=null;
@@ -7620,6 +7635,7 @@ function renderUvNow(){
 var callAqi=null;
 var callRisk=null;   // {spc, ero, fire, wssi}, each [day1,day2] — raw dn/rank values from loadSpc
 var callLocalAlert=null; // strongest active LSX alert covering the selected location, if known
+var callAlertGroups=[]; // retained so an expiring warning can yield to another active local hazard
 function hrWord(d){
   if(typeof d==="number") return ((d%12)||12)+(d<12?"am":"pm");
   return d.toLocaleTimeString([], {hour:"numeric"}).replace(/\s/g,"").toLowerCase();
@@ -8032,15 +8048,22 @@ function bottomLineWeekCandidates(days,cutoff,hourly){
   }
   return out;
 }
-function bottomLineLocalAlert(groups){
+function bottomLineLocalAlert(groups,nowMs){
+  if(nowMs==null) nowMs=Date.now();
   var local=null,bestKey=null,ranks={emergency:0,warning:1,watch:2,advisory:3,statement:4};
   (groups||[]).forEach(function(g){
     if(!g||g.scope==="away") return;
-    var level=g.lv&&g.lv.k||"statement",rank=ranks[level]==null?5:ranks[level];
-    var sev=ALERT_SEV_RANK[g.sev],key=[rank,sev==null?5:sev,String(g.ev||"Alert")].join("|");
-    if(bestKey!=null&&key>=bestKey) return;
-    bestKey=key;
-    local={event:g.ev||"Alert",family:eventFamily(g.ev),level:level,ends:g.latest||0};
+    // A folded card's union end must not keep its expired higher tier active.
+    var phases=g.phases&&g.phases.length?g.phases:[g];
+    phases.forEach(function(p){
+      if(p.latest>0&&p.latest<=nowMs) return;
+      var level=p.lv&&p.lv.k||"statement",rank=ranks[level]==null?5:ranks[level];
+      var severity=p.best&&p.best.properties?p.best.properties.severity:p.sev||g.sev;
+      var sev=ALERT_SEV_RANK[severity],key=[rank,sev==null?5:sev,String(p.ev||"Alert")].join("|");
+      if(bestKey!=null&&key>=bestKey) return;
+      bestKey=key;
+      local={event:p.ev||"Alert",family:eventFamily(p.ev),level:level,ends:p.latest||0};
+    });
   });
   return local;
 }
@@ -8420,6 +8443,10 @@ function fmtSpan(ms){   // bare duration, no framing
 function fmtLeft(ms){ return ms<=0?null:(fmtSpan(ms)+(ms<60000?"":" left")); }
 function tickCountdowns(){
   var now=Date.now();
+  if(callLocalAlert&&callLocalAlert.ends>0&&callLocalAlert.ends<=now){
+    callLocalAlert=bottomLineLocalAlert(callAlertGroups,now);
+    renderTheCall();
+  }
   [].forEach.call(document.querySelectorAll("[data-exp]"),function(el){
     var t=+el.getAttribute("data-exp");
     if(!t){ el.textContent=""; return; }

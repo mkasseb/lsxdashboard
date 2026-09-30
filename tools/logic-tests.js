@@ -89,7 +89,7 @@ const SUBJECT = new Function(`
   ${lift(/^function stationMiles\(lat1,lon1,lat2,lon2\)\{[\s\S]*?^\}/m, 'stationMiles()')}
   ${lift(/^function bottomLineHourlyCandidates\(H,opts\)\{[\s\S]*?^\}/m, 'bottomLineHourlyCandidates()')}
   ${lift(/^function bottomLineWeekCandidates\(days,cutoff,hourly\)\{[\s\S]*?^\}/m, 'bottomLineWeekCandidates()')}
-  ${lift(/^function bottomLineLocalAlert\(groups\)\{[\s\S]*?^\}/m, 'bottomLineLocalAlert()')}
+  ${lift(/^function bottomLineLocalAlert\(groups,nowMs\)\{[\s\S]*?^\}/m, 'bottomLineLocalAlert()')}
   ${lift(/^function bottomLineCmp\(a,b\)\{[\s\S]*?^\}/m, 'bottomLineCmp()')}
   ${lift(/^function bottomLineAlertMatch\(alert,candidate\)\{[\s\S]*?^\}/m, 'bottomLineAlertMatch()')}
   ${lift(/^function bottomLineUrgentStormAlert\(alert,candidate\)\{[\s\S]*?^\}/m, 'bottomLineUrgentStormAlert()')}
@@ -162,6 +162,10 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
   check('missing interval splits rather than invents a continuous event',
     summary(grid([[0,6,25.4],[6,6,null],[12,6,25.4],[18,78,0]])).events.map(e=>e.partial), [true,true]);
   check('long dry gap separates events', summary(grid([[0,6,25.4],[6,12,0],[18,6,25.4],[24,72,0]])).events.length, 2);
+  check('missing amounts after a long dry break do not invalidate the earlier event',
+    summary(grid([[0,6,25.4],[6,12,0],[18,6,null],[24,72,0]])).events[0].partial,false);
+  check('long known dry break clears a previous missing-data boundary',
+    summary(grid([[0,6,null],[6,12,0],[18,6,25.4],[24,72,0]])).events[0].partial,false);
   check('event extending beyond view retains its full total', rounded(summary(grid([[0,66,0],[66,12,25.4],[78,18,0]])).events[0].amount), 1);
   check('event extending beyond view is labeled', summary(grid([[0,66,0],[66,12,25.4],[78,18,0]])).events[0].beyondView, true);
   check('wet forecast edge is not presented as final event total', summary(grid([[0,66,0],[66,6,25.4]])).events[0].continues, true);
@@ -941,7 +945,7 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
 
 /* ============ Bottom Line local-alert selection ============ */
 {
-  const L = SUBJECT.bottomLineLocalAlert;
+  const L = groups => SUBJECT.bottomLineLocalAlert(groups,0);
   const awayEmergency = {scope: 'away', ev: 'Tornado Warning', lv: {k: 'emergency'}, latest: 500};
   const localAdvisory = {scope: 'here', ev: 'Heat Advisory', lv: {k: 'advisory'}, latest: 300};
   const localWarning = {scope: 'here', ev: 'High Wind Warning', lv: {k: 'warning'}, latest: 400};
@@ -958,6 +962,18 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
     L([{scope: '', ev: 'Winter Storm Watch', lv: {k: 'watch'}, latest: 200}]),
     {event: 'Winter Storm Watch', family: 'winter', level: 'watch', ends: 200});
   check('missing alert groups fail quiet', L(null), null);
+  check('an expired warning yields to a still-active advisory',
+    SUBJECT.bottomLineLocalAlert([localWarning,{...localAdvisory,latest:500}],400),
+    {event:'Heat Advisory',family:'heat',level:'advisory',ends:500});
+  check('the final expiration clears local alert state',
+    SUBJECT.bottomLineLocalAlert([localWarning,localAdvisory],400),null);
+  check('a folded card selects its active phase instead of its union end',
+    SUBJECT.bottomLineLocalAlert([{scope:'here',latest:500,phases:[localWarning,
+      {...localAdvisory,latest:500}]}],400),
+    {event:'Heat Advisory',family:'heat',level:'advisory',ends:500});
+  check('an alert with no verified end remains conservative',
+    SUBJECT.bottomLineLocalAlert([{...localWarning,latest:0}],500),
+    {event:'High Wind Warning',family:'wind',level:'warning',ends:0});
 }
 
 /* ============ buildBottomLine ============ */
