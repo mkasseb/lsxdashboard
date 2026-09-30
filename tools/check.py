@@ -70,7 +70,9 @@ SITEMAP = os.path.join(ROOT, "sitemap.xml")
 # don't apply fetch directives to a link the user clicks, so these need no CSP entry —
 # but they must be named here so a genuinely new *feed* can't hide among them.
 NAV_ONLY = {
+    "https://atmosphere.copernicus.eu",
     "https://aviationweather.gov",
+    "https://creativecommons.org",
     "https://droughtmonitor.unl.edu",
     "https://feathericons.com",
     "https://forecast.weather.gov",
@@ -89,6 +91,7 @@ NAV_ONLY = {
     "https://map.blitzortung.org",
     "https://www.cpc.ncep.noaa.gov",
     "https://www.drought.gov",
+    "https://www.geonames.org",
     "https://www.openstreetmap.org",
     "https://www.rcc-acis.org",
     "https://www.spc.noaa.gov",

@@ -117,7 +117,7 @@ All feeds are keyless. The sources have different attribution and reuse terms; s
 | `services5.arcgis.com` | Current U.S. Drought Monitor classification |
 | `api.water.noaa.gov` (NWPS) | River gauge stages and crest forecasts |
 | `data.rcc-acis.org` | 1991–2020 normals, daily records, rankings, dry streaks |
-| Open-Meteo | Air quality, UV index, and the location geocoder |
+| Open-Meteo | Air quality from Copernicus Atmosphere Monitoring Service (CAMS), UV index, and the location geocoder using GeoNames data |
 | `gibs.earthdata.nasa.gov` (WMTS) | GOES-19 ABI GeoColor satellite tiles, in the map's own projection |
 
 Basemap via OpenFreeMap: © OpenMapTiles, data from OpenStreetMap contributors.
@@ -227,9 +227,9 @@ only paints is reviewed by eye; there is no snapshot suite to update. Read
 in [`assets/`](assets) and [`tools/`](tools), and the weather-specific glyphs in the inline sprite.
 
 Everything that came from somewhere else keeps its own terms. This table is the canonical credits
-list — the page footer links here instead of repeating it, and keeps on the page only what has to
-be there: Open-Meteo's CC BY attribution (its data renders in the page itself) and the basemap
-credit on each map. MIT's one condition is that the copyright
+list — the page footer links here for the full list and displays Open-Meteo's CC BY attribution
+with a licence link, plus credits for its CAMS air-quality and GeoNames location sources. Basemap
+credits appear on each map. MIT's one condition is that the copyright
 notice travels with the work, which this table and [`LICENSE`](LICENSE) satisfy now that the
 repository is public:
 
@@ -243,7 +243,9 @@ repository is public:
 | NWS/NOAA feeds — `api.weather.gov`, NCEP, NWPS, SPC/WPC/CPC, NESDIS/GOES | Public domain, as U.S. government work |
 | NASA GIBS GOES-19 ABI tiles | Public domain |
 | [U.S. Drought Monitor](https://droughtmonitor.unl.edu/DmData/GISData.aspx) classifications | Credit NDMC, USDA, and NOAA when using the GIS data |
-| Open-Meteo air quality, UV & geocoding | CC BY 4.0 |
+| [Open-Meteo](https://open-meteo.com/) air quality, UV & geocoding | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
+| [Copernicus Atmosphere Monitoring Service (CAMS)](https://atmosphere.copernicus.eu/) global atmospheric composition forecasts | Upstream air-quality data used by Open-Meteo; CAMS and Open-Meteo credited on the page. See [Open-Meteo's attribution guidance](https://open-meteo.com/en/docs/air-quality-api#citation). |
+| [GeoNames](https://www.geonames.org/) location data | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); upstream data used by Open-Meteo's geocoder |
 | [RCC-ACIS](https://www.rcc-acis.org/) normals, records & rankings | Open access |
 | [OpenFreeMap](https://openfreemap.org/) basemap | Public keyless tiles; © OpenMapTiles, data from OpenStreetMap contributors. The public instance offers no SLA. |
 

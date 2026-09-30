@@ -21,9 +21,10 @@ function feedUpdate(key,status,issued){
   freshnessCheck();
 }
 function freshnessCheck(){
-  var now=Date.now(), counts={ready:0,partial:0,unavailable:0,stale:0,saved:0,loading:0};
+  var now=Date.now(), total=0, counts={ready:0,partial:0,unavailable:0,stale:0,saved:0,loading:0};
   Object.keys(FEEDS).forEach(function(k){
     var cfg=FEEDS[k]; if(cfg.tracked===false) return;
+    total++;
     var c=feedChecks[k], state=feedState(c,now,cfg.age);
     counts[state]++;
     if(!cfg.card) return;
@@ -42,8 +43,8 @@ function freshnessCheck(){
     if(el.textContent!==text) el.textContent=text;
   });
   var good=counts.ready+counts.partial, bad=counts.unavailable+counts.stale;
-  var summary=good?good+" data feeds checked"+(bad?" · "+bad+" unavailable or overdue":"")
-    +(counts.partial?" · some results incomplete":"")
+  var summary=good?good+" of "+total+" feeds checked"+(bad?" · "+bad+" unavailable or overdue":"")
+    +(counts.partial?" · "+counts.partial+" with incomplete results":"")
     +(counts.loading?" · "+counts.loading+" checking":"")
     +(counts.saved?" · "+counts.saved+" showing saved data":"")
     :(counts.saved?"Showing saved data; current weather is unverified":counts.loading?"Checking weather services…":"Weather data unavailable — no current checks succeeded");
@@ -54,7 +55,7 @@ function freshnessCheck(){
   var notice=summary+". Alerts: "+({ready:"checked",partial:"some data unavailable",stale:"check overdue",saved:"saved and unverified",loading:"checking",unavailable:"unavailable"}[alertState]||"unavailable")+(alert.successAt?", last successful check "+weatherTime(alert.successAt,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"")+".";
   if(btn){ btn.title=notice; btn.setAttribute("aria-label","Refresh weather data. "+notice); }
   var footer=document.getElementById("lastUpdate");
-  if(footer) footer.textContent=summary+(lastAttempt?" · last refresh attempted "+weatherTime(lastAttempt,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"")+". All weather times are Central Time (CT).";
+  if(footer) footer.textContent=summary+(lastAttempt?" · last full refresh attempted "+weatherTime(lastAttempt,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"")+". All weather times are Central Time (CT).";
   if(typeof resolveSnapBar==="function") resolveSnapBar();
   var evidence=renderBriefingEvidence._models;
   if(evidence) renderBriefingEvidence(evidence.near,evidence.planning,evidence.hours);
