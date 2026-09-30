@@ -2,22 +2,25 @@
 
 Why the code is shaped the way it is: what each decision replaced, what broke the first time, and
 which parts are load-bearing. The [README](README.md) covers what this is and how to run it; this
-file is for reading before *changing* [`index.html`](index.html).
+file is for reading before changing the dashboard.
 
-The script is sectioned by `/* ==== BANNER ==== */` comments and reads top to bottom: config →
-helpers → ~15 per-card loaders → derived renderers → orchestration → scheduler → layout engine.
+Markup lives in `index.html`, styles in `assets/dashboard.css`, pure decisions in
+`assets/weather-core.js`, request adapters and the feed registry in `assets/weather-feeds.js`,
+and rendering, maps, interaction and startup in `assets/dashboard.js`. These are ordinary static
+files loaded in order, with shared browser globals and no build step or framework.
 
 ## What the checks cover, and how
 
 With no build step there is nothing between an edit and production, so the mistakes that would
 ship silently are checked mechanically. [`tools/check.py`](tools/check.py) catches the four
-footguns this repo's shape creates — a syntax error in the inline script, an origin the CSP
+footguns this repo's shape creates — a syntax error in a served script, an origin the CSP
 doesn't declare, an icon name with no `<symbol>`, and a missing or self-contradicting file at the
 site root. [`tools/logic-tests.js`](tools/logic-tests.js) covers the pure decision functions:
 `rangeRow()`, `alertLevel()`, `cardCmp()` and `coldVerdict()`. With no build step there is nothing
-to import from, so it lifts them out of `index.html` by name and runs them — which means a rename
-fails the suite loudly rather than leaving it silently testing nothing. Anything that paints is
-left to the eye. `cardCmp()` and `ALERT_SEV_RANK` sit at the top level of the script rather than
+to transpile, so the harness reads the scripts referenced by the page and lifts declarations by
+name. A rename fails loudly rather than leaving a test silently unused. Chromium browser scenarios
+run in CI and verify the served scripts, styles, interactions and failure states; live map tiles
+and other browser engines still require separate verification. `cardCmp()` and `ALERT_SEV_RANK` sit at the top level rather than
 inside `loadAlerts()` for exactly this reason: the order of the alert list is the one thing about
 that section a reader acts on, and it is asserted rather than eyeballed.
 
@@ -170,7 +173,8 @@ verdict that scores every daylight hour on comfort, rain risk and wind to name t
 window to be outside, spoken only when the day has adversity worth dodging. It ranks directly
 under safety, so the card is on the first screen whatever the weather is doing.
 The same briefing now reads the NWS seven-day day/night periods after the hourly edge. Later-week
-rain, storms, wintry weather, heat, freezing cold and wind can lead when the next day is quiet.
+rain, storms, wintry weather, heat, freezing cold and wind appear in their own expandable planning
+section alongside the near-term advice.
 Those cues name the forecast day, avoid exact timing and use softer planning language; current
 warnings never borrow them as evidence. The daily feed can still populate the card when the hourly
 feed fails. Bottom Line keeps the feed's final day-only period after an evening load even though
@@ -206,11 +210,16 @@ only when the lead itself is neutral or good; a warning never spends scarce spac
 Below 600px that optional context cue yields the space entirely because the same information
 remains available in the Climate section.
 
-The header’s horizon is computed from the last seven-day period (“Through Fri, Oct 2”) when that
-feed is available, and from the last hourly period's end when it is not. An outlook-only briefing
-says “Today and tomorrow” until the NWS forecast arrives. During a local warning or emergency,
-the later-week cues yield and the header returns to the near-term horizon. NWS timestamp date and
-hour fields set the header, so a visitor's browser timezone cannot shift the forecast's end date.
+Near-term guidance and later-week planning are selected independently, so the same topic can
+describe a dry next day and storm potential later in the week without one suppressing the other.
+The header names the near-term horizon; expandable planning names its own seven-day endpoint.
+Local warnings and emergencies suppress later-week planning. Both use Central Time.
+
+The Bottom Line explicitly identifies dashboard-generated advice; The Pulse identifies
+NWS-authored guidance. A native “Why this recommendation?” disclosure exposes the selected
+candidates' forecast values, the rule used, successful-check and source ages, missing data and
+timing uncertainty. Source issuance stays unknown when a service does not supply it. Disclosures
+remain stable DOM nodes so their open state and summary focus survive refreshes.
 The renderer
 preserves the hierarchy in DOM order — heading, lead,
 semantic support list — and uses severity colour only when the underlying candidate warrants it.
@@ -477,19 +486,35 @@ loader clears its restored fragments before painting unavailable data. The clima
 cache also preserves its original check time and partial-result status, and expires after 12 hours.
 
 A snapshot is restored markup under the current stylesheet, so changing markup or its freshness
-contract requires bumping `SNAP_KEY`. Version 17 discards earlier snapshots lacking the new times.
+contract requires bumping `SNAP_KEY`. Version 18 clears earlier snapshots and includes river pin controls.
 
 ## Adding a card, adding a loader
 
-**Adding a card** means registering `FEEDS` and validated `feedUpdate()` outcomes, plus touching
-the markup, the `RANK` map in `layoutMasonry`'s `tier()`, `SNAP_PARTS`, the `SCHED` table, and `clearLocationUI`/`resetLocationState`.
+`FEEDS` owns loader names, cadence, location scope, freshness thresholds, failure policy,
+location-reset markup and snapshot fragments. Manual refresh, location refresh, `SCHED` and
+`SNAP_PARTS` are generated from it. Hourly shares the daily loader through an `owner` entry,
+so a refresh requests that source only once. Loaders retain their source-specific unavailable
+paints; `runFeed()` contains unexpected rejections, respects location generations and applies
+the registry's failure policy. Storm discussions retain unexpired information, while snapshots
+are best effort and map/image feeds retain their own fallback behavior.
 
-**Adding a location-scoped loader** also means updating the `jobs` array inside `setLocation()`. `SCHED`
-only governs the periodic refresh, and `refreshAll()` only covers the initial paint — a loader
-missing from `setLocation` looks like it works, then silently never re-runs when the visitor
-changes town. Worse, it can appear broken on first load too: geolocation resolves *after* the first
-`refreshAll()`, so the generation bumps, the in-flight fetch is discarded by its own `fresh()`
-guard, and nothing re-issues it.
+Adding a card requires its markup, masonry rank and one registry entry. Its loader marks
+validated outcomes with `feedUpdate()`. Clear any derived weather state on location changes;
+reset targets and cache eligibility belong in the registry rather than separate lifecycle lists.
+
+## Location and interaction continuity
+
+The sticky navigation names the selected place and links back to search. Favorites store named
+points locally. Shared URLs encode latitude, longitude, name and point type; a shared point takes
+precedence over local storage only after `/points` verifies LSX. Verification has its own generation
+guard so an older favorite or URL lookup cannot supersede a newer choice. City searches use a
+representative town point; high-accuracy geolocation supplies a more precise polygon-warning basis.
+
+River pins reorder relevant gauges while retaining every regional gauge. Pins persist separately
+from location, since the gauges are regional. Pin controls retain focus across reorder and refresh.
+The hourly slider stores the selected forecast instant, preserving the same hour as the forecast
+window advances. A removed hour clamps to the nearest available one; an outage moves focus to the
+hourly heading. Native risk explanations work by tap and keyboard and stay open across updates.
 
 ## Radar and satellite are one widget, stacked
 

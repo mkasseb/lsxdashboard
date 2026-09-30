@@ -10,7 +10,7 @@ const path = require('path');
 const assert = require('node:assert/strict');
 const {chromium} = require('playwright');
 const root = path.join(__dirname, '..');
-const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+const {html, assets} = require('./source');
 const recorded = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/weather/lsx-recorded.json'), 'utf8'));
 const H = 3600000;
 const base = Date.parse('2026-09-30T18:00:00Z');
@@ -47,10 +47,11 @@ function feeds(c, id='0') {
   const daily=Array.from({length:14},(_,i)=>{
     const p=clone(periods[i*12]);p.name=i===0?'Today':i%2?'Tonight':'Thursday';p.detailedForecast='Scenario '+c.name;p.endTime=stamp(start+(i+1)*12*H);return p;
   });
+  if(c.weekRain){daily[6].name='Saturday';daily[6].shortForecast='Thunderstorms';daily[6].probabilityOfPrecipitation.value=80;}
   if(c.hourlyExpired)periods.forEach(p=>{p.startTime=stamp(Date.parse(p.startTime)-8*24*H);p.endTime=stamp(Date.parse(p.endTime)-8*24*H);});
   return {
     points:{properties:{forecast:'https://api.weather.gov/gridpoints/LSX/'+id+'/forecast',forecastHourly:'https://api.weather.gov/gridpoints/LSX/'+id+'/forecast/hourly',forecastGridData:'https://api.weather.gov/gridpoints/LSX/'+id,observationStations:'https://api.weather.gov/gridpoints/LSX/'+id+'/stations',county:'https://api.weather.gov/zones/county/MOC183',forecastZone:'https://api.weather.gov/zones/forecast/MOZ052',fireWeatherZone:'https://api.weather.gov/zones/fire/MOZ052',timeZone:'America/Chicago',cwa:'LSX',relativeLocation:{properties:{city:'Lake St. Louis',state:'MO'}}}},
-    hourly:{properties:{periods}},daily:{properties:{periods:daily}},
+    hourly:{properties:{updateTime:new Date(now-H).toISOString(),periods}},daily:{properties:{updateTime:new Date(now-H).toISOString(),periods:daily}},
     grid:{properties:{updateTime:new Date(now-H).toISOString(),quantitativePrecipitation:layer(now,c.qpf,c.unit),snowfallAmount:layer(now,c.snow,c.unit),iceAccumulation:layer(now,c.ice,c.unit),windGust:layer(now,c.gusts,'wmoUnit:km_h-1')}},
     observation:{properties:{timestamp:new Date(now-(c.staleObservation?3*H:5*60000)).toISOString(),temperature:{value:(c.temp-32)*5/9},dewpoint:{value:10},relativeHumidity:{value:80},windSpeed:{value:16.1},windDirection:{value:225},windGust:{value:null},barometricPressure:{value:101325},visibility:{value:16093},textDescription:c.condition}}
   };
@@ -72,13 +73,19 @@ async function open(c, width=390) {
   const context=await browser.newContext({viewport:{width,height:900},timezoneId:c.timezone||'America/Chicago'});
   const page=await context.newPage();
   await page.clock.install({time:new Date(c.now)});
-  if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v17',snapshot),c.snapshot);
+  if(c.storage)await page.addInitScript(storage=>Object.entries(storage).forEach(([key,value])=>localStorage.setItem(key,typeof value==='string'?value:JSON.stringify(value))),c.storage);
+  if(c.geo)await page.addInitScript(geo=>Object.defineProperty(navigator,'geolocation',{value:{getCurrentPosition:success=>queueMicrotask(()=>success({coords:{latitude:geo.lat,longitude:geo.lon,accuracy:25}}))}}),c.geo);
+  if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v18',snapshot),c.snapshot);
   const errors=[],requests=[];
   page.on('pageerror',e=>errors.push(e.message));
   let active=c;
   await context.route('**/*',async route=>{
     const req=route.request(),u=new URL(req.url());
-    if(u.hostname==='lsx-weather-test.invalid') return route.fulfill({status:200,contentType:'text/html',body:html});
+    if(u.hostname==='lsx-weather-test.invalid') {
+      if(u.pathname==='/')return route.fulfill({status:200,contentType:'text/html',body:html});
+      const asset=assets[u.pathname];
+      return route.fulfill({status:asset?200:404,contentType:asset?.type||'text/plain',body:asset?.content||'Missing static asset'});
+    }
     // Capture a request's scenario before any delay; later switches must not rewrite an old response.
     const scenario=clone(active);
     const c=scenario.locations?.[u.searchParams.get('geometry')]||scenario;
@@ -97,6 +104,7 @@ async function open(c, width=390) {
       else if(u.pathname.startsWith('/gridpoints/LSX/')) id=u.pathname.split('/').slice(3,u.pathname.endsWith('/forecast/hourly')?-2:u.pathname.endsWith('/forecast')||u.pathname.endsWith('/stations')?-1:undefined).join('/');
       const chosen=scenario.byId?.[id]||c;
       const f=chosen.recorded?clone(recorded.responses):feeds(chosen,id);
+      if(chosen.cwa)f.points.properties.cwa=chosen.cwa;
       if(chosen.delay) await new Promise(resolve=>setTimeout(resolve,chosen.delay));
       if(u.pathname.startsWith('/points/')) return reply(f.points);
       if(u.pathname.endsWith('/forecast/hourly')&&chosen.hourlyHang)return;
@@ -139,8 +147,8 @@ async function open(c, width=390) {
     if(u.hostname==='cdn.jsdelivr.net'&&u.pathname.endsWith('.svg')) return route.fulfill({status:200,contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg"/>'});
     return route.abort().catch(()=>{}); // Maps and unrelated third-party widgets use their real fallbacks.
   });
-  await page.goto('https://lsx-weather-test.invalid/',{waitUntil:'domcontentloaded'});
-  if(!c.skipWait)await page.waitForFunction(()=>typeof refreshInFlight!=='undefined'&&refreshInFlight===null);
+  await page.goto('https://lsx-weather-test.invalid/'+(c.search||''),{waitUntil:'domcontentloaded'});
+  if(!c.skipWait)await page.waitForFunction(()=>typeof refreshInFlight!=='undefined'&&refreshInFlight===null&&snapSafeSeq===locSeq);
   return {page,context,errors,requests,change:c=>{active=c;}};
 }
 async function expectText(page,selector,pattern) {
@@ -154,6 +162,20 @@ async function noOverflow(page) {
   assert.equal(faults,0,'probability labels must fit their cells');
   const overflow=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,elements:[...document.querySelectorAll('body *')].filter(el=>{const r=el.getBoundingClientRect();return r.width&&r.right>innerWidth+1;}).slice(0,12).map(el=>({tag:el.tagName,id:el.id,cls:el.className,right:el.getBoundingClientRect().right,text:el.textContent.slice(0,100)}))}));
   assert(overflow.scroll<=overflow.width+1,'page must fit viewport: '+JSON.stringify(overflow));
+}
+async function noCardOverlap(page) {
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  await page.evaluate(()=>Promise.all([...document.querySelectorAll('.masonry > .card')].flatMap(card=>
+    card.getAnimations().map(animation=>animation.finished.catch(()=>{}))
+  )));
+  const overlaps=await page.locator('.masonry > .card').evaluateAll(cards=>{
+    const boxes=cards.map(card=>({id:card.id,box:card.getBoundingClientRect()})).filter(c=>c.box.width&&c.box.height);
+    return boxes.flatMap((a,i)=>boxes.slice(i+1).filter(b=>
+      Math.min(a.box.right,b.box.right)-Math.max(a.box.left,b.box.left)>1&&
+      Math.min(a.box.bottom,b.box.bottom)-Math.max(a.box.top,b.box.top)>1
+    ).map(b=>[a.id,b.id]));
+  });
+  assert.deepEqual(overlaps,[],'expanded cards must not overlap neighboring content');
 }
 async function durations(page, missing=false) {
   for(const hours of [24,48,72]) {
@@ -202,10 +224,161 @@ async function run(name,c,test,width=390) {
   } finally {if(session)await session.context.close();}
 }
 async function main() {
-  browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
+  browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||undefined,headless:true,args:['--no-sandbox']});
   try {
     await run('dry forecast and all duration controls',config('dry'),async({page})=>{
       await expectText(page,'#precipEvents',/No measurable precipitation/);await durations(page);
+    });
+    await run('hourly refresh preserves focus and the selected forecast instant',config('hourly focus'),async session=>{
+      await session.page.locator('#hourlyCursor').focus();
+      await session.page.locator('#hourlyCursor').fill('10');
+      const selected=await session.page.evaluate(()=>renderHourly24._selectedTime);
+      await session.page.clock.setSystemTime(new Date(base+H));
+      session.change(config('advanced hourly',{now:base+H}));
+      await session.page.evaluate(()=>loadForecast());
+      assert.equal(await session.page.evaluate(()=>document.activeElement.id),'hourlyCursor');
+      assert.equal(await session.page.evaluate(()=>renderHourly24._selectedTime),selected);
+      assert.equal(await session.page.locator('#hourlyCursor').inputValue(),'9');
+      await session.page.evaluate(()=>loadForecastGrid());
+      assert.equal(await session.page.evaluate(()=>document.activeElement.id),'hourlyCursor');
+      assert.equal(await session.page.evaluate(()=>renderHourly24._selectedTime),selected);
+    });
+    await run('forecast refresh leaves focus outside the chart alone',config('external focus'),async({page})=>{
+      await page.locator('#geoBtn').focus();await page.evaluate(()=>loadForecast());
+      assert.equal(await page.evaluate(()=>document.activeElement.id),'geoBtn');
+    });
+    await run('hourly failure keeps keyboard focus in the forecast card',config('failure focus'),async session=>{
+      await session.page.locator('#hourlyCursor').focus();session.change(config('failed hourly',{hourlyDown:true}));
+      await session.page.evaluate(()=>loadForecast());
+      assert.equal(await session.page.evaluate(()=>document.activeElement.id),'h24Title');
+      await expectText(session.page,'#hourly24',/unavailable/);
+    });
+    for(const width of [320,1280])await run('risk explanations work by tap and remain open after refresh at '+width+'px',config('risk help'),async({page})=>{
+      await page.locator('#riskHelp summary').click();await expectText(page,'#riskHelp',/category rank, not a probability/);
+      await noCardOverlap(page);
+      assert.equal(await page.evaluate(()=>document.activeElement.parentElement.id),'riskHelp');
+      await page.locator('#riskHelp summary').focus();await page.evaluate(()=>loadSpc());
+      assert(await page.locator('#riskHelp').evaluate(el=>el.open));
+      await noCardOverlap(page);
+      assert.equal(await page.evaluate(()=>document.activeElement.parentElement.id),'riskHelp');
+      await page.locator('#riskHelp summary').click();await noCardOverlap(page);
+      assert.equal(await page.evaluate(()=>document.activeElement.parentElement.id),'riskHelp');
+    },width);
+    await run('briefing separates dry near-term guidance from later storms',config('briefing horizons',{weekRain:true}),async({page})=>{
+      await expectText(page,'#briefNear',/Rain unlikely/);await expectText(page,'#briefPlanning',/Storms possible Saturday/);
+      await page.locator('#briefPlanning summary').click();
+      await expectText(page,'.brief-author',/Dashboard-generated.*NWS-authored/);
+      await page.locator('#briefWhy summary').click();
+      await expectText(page,'#briefEvidence',/precipitation chance 0%/);
+      await expectText(page,'#briefEvidence',/NWS precipitation chance 80%/);
+      await expectText(page,'#briefEvidence',/source.*ago/);
+      await expectText(page,'#briefEvidence',/do not establish an exact arrival hour/);
+      await page.locator('#briefWhy summary').focus();await page.evaluate(()=>loadForecast());
+      assert(await page.locator('#briefWhy').evaluate(el=>el.open));
+      assert(await page.locator('#briefPlanning').evaluate(el=>el.open));
+      assert.equal(await page.evaluate(()=>document.activeElement.parentElement.id),'briefWhy');
+      await page.locator('#briefPlanning summary').focus();await page.evaluate(()=>loadForecast());
+      assert(await page.locator('#briefPlanning').evaluate(el=>el.open));
+      assert.equal(await page.evaluate(()=>document.activeElement.parentElement.id),'briefPlanning');
+    });
+    await run('open briefing evidence updates source age when checks become overdue',config('evidence age',{weekRain:true}),async({page})=>{
+      await page.locator('#briefWhy summary').click();await page.locator('#briefWhy summary').focus();
+      await expectText(page,'#briefEvidence',/Hourly forecast:.*verified/);
+      await page.evaluate(()=>stopSchedule());
+      await page.clock.setSystemTime(new Date(base+61*60000));await page.evaluate(()=>freshnessCheck());
+      await expectText(page,'#briefEvidence',/Hourly forecast:.*check overdue/);
+      assert(await page.locator('#briefWhy').evaluate(el=>el.open));
+      assert.equal(await page.evaluate(()=>document.activeElement.parentElement.id),'briefWhy');
+    });
+    await run('local warning suppresses later-week planning',config('warning horizons',{weekRain:true,pop:80,condition:'Thunderstorms',alerts:[alert('Tornado Warning',base)]}),async({page})=>{
+      await expectText(page,'#briefNear',/Take tornado shelter now/);
+      assert(!(await page.locator('#briefPlanning').isVisible()));
+      await page.locator('#briefWhy summary').click();await expectText(page,'#briefEvidence',/active local NWS alert takes priority/);
+    });
+    await run('selected town stays visible in sticky navigation',config('sticky town'),async({page})=>{
+      await page.evaluate(()=>window.scrollTo(0,1800));
+      const box=await page.locator('#stickyLocation').boundingBox();assert(box.y>=0&&box.y<60);
+      await expectText(page,'#stickyLocation',/Lake St\. Louis/);
+      await page.locator('#stickyLocation').click();assert.equal(await page.evaluate(()=>document.activeElement.id),'locSearch');
+    },320);
+    await run('expanded location and briefing controls fit a narrow screen in both themes',config('narrow controls',{
+      search:'?lat=38.81000&lon=-90.86000&place='+encodeURIComponent('A long shared location name '.repeat(4)),weekRain:true
+    }),async({page})=>{
+      await page.locator('#locationTools summary').click();await page.locator('#favoriteToggle').click();
+      await page.locator('#briefPlanning summary').click();await page.locator('#briefWhy summary').click();
+      await page.locator('#riskHelp summary').click();
+      for(const theme of ['light','dark']){await page.evaluate(theme=>applyTheme(theme),theme);await noOverflow(page);}
+      assert.equal(new URL(await page.locator('#locationLink').inputValue()).searchParams.get('place'),'A long shared location name '.repeat(4).trim());
+    },320);
+    await run('favorites persist, switch locations, and can be removed',config('favorites'),async({page})=>{
+      await page.locator('#locationTools summary').click();await page.locator('#favoriteToggle').click();
+      await page.evaluate(()=>setLocation({name:'Wentzville, MO',lat:38.81,lon:-90.86,precision:'representative'},{save:true}));
+      await page.waitForFunction(()=>snapSafeSeq===locSeq);await page.locator('#favoriteToggle').click();
+      assert.equal(await page.locator('#favoriteSelect option').count(),3);
+      await page.reload();await page.waitForFunction(()=>refreshInFlight===null&&snapSafeSeq===locSeq);
+      await page.locator('#locationTools summary').click();assert.equal(await page.locator('#favoriteSelect option').count(),3);
+      await page.locator('#favoriteSelect').selectOption('38.80000,-90.79000');
+      await page.waitForFunction(()=>current.name==='Lake St. Louis, MO'&&snapSafeSeq===locSeq);
+      await expectText(page,'#stickyLocation',/Lake St\. Louis/);
+      assert.equal(new URL(page.url()).searchParams.get('lat'),'38.80000');
+      await page.locator('#favoriteRemove').click();assert.equal(await page.locator('#favoriteSelect option').count(),2);
+    });
+    await run('shared location overrides a saved place after LSX validation',config('shared town',{
+      search:'?lat=38.81000&lon=-90.86000&place=Wentzville%2C%20MO&kind=city',
+      storage:{lsxLoc:{name:'Old town',lat:38.8,lon:-90.79}}
+    }),async({page})=>{
+      await expectText(page,'#stickyLocation',/Wentzville/);assert.equal(await page.evaluate(()=>current.lat),38.81);
+      assert.equal(await page.evaluate(()=>current.precision),'representative');
+      const link=await page.locator('#locationLink').inputValue();assert.equal(new URL(link).searchParams.get('place'),'Wentzville, MO');
+    });
+    await run('location sharing offers a selected link when clipboard access fails',config('copy fallback'),async({page})=>{
+      await page.locator('#locationTools summary').click();
+      await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:()=>Promise.reject(new Error('Clipboard unavailable'))}}));
+      await page.locator('#shareLocation').click();await page.waitForFunction(()=>document.activeElement.id==='locationLink');
+      const selection=await page.locator('#locationLink').evaluate(el=>({start:el.selectionStart,end:el.selectionEnd,length:el.value.length}));
+      assert.equal(selection.start,0);assert.equal(selection.end,selection.length);
+      await expectText(page,'#locFeedback',/Select and copy/);
+    });
+    await run('out-of-area shared point keeps the current LSX location',config('outside shared',{
+      search:'?lat=41.88000&lon=-87.63000&place=Chicago',byId:{'41.8800,-87.6300':config('Chicago',{cwa:'LOT'})}
+    }),async({page})=>{
+      assert.equal(await page.evaluate(()=>current.name),'Lake St. Louis, MO');await expectText(page,'#locFeedback',/outside.*LSX/);
+    });
+    await run('malformed shared coordinates never change the forecast point',config('bad shared',{search:'?lat=NaN&lon=-90.79'}),async({page})=>{
+      assert.equal(await page.evaluate(()=>current.lat),38.8);await expectText(page,'#locFeedback',/link is invalid/);
+    });
+    await run('geolocation shares a precise point and distinguishes it from city search',config('device point',{geo:{lat:38.81234,lon:-90.85678}}),async({page})=>{
+      assert.equal(await page.evaluate(()=>current.precision),'device');await expectText(page,'#stickyKind',/Geolocated point/);
+      const url=new URL(page.url());assert.equal(url.searchParams.get('lat'),'38.81234');assert.equal(url.searchParams.get('kind'),'point');
+    });
+    await run('late favorite verification cannot overwrite a newer choice',config('favorite race',{
+      byId:{'38.8100,-90.8100':config('slow favorite',{delay:350}),'38.8200,-90.8200':config('new favorite',{delay:10})}
+    }),async({page})=>{
+      await page.evaluate(async()=>{
+        const old=chooseVerifiedLocation({name:'Old favorite',lat:38.81,lon:-90.81,precision:'representative'},{save:true});
+        const newer=chooseVerifiedLocation({name:'New favorite',lat:38.82,lon:-90.82,precision:'representative'},{save:true});
+        await Promise.all([old,newer]);
+      });
+      await page.waitForFunction(()=>snapSafeSeq===locSeq);assert.equal(await page.evaluate(()=>current.name),'New favorite');
+    });
+    await run('river pins persist and keep all regional gauges available',config('river pins',{river:[20,22,25]}),async({page})=>{
+      const pin=page.locator('[data-pin-gauge="ERKM7"]');await pin.click();
+      assert.equal(await page.locator('#rivers .river-row').count(),6);
+      assert.equal(await page.locator('#rivers .river-row').first().getAttribute('data-gauge'),'ERKM7');
+      assert.equal(await page.evaluate(()=>document.activeElement.getAttribute('data-pin-gauge')),'ERKM7');
+      await page.reload();await page.waitForFunction(()=>refreshInFlight===null&&snapSafeSeq===locSeq);
+      assert.equal(await page.locator('[data-pin-gauge="ERKM7"]').getAttribute('aria-pressed'),'true');
+      assert.equal(await page.locator('#rivers .river-row').count(),6);
+      await page.locator('[data-pin-gauge="ERKM7"]').click();assert.equal(await page.locator('#rivers .river-group').count(),0);
+    },320);
+    await run('registry refresh invokes the shared daily and hourly loader once',config('registry'),async session=>{
+      const count=()=>session.requests.filter(u=>new URL(u).pathname.endsWith('/forecast/hourly')).length;
+      const before=count();await session.page.evaluate(()=>refreshAll());assert.equal(count()-before,1);
+      const keys=await session.page.evaluate(()=>({tasks:feedTasks(false),local:feedTasks(true),scheduled:SCHED.map(t=>t.key)}));
+      assert(!keys.tasks.includes('hourly'));assert(!keys.local.includes('rivers'));assert(keys.scheduled.includes('daily'));
+      await session.page.evaluate(()=>{const original=loadForecast;window.loadForecast=()=>{throw new Error('unexpected loader failure');};return runFeed('daily').then(()=>{window.loadForecast=original;});});
+      assert.equal(await session.page.evaluate(()=>feedChecks.daily.status),'unavailable');
+      assert.equal(await session.page.evaluate(()=>feedChecks.hourly.status),'unavailable');
     });
     await run('rain bursts separated by six known dry hours',config('rain',{qpf:[[0,6,25.4],[6,6,0],[12,6,12.7],[18,78,0]],pop:80,condition:'Showers And Thunderstorms'}),async({page})=>{
       assert.equal(await page.locator('.precip-event').count(),1);await expectText(page,'.precip-total',/~1\.50″ rain/);await durations(page);

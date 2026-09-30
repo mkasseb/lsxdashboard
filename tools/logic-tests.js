@@ -1,10 +1,8 @@
 #!/usr/bin/env node
-/* Unit tests for the pure decision functions in index.html.
+/* Unit tests for the pure weather decisions in the served static scripts.
  *
- * There is no build step and no package.json, so there is nowhere to import from — these lift the
- * functions out of the source by name and run them. That is uglier than a module boundary and it
- * is the honest trade: the alternative is a bundler, a dependency tree and a lockfile in a repo
- * whose whole premise is that you can edit one file and reload the page.
+ * tools/source.js reads the files referenced by index.html. These lift selected declarations
+ * into controlled harnesses, keeping browser globals and API mocks explicit without a bundler.
  *
  * Only functions that decide something belong here. Anything that paints is left to the eye — a
  * test asserting that a <span> has a class is a test of the test.
@@ -19,7 +17,7 @@ process.env.TZ='America/Chicago';
 
 const fs = require('fs');
 const path = require('path');
-const SRC = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+const SRC = require('./source').source;
 
 /* Pull a top-level declaration out of the source by name. Anchored to a line start and closed by a
    brace in column 0, which is how every function in the file is written; a rename or a re-indent
@@ -142,12 +140,13 @@ function check(name, actual, expected) {
 
 /* Restored chart markup must carry its duration and details rather than a prior fixed view. */
 check('freshness and Central Time markup migration bumps the snapshot key',
-  /var SNAP_KEY="lsxSnap_v17"/.test(SRC), true);
-check('the previous v16 snapshot is explicitly discarded',
-  /"lsxSnap_v16"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
-const snapParts = lift(/^var SNAP_PARTS=\[[\s\S]*?^\];/m, 'SNAP_PARTS');
+  /var SNAP_KEY="lsxSnap_v18"/.test(SRC), true);
+check('the previous v17 snapshot is explicitly discarded',
+  /"lsxSnap_v17"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
+const snapshotParts = new Function(lift(/^var FEEDS=\{[\s\S]*?^\};/m, 'FEEDS')+'\n'+
+  lift(/^var SNAP_PARTS=.*$/m, 'SNAP_PARTS')+'; return SNAP_PARTS;')();
 check('saved HTML cannot restore stale current readings, risk or briefing',
-  ['current', 'ccStation', 'spc', 'spcThreats', 'precipEvents', 'callRow', 'alerts', 'mcd', 'aqi'].every(id => !snapParts.includes(`id:"${id}"`)), true);
+  ['current', 'ccStation', 'spc', 'spcThreats', 'precipEvents', 'callRow', 'alerts', 'mcd', 'aqi'].every(id => !snapshotParts.some(p=>p.id===id)), true);
 
 /* Correctness must survive the viewer's clock, not just the CI runner's default timezone. */
 {
@@ -1701,6 +1700,7 @@ async function checkForecastRefreshFailure() {
     function renderContext(){painted.push('context');}
     function renderTheCall(){painted.push('bottom');}
     function syncHourlyControls(){}
+    ${lift(/^function clearHourlyForecast\(\)\{[\s\S]*?^\}/m, 'clearHourlyForecast()')}
     ${lift(/^function loadForecast\(\)\{[\s\S]*?^\}/m, 'loadForecast()')}
     return {loadForecast,renderHourly24};
   `)(smart,climate,els,painted);
