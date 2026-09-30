@@ -46,7 +46,10 @@ node tools/logic-tests.js     # the functions that decide something
 The optional browser suite runs the production dashboard against intercepted NWS/ArcGIS-shaped
 weather scenarios and a recorded LSX response set. It covers heavy rain, snow and ice, warning
 expiration, SPC issuance changes, AQI/UV, river trends, feed failures, daylight-saving changes,
-phone/tablet/desktop widths, rapid location changes and repeated refresh/chart work. It also checks
+phone/tablet/desktop widths, rapid location changes and repeated refresh/chart work. Freshness
+checks cover full and partial outages, request timeouts, saved-view TTLs and per-feed verification.
+Weather timing is checked in Chicago, UTC, Los Angeles and Tokyo browser timezones, including UV
+samples across both daylight-saving transitions. It also checks
 2,000 seeded accumulation cases against a separate oracle. The fixture records its source URLs
 and retrieval time; extreme scenarios are synthetic. Maps exercise their unavailable fallbacks,
 so this suite does not verify live tiles, animations or browser-specific rendering outside Chromium.
@@ -145,17 +148,26 @@ The full design rationale — what each decision replaced, and why — lives in
   radar and satellite stack on one Leaflet map; the loop targets a 60-minute span, not a sweep
   count; and a dead tile layer is detected per layer so it can never read as clear skies.
 - **Every loader owns its failure.** Each degrades to an official link or to silence; one dead
-  NOAA service must never blank a sibling card.
+  NOAA service must never blank a sibling card. Per-feed labels distinguish validated checks,
+  partial results, overdue checks and unavailable data. Source timestamps stay separate from
+  check times. JSON requests time out after 20 seconds.
+- **Weather uses Central Time.** Clocks, alert windows, briefings, UV, sunrise/sunset and climate
+  dates use `America/Chicago`, regardless of the viewer’s timezone. Calendar-only NOAA/ACIS
+  product dates retain their stated day; daylight-saving changes never shorten a climate day.
 - **Location generations.** Every location-scoped fetch checks `fresh()` before writing to the
   DOM, so one town's numbers can never appear under another town's label.
 - **Nothing unverified is printed.** Sample-size gates, missing-day checks, borrowed figures
   attributed by name. Suppression beats false precision.
-- **Instant paint.** Return visits paint from a `localStorage` snapshot before live data refreshes;
-  reshaping a card's DOM means bumping `SNAP_KEY`.
+- **Instant paint.** Return visits paint eligible forecast/context cards from a `localStorage`
+  snapshot before live data refreshes. Each fragment keeps its original successful-check time;
+  saving again does not renew its TTL. Alerts, current observations and short-fused discussions
+  are fetched live. Saved labels persist until their own feed is verified or cleared. Reshaping
+  a card’s DOM or freshness metadata means bumping `SNAP_KEY`.
 
-**Adding a card** means touching five places: the markup, the `RANK` map in `layoutMasonry`'s
-`tier()`, `SNAP_PARTS`, the `SCHED` table, and `clearLocationUI`/`resetLocationState`. **Adding a
-location-scoped loader** means a sixth, the `jobs` array inside `setLocation()` — the reasons are
+**Adding a card** means registering its feed in `FEEDS` and marking validated outcomes with
+`feedUpdate()`, plus touching the markup, the `RANK` map in `layoutMasonry`’s `tier()`, `SNAP_PARTS`,
+the `SCHED` table, and `clearLocationUI`/`resetLocationState`. **Adding a location-scoped loader**
+also means updating the `jobs` array inside `setLocation()` — the reasons are
 in [`DESIGN.md`](DESIGN.md#adding-a-card-adding-a-loader).
 
 ## Known gaps

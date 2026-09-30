@@ -326,7 +326,11 @@
   select:hover,button:hover{border-color:var(--accent)}
   .refresh-btn{display:flex;align-items:center;gap:7px}
   .dot{width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 8px var(--good)}
-  .dot.stale{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+  .dot[data-state="loading"]{background:var(--muted);box-shadow:none}
+  .dot[data-state="partial"]{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+  .dot.stale{background:var(--danger);box-shadow:0 0 8px var(--danger)}
+  .feed-status{font-size:var(--fs-xs);line-height:1.5;color:var(--muted);margin-top:5px;overflow-wrap:anywhere}
+  .feed-status[data-state="unavailable"],.feed-status[data-state="stale"],.feed-status[data-state="saved"],.feed-status[data-state="partial"]{color:var(--warn)}
 
   .grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px;align-items:start}
   /* First-paint entrance. Deliberately shallow and short — the point is that the page assembles
@@ -1771,7 +1775,7 @@
   </div>
   <div class="header-right">
     <button class="refresh-btn" id="refresh" title="Refresh everything now">
-      <span class="dot" id="statusDot"></span><span id="refreshLabel">Refresh</span>
+      <span class="dot" id="statusDot" data-state="loading"></span><span id="refreshLabel">Refresh</span>
     </button>
     <button id="themeBtn" title="Theme: auto (tap to change)" aria-label="Toggle light/dark theme"><svg class="ic" aria-hidden="true"><use href="#i-theme-auto"/></svg></button>
     <div class="clock">
@@ -2130,14 +2134,126 @@ var LD = {"Accept":"application/ld+json"};
 var current = DEFAULT_LOC;
 
 /* ============ HELPERS ============ */
-function getJSON(url, headers, signal){
-  var opt={headers:headers||{}};
-  if(signal) opt.signal=signal;   // pass locSignal() to make a fetch cancellable on location change
-  return fetch(url,opt).then(function(r){
-    if(!r.ok) throw new Error(url+" "+r.status);
-    NET_OK=true;              // at least one feed answered → we're genuinely online
+var WEATHER_TZ="America/Chicago";
+var WEATHER_PARTS=new Intl.DateTimeFormat("en-US",{timeZone:WEATHER_TZ,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",hourCycle:"h23"});
+function weatherParts(value){
+  var d=value==null?new Date():new Date(value), p={};
+  WEATHER_PARTS.formatToParts(d).forEach(function(v){ if(v.type!=="literal") p[v.type]=Number(v.value); });
+  p.month--; p.key=p.year+"-"+("0"+(p.month+1)).slice(-2)+"-"+("0"+p.day).slice(-2);
+  return p;
+}
+function weatherTime(value,options){
+  return new Date(value).toLocaleString("en-US",Object.assign({timeZone:WEATHER_TZ},options));
+}
+/* Calendar-only ACIS dates are carried at UTC noon and advanced in UTC. They are not instants
+   to convert into the viewer's timezone, and a calendar day must stay 24 hours across DST. */
+function calendarDate(key){
+  var p=String(key).split("-");
+  return new Date(Date.UTC(+p[0],+p[1]-1,+p[2],12));
+}
+function weatherDay(value){ return calendarDate(weatherParts(value).key); }
+function requestJSON(url,options,signal){
+  var ctl=new AbortController(), timedOut=false;
+  function abort(){ ctl.abort(); }
+  if(signal){ if(signal.aborted) abort(); else signal.addEventListener("abort",abort,{once:true}); }
+  var timer=setTimeout(function(){ timedOut=true; ctl.abort(); },20000);
+  return fetch(url,Object.assign({},options,{signal:ctl.signal})).then(function(r){
+    if(!r.ok) throw new Error("Weather service returned "+r.status);
     return r.json();
+  }).catch(function(e){
+    if(timedOut){ var err=new Error("Weather request timed out"); err.name="TimeoutError"; throw err; }
+    throw e;
+  }).finally(function(){ clearTimeout(timer); if(signal) signal.removeEventListener("abort",abort); });
+}
+function getJSON(url, headers, signal){
+  return requestJSON(url,{headers:headers||{}},signal);
+}
+/* A successful HTTP request is not a successful weather check. Loaders mark these only after
+   validating their own payloads. Source timestamps and successful-check times stay separate. */
+var FEEDS={
+  alerts:{label:"Alerts",card:"alertsCard",age:2*60000,local:true},
+  current:{label:"Observation",card:"currentCard",age:20*60000,local:true},
+  daily:{label:"Daily forecast",card:"forecastCard",age:60*60000,local:true},
+  hourly:{label:"Hourly forecast",card:"h24Card",age:60*60000,local:true},
+  grid:{label:"Amounts / gusts",card:"h24Card",age:60*60000,local:true},
+  aqi:{label:"Air quality",card:"currentCard",age:40*60000,local:true},
+  uv:{label:"UV",card:"currentCard",age:120*60000,local:true},
+  risk:{label:"Risk outlooks",card:"riskCard",age:60*60000,local:true},
+  mcd:{label:"Storm discussions",card:"riskCard",age:10*60000,local:true},
+  cpc:{label:"Week-ahead outlooks",card:"cpcCard",age:120*60000,local:true},
+  hazards:{label:"Hazards outlook",card:"hazardsCard",age:120*60000,local:true},
+  drought:{label:"Drought",card:"droughtCard",age:12*3600000,local:true},
+  rivers:{label:"River gauges",card:"riversCard",age:30*60000},
+  afd:{label:"NWS discussion",card:"afdCard",age:60*60000},
+  climate:{label:"Climate",card:"climateCard",age:12*3600000,local:true},
+  context:{label:"Records",card:"climateCard",age:12*3600000,local:true},
+  stations:{label:"Station plot",card:"obsCard",age:24*60000}
+};
+var feedChecks={}, savedParts={}, lastAttempt=0;
+Object.keys(FEEDS).forEach(function(k){ feedChecks[k]={status:"loading",successAt:0,issuedAt:0,saved:false}; });
+function feedState(check,now,maxAge){
+  if(!check) return "loading";
+  if(check.saved) return "saved";
+  if(check.status==="ready"||check.status==="partial"){
+    if(!check.successAt||now<check.successAt||now-check.successAt>maxAge) return "stale";
+  }
+  return check.status;
+}
+function feedUpdate(key,status,issued){
+  var c=feedChecks[key]; if(!c) return;
+  // Remove restored fragments before their loader paints its failure state. A saved normal must
+  // never survive underneath an unavailable feed, or acquire a new timestamp on the next save.
+  Object.keys(savedParts).forEach(function(id){
+    if(savedParts[id]!==key) return;
+    if(status==="unavailable"){
+      var el=document.getElementById(id);
+      if(el) el.innerHTML="";
+    }
+    delete savedParts[id];
   });
+  c.status=status; c.saved=false;
+  if(status==="ready"||status==="partial"){
+    c.successAt=Date.now();
+    var t=typeof issued==="number"?issued:Date.parse(issued||"");
+    c.issuedAt=isFinite(t)&&t>0&&t<=Date.now()+10*60000?t:0;
+  }
+  freshnessCheck();
+}
+function freshnessCheck(){
+  var now=Date.now(), counts={ready:0,partial:0,unavailable:0,stale:0,saved:0,loading:0};
+  Object.keys(FEEDS).forEach(function(k){
+    var cfg=FEEDS[k], c=feedChecks[k], state=feedState(c,now,cfg.age);
+    counts[state]++;
+    if(!cfg.card) return;
+    var card=document.getElementById(cfg.card); if(!card) return;
+    var el=document.getElementById("fresh-"+k);
+    if(!el){
+      el=document.createElement("div"); el.id="fresh-"+k; el.className="feed-status";
+      card.appendChild(el);
+    }
+    var text=cfg.label+": ";
+    if(state==="ready"||state==="partial") text+=(state==="partial"?"Some data unavailable · ":"")+"checked "+weatherTime(c.successAt,{hour:"numeric",minute:"2-digit"})+" CT";
+    else text+=({loading:"Checking…",unavailable:"Unavailable",stale:"Check overdue",saved:"Saved data · awaiting verification"}[state]||"Unavailable")
+      +(c.successAt?" · last successful check "+weatherTime(c.successAt,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"");
+    if(c.issuedAt&&(state==="ready"||state==="partial"||state==="saved")) text+=" · source "+weatherTime(c.issuedAt,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT";
+    el.setAttribute("data-state",state);
+    if(el.textContent!==text) el.textContent=text;
+  });
+  var good=counts.ready+counts.partial, bad=counts.unavailable+counts.stale;
+  var summary=good?good+" data feeds checked"+(bad?" · "+bad+" unavailable or overdue":"")
+    +(counts.partial?" · some results incomplete":"")
+    +(counts.loading?" · "+counts.loading+" checking":"")
+    +(counts.saved?" · "+counts.saved+" showing saved data":"")
+    :(counts.saved?"Showing saved data; current weather is unverified":counts.loading?"Checking weather services…":"Weather data unavailable — no current checks succeeded");
+  var dot=document.getElementById("statusDot"), btn=document.getElementById("refresh");
+  var state=!good?(counts.loading?"loading":"unavailable"):(bad||counts.partial||counts.saved||counts.loading?"partial":"ready");
+  if(dot){ dot.setAttribute("data-state",state); dot.classList.toggle("stale",state==="unavailable"); }
+  var alert=feedChecks.alerts, alertState=feedState(alert,now,FEEDS.alerts.age);
+  var notice=summary+". Alerts: "+({ready:"checked",partial:"some data unavailable",stale:"check overdue",saved:"saved and unverified",loading:"checking",unavailable:"unavailable"}[alertState]||"unavailable")+(alert.successAt?", last successful check "+weatherTime(alert.successAt,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"")+".";
+  if(btn){ btn.title=notice; btn.setAttribute("aria-label","Refresh weather data. "+notice); }
+  var footer=document.getElementById("lastUpdate");
+  if(footer) footer.textContent=summary+(lastAttempt?" · last refresh attempted "+weatherTime(lastAttempt,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"")+". All weather times are Central Time (CT).";
+  if(typeof resolveSnapBar==="function") resolveSnapBar();
 }
 function isAbort(e){ return !!e && e.name==="AbortError"; }
 function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
@@ -2408,10 +2524,15 @@ function loadForecastGrid(){
   }).then(function(d){
     if(!fresh()) return;
     if(!d||!d.properties) throw new Error("Invalid forecast grid");
-    forecastGrid={status:"ready",properties:d.properties,gusts:gridSeries(d.properties.windGust,"wind")};
+    var gusts=gridSeries(d.properties.windGust,"wind"), amounts=gridSeries(d.properties.quantitativePrecipitation,"amount");
+    if(!gusts.some(function(v){return v.value!=null;})&&!amounts.some(function(v){return v.value!=null;})) throw new Error("Grid measurements unavailable");
+    var complete=precipEventSummary(d.properties,Date.now(),72).complete&&gusts.length>0;
+    feedUpdate("grid",complete?"ready":"partial",d.properties.updateTime);
+    forecastGrid={status:"ready",properties:d.properties,gusts:gusts};
     renderPrecipEvents(); renderHourly24();
   }).catch(function(){
     if(!fresh()) return;
+    feedUpdate("grid","unavailable");
     forecastGrid={status:"unavailable",properties:null,gusts:[]};
     renderPrecipEvents(); renderHourly24();
   });
@@ -3227,7 +3348,7 @@ function syncRadarBadge(){
   }
   var i=Math.max(0,Math.min(radarFrames.length-1,radarIdx));
   var t=new Date(radarFrames[i].time), latest=(i===radarFrames.length-1);
-  var hhmm=t.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
+  var hhmm=t.toLocaleTimeString("en-US", {timeZone:WEATHER_TZ,hour:"numeric",minute:"2-digit"});
   var age=Math.round((Date.now()-new Date(radarFrames[radarFrames.length-1].time))/60000);
   if(latest && age>=RADAR_STALE_MIN){
     // The dangerous case: a real sweep, drawn correctly, quietly an hour out of date.
@@ -3905,12 +4026,17 @@ function loadForecast(){
     return Promise.all([getJSON(fUrl,HEADERS,locSignal()), getJSON(hUrl,HEADERS,locSignal()).catch(function(){return null;})]).then(function(res){
       if(!fresh()) return;   // user moved while this was in flight
       var f=res[0], h=res[1];
+      if(!f||!f.properties||!Array.isArray(f.properties.periods)||!f.properties.periods.length) throw new Error("Invalid daily forecast");
       // A malformed or empty HTTP 200 hourly response is still a failed enhancer.
       // Keep the healthy daily forecast and clear any previous hourly chart.
       if(h&&h.properties&&Array.isArray(h.properties.periods)){
-        h.properties.periods=h.properties.periods.filter(function(p){return !!p&&typeof p==="object";});
-        if(!h.properties.periods.length) h=null;
+        h.properties.periods=h.properties.periods.filter(function(p){return !!p&&p.temperature!=null&&isFinite(p.temperature)&&isFinite(Date.parse(p.startTime))&&Date.parse(p.endTime)>Date.parse(p.startTime);});
+        // Keep valid source periods for daily summaries; the chart clips elapsed hours itself.
+        // A response containing only elapsed periods cannot verify the current forecast.
+        if(!h.properties.periods.some(function(p){return Date.parse(p.endTime)>Date.now();})) h=null;
       }else h=null;
+      feedUpdate("daily","ready",f.properties.updateTime||f.properties.updated||f.properties.generatedAt);
+      feedUpdate("hourly",h?"ready":"unavailable",h&&(h.properties.updateTime||h.properties.updated||h.properties.generatedAt));
       var hByDate=h?hourlyByDate(h.properties.periods):{};
       var ps=f.properties.periods.slice(0,15);
       /* Pair day + night periods into single calendar days — seven visible rows, capped ON PURPOSE.
@@ -4093,6 +4219,7 @@ function loadForecast(){
     });
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
+    feedUpdate("daily","unavailable"); feedUpdate("hourly","unavailable");
     smart.days=[]; smart.weekDays=[]; smart.hourly=[]; smart.hourlyAll=[];
     loadForecast._paint=null; renderHourly24._hrs=null;
     climate.fcHi=null; climate.fcLo=null; climate.fcHiLabel="";
@@ -4168,6 +4295,7 @@ function loadCurrent(){
       return loadCurrent();
     }).catch(function(e){
       if(isAbort(e)||!fresh()) return;
+      feedUpdate("current","unavailable");
       if(stEl) stEl.textContent="\u2014";
       if(el) el.innerHTML='<div class="empty">Couldn\'t find a nearby reporting station. This will retry automatically.</div>';
     });
@@ -4175,6 +4303,7 @@ function loadCurrent(){
   return currentObservation().then(function(result){
     if(!fresh()) return;   // user moved while this was in flight
     if(!result.observation){
+      feedUpdate("current","unavailable");
       stEl.textContent=result.station||"—";
       heroNow.temp=null;
       el.innerHTML='<div class="empty" role="status"><b>Current observation unavailable.</b> '
@@ -4184,6 +4313,7 @@ function loadCurrent(){
     }
     if(result.station!==current.station){ current.station=result.station; saveLoc(current); }
     var o=result.observation;
+    feedUpdate("current","ready",o.properties.timestamp);
     var p=o.properties, c2f=function(c){return c==null?null:Math.round(c*9/5+32);};
     var temp=c2f(p.temperature&&p.temperature.value), dew=c2f(p.dewpoint&&p.dewpoint.value);
     var rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?Math.round(p.relativeHumidity.value):null;
@@ -4197,7 +4327,7 @@ function loadCurrent(){
     var desc=p.textDescription||"—", now=new Date();
     // Real sunrise/sunset for the icon's day/night variant (polar-edge fallback: 7am–7pm)
     var st=sunTimes(current.lat,current.lon,now);
-    var day=(st.rise&&st.set)?(now>=st.rise&&now<=st.set):(now.getHours()>=7&&now.getHours()<19);
+    var day=(st.rise&&st.set)?(now>=st.rise&&now<=st.set):(weatherParts(now).hour>=7&&weatherParts(now).hour<19);
     // The code stays — the audience that reads this page likes it — but it stops being the only
     // thing said. A station we have no name for gets no title rather than an invented one.
     stEl.textContent=current.station;
@@ -4245,6 +4375,7 @@ function loadCurrent(){
     if(typeof renderAqiMini==="function") renderAqiMini();   // re-fill the AQI line after the re-render
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
+    feedUpdate("current","unavailable");
     stEl.textContent="—";
     el.innerHTML='<div class="empty">No current obs from '+current.station+'. Station may be offline.</div>';
   });
@@ -4358,7 +4489,8 @@ function loadAlerts(){
   return Promise.all([getJSON(API+"/alerts/active?area=MO,IL",HEADERS), ensureUserZones()]).then(function(res){
     var data=res[0];
     if(!fresh()) return;   // user moved while this was in flight
-    if(typeof markFresh==="function") markFresh();  // alerts are the safety-critical feed — only THEY count as "fresh"
+    if(!data||!Array.isArray(data.features)||!data.features.every(function(f){return f&&f.properties&&typeof f.properties.event==="string";})) throw new Error("Invalid alerts");
+    feedUpdate("alerts",zonesResolved()?"ready":"partial",data.updated);
     loadWarnPolygons(data.features||[]);  // one fetch feeds both list and map
     loadWatchPolygons(data.features||[]); // …and decides whether the watch fills are worth fetching
     function isLSX(f){
@@ -4543,8 +4675,8 @@ function loadAlerts(){
       var fam=eventFamily(g.ev), fcfg=FAMILY_CFG[fam]||FAMILY_CFG.convective;
       var bp=(g.best&&g.best.properties)||{};
       var mg=!!(g.phases&&g.phases.length>1);   // a folded card holding several products
-      var endStr=g.latest?new Date(g.latest).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"\u2014";
-      var startStr=g.earliest?new Date(g.earliest).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"";
+      var endStr=g.latest?new Date(g.latest).toLocaleString("en-US", {timeZone:WEATHER_TZ,weekday:"short",hour:"numeric",minute:"2-digit"}):"\u2014";
+      var startStr=g.earliest?new Date(g.earliest).toLocaleString("en-US", {timeZone:WEATHER_TZ,weekday:"short",hour:"numeric",minute:"2-digit"}):"";
       // Elapsed-vs-remaining bar for the alert window; a window that hasn't opened yet is "pending".
       // Only whether the window is a measurable span is decided here — how far along it is changes
       // by the second, so the fill is left to tickCountdowns and kept out of the markup.
@@ -4568,8 +4700,8 @@ function loadAlerts(){
       if(mg){
         phasesHTML='<div class="a2-phases">'+g.phases.map(function(ph){
           var pPend=!!(ph.earliest&&Date.now()<ph.earliest);
-          var pe=ph.latest?new Date(ph.latest).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"—";
-          var ps=ph.earliest?new Date(ph.earliest).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"";
+          var pe=ph.latest?new Date(ph.latest).toLocaleString("en-US", {timeZone:WEATHER_TZ,weekday:"short",hour:"numeric",minute:"2-digit"}):"—";
+          var ps=ph.earliest?new Date(ph.earliest).toLocaleString("en-US", {timeZone:WEATHER_TZ,weekday:"short",hour:"numeric",minute:"2-digit"}):"";
           return '<div class="a2-ph ph-'+ph.lv.k+'"><span class="phd"></span><span class="phn">'+esc(ph.ev)+'</span>'
             +'<span class="pht">'+esc(pPend&&ps?ps+" – "+pe:"until "+pe)+'</span></div>';
         }).join("")+'</div>';
@@ -4597,14 +4729,14 @@ function loadAlerts(){
       if(mg){
         // the per-product ledger: whose counties, until when \u2014 the facts the fold took off the top row
         detail+='<div class="a2-seg">'+g.phases.map(function(ph){
-          var pe=ph.latest?new Date(ph.latest).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"\u2014";
+          var pe=ph.latest?new Date(ph.latest).toLocaleString("en-US", {timeZone:WEATHER_TZ,weekday:"short",hour:"numeric",minute:"2-digit"}):"\u2014";
           return '<b>'+esc(ph.ev)+'</b> \u2014 '+ph.counties.length+(ph.counties.length===1?" county":" counties")
             +' in '+ph.segs.length+(ph.segs.length===1?" zone group":" zone groups")+', ends '+esc(pe);
         }).join("<br>")+'</div>';
       } else if(g.segs.length>1){
         detail+='<div class="a2-seg"><b>'+g.segs.length+' zone groups:</b> '+g.segs.map(function(f){
           var p2=f.properties, e=p2.ends||p2.expires;
-          var es=e?new Date(e).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"\u2014";
+          var es=e?new Date(e).toLocaleString("en-US", {timeZone:WEATHER_TZ,weekday:"short",hour:"numeric",minute:"2-digit"}):"\u2014";
           var ar=(p2.areaDesc||"").split(";").length;
           return esc(String(ar))+" counties until "+esc(es);
         }).join(" \u00b7 ")+'</div>';
@@ -4653,8 +4785,8 @@ function loadAlerts(){
          put a wrong time next to the warning's name; the union stays on the time bar inside. */
       var hEnd=mg?g.phases[0].latest:g.latest, hStart=mg?g.phases[0].earliest:g.earliest;
       var hPend=!!(hStart&&Date.now()<hStart);
-      var hWhen=hPend?("from "+new Date(hStart).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}))
-                     :(hEnd?"until "+new Date(hEnd).toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"}):"");
+      var hWhen=hPend?("from "+new Date(hStart).toLocaleString("en-US", {timeZone:WEATHER_TZ,weekday:"short",hour:"numeric",minute:"2-digit"}))
+                     :(hEnd?"until "+new Date(hEnd).toLocaleString("en-US", {timeZone:WEATHER_TZ,weekday:"short",hour:"numeric",minute:"2-digit"}):"");
       // Second line: the ACTION, because the first line already named the hazard. Products with
       // no instruction (statements, mostly) fall back to the What text, then to the prose.
       var sub=firstSentence(bp.instruction);
@@ -4737,7 +4869,8 @@ function loadAlerts(){
     }
     paintAlerts(el,calmHTML+mineHTML+elseHTML);
   }).catch(function(){
-    if(!fresh()) return;   // an old location's failed request must not replace the new alert list
+    if(!fresh()) return;
+    feedUpdate("alerts","unavailable");   // an old location's failed request must not replace the new alert list
     callLocalAlert=null; callAlertGroups=[];
     if(typeof renderTheCall==="function") renderTheCall();
     card.classList.remove("calm");
@@ -4801,8 +4934,8 @@ function crestWhen(iso){
   // Beyond ~5 days a bare weekday is ambiguous (today is Saturday; so is next Saturday) and an
   // hour is false precision on long-range guidance — give the date instead.
   return (days>5)
-    ? d.toLocaleDateString([], {weekday:"short",month:"short",day:"numeric"})
-    : d.toLocaleString([], {weekday:"short",hour:"numeric"});
+    ? d.toLocaleDateString("en-US", {timeZone:WEATHER_TZ,weekday:"short",month:"short",day:"numeric"})
+    : d.toLocaleString("en-US", {timeZone:WEATHER_TZ,weekday:"short",hour:"numeric"});
 }
 function crestInfo(fcJson,now){
   if(!fcJson) return null;
@@ -4834,7 +4967,7 @@ function riverLinkOnly(r){
     +'<span class="rname"><span class="rn-top">'+ic("flood")+esc(r.name)+'</span></span><span class="rmeta"><span class="rval" style="color:var(--muted);font-size:13px">View ↗</span></span></a>';
 }
 function loadRivers(){
-  var el=document.getElementById("rivers");
+  var el=document.getElementById("rivers"), known=0;
   var jobs=RIVERS.map(function(r){
     var base="https://api.water.noaa.gov/nwps/v1/gauges/"+r.id;
     // the forecast series is a separate endpoint; a gauge without one (Eureka today) just loses
@@ -4843,7 +4976,8 @@ function loadRivers(){
     .then(function(res){
       var d=res[0], fcSeries=res[1];
       var ob=(d.status&&d.status.observed)||{}, val=ob.primary, unit=ob.primaryUnit||"ft", info=catInfo(ob.floodCategory);
-      if(val==null) return riverLinkOnly(r);
+      if(typeof val!=="number"||!isFinite(val)||val<=-500) return riverLinkOnly(r);
+      known++;
       // Context: how much headroom is left before action stage, and which way it's heading
       var sub=[];
       var cats=(d.flood&&d.flood.categories)||{};
@@ -4873,7 +5007,7 @@ function loadRivers(){
         +'<span class="rcat">'+info.label+'</span></span></a>';
     }).catch(function(){return riverLinkOnly(r);});
   });
-  return Promise.all(jobs).then(function(rows){el.innerHTML=rows.join("");});
+  return Promise.all(jobs).then(function(rows){feedUpdate("rivers",known===RIVERS.length?"ready":known?"partial":"unavailable");el.innerHTML=rows.join("");});
 }
 
 /* ============ AQI ============ */
@@ -4907,10 +5041,12 @@ function renderAqiMini(){
 function loadAqi(){
   var fresh=locGuard();
   var el=document.getElementById("aqi"), card=document.getElementById("aqiCard");
-  var url="https://air-quality-api.open-meteo.com/v1/air-quality?latitude="+current.lat+"&longitude="+current.lon+"&current=us_aqi,pm2_5,pm10";
+  var url="https://air-quality-api.open-meteo.com/v1/air-quality?latitude="+current.lat+"&longitude="+current.lon+"&current=us_aqi,pm2_5,pm10&timeformat=unixtime";
   return getJSON(url,null,locSignal()).then(function(d){
     if(!fresh()) return;   // user moved while this was in flight
     var cur=d.current||{}, aqi=cur.us_aqi, info=aqiInfo(aqi);
+    if(typeof aqi!=="number"||!isFinite(aqi)||aqi<0) throw new Error("Invalid AQI");
+    feedUpdate("aqi","ready",typeof cur.time==="number"?cur.time*1000:null);
     aqiState={val:(aqi!=null)?aqi:null, pm:(cur.pm2_5!=null)?Math.round(cur.pm2_5):null, err:false};
     // The dedicated card only appears when air quality is a story: AQI > 100 ("Unhealthy for
     // Sensitive Groups" and worse — EPA's literal "Hazardous" is 301+, far too rare a trigger).
@@ -4928,6 +5064,7 @@ function loadAqi(){
     if(typeof renderTheCall==="function") renderTheCall();   // AQI can add/remove a verdict pill
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
+    feedUpdate("aqi","unavailable");
     aqiState={val:null, pm:null, err:true};
     if(card) card.classList.remove("show");
     if(el) el.innerHTML="";
@@ -5217,6 +5354,11 @@ function loadSpc(){
     /* Day 1 AND day 2 for the Bottom Line: the matrix below paints day 2 and throws it away,
        but tomorrow's outlook is exactly what the card's 24 hourly periods cannot see. WSSI is
        Bottom Line-only — a Winter column in the matrix would sit empty most of the year. */
+    var known=r.slice(0,11).filter(function(v){return v!=null;}).length;
+    (r[11]||[]).forEach(function(day){
+      if(day) known+=day.values.filter(function(v){return v!=null;}).length;
+    });
+    feedUpdate("risk",known===0?"unavailable":known===17?"ready":"partial");
     callRisk={spc:[r[0],r[1]], ero:[r[3],r[4]], fire:[r[6],r[7]],
               wssi:[r[9],r[10]]};
     var days=["Today","Tomorrow","Day 3"];
@@ -5233,6 +5375,7 @@ function loadSpc(){
     if(typeof renderTheCall==="function") renderTheCall();   // outlook levels can add/remove a verdict pill
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
+    feedUpdate("risk","unavailable");
     el.innerHTML='<div class="empty">Risk outlooks unavailable. <a href="https://www.spc.noaa.gov/products/outlook/day1otlk.html" target="_blank" rel="noopener">Open SPC \u2197</a> \u00b7 <a href="https://www.spc.noaa.gov/products/fire_wx/" target="_blank" rel="noopener">Fire \u2197</a></div>';
     callRisk=null;                                           // never let a stale outlook keep a pill alive
     renderSpcThreats(null);
@@ -5290,9 +5433,9 @@ function mcdPill(d){
 function mcdUntil(end){
   if(!end) return "";
   var d=new Date(end);
-  var t=d.toLocaleTimeString([],{hour:"numeric",minute:"2-digit"});
+  var t=d.toLocaleTimeString("en-US", {timeZone:WEATHER_TZ,hour:"numeric",minute:"2-digit"});
   // an MD can run past local midnight; a bare "1:15 AM" would read as nineteen hours ago
-  if(d.toDateString()!==new Date().toDateString()) t=d.toLocaleDateString([],{weekday:"short"})+" "+t;
+  if(weatherParts(d).key!==weatherParts().key) t=d.toLocaleDateString("en-US", {timeZone:WEATHER_TZ,weekday:"short"})+" "+t;
   return "until "+t;
 }
 var lastMcds=[], mcdLayer=null;
@@ -5353,11 +5496,12 @@ function loadMcd(){
        contribute nothing — but in a national outbreak they inflate the count that decides how
        many texts to fetch, and a nearby MD's text crowded past the cap by ten Plains MDs is a
        silent false negative on a severe-weather surface. geomTouchesEnv only ever over-keeps. */
-    var feats=((fc&&fc.features)||[]).filter(function(f){
+    if(!fc||!Array.isArray(fc.features)||fc.error) throw new Error("Invalid storm discussions");
+    var feats=fc.features.filter(function(f){
       return f.geometry&&/MD\s*\d+/i.test((f.properties&&f.properties.name)||"")
         &&geomTouchesEnv(f.geometry,WWA_ENV);
     });
-    if(!feats.length){ if(fresh()) renderMcd([]); return; }
+    if(!feats.length){ if(fresh()){ feedUpdate("mcd","ready"); renderMcd([]); } return; }
     /* The polygons say which MDs are ACTIVE; only the text products know who they're FOR. The
        product list is newest-first but NATIONAL, so a regional MD's text can sit arbitrarily deep
        when the Plains are issuing over it — no fixed fetch count is safe. Walk the list in small
@@ -5394,10 +5538,12 @@ function loadMcd(){
         if(end&&end<=Date.now()) return;   // the service can hold an expired MD briefly past its window
         out.push({num:num,geom:f.geometry,hits:hits,end:end,d:d});
       });
+      feedUpdate("mcd",Object.keys(need).every(function(n){return byNum[n];})?"ready":"partial");
       renderMcd(out);
     });
   }).catch(function(e){
     if(isAbort(e)||!fresh()) return;
+    feedUpdate("mcd","unavailable");
     /* A failed refresh must not read as "the discussion ended": keep what's already painted until
        its own valid time retires it. (An MD whose window never parsed rides until a fetch succeeds.) */
     renderMcd(lastMcds.filter(function(m){ return !m.end||m.end>Date.now(); }));
@@ -5408,24 +5554,27 @@ function loadMcd(){
 var CPC_610="https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/cpc_6_10_day_outlk/MapServer/";
 var CPC_814="https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/cpc_8_14_day_outlk/MapServer/";
 function cpcParse(d){
+  if(!d||d.error||!Array.isArray(d.features)) return null;
+  if(!d.features.length) return {cat:"Equal chances",prob:null};
   var best=null;
   (d.features||[]).forEach(function(f){
     var at=f.attributes||{}, cat=null, prob=null;
     for(var k in at){
       var kl=k.toLowerCase();
       if(kl==="cat"||kl==="category") cat=String(at[k]);
-      if(kl==="prob"||kl==="probability") prob=+at[k];
+      if((kl==="prob"||kl==="probability")&&at[k]!=null) prob=+at[k];
     }
-    if(cat&&(best==null||(prob||0)>(best.prob||0))) best={cat:cat,prob:prob};
+    if(cat&&/above|below|normal|equal|^EC$|^[ABN]$/i.test(cat)&&(best==null||(prob||0)>(best.prob||0))) best={cat:cat,prob:prob};
   });
   return best;
 }
 function cpcPill(kind,r){
   // kind: "t" temp, "p" precip
-  if(!r||!r.cat||/normal/i.test(r.cat)){
-    return '<span class="cpc-pill" style="background:var(--inset);color:var(--muted)">Near normal / equal chances</span>';
+  if(!r||!r.cat) return '<span class="cpc-pill" style="background:var(--inset);color:var(--muted)">Unavailable</span>';
+  if(!/above|below|^[AB]$/i.test(r.cat)&&/normal|equal|^EC$|^N$/i.test(r.cat)){
+    return '<span class="cpc-pill" style="background:var(--inset);color:var(--muted)">'+(/equal|^EC$/i.test(r.cat)?"Equal chances":"Near normal")+'</span>';
   }
-  var above=/above/i.test(r.cat);
+  var above=/above|^A$/i.test(r.cat);
   var label, bg;
   if(kind==="t"){ label=above?"Leaning warm":"Leaning cool"; bg=above?"#ff7a2f":"#4aa3ff"; }
   else{ label=above?"Leaning wet":"Leaning dry"; bg=above?"#37b06f":"#c9a15a"; }
@@ -5438,7 +5587,10 @@ function loadCpc(){
   var jobs=[pointQuery(CPC_610,0),pointQuery(CPC_610,1),pointQuery(CPC_814,0),pointQuery(CPC_814,1)];
   return Promise.allSettled(jobs).then(function(rs){
     if(!fresh()) return;   // user moved while this was in flight
-    function val(i){ return rs[i].status==="fulfilled"?cpcParse(rs[i].value):null; }
+    var values=rs.map(function(r){return r.status==="fulfilled"?cpcParse(r.value):null;});
+    var known=values.filter(Boolean).length;
+    feedUpdate("cpc",known===4?"ready":known?"partial":"unavailable");
+    function val(i){ return values[i]; }
     el.innerHTML='<div class="cpc-grid">'
       +'<div class="cpc-item"><div class="k">6\u201310 Day \u00b7 Temp</div>'+cpcPill("t",val(0))+'</div>'
       +'<div class="cpc-item"><div class="k">6\u201310 Day \u00b7 Precip</div>'+cpcPill("p",val(1))+'</div>'
@@ -5447,6 +5599,7 @@ function loadCpc(){
       +'</div>';
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
+    feedUpdate("cpc","unavailable");
     el.innerHTML='<div class="empty">CPC outlooks unavailable. <a href="https://www.cpc.ncep.noaa.gov/products/predictions/610day/" target="_blank" rel="noopener">Open CPC \u2197</a></div>';
   });
 }
@@ -5494,6 +5647,8 @@ function loadDrought(){
     pointQuery(DROUGHT_OUTLK_URL,4,"outlook")
   ]).then(function(r){
     if(!fresh()) return;   // user moved while this was in flight
+    var known=r.filter(function(v){return v.status==="fulfilled";}).length;
+    feedUpdate("drought",known===3?"ready":known?"partial":"unavailable");
     // Now — U.S. Drought Monitor
     var nowEl=document.getElementById("drNow");
     if(nowEl){
@@ -5612,7 +5767,7 @@ function hazForecastNote(h){
   var mode=/heat|hot/.test(l)?"hi":(/cold|freeze|frost|chill/.test(l)?"lo":"");
   if(!mode) return "";
   function utcKey(ms){ var d=new Date(ms); return d.getUTCFullYear()*10000+(d.getUTCMonth()+1)*100+d.getUTCDate(); }
-  function locKey(iso){ var d=new Date(iso); return d.getFullYear()*10000+(d.getMonth()+1)*100+d.getDate(); }
+  function locKey(iso){ var d=weatherParts(iso); return d.year*10000+(d.month+1)*100+d.day; }
   var ks=utcKey(h.start), ke=utcKey(h.end), best=null;
   smart.days.forEach(function(d){
     var p=d.day||d.night; if(!p||!p.startTime) return;
@@ -5634,7 +5789,10 @@ function loadHazards(){
     if(!fresh()) return;   // user moved while this was in flight
     var d37=hazScan(all.slice(0,3));
     var d814=hazScan(all.slice(3,6));
-    function block(title,list){
+    var known=all.filter(function(r){return r.status==="fulfilled";}).length;
+    feedUpdate("hazards",known===6?"ready":known?"partial":"unavailable");
+    function block(title,list,complete){
+      if(!list.length&&!complete) return '<div class="hz-row"><span class="hz-when">'+title+'</span><span class="hz-none">Hazards data unavailable</span></div>';
       if(!list.length) return '<div class="hz-row hz-clear"><span class="hz-when">'+title+'</span><span class="hz-none">'+ic("check")+'No hazards flagged</span></div>';
       var notes=[];
       var chips=list.map(function(h){
@@ -5647,7 +5805,7 @@ function loadHazards(){
         +(notes.length?'<span class="hz-fc">'+esc(notes.join(" · "))+'</span>':'')
         +'</span></div>';
     }
-    el.innerHTML=block("Days 3–7",d37)+block("Days 8–14",d814);
+    el.innerHTML=block("Days 3–7",d37,all.slice(0,3).every(function(r){return r.status==="fulfilled";}))+block("Days 8–14",d814,all.slice(3,6).every(function(r){return r.status==="fulfilled";}));
     // issuance freshness: the newest file date across whatever layers answered
     var issued=0;
     all.forEach(function(rs){
@@ -5659,10 +5817,11 @@ function loadHazards(){
     });
     var cap=document.getElementById("hazIssued");
     if(cap) cap.textContent=issued
-      ?("issued "+new Date(issued).toLocaleDateString([], {weekday:"short"})+" · days 3–14")
+      ?("issued "+new Date(issued).toLocaleDateString("en-US", {timeZone:WEATHER_TZ,weekday:"short"})+" · days 3–14")
       :"days 3–14";
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
+    feedUpdate("hazards","unavailable");
     el.innerHTML='<div class="empty">Hazards outlook unavailable. <a href="https://www.wpc.ncep.noaa.gov/threats/threats.php" target="_blank" rel="noopener">Open WPC Hazards ↗</a></div>';
   });
 }
@@ -5680,12 +5839,11 @@ function acisNum(v){ // ACIS returns "M" (missing), "T" (trace), or a numeric st
 }
 function acisPost(call,params){
   // every ACIS call is scoped to a station or bbox derived from `current` — cancellable by definition
-  return fetch(ACIS+call,{
+  return requestJSON(ACIS+call,{
     method:"POST",
     headers:{"Content-Type":"application/x-www-form-urlencoded","Accept":"application/json"},
-    body:"params="+encodeURIComponent(JSON.stringify(params)),
-    signal:locSignal()
-  }).then(function(r){ if(!r.ok) throw new Error("acis "+r.status); return r.json(); });
+    body:"params="+encodeURIComponent(JSON.stringify(params))
+  },locSignal());
 }
 // Find the nearest station that actually reports TEMPERATURE (not a precip-only CoCoRaHS gauge).
 // Cache per rounded location; fall back to KSTL (St. Louis Lambert) if nothing suitable is found.
@@ -5703,7 +5861,7 @@ function climStation(lat,lon){
       var tempRange=dr[0];               // first elem requested was maxt
       if(!tempRange||!tempRange[1]) return;
       var endYr=parseInt(String(tempRange[1]).slice(0,4),10);
-      if(!endYr || (now.getFullYear()-endYr)>2) return;   // skip stale/discontinued temp stations
+      if(!endYr || (weatherParts(now).year-endYr)>2) return;   // skip stale/discontinued temp stations
       // score: closeness, but strongly prefer first-order (ICAO/WBAN) stations
       var dist=Math.sqrt(Math.pow(s.ll[0]-lon,2)+Math.pow(s.ll[1]-lat,2));
       var firstOrder=s.sids.some(function(x){var t=x.split(" ")[1];return t==="1"||t==="3";});
@@ -5764,12 +5922,12 @@ function renderVsNormal(){
 function climGapMax(periodDays,isSum){
   return isSum ? Math.max(2,Math.floor(0.05*periodDays)) : Math.max(3,Math.floor(0.25*periodDays));
 }
-function climPeriods(){
-  var n=new Date(), y=n.getFullYear();
-  var jul1=new Date(y,6,1); if(n<jul1) jul1=new Date(y-1,6,1);   // snow season starts Jul 1
-  return {mtd:n.getDate(),
-          ytd:Math.floor((n-new Date(y,0,1))/86400000)+1,
-          std:Math.floor((n-jul1)/86400000)+1};
+function climPeriods(date){
+  var p=weatherParts(date), n=calendarDate(p.key), y=p.year;
+  var jul1=calendarDate((p.month<6?y-1:y)+"-07-01");
+  return {mtd:p.day,
+          ytd:Math.round((n-calendarDate(y+"-01-01"))/86400000)+1,
+          std:Math.round((n-jul1)/86400000)+1};
 }
 /* Each departure arrives as [value, missingDays] thanks to add:"mcnt" — return the value with a
    verdict, so the caller can decide between using it, borrowing, or blanking. */
@@ -5799,7 +5957,7 @@ function loadClimate(){
     var st=sts[0], deep=sts[1];
     climate.station=st.sid; climate.stationName=st.name;
     var nameEl=document.getElementById("cnStation"); if(nameEl) nameEl.textContent=st.name||st.sid;
-    var showSnow=(function(){var m=new Date().getMonth();return m>=10||m<=3;})(); // Nov–Apr
+    var showSnow=(function(){var m=weatherParts().month;return m>=10||m<=3;})(); // Nov–Apr
     // add:"mcnt" makes each running departure come back as [departure, missing-day-count] so a
     // gappy station can't pass off a hole-riddled sum as a real anomaly (Mount Vernon: "-19.99""
     // year precip departure with 79 of the days simply missing)
@@ -5812,8 +5970,7 @@ function loadClimate(){
       {name:"pcpn",duration:"ytd",reduce:{reduce:"sum",add:"mcnt"},normal:"departure"}
     ];
     if(showSnow) elems.push({name:"snow",duration:"std",season_start:"07-01",reduce:{reduce:"sum",add:"mcnt"},normal:"departure"});
-    var _d=new Date();
-    var today=_d.getFullYear()+"-"+("0"+(_d.getMonth()+1)).slice(-2)+"-"+("0"+_d.getDate()).slice(-2); // LOCAL date (toISOString is UTC → wrong in the evening)
+    var today=weatherParts().key; // the station calendar date, even for a viewer elsewhere
     var per=climPeriods();
     function ask(sid){
       return acisPost("StnData",{sid:sid, sdate:today, edate:today, elems:elems, meta:["name"]}).then(function(r){
@@ -5823,6 +5980,7 @@ function loadClimate(){
       });
     }
     function paint(c,borrowedFrom){
+      feedUpdate("climate",climAllOK(c,showSnow)?"ready":"partial");
       var cells=""
         +'<div class="cn-cell"><span class="cn-lbl">Temp \u00b7 month</span>'+fmtDep(c.t1.ok?c.t1.v:null,"\u00b0")+'</div>'
         +'<div class="cn-cell"><span class="cn-lbl">Temp \u00b7 year</span>'+fmtDep(c.t2.ok?c.t2.v:null,"\u00b0")+'</div>'
@@ -5859,12 +6017,14 @@ function loadClimate(){
     });
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
+    feedUpdate("climate","unavailable");
+    climate.normHi=null; climate.normLo=null; renderVsNormal();
     grid.innerHTML='<div class="empty">Climate normals unavailable. <a href="https://xmacis.rcc-acis.org/" target="_blank" rel="noopener">xmACIS ↗</a></div>';
   });
 }
 
 /* ============ CLIMATE CONTEXT — records, rankings, streaks ============
-   Four keyless ACIS queries, fetched once per day and cached as small DERIVED facts (~10 KB)
+   Four keyless ACIS queries, cached for up to 12 hours as small DERIVED facts (~10 KB)
    rather than raw history:
      1. the same calendar day across every year of record → true daily records + a percentile
      2. monthly totals across every year          → "already wetter than N of M Julys"
@@ -5898,7 +6058,7 @@ function deepStation(lat,lon){
       var startYr=parseInt(String(dr[0]).slice(0,4),10), endYr=parseInt(String(dr[1]).slice(0,4),10);
       if(!startYr||!endYr) return;
       if(startYr>1965) return;                          // no legacy depth
-      if((now.getFullYear()-endYr)>2) return;           // discontinued
+      if((weatherParts(now).year-endYr)>2) return;           // discontinued
       var firstOrder=s.sids.some(function(x){ var t=x.split(" ")[1]; return t==="1"||t==="3"; });
       if(!firstOrder) return;                           // airports: continuous, quality-controlled
       var dist=Math.sqrt(Math.pow(s.ll[0]-lon,2)+Math.pow(s.ll[1]-lat,2));
@@ -5917,7 +6077,7 @@ function deepStation(lat,lon){
   return p;
 }
 var MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
-function ctxTodayKey(){ var d=new Date(); return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2); }
+function ctxTodayKey(){ return weatherParts().key; }
 function ctxNumPairs(rows,col,pickMax){
   // → {best:{v,y}, sorted:[v...]} over one column, ignoring M/T padding
   var vals=[], best=null;
@@ -5944,13 +6104,18 @@ function loadClimateContext(){
     try{
       var c=JSON.parse(localStorage.getItem(CTX_KEY)||"null");
       // a cache HIT paints synchronously, so it needs the guard just as much as a fetch does
-      if(c&&c.key===key&&c.ctx){ ctx=c.ctx; ctx.ready=true; renderContext(); return null; }
+      if(c&&c.key===key&&c.ctx&&c.ctx.ready&&typeof c.checkedAt==="number"
+        &&Date.now()>=c.checkedAt&&Date.now()-c.checkedAt<=FEEDS.context.age
+        &&(c.status==="ready"||c.status==="partial")){ ctx=c.ctx;
+        feedChecks.context={status:c.status,successAt:c.checkedAt,issuedAt:0,saved:false};
+        delete savedParts.cnCtx; freshnessCheck();
+        renderContext(); return null; }
     }catch(e){}
-    var now=new Date(), y=now.getFullYear();
-    var mm=("0"+(now.getMonth()+1)).slice(-2), dd=("0"+now.getDate()).slice(-2);
+    var now=weatherParts(), y=now.year;
+    var mm=("0"+(now.month+1)).slice(-2), dd=("0"+now.day).slice(-2);
     var today=y+"-"+mm+"-"+dd;
-    var wkEnd=new Date(now.getTime()+6*86400000);
-    var wkEndStr=wkEnd.getFullYear()+"-"+("0"+(wkEnd.getMonth()+1)).slice(-2)+"-"+("0"+wkEnd.getDate()).slice(-2);
+    var wkEnd=new Date(calendarDate(today).getTime()+6*86400000);
+    var wkEndStr=wkEnd.toISOString().slice(0,10);
     var histStart=(y-2)+"-"+mm+"-"+dd;
     return Promise.allSettled([
       acisPost("StnData",{sid:rec.sid,sdate:"1850-"+mm+"-"+dd,edate:today,
@@ -5969,11 +6134,11 @@ function loadClimateContext(){
       function data(i){
         if(rs[i].status!=="fulfilled") return null;
         var v=rs[i].value;
-        if(!v||v.error||!v.data) return null;
+        if(!v||v.error||!Array.isArray(v.data)) return null;
         return v.data;
       }
       var nctx={ready:false, recHi:null, recLo:null, recPcp:null, doyHi:[], doyLo:[],
-                monWet:[], monWarm:[], monMtd:null, monMean:null, monName:MONTHS[now.getMonth()],
+                monWet:[], monWarm:[], monMtd:null, monMean:null, monName:MONTHS[now.month],
                 years:0, dry:null, hist:null, normWeek:{},
                 recStation:(rec.sid!==st.sid)?(rec.name||rec.sid):""};
       // 1 — this calendar day, every year
@@ -6021,13 +6186,15 @@ function loadClimateContext(){
         if(h!=null||l!=null) nctx.normWeek[r[0]]={hi:h, lo:l};
       });
       nctx.ready=!!(nctx.recHi||nctx.monWet.length||nctx.hist);
+      var complete=[0,1,2,3].every(function(i){var rows=data(i);return rows&&rows.length;});
+      feedUpdate("context",nctx.ready?(complete?"ready":"partial"):"unavailable");
       ctx=nctx;
-      if(ctx.ready){ try{ localStorage.setItem(CTX_KEY,JSON.stringify({key:key,ctx:ctx})); }catch(e){} }
+      if(ctx.ready){ try{ localStorage.setItem(CTX_KEY,JSON.stringify({key:key,ctx:ctx,status:feedChecks.context.status,checkedAt:feedChecks.context.successAt})); }catch(e){} }
       renderContext();
       return null;
     });
    });
-  }).catch(function(){ /* context is a bonus layer — silence on failure */ });
+  }).catch(function(){ if(fresh()){ feedUpdate("context","unavailable"); ctx.ready=false; renderContext(); } });
 }
 /* ---- derived lookups (cheap, recomputed as the forecast changes) ---- */
 function ctxRankBelow(sorted,v){
@@ -6037,9 +6204,8 @@ function ctxRankBelow(sorted,v){
 }
 function ctxDateAt(i){
   if(!ctx.hist) return null;
-  var p=String(ctx.hist.start).split("-");
-  var d=new Date(+p[0],+p[1]-1,+p[2]);
-  d.setDate(d.getDate()+i);
+  var d=calendarDate(ctx.hist.start);
+  d.setUTCDate(d.getUTCDate()+i);
   return d;
 }
 function ctxSince(kind,v){
@@ -6051,18 +6217,18 @@ function ctxSince(kind,v){
     if(x==null) continue;
     if(kind==="hot"?x>=v:x<=v){
       var d=ctxDateAt(i);
-      return {date:d, days:Math.round((Date.now()-d.getTime())/86400000)};
+      return {date:d, days:Math.round((weatherDay()-d)/86400000)};
     }
   }
   return {date:null, days:null, beyond:true};
 }
-function fmtMD(d){ return d?d.toLocaleDateString([], {month:"short", day:"numeric"}):""; }
+function fmtMD(d){ return d?d.toLocaleDateString("en-US", {timeZone:"UTC",month:"short", day:"numeric"}):""; }
 /* Same date, with the year. ctxSince() searches two full years back and only reports a gap of 21
    days or more, so "warmest since Aug 27" could mean five weeks ago or twenty months — and a
    reader has no way to tell which, or whether the year was simply left off. The year is not
    decoration on a sentence whose whole point is how long it has been. Always printed, including
    for a date in the current year: a rule with an exception is a rule you have to check. */
-function fmtMDY(d){ return d?d.toLocaleDateString([], {month:"short", day:"numeric", year:"numeric"}):""; }
+function fmtMDY(d){ return d?d.toLocaleDateString("en-US", {timeZone:"UTC",month:"short", day:"numeric", year:"numeric"}):""; }
 function shortStn(n){   // "ST LOUIS LAMBERT INTL AIRPORT" → "St Louis Lambert"
   var w=String(n||"").split(/\s+/).filter(function(x){
     return !/^(INTL|INTERNATIONAL|AIRPORT|ARPT|AP|FIELD|FLD|MUNICIPAL|MUNI|RGNL|REGIONAL|OUTLAND|AFB)$/i.test(x);
@@ -6075,7 +6241,7 @@ function renderContext(){
   if(!ctx.ready){ el.innerHTML=""; return; }
   var L=[];
   function line(ico,html,cls){ L.push('<div class="cx'+(cls?" "+cls:"")+'"><span class="cxi">'+ic(ico)+'</span><span>'+html+'</span></div>'); }
-  var md=fmtMD(new Date());
+  var md=fmtMD(weatherDay());
   // records for today — only from a sample that can support the claim; attribute the deep
   // station when it isn't the local one
   var deepOK=ctx.years>=CTX_MIN_YEARS;
@@ -6109,7 +6275,7 @@ function renderContext(){
   }
   // dry streak
   if(ctx.dry&&ctx.dry.days>=3){
-    line("drought","<b class=\"cx-dry\">"+ctx.dry.days+" days</b> since measurable rain (last "+ctx.dry.amt.toFixed(2)+"″ on "+fmtMD(new Date(ctx.dry.date+"T12:00:00"))+")");
+    line("drought","<b class=\"cx-dry\">"+ctx.dry.days+" days</b> since measurable rain (last "+ctx.dry.amt.toFixed(2)+"″ on "+fmtMD(calendarDate(ctx.dry.date))+")");
   }
   // "warmest since" / "coldest since", only when the gap is actually interesting
   if(climate.fcHi!=null){
@@ -6210,7 +6376,7 @@ function renderHeroToday(){
             '<span class="cs-sep">·</span>',
             '<span><b>'+fmtDur(st.set.getTime()-now)+'</b> of daylight left</span>'];
     }else{
-      var tm=sunTimes(current.lat,current.lon,new Date(now+86400000));
+      var tm=sunTimes(current.lat,current.lon,new Date(weatherDay(now).getTime()+86400000));
       bits=['<span>'+mcImg("sunset","moon",18)+'Sun set <b>'+fmtT(st.set)+'</b></span>'];
       if(tm.rise) bits.push('<span class="cs-sep">·</span>',
                             '<span>'+mcImg("sunrise","sun",18)+'Sunrise <b>'+fmtT(tm.rise)+'</b></span>');
@@ -6515,8 +6681,9 @@ var STN_STALE_MS=2*60*60000, STN_DEAD_MS=6*60*60000;
    ob ages into stale and then off the map exactly like a served one. */
 var _stnLast={};
 function loadStationPlot(){
-  if(!stnMap||typeof L==="undefined") return Promise.resolve();
+  if(!stnMap||typeof L==="undefined"){ feedUpdate("stations","unavailable"); return Promise.resolve(); }
   var c2f=function(c){return (c==null)?null:Math.round(c*9/5+32);};
+  var checked=0;
   var jobs=STN_LIST.map(function(s){
     return getJSON(API+"/stations/"+s.id+"/observations/latest").then(function(d){
       var p=(d&&d.properties)||{};
@@ -6530,6 +6697,7 @@ function loadStationPlot(){
         windMph:mph,
         gustMph:(p.windGust&&p.windGust.value!=null)?Math.round(p.windGust.value*0.621371):null,
         ts:p.timestamp||null};
+      if(currentObservationFresh(d,Date.now())) checked++;
       if(o.ts) _stnLast[s.id]=o;   // an ob with no timestamp could never age out — don't cache it
       return o;
     }).catch(function(){ return _stnLast[s.id]||null; });
@@ -6543,6 +6711,7 @@ function loadStationPlot(){
       o.stale=!!t&&(now-t>STN_STALE_MS);
       return o;
     });
+    feedUpdate("stations",checked===STN_LIST.length?"ready":checked?"partial":"unavailable");
     renderStationLayer();
     var age=document.getElementById("stnAge");
     if(age){
@@ -6565,7 +6734,7 @@ function loadStationPlot(){
       age.textContent=plotted?(parts.join(" · ")||"tap a station for detail")
                             :"no obs — NWS API isn't answering";
     }
-  }).catch(function(){});
+  }).catch(function(){ feedUpdate("stations","unavailable"); });
 }
 /* ---- Sky layer toggles ----
    Radar and satellite stack on one map now, and each button is an independent on/off. They were
@@ -6805,7 +6974,7 @@ function syncSatToRadar(){
 }
 function satClock(iso){
   var d=new Date(iso);
-  return isNaN(d)?"":d.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"});
+  return isNaN(d)?"":d.toLocaleTimeString("en-US", {timeZone:WEATHER_TZ,hour:"numeric",minute:"2-digit"});
 }
 /* GIBS posts a new GeoColor frame every ~10 minutes, and Leaflet caches its tile <img>s in the DOM
    — nothing re-fetches on its own. redraw() would do it, but it drops every tile first and leaves
@@ -6938,8 +7107,10 @@ function loadAFD(){
     var latest=g[0], purl=latest["@id"]||(API+"/products/"+latest.id);
     return getJSON(purl,LD);
   }).then(function(prod){
-    renderAFD(extractAFD(prod.productText||""), prod.issuanceTime);
-  }).catch(function(){ renderAFD(null); });
+    var sec=extractAFD(prod.productText||"");
+    feedUpdate("afd",sec?"ready":"unavailable",prod.issuanceTime);
+    renderAFD(sec, prod.issuanceTime);
+  }).catch(function(){ feedUpdate("afd","unavailable"); renderAFD(null); });
 }
 
 /* ============ LOCATION (geolocation / search / presets, persisted) ============ */
@@ -7018,6 +7189,8 @@ function locSignal(){ if(!locAbort) locAbort=new AbortController(); return locAb
 /* Derived state is cleared on every change so a render can never MIX two places -- e.g. the new
    town's forecast high ranked against the old town's 96-year record. */
 function resetLocationState(){
+  Object.keys(FEEDS).forEach(function(k){if(FEEDS[k].local) feedChecks[k]={status:"loading",successAt:0,issuedAt:0,saved:false};});
+  savedParts={}; freshnessCheck();
   climate.normHi=null; climate.normLo=null; climate.fcHi=null; climate.fcLo=null;
   climate.fcHiLabel=""; climate.station=null; climate.stationName="";
   ctx={ready:false, recHi:null, recLo:null, recPcp:null, doyHi:[], doyLo:[],
@@ -7524,9 +7697,9 @@ var smart={spcRisk:0,eroRisk:0,fireRisk:0,hourly:[],hourlyAll:[],days:[],weekDay
    Outlived the card they were written for. Two callers: the hero's sun line (renderHeroToday) and
    the day/night variant of the current-conditions icon. fmtT/fmtDur serve the same line. */
 function sunTimes(lat,lon,date){
-  var rad=Math.PI/180;
-  var start=Date.UTC(date.getFullYear(),0,0);
-  var doy=Math.floor((Date.UTC(date.getFullYear(),date.getMonth(),date.getDate())-start)/86400000);
+  var rad=Math.PI/180, wall=weatherParts(date);
+  var start=Date.UTC(wall.year,0,0);
+  var doy=Math.floor((Date.UTC(wall.year,wall.month,wall.day)-start)/86400000);
   var lngHour=lon/15;
   function calc(rising){
     var t=doy+((rising?6:18)-lngHour)/24;
@@ -7540,14 +7713,14 @@ function sunTimes(lat,lon,date){
     var H=(rising?360-Math.acos(cosH)/rad:Math.acos(cosH)/rad)/15;
     var T=H+RA-(0.06571*t)-6.622;
     var UT=(T-lngHour)%24; if(UT<0)UT+=24;
-    var d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));
+    var d=new Date(Date.UTC(wall.year,wall.month,wall.day));
     return new Date(d.getTime()+UT*3600000);
   }
   var r=calc(true), s=calc(false);
   if(r&&s&&s.getTime()<r.getTime()) s=new Date(s.getTime()+86400000);
   return {rise:r, set:s};
 }
-function fmtT(d){ return d?d.toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):"—"; }
+function fmtT(d){ return d?d.toLocaleTimeString("en-US", {timeZone:WEATHER_TZ,hour:"numeric",minute:"2-digit"}):"—"; }
 function fmtDur(ms){ var h=Math.floor(ms/3600000), m=Math.round(ms%3600000/60000); return h+"h "+m+"m"; }
 function uvLevel(v){
   if(v==null) return null;
@@ -7557,7 +7730,7 @@ function uvLevel(v){
   if(v<11) return {t:"Very High",c:"#ff6a2f"};
   return {t:"Extreme",c:"#c13bff"};
 }
-function shortT(t){ return new Date(t).toLocaleTimeString([], {hour:"numeric"}).replace(/\s/g,"").toLowerCase(); }
+function shortT(t){ return new Date(t).toLocaleTimeString("en-US", {timeZone:WEATHER_TZ,hour:"numeric"}).replace(/\s/g,"").toLowerCase(); }
 /* ===== UV =====
    UV reads as a current condition, not a seasonal curiosity, so it lives with the other exposure
    numbers in the hero and as a per-day figure in the 7-day. One request serves both: the hourly
@@ -7567,20 +7740,24 @@ var uv={now:null, peak:null, daily:{}};
 function loadUv(){
   var fresh=locGuard();
   return getJSON("https://api.open-meteo.com/v1/forecast?latitude="+current.lat+"&longitude="+current.lon
-    +"&hourly=uv_index&daily=uv_index_max&forecast_days=7&timezone=auto", null, locSignal()).then(function(d){
+    +"&hourly=uv_index&daily=uv_index_max&forecast_days=7&timezone=America%2FChicago&timeformat=unixtime", null, locSignal()).then(function(d){
     if(!fresh()) return;   // user moved while this was in flight
     var h=d.hourly||{}, ts=h.time||[], vs=h.uv_index||[], now=Date.now(), best=null, cur=null, curGap=Infinity;
     for(var i=0;i<ts.length;i++){
       if(vs[i]==null) continue;
-      var t=new Date(ts[i]).getTime(), gap=Math.abs(t-now);
+      var t=(typeof ts[i]==="number")?ts[i]*1000:(/Z$|[+-]\d\d:\d\d$/.test(ts[i])?Date.parse(ts[i]):NaN);
+      if(!isFinite(t)) continue;
+      var gap=Math.abs(t-now);
       // "now" is the nearest hourly sample, but only if one is actually near — never extrapolate
       if(gap<curGap && gap<=5400000){ curGap=gap; cur=vs[i]; }
       if(t<now-1800000||t>now+24*3600000) continue;    // peak across the next 24 h (useful in the evening too)
       if(!best||vs[i]>best.v) best={v:vs[i],t:t};
     }
+    if(cur==null&&!best) throw new Error("UV samples unavailable");
+    feedUpdate("uv",cur==null?"partial":"ready");
     uv.now=cur; uv.peak=best;
     var dd=d.daily||{}, dts=dd.time||[], dvs=dd.uv_index_max||[], map={};
-    for(var j=0;j<dts.length;j++){ if(dvs[j]!=null) map[dts[j]]=dvs[j]; }
+    for(var j=0;j<dts.length;j++){ if(dvs[j]!=null) map[typeof dts[j]==="number"?weatherParts(dts[j]*1000).key:dts[j]]=dvs[j]; }
     uv.daily=map;
     renderUvNow();
     if(typeof renderTheCall==="function") renderTheCall();
@@ -7588,6 +7765,7 @@ function loadUv(){
     if(typeof loadForecast._paint==="function") loadForecast._paint();
   }).catch(function(){
     if(!fresh()) return;
+    feedUpdate("uv","unavailable");
     uv.now=null; uv.peak=null; uv.daily={}; renderUvNow();
     if(typeof renderTheCall==="function") renderTheCall();
   });
@@ -7603,7 +7781,7 @@ function renderUvNow(){
   if((r==null||r<1)&&!(pr!=null&&pr>=3&&p.t>Date.now())){ el.innerHTML=""; return; }
   var live=(r!=null&&r>=1), lv=live?uvLevel(r):uvLevel(pr), sub=[], val;
   // A peak that lands on a later date needs saying so — "at 10am" at 11pm reads as four hours ago.
-  var when=p?((new Date(p.t)).toDateString()!==new Date().toDateString()?'tomorrow ':'at ')+shortT(p.t):"";
+  var when=p?(weatherParts(p.t).key!==weatherParts().key?'tomorrow ':'at ')+shortT(p.t):"";
   if(live){
     val=r+' <span class="ex-cat">'+lv.t+'</span>';
     if(pr!=null&&pr>r) sub.push('peak <b>'+pr+'</b> '+when);
@@ -7638,7 +7816,7 @@ var callLocalAlert=null; // strongest active LSX alert covering the selected loc
 var callAlertGroups=[]; // retained so an expiring warning can yield to another active local hazard
 function hrWord(d){
   if(typeof d==="number") return ((d%12)||12)+(d<12?"am":"pm");
-  return d.toLocaleTimeString([], {hour:"numeric"}).replace(/\s/g,"").toLowerCase();
+  return hrWord(weatherParts(d).hour);
 }
 /* The same clock word, plus the day when it isn't today. The Bottom Line reasons over a 24-hour
    window, so a bare "near 1pm" read at 8pm was describing TOMORROW afternoon in a voice that
@@ -7646,23 +7824,26 @@ function hrWord(d){
 function whenWord(d,base){
   base=base||new Date();
   var w=hrWord(d);
-  return d.getDate()===base.getDate()?w:w+" tomorrow";
+  var days=Math.round((weatherDay(d)-weatherDay(base))/86400000);
+  return days===0?w:w+(days===1?" tomorrow":" "+weatherTime(d,{weekday:"long"}));
 }
 function windowSpan(a,b,base){
   base=base||new Date();
   var span=hrWord(a)+"–"+hrWord(b);
-  return a.getDate()===base.getDate()?span:span+" tomorrow";
+  if(weatherParts(a).key!==weatherParts(b).key) return whenWord(a,base)+"–"+whenWord(b,base);
+  var days=Math.round((weatherDay(a)-weatherDay(base))/86400000);
+  return days===0?span:span+(days===1?" tomorrow":" "+weatherTime(a,{weekday:"long"}));
 }
 function bottomLineHorizon(d){
   var wall=typeof d==="string"?nwsWallTime(d):null;
   if(wall){
-    var day=new Date(Number(wall.key.slice(0,4)),wall.month,wall.day);
+    var day=calendarDate(wall.key);
     var hour=hrWord(wall.hour).replace(/(am|pm)$/i,function(m){ return " "+m.toUpperCase(); });
-    return "Through "+day.toLocaleDateString([], {weekday:"short"})+" "+hour;
+    return "Through "+day.toLocaleDateString("en-US", {timeZone:"UTC",weekday:"short"})+" "+hour;
   }
   if(!d||typeof d==="string"||isNaN(d.getTime())) return "Next 24 hours";
   var clock=hrWord(d).replace(/(am|pm)$/i,function(m){ return " "+m.toUpperCase(); });
-  return "Through "+d.toLocaleDateString([], {weekday:"short"})+" "+clock;
+  return "Through "+d.toLocaleDateString("en-US", {timeZone:WEATHER_TZ,weekday:"short"})+" "+clock;
 }
 function bottomLineWeekHorizon(days){
   var last=null,lastText="";
@@ -7677,8 +7858,8 @@ function bottomLineWeekHorizon(days){
   });
   if(!last) return "Next 7 days";
   var wall=nwsWallTime(lastText);
-  var date=wall?new Date(Number(wall.key.slice(0,4)),wall.month,wall.day):last;
-  return "Through "+date.toLocaleDateString([], {weekday:"short",month:"short",day:"numeric"});
+  var date=wall?calendarDate(wall.key):weatherDay(last);
+  return "Through "+date.toLocaleDateString("en-US", {timeZone:"UTC",weekday:"short",month:"short",day:"numeric"});
 }
 function bottomLineBriefingHorizon(days,H,weekEnabled,hasRisk){
   if(weekEnabled&&days&&days.length) return bottomLineWeekHorizon(days);
@@ -7776,7 +7957,7 @@ function bottomLineHours(hrs){
     if(rh!=null&&!isFinite(rh)) rh=null;
     var pop=precipChance(p.probabilityOfPrecipitation);
     var mph=parseMph(p.windSpeed), sf=p.shortForecast||"", t=p.temperature;
-    H.push({t:t,d:d,end:end,endText:p.endTime||"",hr:d.getHours(),pop:pop,rh:rh,mph:mph,
+    H.push({t:t,d:d,end:end,endText:p.endTime||"",hr:weatherParts(d).hour,pop:pop,rh:rh,mph:mph,
             dew:dewF(t,rh),fl:feelsLikeF(t,rh,mph),
             thund:/thunder|t-?storm/i.test(sf),wint:/snow|sleet|wintry|freezing/i.test(sf),
             fog:/fog/i.test(sf),day:!!p.isDaytime});
@@ -7902,16 +8083,16 @@ function bottomLineHourlyCandidates(H,opts){
       "Low near "+lo+"°.","Open windows may offer little relief.","neutral");
   }
 
-  var today=now.getDate();
-  var dayH=H.filter(function(h){ return h.day&&h.d.getDate()===today; });
-  if(dayH.length>=4&&now.getHours()<17){
+  var localNow=weatherParts(now), today=localNow.key;
+  var dayH=H.filter(function(h){ return h.day&&weatherParts(h.d).key===today; });
+  if(dayH.length>=4&&localNow.hour<17){
     var dhi=-999,nice=true;
     dayH.forEach(function(h){
       if(h.t!=null&&h.t>dhi) dhi=h.t;
       if(h.t==null||h.pop==null||h.pop>=20||h.t<58||h.t>88||(h.fl!=null&&h.fl>=95)||(h.mph!=null&&h.mph>15)||(h.dew!=null&&h.dew>66)) nice=false;
     });
     if(nice) push(55,"check","outdoors","Outdoor plans","Excellent outdoor conditions",
-      dhi+"° and dry "+(now.getHours()>=12?"the rest of the day":"all day")+".",
+      dhi+"° and dry "+(localNow.hour>=12?"the rest of the day":"all day")+".",
       "Good day to keep outdoor plans.","good");
   }
 
@@ -8227,15 +8408,15 @@ function renderTheCall(){
   if(ctx.ready&&ctx.years>=CTX_MIN_YEARS&&climate.fcHi!=null&&ctx.recHi){
     var gap=ctx.recHi.v-climate.fcHi;
     if(gap<=0) push(92,"record","climate","Context","Record warmth possible",
-      "Could reach the "+fmtMD(new Date())+" record of "+Math.round(ctx.recHi.v)+"° from "+ctx.recHi.y+".","","context",true);
+      "Could reach the "+fmtMD(weatherDay())+" record of "+Math.round(ctx.recHi.v)+"° from "+ctx.recHi.y+".","","context",true);
     else if(gap<=4) push(88,"record","climate","Context","Near-record warmth",
-      "Within "+Math.round(gap)+"° of the "+fmtMD(new Date())+" record: "+Math.round(ctx.recHi.v)+"° in "+ctx.recHi.y+".","","context",true);
+      "Within "+Math.round(gap)+"° of the "+fmtMD(weatherDay())+" record: "+Math.round(ctx.recHi.v)+"° in "+ctx.recHi.y+".","","context",true);
     else{
       var rk=ctxRankBelow(ctx.doyHi,climate.fcHi);
       if(rk&&rk.pct>=90) push(74,"stats","climate","Context","Unusually warm",
-        "Warmer than "+rk.below+" of "+rk.total+" "+fmtMD(new Date())+"s on record.","","context",true);
+        "Warmer than "+rk.below+" of "+rk.total+" "+fmtMD(weatherDay())+"s on record.","","context",true);
       else if(rk&&rk.pct<=10) push(74,"stats","climate","Context","Unusually cool",
-        "Cooler than "+(rk.total-rk.below)+" of "+rk.total+" "+fmtMD(new Date())+"s on record.","","context",true);
+        "Cooler than "+(rk.total-rk.below)+" of "+rk.total+" "+fmtMD(weatherDay())+"s on record.","","context",true);
     }
   }
   if(ctx.ready&&ctx.dry&&ctx.dry.days>=10) push(45,"drought","climate","Context","Long dry stretch",
@@ -8269,12 +8450,11 @@ function renderTheCall(){
    Return visits paint in one synchronous step, before a single network request. Cards are stored
    as already-rendered HTML, so there's no re-render cost either.
    Honesty rules, since this is weather data:
-     · every card carries a TTL — the alert list expires after 15 min and simply isn't restored
-       after that, so a stale "all clear" can never sit on screen during a warning;
-     · the warning banner is NEVER restored — it asserts something about RIGHT NOW, so it only
+     · every fragment carries a TTL measured from its last successful weather check, not the save;
+     · alerts, short-fused discussions and current observations are NEVER restored, so they only
        ever comes from a live fetch;
      · a snapshot is only reused for the same location it was taken at;
-     · while restored content is showing, a bar names the exact snapshot time. */
+     · saved fragments and their cards stay labeled until that specific feed is verified or cleared. */
 /* The key carries a version because a snapshot is RESTORED MARKUP, not data: it is painted under
    whatever stylesheet ships today. When the hero's footer became a tile pair, a v1 snapshot's old
    rows picked up the new tile chrome without their grid parent and the old context line — now a
@@ -8321,27 +8501,24 @@ function renderTheCall(){
 // v15: #daily no longer includes the forecast overview. A v14 snapshot would restore that
 // duplicate summary without its removed styles before the fresh forecast arrives.
 // v16: the hourly chart has duration controls, day boundaries and an accessible detail slider.
-var SNAP_KEY="lsxSnap_v16", snapRestored=false, NET_OK=false;
-try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13","lsxSnap_v14","lsxSnap_v15"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
+// v17: saved fragments carry their original validated check times and Central Time labels.
+var SNAP_KEY="lsxSnap_v17", snapRestored=false;
+try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13","lsxSnap_v14","lsxSnap_v15","lsxSnap_v16"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
 var SNAP_PARTS=[
-  {id:"afd",      ttl:6*3600000},
-  {id:"alerts",   ttl:15*60000},     // safety-critical: short leash
-  {id:"hourly24", ttl:3*3600000},
-  {id:"h24loc",   ttl:3*3600000},
-  {id:"daily",    ttl:6*3600000},
-  {id:"rivers",   ttl:3*3600000},
-  {id:"aqi",      ttl:3*3600000},
-  {id:"mcd",      ttl:15*60000},     // an MD lives 1–3 h; restore only when nearly current
-  {id:"cpc",      ttl:24*3600000},
-  {id:"hazards",  ttl:24*3600000},
-  {id:"cnToday",  ttl:12*3600000},
-  {id:"cnGrid",   ttl:12*3600000},
-  {id:"cnStation",ttl:12*3600000},
-  {id:"cnCtx",    ttl:12*3600000},
-  {id:"qpf7",     ttl:12*3600000},
-  {id:"drNow",    ttl:48*3600000},
-  {id:"drMonth",  ttl:48*3600000},
-  {id:"drSeason", ttl:48*3600000}
+  {id:"afd",      feed:"afd",     ttl:6*3600000},
+  {id:"hourly24", feed:"hourly",  ttl:3*3600000},
+  {id:"h24loc",   feed:"hourly",  ttl:3*3600000},
+  {id:"daily",    feed:"daily",   ttl:6*3600000},
+  {id:"rivers",   feed:"rivers",  ttl:3*3600000},
+  {id:"cpc",      feed:"cpc",     ttl:24*3600000},
+  {id:"hazards",  feed:"hazards", ttl:24*3600000},
+  {id:"cnToday",  feed:"climate", ttl:12*3600000},
+  {id:"cnGrid",   feed:"climate", ttl:12*3600000},
+  {id:"cnStation",feed:"climate", ttl:12*3600000},
+  {id:"cnCtx",    feed:"context", ttl:12*3600000},
+  {id:"drNow",    feed:"drought", ttl:48*3600000},
+  {id:"drMonth",  feed:"drought", ttl:48*3600000},
+  {id:"drSeason", feed:"drought", ttl:48*3600000}
 ];
 function saveSnapshot(){
   // Mid-transition the DOM still shows the OLD place while `current` is already the new one --
@@ -8353,15 +8530,16 @@ function saveSnapshot(){
   var snap={t:Date.now(), loc:(current&&current.name)||"",
             lat:(current&&current.lat!=null)?+current.lat.toFixed(3):null,
             lon:(current&&current.lon!=null)?+current.lon.toFixed(3):null,
-            wx:document.body.getAttribute("data-wx")||"", parts:{}};
-  var ac=document.getElementById("alertsCard");
-  snap.calm=!!(ac&&ac.classList.contains("calm"));
+            wx:document.body.getAttribute("data-wx")||"", parts:{},feeds:{}};
   SNAP_PARTS.forEach(function(p){
+    var c=feedChecks[p.feed];
+    if(!c||!c.successAt||(!c.saved&&c.status!=="ready"&&c.status!=="partial")||Date.now()-c.successAt>p.ttl) return;
     var el=document.getElementById(p.id);
     if(!el) return;
     var h=el.innerHTML;
     if(!h||/class="loading"/.test(h)) return;   // never cache a spinner
     snap.parts[p.id]=h;
+    snap.feeds[p.feed]={status:c.status,successAt:c.successAt,issuedAt:c.issuedAt};
   });
   if(!Object.keys(snap.parts).length) return;
   function put(){ localStorage.setItem(SNAP_KEY,JSON.stringify(snap)); }
@@ -8382,22 +8560,23 @@ function saveSnapshotIdle(){
 function showSnapBar(t){
   var bar=document.getElementById("snapBar"), txt=document.getElementById("snapBarText");
   if(!bar||!txt) return;
-  txt.textContent="Saved view from "+new Date(t).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"})+" · fetching live data…";
+  txt.textContent="Saved view from "+new Date(t).toLocaleTimeString("en-US", {timeZone:WEATHER_TZ,hour:"numeric",minute:"2-digit"})+" · fetching live data…";
   bar.classList.add("show");
 }
 function resolveSnapBar(){
   var bar=document.getElementById("snapBar"), txt=document.getElementById("snapBarText");
   if(!bar||!bar.classList.contains("show")) return;
-  if(NET_OK){ bar.classList.remove("show","offline"); }
-  else if(txt){
+  if(!Object.keys(savedParts).length){ bar.classList.remove("show","offline"); return; }
+  var failed=Object.keys(feedChecks).some(function(k){return feedChecks[k].status==="unavailable";});
+  if(failed&&txt){
     bar.classList.add("offline");
-    txt.textContent="Can't reach the weather services — this is the last saved view, not current conditions.";
+    txt.textContent="Some saved data remain unverified. Check each card's timestamp; current weather services are partly unavailable.";
   }
 }
 function restoreSnapshot(){
   var snap=null;
   try{ var s=localStorage.getItem(SNAP_KEY); snap=s?JSON.parse(s):null; }catch(e){ return false; }
-  if(!snap||!snap.t||!snap.parts) return false;
+  if(!snap||!snap.t||!snap.parts||!snap.feeds) return false;
   var age=Date.now()-snap.t;
   if(age<0||age>48*3600000) return false;                       // clock moved or far too old
   if(snap.loc&&current&&snap.loc!==current.name) return false;  // numbers would describe another place
@@ -8407,24 +8586,21 @@ function restoreSnapshot(){
   var n=0;
   SNAP_PARTS.forEach(function(p){
     var h=snap.parts[p.id];
-    if(!h||age>p.ttl) return;
+    var c=snap.feeds[p.feed], checkedAge=c?Date.now()-c.successAt:Infinity;
+    if(!h||!c||!c.successAt||checkedAge<0||checkedAge>p.ttl||(c.status!=="ready"&&c.status!=="partial")) return;
     var el=document.getElementById(p.id);
     if(!el) return;
-    el.innerHTML=h; n++;
+    el.innerHTML=h; n++; savedParts[p.id]=p.feed;
+    feedChecks[p.feed]={status:c.status,successAt:c.successAt,issuedAt:c.issuedAt||0,saved:true};
   });
   if(!n) return false;
-  if(snap.parts.callRow&&age<=3*3600000){ var cc=document.getElementById("callCard"); if(cc) cc.classList.add("has"); }
-  if(snap.calm&&age<=15*60000&&snap.parts.alerts){ var ac=document.getElementById("alertsCard"); if(ac) ac.classList.add("calm"); }
-  // AQI card visibility travels with its content: the bad-air marker inside the restored HTML
-  var aq=document.getElementById("aqi"), aqc=document.getElementById("aqiCard");
-  if(aqc) aqc.classList.toggle("show", !!(aq&&aq.querySelector("[data-aqibad]")));
   if(snap.wx) document.body.setAttribute("data-wx",snap.wx);
   var hourlyWrap=document.querySelector("#hourly24 .h24-wrap"), restoredHours=hourlyWrap?Number(hourlyWrap.getAttribute("data-hours")):24;
   if([24,48,72].indexOf(restoredHours)>=0) hourlyHours=restoredHours;
   var restoredCursor=document.getElementById("hourlyCursor"); if(restoredCursor) restoredCursor.disabled=true;
   syncHourlyControls();
   snapRestored=true;
-  showSnapBar(snap.t);
+  showSnapBar(snap.t); freshnessCheck();
   if(typeof scheduleMasonry==="function") scheduleMasonry();
   return true;
 }
@@ -8484,8 +8660,8 @@ function tickCountdowns(){
 /* ============ CLOCK ============ */
 function tick(){
   var d=new Date();
-  document.getElementById("clock").textContent=d.toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"});
-  document.getElementById("cdate").textContent=d.toLocaleDateString([], {weekday:"long",month:"short",day:"numeric"});
+  document.getElementById("clock").textContent=d.toLocaleTimeString("en-US", {timeZone:WEATHER_TZ,hour:"2-digit",minute:"2-digit"})+" CT";
+  document.getElementById("cdate").textContent=d.toLocaleDateString("en-US", {timeZone:WEATHER_TZ,weekday:"long",month:"short",day:"numeric"});
   tickCountdowns();
 }
 
@@ -8506,9 +8682,9 @@ function refreshAll(){
   var seq=++refreshSeq, g=locSeq;
   var fns=[loadAFD,loadAlerts,loadCurrent,loadForecast,loadForecastGrid,loadRivers,loadAqi,loadSpc,loadMcd,loadCpc,loadQpf,
            loadHazards,loadDrought,loadClimate,loadClimateContext,loadUv,loadStationPlot];
-  var dot=document.getElementById("statusDot"), label=document.getElementById("refreshLabel");
+  var label=document.getElementById("refreshLabel");
   var btn=document.getElementById("refresh");
-  dot.classList.remove("stale");label.textContent="Refreshing…";
+  lastAttempt=Date.now(); freshnessCheck(); label.textContent="Refreshing…";
   if(btn){ btn.disabled=true; btn.setAttribute("aria-busy","true"); }
   stampSched(fns.concat([refreshSatLayer,saveSnapshotIdle]));
   /* Convert synchronous loader failures to rejected task promises. Without this guard, one throw
@@ -8520,7 +8696,7 @@ function refreshAll(){
   });
   refreshInFlight=Promise.allSettled(tasks).then(function(){
     refreshSatLayer();
-    document.getElementById("lastUpdate").textContent="Last updated "+new Date().toLocaleString([], {weekday:"short",hour:"numeric",minute:"2-digit"});
+    freshnessCheck();
     if(g===locSeq) snapSafeSeq=g;  // an older location's refresh cannot bless a newer screen
     resolveSnapBar();   // live data has landed (or we're offline and should say so)
     saveSnapshotIdle(); // freshest render → instant paint next visit (no rush: yield to idle)
@@ -8687,15 +8863,13 @@ var SCHED=[
   {fn:refreshRadarLayer, every:4*60000},
   {fn:saveSnapshotIdle, every:5*60000}   // idle-deferred; the visibilitychange save stays sync
 ];
-var lastGood=Date.now(), schedTimer=null, clockTimer=null;
-function markFresh(){ lastGood=Date.now(); var d=document.getElementById("statusDot"); if(d) d.classList.remove("stale"); }
-function freshnessCheck(){ var d=document.getElementById("statusDot"); if(d) d.classList.toggle("stale", Date.now()-lastGood > 12*60000); }
+var schedTimer=null, clockTimer=null;
 function runDue(){
   var now=Date.now();
   SCHED.forEach(function(t){
     if(now - (t.last||0) >= t.every){
       t.last=now;
-      try{ t.fn(); }catch(e){}   // freshness is marked inside loadAlerts, not by any task completing
+      try{ t.fn(); }catch(e){}   // each loader marks its own validated weather check
     }
   });
 }

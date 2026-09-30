@@ -14,6 +14,9 @@
 
 'use strict';
 
+// Legacy fixtures construct local Date values; their local clock is the LSX clock.
+process.env.TZ='America/Chicago';
+
 const fs = require('fs');
 const path = require('path');
 const SRC = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
@@ -32,7 +35,16 @@ function lift(pattern, label) {
   return m[0];
 }
 
+const TIME_HELPERS = [
+  lift(/^var WEATHER_TZ=.*$/m, 'WEATHER_TZ'),
+  lift(/^var WEATHER_PARTS=.*$/m, 'WEATHER_PARTS'),
+  ...['weatherParts','weatherTime','calendarDate','weatherDay'].map(name=>
+    lift(new RegExp('^function '+name+'\\([^\\n]*\\)\\{[\\s\\S]*?^\\}', 'm'), name))
+].join('\n');
+
 const SUBJECT = new Function(`
+  ${TIME_HELPERS}
+  function feedUpdate(){}
   ${lift(/^function rangeMark\(lo,hi,now\)\{[\s\S]*?^\}/m, 'rangeMark()')}
   ${lift(/^function rangeRow\(d0,d1,now\)\{[\s\S]*?^\}/m, 'rangeRow()')}
   ${lift(/^function alertParas\(txt\)\{[\s\S]*?^\}/m, 'alertParas()')}
@@ -102,7 +114,13 @@ const SUBJECT = new Function(`
   ${lift(/^function geomTouchesEnv\(geom,env\)\{[\s\S]*?^\}/m, 'geomTouchesEnv()')}
   ${lift(/^function watchBoundary\(feats\)\{[\s\S]*?^\}/m, 'watchBoundary()')}
   ${lift(/^function chaikinRing\(ring,iters\)\{[\s\S]*?^\}/m, 'chaikinRing()')}
-  return { rangeMark, rangeRow, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr,
+  ${lift(/^function feedState\(check,now,maxAge\)\{[\s\S]*?^\}/m, 'feedState()')}
+  ${lift(/^function climPeriods\(date\)\{[\s\S]*?^\}/m, 'climPeriods()')}
+  ${lift(/^function sunTimes\(lat,lon,date\)\{[\s\S]*?^\}/m, 'sunTimes()')}
+  ${lift(/^function cpcParse\(d\)\{[\s\S]*?^\}/m, 'cpcParse()')}
+  ${lift(/^function cpcPill\(kind,r\)\{[\s\S]*?^\}/m, 'cpcPill()')}
+  ${lift(/^function textOn\(bg\)\{[\s\S]*?^\}/m, 'textOn()')}
+  return { weatherParts, weatherTime, calendarDate, weatherDay, feedState, climPeriods, sunTimes, cpcParse, cpcPill, rangeMark, rangeRow, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr,
            FAMILY_CFG, coldVerdict, parseMph, heatIndexF, windChillF, feelsLikeF,
            compactDayName, compactCondition, summaryPop, forecastImpact,
            summaryPopText, pairForecastPeriods, nwsWallTime, hourlyByDate, hrWord,
@@ -123,13 +141,54 @@ function check(name, actual, expected) {
 }
 
 /* Restored chart markup must carry its duration and details rather than a prior fixed view. */
-check('extended hourly markup migration bumps the snapshot key',
-  /var SNAP_KEY="lsxSnap_v16"/.test(SRC), true);
-check('the previous v15 snapshot is explicitly discarded',
-  /"lsxSnap_v15"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
+check('freshness and Central Time markup migration bumps the snapshot key',
+  /var SNAP_KEY="lsxSnap_v17"/.test(SRC), true);
+check('the previous v16 snapshot is explicitly discarded',
+  /"lsxSnap_v16"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
 const snapParts = lift(/^var SNAP_PARTS=\[[\s\S]*?^\];/m, 'SNAP_PARTS');
 check('saved HTML cannot restore stale current readings, risk or briefing',
-  ['current', 'ccStation', 'spc', 'spcThreats', 'precipEvents', 'callRow'].every(id => !snapParts.includes(`id:"${id}"`)), true);
+  ['current', 'ccStation', 'spc', 'spcThreats', 'precipEvents', 'callRow', 'alerts', 'mcd', 'aqi'].every(id => !snapParts.includes(`id:"${id}"`)), true);
+
+/* Correctness must survive the viewer's clock, not just the CI runner's default timezone. */
+{
+  const baseline=[];
+  for(const zone of ['America/Chicago','UTC','America/Los_Angeles','Asia/Tokyo']){
+    process.env.TZ=zone;
+    const now=new Date('2026-09-30T18:00:00Z');
+    const start=new Date('2026-10-01T00:00:00Z'),end=new Date('2026-10-01T06:00:00Z');
+    const result=[SUBJECT.weatherParts(now), SUBJECT.windowSpan(start,end,now),
+      SUBJECT.whenWord(end,now), SUBJECT.hrWord(now), SUBJECT.sunTimes(38.8,-90.79,now),
+      SUBJECT.weatherParts('2026-11-01T06:30:00Z').hour,
+      SUBJECT.weatherParts('2026-11-01T07:30:00Z').hour,
+      SUBJECT.weatherParts('2026-03-08T07:30:00Z').hour,
+      SUBJECT.weatherParts('2026-03-08T08:30:00Z').hour,
+      SUBJECT.weatherParts('2027-01-01T03:00:00Z').key];
+    if(!baseline.length) baseline.push(...result);
+    check('weather decisions are identical in '+zone,result,baseline);
+  }
+  process.env.TZ='America/Chicago';
+  check('rain window crossing Central midnight names tomorrow',baseline[1],'7pm–1am tomorrow');
+  check('repeated fall hour remains 1 AM',baseline.slice(5,7),[1,1]);
+  check('spring transition skips 2 AM',baseline.slice(7,9),[1,3]);
+  check('Central year boundary stays on December 31',baseline[9],'2026-12-31');
+  check('climate counts calendar days across spring DST',SUBJECT.climPeriods(new Date('2026-03-09T05:30:00Z')),{mtd:9,ytd:68,std:252});
+  check('climate counts calendar days across fall DST',SUBJECT.climPeriods(new Date('2026-11-02T06:30:00Z')),{mtd:2,ytd:306,std:125});
+  check('two calendar days after spring jump is named correctly',SUBJECT.whenWord(new Date('2026-03-09T05:30:00Z'),new Date('2026-03-08T05:30:00Z')),'12am Monday');
+  const now=Date.parse('2026-09-30T18:00:00Z');
+  check('a feed starts unverified',SUBJECT.feedState({status:'loading',successAt:0},now,60000),'loading');
+  check('failed checks cannot borrow a previous success',SUBJECT.feedState({status:'unavailable',successAt:now-1000},now,60000),'unavailable');
+  check('fresh validated feed is ready',SUBJECT.feedState({status:'ready',successAt:now-1000},now,60000),'ready');
+  check('successful checks age into stale',SUBJECT.feedState({status:'ready',successAt:now-61000},now,60000),'stale');
+  check('restored content never claims a live check',SUBJECT.feedState({status:'ready',successAt:now-1000,saved:true},now,60000),'saved');
+  check('CPC empty verified geometry is equal chances',SUBJECT.cpcParse({features:[]}),{cat:'Equal chances',prob:null});
+  check('CPC API errors remain unknown',SUBJECT.cpcParse({error:{code:500}}),null);
+  check('unknown CPC category remains unknown',SUBJECT.cpcParse({features:[{attributes:{cat:'unexpected'}}]}),null);
+  check('failed CPC rendering never claims normal',SUBJECT.cpcPill('t',null).includes('Unavailable'),true);
+  check('above-normal CPC category remains warm',SUBJECT.cpcPill('t',{cat:'Above Normal'}).includes('Leaning warm'),true);
+  check('normal and equal chances remain separate categories',[
+    SUBJECT.cpcPill('t',{cat:'Normal'}).includes('Near normal'),
+    SUBJECT.cpcPill('t',{cat:'Equal chances'}).includes('Near normal')],[true,false]);
+}
 
 /* Accumulation is a period total, not a rate. Missing values must stay unknown, and snow/ice
    must never be mislabeled as rainfall. These also cover period edges and merged gust samples. */
@@ -1409,6 +1468,8 @@ LAT...LON   38759474 39039367 39299179 39519038
 function riskHarness(getJSON, nowMs=Date.now()) {
   const els = {spc: {innerHTML: ''}, spcLoc: {textContent: ''}, spcThreats: {innerHTML: ''}};
   return new Function('getJSON', 'els', 'nowMs', `
+  ${TIME_HELPERS}
+  function feedUpdate(){}
     var Date=class extends globalThis.Date { static now(){return nowMs;} };
     var SPC_URL='spc/', ERO_URL='ero/', FIRE_URL='fire/', WSSI_URL='wssi/';
     var current={name:'Lake St. Louis, MO',lat:38.8,lon:-90.79};
@@ -1451,6 +1512,8 @@ function riskHarness(getJSON, nowMs=Date.now()) {
 
 function riskMetadataHarness(getJSON) {
   return new Function('getJSON', `
+  ${TIME_HELPERS}
+  function feedUpdate(){}
     var SPC_URL='spc/', ERO_URL='ero/', FIRE_URL='fire/', WSSI_URL='wssi/', MCD_URL='mcd/', WWA_URL='wwa/';
     var RISK_LAYERS={spc:[1,9,17],ero:[0,1,2],fireCat:[1,4],fireD3:{dry:7,wind:8},wssi:[1,2],mcd:0,wwa:1};
     var RISK_READY={spc:false,threats:false,ero:false,fire:false,wssi:false}, _riskLayersP=null;
@@ -1462,6 +1525,8 @@ function riskMetadataHarness(getJSON) {
 
 function observationHarness(getJSON, ids) {
   return new Function('getJSON', 'ids', `
+  ${TIME_HELPERS}
+  function feedUpdate(){}
     var API='https://api.weather.gov', HEADERS={};
     var current={station:'KSUS',lat:38.8,lon:-90.79};
     var STN_STALE_MS=2*60*60000;
@@ -1476,6 +1541,8 @@ function observationHarness(getJSON, ids) {
 function currentCardHarness(result) {
   const els = {current: {innerHTML: ''}, ccStation: {textContent: ''}};
   return new Function('result', 'els', `
+  ${TIME_HELPERS}
+  function feedUpdate(){}
     var current={station:'KSUS',lat:38.8,lon:-90.79};
     var heroNow={temp:83};
     var document={getElementById:function(id){return els[id];}};
@@ -1622,6 +1689,8 @@ async function checkForecastRefreshFailure() {
   const els = {daily:{innerHTML:'old forecast'}, hourly24:{innerHTML:'old chart'}};
   const painted = [];
   const load = new Function('smart','climate','els','painted', `
+  ${TIME_HELPERS}
+  function feedUpdate(){}
     var current={lat:38.8,lon:-90.8}, HEADERS={};
     var document={getElementById:function(id){return els[id]||null;}};
     var renderHourly24=function(){}; renderHourly24._hrs=[{startTime:'old'}];
@@ -1651,6 +1720,8 @@ async function checkGridLoaderIsolation() {
   function harness(read) {
     const painted=[];
     return new Function('read','painted', `
+  ${TIME_HELPERS}
+  function feedUpdate(){}
       var current={lat:38.8,lon:-90.8},HEADERS={},generation=0;
       var forecastGrid={status:'ready',properties:{old:true},gusts:[{value:40}]};
       function locGuard(){var captured=generation;return function(){return captured===generation;};}
