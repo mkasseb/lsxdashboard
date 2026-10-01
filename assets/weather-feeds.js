@@ -452,9 +452,10 @@ function liveAlertFeatures(features,now){
 function alertUpdateNotice(){
   var el=document.getElementById("alertUpdateNote"); if(!el) return;
   el.hidden=!alertsRetained;
-  el.textContent=alertsRetained?"Alert updates unavailable. Showing unexpired alerts last verified "
-    +(feedChecks.alerts.successAt?weatherTime(feedChecks.alerts.successAt,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"earlier")
-    +". New warnings or cancellations cannot be verified. Check weather.gov/lsx.":"";
+  var retained=liveAlertFeatures(lastAlertData&&lastAlertData.features,Date.now()).length>0;
+  el.textContent=alertsRetained?"Alert updates unavailable. "+(retained?"Showing unexpired alerts last verified "
+    +(feedChecks.alerts.successAt?weatherTime(feedChecks.alerts.successAt,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"earlier")+". ":"No unexpired previously verified alerts remain. ")
+    +"New warnings or cancellations cannot be verified. Check weather.gov/lsx.":"";
 }
 function renderAlertsUnavailable(){
   callLocalAlert=null; callAlertGroups=[];

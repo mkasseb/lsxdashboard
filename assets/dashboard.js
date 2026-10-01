@@ -1998,7 +1998,6 @@ function fmtDep(v,unit){
 }
 function renderVsNormal(){
   var el=document.getElementById("cnToday"); if(!el) return;
-  if(climate.normHi==null && climate.normLo==null){ el.innerHTML='<span class="cn-na">Normals loading…</span>'; return; }
   function dep(fc,norm){
     if(fc==null||norm==null) return '';
     var d=fc-norm, s=(d>0?"+":"")+Math.round(d)+"°";
@@ -4089,7 +4088,7 @@ function runDue(){
     scheduleDate=today;
     // Calendar-bound records and normals must not silently acquire the new day's label.
     ctx.ready=false; climate.normHi=null; climate.normLo=null; climate.normDate=null;
-    renderContext(); renderCurrentCtx(); renderVsNormal();
+    renderContext(); renderCurrentCtx(); renderVsNormal(); renderTheCall();
     SCHED.forEach(function(t){if(["daily","grid","uv","risk","climate","context"].indexOf(t.key)>=0)t.last=0;});
   }
   SCHED.forEach(function(t){

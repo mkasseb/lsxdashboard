@@ -739,7 +739,7 @@ async function main() {
       assert(!/No hazards flagged/.test(await page.locator('#hazards').innerText()));
     },320);
   } finally {await browser.close();}
-  const report={testedAt:new Date().toISOString(),recordedSourceAt:recorded.recordedAt,scope:'Production dashboard in Chromium; synthetic weather extremes and one recorded live LSX replay. AQI, UV and rivers are simulated in selected cases; maps and other ancillary feeds exercise unavailable fallbacks.',passed:results.filter(r=>r.status==='passed').length,failed:results.filter(r=>r.status==='failed').length,results};
+  const report={testedAt:new Date().toISOString(),recordedSourceAt:recorded.recordedAt,scope:'Production dashboard in Chromium; synthetic weather extremes and one recorded live LSX replay. AQI, UV and rivers are simulated in selected cases; real map libraries use controlled styles and tiles for initialization, recovery, playback, fullscreen and tile failures. Other ancillary feeds exercise unavailable fallbacks.',passed:results.filter(r=>r.status==='passed').length,failed:results.filter(r=>r.status==='failed').length,results};
   const reportPath=process.env.WEATHER_STRESS_REPORT||'/tmp/lsx-weather-stress-report.json';
   fs.writeFileSync(reportPath,JSON.stringify(report,null,2)+'\n');
   console.log(report.passed+' passed; '+report.failed+' failed; report '+reportPath);
