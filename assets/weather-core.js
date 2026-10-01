@@ -706,16 +706,29 @@ function stationMiles(lat1,lon1,lat2,lon2){
 /* Every hourly-data decision in one pure function. The renderer supplies normalized hours and
    slower-feed facts; tests supply controlled scenarios. `now` is explicit so "today/tomorrow",
    expired UV peaks and the after-5pm behavior do not depend on the test runner's clock. */
+function aqiInfo(v){
+  if(v==null)return {c:"var(--muted)",t:"—",s:""};
+  // Guidance wording follows the EPA's own AQI category advice rather than paraphrasing it — this is
+  // health information, and the agency that sets the scale has already chosen the words for it.
+  if(v<=50)return {c:"#3ecf8e",t:"Good",s:"Little or no health risk."};
+  if(v<=100)return {c:"#ffd23f",t:"Moderate",s:"Unusually sensitive people should limit prolonged exertion."};
+  if(v<=150)return {c:"#ff9f2f",t:"Unhealthy (Sensitive)",s:"Sensitive groups should reduce prolonged exertion."};
+  if(v<=200)return {c:"#ff6a2f",t:"Unhealthy",s:"Everyone should reduce prolonged outdoor exertion."};
+  if(v<=300)return {c:"#c13bff",t:"Very Unhealthy",s:"Avoid prolonged exertion; move activities indoors."};
+  return {c:"#ff3b3b",t:"Hazardous",s:"Avoid all outdoor physical activity."};
+}
 function bottomLineHourlyCandidates(H,opts){
   H=H||[]; opts=opts||{};
   var now=opts.now||new Date(), n=H.length, i, candidates=[];
+  var gaps=H.some(function(h,j){return j>0&&h.d-H[j-1].d!==3600000;});
+  var comfortOK=opts.allowComfort!==false&&!(opts.aqi>100);
   function push(pri,ico,topic,label,headline,detail,action,tone,context,extra){
     candidates.push(bottomCandidate(pri,ico,topic,label,headline,detail,action,tone,context,extra));
   }
   function when(d){ return whenWord(d,now); }
 
   // Rain/storm window. One wet block owns its weather type; a later storm cannot relabel it.
-  var wet0=-1, wetEnd=-1, hasThunder=false, hasWintry=false, maxPop=0, popMissing=false, popKnown=false;
+  var wet0=-1, wetEnd=-1, hasThunder=false, hasWintry=false, maxPop=0, popMissing=gaps, popKnown=false;
   for(i=0;i<n;i++){
     if(H[i].pop==null) popMissing=true;
     else popKnown=true;
@@ -737,7 +750,7 @@ function bottomLineHourlyCandidates(H,opts){
         "Keep an eye on the forecast for outdoor plans.","neutral");
       else push(40,"sun","precip","Rain","Rain unlikely",
         "Chance stays below 20% through "+when(H[n-1].d)+".",
-        "Outdoor plans look favorable for rain.","neutral");
+        "Keep checking the forecast before outdoor plans.","neutral");
     }else{
       var span=(wetEnd>wet0)
         ?(wet0===0?"now":"~"+when(H[wet0].d))+"–"+when(H[wetEnd].d)
@@ -799,8 +812,11 @@ function bottomLineHourlyCandidates(H,opts){
     else if(uvR>=8) push(62,"uv","uv","Sun exposure","Very high UV near "+uvAt,
       "UV index around "+uvR+".","Use sun protection for outdoor plans.","warning");
   }
-  if(opts.aqi!=null&&opts.aqi>100) push(75,"air","air","Air quality","Poor air quality",
-    "AQI "+opts.aqi+".","Sensitive groups should limit prolonged outdoor exertion.","warning");
+  if(opts.aqi!=null&&opts.aqi>100){
+    var air=aqiInfo(opts.aqi);
+    push(opts.aqi>300?110:opts.aqi>200?101:opts.aqi>150?90:75,"air","air","Air quality",
+      air.t+" air quality","AQI "+opts.aqi+".",air.s,opts.aqi>150?"danger":"warning");
+  }
 
   var n0=-1;
   for(i=0;i<n;i++){ if(H[i].hr>=21||H[i].hr<=6){ n0=i; break; } }
@@ -816,7 +832,7 @@ function bottomLineHourlyCandidates(H,opts){
       if(h.t<50||h.t>72||h.pop==null||h.pop>=25||(h.mph!=null&&h.mph>14)||h.dew==null||h.dew>64) ok=false;
       if(h.dew!=null&&h.dew>=67&&h.t>=70) muggy=true;
     });
-    if(ok&&!muggy) push(50,"moon","overnight","Tonight","Comfortable overnight",
+    if(ok&&!muggy&&comfortOK&&!gaps) push(50,"moon","overnight","Tonight","Comfortable overnight",
       "Low near "+lo+"° with dry air.","Good window-opening weather.","good");
     else if(muggy) push(30,"moon","overnight","Tonight","Warm and humid overnight",
       "Low near "+lo+"°.","Open windows may offer little relief.","neutral");
@@ -824,18 +840,18 @@ function bottomLineHourlyCandidates(H,opts){
 
   var localNow=weatherParts(now), today=localNow.key;
   var dayH=H.filter(function(h){ return h.day&&weatherParts(h.d).key===today; });
-  if(dayH.length>=4&&localNow.hour<17){
+  if(comfortOK&&!gaps&&dayH.length>=4&&localNow.hour<17){
     var dhi=-999,nice=true;
     dayH.forEach(function(h){
       if(h.t!=null&&h.t>dhi) dhi=h.t;
       if(h.t==null||h.pop==null||h.pop>=20||h.t<58||h.t>88||(h.fl!=null&&h.fl>=95)||(h.mph!=null&&h.mph>15)||(h.dew!=null&&h.dew>66)) nice=false;
     });
     if(nice) push(55,"check","outdoors","Outdoor plans","Excellent outdoor conditions",
-      dhi+"° and dry "+(localNow.hour>=12?"the rest of the day":"all day")+".",
+      dhi+"° and dry through "+when(dayH[dayH.length-1].end||new Date(+dayH[dayH.length-1].d+3600000))+".",
       "Good day to keep outdoor plans.","good");
   }
 
-  if(maxFl>=99||wet0>=0||wMax>=25){
+  if(comfortOK&&(maxFl>=99||wet0>=0||wMax>=25)){
     var windowHours=[];
     for(i=0;i<n;i++){
       var hb=H[i];
@@ -1274,6 +1290,13 @@ function chaikinRing(ring,iters){
     pts=out;
   }
   return closed?pts.concat([pts[0]]):pts;
+}
+
+/* NWPS timestamps describe measurements, not the time the HTTP request succeeded. */
+function riverObservationState(ob,now,maxAge){
+  var t=Date.parse(ob&&ob.validTime||"");
+  if(!isFinite(t)||t<=0||t>now+10*60000) return {state:"unknown",time:0};
+  return {state:now-t>maxAge?"stale":"ready",time:t};
 }
 
 function feedState(check,now,maxAge){

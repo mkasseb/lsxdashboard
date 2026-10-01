@@ -31,7 +31,7 @@ jobs:
           node-version: '22'
       - name: Install browser test tools outside the static app
         run: |
-          npm install --prefix "$RUNNER_TEMP/lsx-browser" playwright@1.62.1
+          npm install --prefix "$RUNNER_TEMP/lsx-browser" playwright@1.62.1 leaflet@1.9.4 maplibre-gl@5.24.0 @maplibre/maplibre-gl-leaflet@0.1.4
           node "$RUNNER_TEMP/lsx-browser/node_modules/playwright/cli.js" install --with-deps chromium
       - name: Run production-page weather scenarios
         run: |

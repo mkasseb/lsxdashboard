@@ -62,19 +62,22 @@ var _pointsCache={};
 
 Object.keys(FEEDS).forEach(function(k){ FEEDS[k].failure=FEEDS[k].failure||"unavailable"; if(FEEDS[k].tracked!==false) feedChecks[k]={status:"loading",successAt:0,issuedAt:0,saved:false}; });
 
-function requestJSON(url,options,signal){
+function requestWeather(url,options,signal,asText){
   var ctl=new AbortController(), timedOut=false;
   function abort(){ ctl.abort(); }
   if(signal){ if(signal.aborted) abort(); else signal.addEventListener("abort",abort,{once:true}); }
   var timer=setTimeout(function(){ timedOut=true; ctl.abort(); },20000);
   return fetch(url,Object.assign({},options,{signal:ctl.signal})).then(function(r){
     if(!r.ok) throw new Error("Weather service returned "+r.status);
-    return r.json();
+    return asText?r.text():r.json();
   }).catch(function(e){
     if(timedOut){ var err=new Error("Weather request timed out"); err.name="TimeoutError"; throw err; }
     throw e;
   }).finally(function(){ clearTimeout(timer); if(signal) signal.removeEventListener("abort",abort); });
 }
+
+function requestJSON(url,options,signal){ return requestWeather(url,options,signal,false); }
+function getText(url){ return requestWeather(url,{},null,true); }
 
 function getJSON(url, headers, signal){
   return requestJSON(url,{headers:headers||{}},signal);
@@ -119,13 +122,21 @@ function loadForecastGrid(){
 function loadForecast(){
   var fresh=locGuard();
   var daily=document.getElementById("daily");
+  function failDaily(){
+    feedUpdate("daily","unavailable");
+    smart.days=[]; smart.weekDays=[]; loadForecast._paint=null;
+    climate.fcHi=null; climate.fcLo=null; climate.fcHiLabel="";
+    climate.fcHiDate=null; climate.fcLoDate=null;
+    daily.innerHTML='<div class="empty">Forecast unavailable. <a href="https://forecast.weather.gov/MapClick.php?lat='+current.lat+'&lon='+current.lon+'" target="_blank" rel="noopener">Open NWS forecast ↗</a></div>';
+    renderHeroToday(); renderVsNormal(); renderContext();
+  }
   return pointsFor(current.lat,current.lon).then(function(pt){
+    if(!fresh()) return;
     var fUrl=pt.properties.forecast, hUrl=pt.properties.forecastHourly;
     // Hourly is only an enhancer (humidity + 24h strip). If it fails, the 7-day must still render.
-    return Promise.all([getJSON(fUrl,HEADERS,locSignal()), getJSON(hUrl,HEADERS,locSignal()).catch(function(){return null;})]).then(function(res){
+    return Promise.all([getJSON(fUrl,HEADERS,locSignal()).catch(function(){return null;}), getJSON(hUrl,HEADERS,locSignal()).catch(function(){return null;})]).then(function(res){
       if(!fresh()) return;   // user moved while this was in flight
       var f=res[0], h=res[1];
-      if(!f||!f.properties||!Array.isArray(f.properties.periods)||!f.properties.periods.length) throw new Error("Invalid daily forecast");
       // A malformed or empty HTTP 200 hourly response is still a failed enhancer.
       // Keep the healthy daily forecast and clear any previous hourly chart.
       if(h&&h.properties&&Array.isArray(h.properties.periods)){
@@ -134,8 +145,11 @@ function loadForecast(){
         // A response containing only elapsed periods cannot verify the current forecast.
         if(!h.properties.periods.some(function(p){return Date.parse(p.endTime)>Date.now();})) h=null;
       }else h=null;
-      feedUpdate("daily","ready",f.properties.updateTime||f.properties.updated||f.properties.generatedAt);
       feedUpdate("hourly",h?"ready":"unavailable",h&&(h.properties.updateTime||h.properties.updated||h.properties.generatedAt));
+      if(!f||!f.properties||!Array.isArray(f.properties.periods)||!f.properties.periods.length){
+        failDaily();
+      }else{
+      feedUpdate("daily","ready",f.properties.updateTime||f.properties.updated||f.properties.generatedAt);
       var hByDate=h?hourlyByDate(h.properties.periods):{};
       var ps=f.properties.periods.slice(0,15);
       /* Pair day + night periods into single calendar days — seven visible rows, capped ON PURPOSE.
@@ -160,11 +174,13 @@ function loadForecast(){
       // Cache today's forecast hi/lo for the Climate-vs-Normal card
       if(days[0]){
         if(typeof climate!=="undefined"){
-          var fcHi=days[0].day?days[0].day.temperature:null, hiLabel="";
+          var hiPeriod=days[0].day, fcHi=hiPeriod?hiPeriod.temperature:null, hiLabel="";
           if(fcHi==null){ // evening: today's daytime high already passed → use next available daytime high
-            for(var k=1;k<days.length;k++){ if(days[k].day){ fcHi=days[k].day.temperature; hiLabel=" (tmrw)"; break; } }
+            for(var k=1;k<days.length;k++){ if(days[k].day){ hiPeriod=days[k].day; fcHi=hiPeriod.temperature; hiLabel=" (tmrw)"; break; } }
           }
           climate.fcHi=fcHi;
+          climate.fcHiDate=hiPeriod?weatherParts(hiPeriod.startTime).key:null;
+          climate.fcLoDate=days[0].night?weatherParts(Date.parse(days[0].night.endTime)-1).key:null;
           climate.fcHiLabel=hiLabel;
           climate.fcLo=days[0].night?days[0].night.temperature:null;
           if(typeof renderVsNormal==="function") renderVsNormal();
@@ -302,6 +318,7 @@ function loadForecast(){
         +'</div>';
       }).join(""); }
       loadForecast._paint();
+      }
       if(h){ // hourly strip only when the hourly feed succeeded
         var hrs=forecastWindowHours(h.properties.periods,24,Date.now());
         smart.hourly=hrs;
@@ -316,13 +333,9 @@ function loadForecast(){
     });
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
-    feedUpdate("daily","unavailable"); feedUpdate("hourly","unavailable");
-    smart.days=[]; smart.weekDays=[]; smart.hourly=[]; smart.hourlyAll=[];
-    loadForecast._paint=null; renderHourly24._hrs=null;
-    climate.fcHi=null; climate.fcLo=null; climate.fcHiLabel="";
+    failDaily(); feedUpdate("hourly","unavailable");
+    smart.hourly=[]; smart.hourlyAll=[]; renderHourly24._hrs=null;
     clearHourlyForecast();
-    daily.innerHTML='<div class="empty">Forecast unavailable. <a href="https://forecast.weather.gov/MapClick.php?lat='+current.lat+'&lon='+current.lon+'" target="_blank" rel="noopener">Open NWS forecast ↗</a></div>';
-    renderHeroToday(); renderVsNormal(); renderContext();
     if(typeof renderTheCall==="function") renderTheCall();
   });
 }
@@ -429,17 +442,59 @@ function loadCurrent(){
   });
 }
 
+var lastAlertData=null, alertsRetained=false, retainedAlertKey="", alertRequestSeq=0;
+function liveAlertFeatures(features,now){
+  return (features||[]).filter(function(f){
+    var p=f.properties||{}, end=Date.parse(p.ends||p.expires||"");
+    return isFinite(end)&&end>now;
+  });
+}
+function alertUpdateNotice(){
+  var el=document.getElementById("alertUpdateNote"); if(!el) return;
+  el.hidden=!alertsRetained;
+  el.textContent=alertsRetained?"Alert updates unavailable. Showing unexpired alerts last verified "
+    +(feedChecks.alerts.successAt?weatherTime(feedChecks.alerts.successAt,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"earlier")
+    +". New warnings or cancellations cannot be verified. Check weather.gov/lsx.":"";
+}
+function renderAlertsUnavailable(){
+  callLocalAlert=null; callAlertGroups=[];
+  var card=document.getElementById("alertsCard"); card.classList.remove("calm");
+  paintAlerts(document.getElementById("alerts"),'<div class="empty">Couldn\'t load alerts. <a href="https://www.weather.gov/lsx/" target="_blank" rel="noopener">Check weather.gov/lsx ↗</a></div>');
+  loadWarnPolygons([]); watchFeats=[]; watchKey=""; drawWatchPolygons();
+  renderTheCall();
+}
+function renderRetainedAlerts(){
+  var feats=liveAlertFeatures(lastAlertData&&lastAlertData.features,Date.now());
+  var key=JSON.stringify(feats.map(function(f){return f.id||f.properties.id||f.properties.event;}));
+  alertUpdateNotice();
+  if(key===retainedAlertKey) return;
+  retainedAlertKey=key;
+  watchFeats=watchFeats.filter(function(f){var p=f.properties||{};return Date.parse(p.ends||p.expiration||"")>Date.now();});
+  drawWatchPolygons();
+  if(feats.length) renderAlertsData({features:feats});
+  else renderAlertsUnavailable();
+}
 function loadAlerts(){
-  var fresh=locGuard();
-  var el=document.getElementById("alerts"), card=document.getElementById("alertsCard");
-  // zones resolve alongside the alerts (memoised per location) so "covers me" is known at render time
+  var fresh=locGuard(), seq=++alertRequestSeq;
   return Promise.all([getJSON(API+"/alerts/active?area=MO,IL",HEADERS), ensureUserZones()]).then(function(res){
+    if(!fresh()||seq!==alertRequestSeq) return;
     var data=res[0];
-    if(!fresh()) return;   // user moved while this was in flight
     if(!data||!Array.isArray(data.features)||!data.features.every(function(f){return f&&f.properties&&typeof f.properties.event==="string";})) throw new Error("Invalid alerts");
+    lastAlertData=data; alertsRetained=false; retainedAlertKey="";
+    alertUpdateNotice();
     feedUpdate("alerts",zonesResolved()?"ready":"partial",data.updated);
-    loadWarnPolygons(data.features||[]);  // one fetch feeds both list and map
-    loadWatchPolygons(data.features||[]); // …and decides whether the watch fills are worth fetching
+    renderAlertsData(data);
+  }).catch(function(){
+    if(!fresh()||seq!==alertRequestSeq) return;
+    alertsRetained=true; retainedAlertKey="";
+    feedUpdate("alerts","unavailable");
+    renderRetainedAlerts();
+  });
+}
+function renderAlertsData(data){
+  var el=document.getElementById("alerts"), card=document.getElementById("alertsCard");
+  loadWarnPolygons(data.features||[]);
+  if(!alertsRetained) loadWatchPolygons(data.features||[]);
     function isLSX(f){
       var p=f.properties||{};
       var aw=(p.parameters&&p.parameters.AWIPSidentifier&&p.parameters.AWIPSidentifier[0])||"";
@@ -467,6 +522,7 @@ function loadAlerts(){
     var scope=document.getElementById("alertsScope");
     if(scope) scope.textContent=localMode?place:"LSX";
     if(typeof tickCountdowns==="function") setTimeout(tickCountdowns,0);   // fill the new countdowns immediately
+    if(feats.length===0&&alertsRetained){ renderAlertsUnavailable(); return; }
     if(feats.length===0){
       /* The scope half earns its place: "no active alerts" without it invites the reader's next
          question, which is "no alerts WHERE — my street, or the region?". This page treats that
@@ -794,7 +850,7 @@ function loadAlerts(){
        items the claim and its tail get dealt into columns instead of wrapping.) */
     var awayEmerg=null;
     glist.forEach(function(g){ if(!awayEmerg&&g.scope==="away"&&isTakeCover(g.lv)) awayEmerg=g; });
-    var calmHTML=(!mineN&&awayN)?'<div class="calmrow'+(awayEmerg?' guarded':'')+'">'
+    var calmHTML=(!alertsRetained&&!mineN&&awayN)?'<div class="calmrow'+(awayEmerg?' guarded':'')+'">'
       +'<span class="cdot"></span><span>No active watches, warnings or advisories for '+esc(place)+'.'
       +(awayEmerg?' <span class="cmut">'+esc(awayEmerg.ev)+' is active elsewhere in the area.</span>':'')
       +'</span></div>':'';
@@ -815,15 +871,9 @@ function loadAlerts(){
         +'<div id="alertsElse">'+awayHTML+'</div>';
     }
     paintAlerts(el,calmHTML+mineHTML+elseHTML);
-  }).catch(function(){
-    if(!fresh()) return;
-    feedUpdate("alerts","unavailable");   // an old location's failed request must not replace the new alert list
-    callLocalAlert=null; callAlertGroups=[];
-    if(typeof renderTheCall==="function") renderTheCall();
-    card.classList.remove("calm");
-    paintAlerts(el,'<div class="empty">Couldn\'t load alerts. <a href="https://www.weather.gov/lsx/" target="_blank" rel="noopener">Check weather.gov/lsx ↗</a></div>');
-  });
+
 }
+
 
 function loadRivers(){
   var el=document.getElementById("rivers"), known=0;
@@ -836,9 +886,13 @@ function loadRivers(){
       var d=res[0], fcSeries=res[1];
       var ob=(d.status&&d.status.observed)||{}, val=ob.primary, unit=ob.primaryUnit||"ft", info=catInfo(ob.floodCategory);
       if(typeof val!=="number"||!isFinite(val)||val<=-500) return riverLinkOnly(r);
+      var age=riverObservationState(ob,Date.now(),r.maxAge||2*3600000);
+      if(age.state!=="ready") return riverLinkOnly(r,age.time
+        ?"Last report "+weatherTime(age.time,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT · stale; current level unverified"
+        :"Observation time unavailable; current level unverified");
       known++;
       // Context: how much headroom is left before action stage, and which way it's heading
-      var sub=[];
+      var sub=["Observed "+weatherTime(age.time,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT"];
       var cats=(d.flood&&d.flood.categories)||{};
       var act=cats.action&&cats.action.stage, minor=cats.minor&&cats.minor.stage;
       var ref=(typeof act==="number"&&act>0)?{v:act,n:"action stage"}
@@ -849,7 +903,10 @@ function loadRivers(){
                       :(Math.round(-gap*10)/10)+" ft over "+ref.n);
       }
       // What the river is forecast to DO — crest, keep climbing, or recede
-      var cr=crestInfo(fcSeries,val);
+      var issue=Date.parse(fcSeries&&fcSeries.issuedTime||"");
+      var forecastFresh=isFinite(issue)&&issue>0&&issue<=Date.now()+10*60000&&Date.now()-issue<=48*3600000;
+      var cr=forecastFresh?crestInfo(fcSeries,val):null;
+      if(fcSeries) sub.push(forecastFresh?"Forecast issued "+weatherTime(issue,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"Forecast issuance unavailable or stale");
       var crestCat=null;
       if(cr){
         var st1=Math.round(cr.stage*10)/10;
@@ -1186,7 +1243,7 @@ function loadClimate(){
     }
     return ask(st.sid).then(function(local){
       if(!fresh()) return;   // user moved while this was in flight
-      climate.normHi=local.normHi; climate.normLo=local.normLo;   // normals are gap-free \u2014 always local
+      climate.normHi=local.normHi; climate.normLo=local.normLo; climate.normDate=today;   // normals are gap-free \u2014 always local
       if(climAllOK(local,showSnow) || !deep || !deep.sid || deep.sid===st.sid){ paint(local,""); return; }
       // Local station is too gappy for the running totals. Month/year anomalies are broad-scale,
       // so a complete nearby record beats four dashes \u2014 borrowed as a COHERENT set from ONE
@@ -1207,7 +1264,7 @@ function loadClimate(){
 
 function loadClimateContext(){
   var fresh=locGuard();
-  try{ localStorage.removeItem("lsxCtx_v1"); }catch(e){}   // pre-split cache format
+  try{ localStorage.removeItem("lsxCtx_v1"); localStorage.removeItem("lsxCtx_v2"); }catch(e){}   // pre-split cache format
   return climStation(current.lat,current.lon).then(function(st){
    return deepStation(current.lat,current.lon).then(function(deep){
     // Depth vs locality: daily records/rankings come from the deep legacy station; monthly,
@@ -1251,7 +1308,7 @@ function loadClimateContext(){
         if(!v||v.error||!Array.isArray(v.data)) return null;
         return v.data;
       }
-      var nctx={ready:false, recHi:null, recLo:null, recPcp:null, doyHi:[], doyLo:[],
+      var nctx={ready:false, recordDate:today, recHi:null, recLo:null, recPcp:null, doyHi:[], doyLo:[],
                 monWet:[], monWarm:[], monMtd:null, monMean:null, monName:MONTHS[now.month],
                 years:0, dry:null, hist:null, normWeek:{},
                 recStation:(rec.sid!==st.sid)?(rec.name||rec.sid):""};

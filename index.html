@@ -202,6 +202,7 @@
   <a href="#alertsCard">Alerts</a>
   <a href="#currentCard">Now</a>
   <a href="#radarCard">Sky</a>
+  <a href="#h24Card">Hourly</a>
   <a href="#forecastCard">7-Day</a>
   <a href="#riversCard">Rivers</a>
   <a href="#climateCard">Climate</a>
@@ -225,6 +226,7 @@
        zone lookup failed and the list fell back to the whole county warning area. -->
   <section class="card col-12 bannered" id="alertsCard">
     <h2>Active Watches, Warnings &amp; Advisories — <span id="alertsScope">LSX</span></h2>
+    <p id="alertUpdateNote" class="feed-status" data-state="unavailable" role="status" hidden></p>
     <div id="alerts"><div class="loading">Loading alerts…</div></div>
   </section>
 
@@ -246,6 +248,7 @@
       <h2>Bottom Line</h2>
       <span class="call-horizon" id="callHorizon">Next 24 hours</span>
     </div>
+    <p id="briefStatus" class="brief-author" role="status" hidden></p>
     <div class="callrow" id="callRow"></div>
     <details class="disclosure brief-planning" id="briefPlanning" hidden>
       <summary id="briefPlanningTitle">Later-week planning</summary>
@@ -296,7 +299,7 @@
   <div class="stack col-8">
   <section class="card hero" id="radarCard">
     <div class="rs-head">
-      <h2>Sky</h2>
+      <h2 id="skyTitle">Sky</h2>
       <span class="rs-tabs" id="rsTabs" role="group" aria-label="Map layers">
         <button type="button" class="rs-tab on" data-l="radar" aria-pressed="true">Radar</button>
         <button type="button" class="rs-tab on" data-l="sat" aria-pressed="true">Satellite</button>
