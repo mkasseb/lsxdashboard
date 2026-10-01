@@ -140,8 +140,14 @@ The full design rationale — what each decision replaced, and why — lives in
   **open**: nothing is ranked down and the list goes flat — a cluttered list beats a hidden warning.
 - **Grouping is by event *and* coverage.** The same hazard can hold a card here and a card
   elsewhere; neither speaks for the other.
-- **Colour is scarce.** Saturated colour means severity, links are blue; that is the whole budget.
-  Type carries the hierarchy through the `--fs-*`/`--r-*`/`--sp-*` scales.
+- **Colour is scarce.** Saturated colour means severity; blue identifies links and selected controls.
+  Solid panels and subtle borders separate cards. Type carries the hierarchy through the
+  `--fs-*`/`--r-*`/`--sp-*` scales.
+- **Current conditions stay compact.** Essential readings, UV/AQI, observation age, and feed status
+  remain visible. Native Details holds pressure, visibility, climate context, and full credits;
+  it preserves its open state through refresh and resets when the location changes.
+- **Navigation follows the screen.** The sticky section bar highlights the current section from
+  measured card positions, including masonry repacking and asynchronous feed updates.
 - **The page is ordered by what a visitor came for.** Alerts and any active mesoscale discussion,
   the Bottom Line, Now and Sky, event precipitation and the 24–72-hour chart, The Pulse, then the masonry — in DOM order.
 - **Radar is a peek, not the product.** The map's height is an aspect ratio, never leftover space;

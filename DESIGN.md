@@ -158,6 +158,30 @@ form a smaller second step; uppercase micro-labels remain inside data displays. 
 expanded forecast prose use a 15px reading size while compact chart and station-plot internals
 stay on explicit pixels: those values are tuned to SVG geometry.
 
+## Solid surfaces and section navigation
+
+Cards use opaque, theme-specific panels, subtle borders, and a shallow shadow; secondary cards
+have no shadow. Weather icons retain their animation, but the decorative weather background,
+glass filters, bevels, hero glows, and card entrance animations are removed. Data labels are
+plain readings; filled or outlined controls communicate interaction. The hourly duration buttons
+share one segmented control, while Radar and Satellite remain independently pressed layer toggles.
+
+The sticky section bar marks one link with `aria-current="location"`. Its scroll tracking measures
+actual card positions, so masonry reordering and asynchronous feed updates cannot leave it following
+an obsolete DOM sequence. Scroll work is coalesced with `requestAnimationFrame`; resize observation
+keeps the selection accurate after content changes. Cards repack without position animations,
+so selection follows settled geometry. When Now and Sky share a row, Now leads unless the reader
+has explicitly jumped to Sky. The active link scrolls into the bar’s visible area without moving
+the page.
+
+On phones, the compact masthead keeps refresh and theme controls beside the brand. The selected
+place remains visible below the search, before any warning. The clock and regional subtitle yield
+space; forecasts and freshness labels still state their Central Time timestamps. Calm alerts use
+one short scoped sentence. Bottom Line keeps its actionable lead visible. Supporting sentences
+are available under “More forecast details” on phones and remain expanded on wider screens; local warnings and
+emergencies also expand them. The reader’s expansion choice survives refresh and responsive
+resizing. Inline supporting text and less repeated labeling keep the expanded phone view compact.
+
 ## The page is ordered by what a visitor came for
 
 Alerts first (in calm weather that card collapses to a single all-clear line), then the Bottom
@@ -302,22 +326,22 @@ tornadoes and `<5%` for wind/hail, never zero risk. The explanation says probabi
 within 25 miles and displays the actual outlook windows in Central time. New event totals and
 threat probabilities are fetched live instead of restored from rendered snapshots.
 
-## UV and air quality are tiles beside the metric grid, not inside it
+## Essential observations and expandable Details
 
-They answer the same question as each other — how much is this going to cost me to be outside — so
-they sit together in `.cc-expo`, wearing `.cc-item`'s chrome because the card should speak one
-language. They stay *out* of `.cc-grid` on purpose: those six tiles are what the `Observed … KSUS`
-footline describes, and UV and AQI come from Open-Meteo, so folding them in would make that line
-assert something false. The footline names Open-Meteo for exactly that reason. They were four
-run-on sentences at 12.5px until the burn clock read identically to a record from 1936; the fix
-was hierarchy, not smaller type. Below them the climate line labels its figures (`NORMAL`,
-`RECORD`) and drops the words "record high" and "low", because a warm/cool colour pair says it in
-no characters at all, and every credit — observation age, station, records station, AirNow —
-collects into one dimmer line that reads as a caption rather than a fifth row of data.
+Wind, gusts, humidity, and dew point are flat label/value readings in `.cc-grid`. Pressure,
+visibility, climate context, and full attribution live in native `<details id="ccDetails">`.
+It starts closed, works with the keyboard, and preserves its open state through an observation
+refresh. Changing location clears the old observation DOM, so the next town starts closed.
+Current observations are never restored from a snapshot; this disclosure changes no saved-fragment
+markup or freshness contract and therefore does not require a `SNAP_KEY` bump.
 
-One thing there is load-bearing: the severity palettes (`uvLevel`, `aqiInfo`) are tuned for the
-dark panel and arrive as inline colours, so a light-mode `filter` darkens them as a group — at tile
-size, AQI "Moderate" on the light panel is otherwise 1.3:1.
+UV and air quality remain visible in `.cc-expo`, outside the station measurements and outside
+Details. Their group and visible provenance line name Open-Meteo. The observation age and station
+stay visible, as do all feed check times and unavailable/overdue labels appended to the card.
+Borrowed climate records keep their source beside the expanded climate context.
+
+The inline severity palettes (`uvLevel`, `aqiInfo`) still use the light-mode darkening filter,
+so their text remains readable on the opaque light panel without changing severity hues.
 
 ## The hero row is a pair of stacks, but only on wide screens
 

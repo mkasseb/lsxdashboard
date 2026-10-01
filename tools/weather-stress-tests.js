@@ -72,6 +72,7 @@ async function open(c, width=390) {
   const context=await browser.newContext({viewport:{width,height:900},timezoneId:c.timezone||'America/Chicago'});
   const page=await context.newPage();
   await page.clock.install({time:new Date(c.now)});
+  if(c.theme)await page.addInitScript(theme=>localStorage.setItem('lsxTheme',theme),c.theme);
   if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v17',snapshot),c.snapshot);
   const errors=[],requests=[];
   page.on('pageerror',e=>errors.push(e.message));
@@ -197,7 +198,7 @@ async function run(name,c,test,width=390) {
     results.push({name,status:'passed',width,ms:Date.now()-started,requests:session.requests.length});
     console.log('PASS',name);
   } catch(e) {
-    results.push({name,status:'failed',width,ms:Date.now()-started,error:e.message});
+    results.push({name,status:'failed',width,ms:Date.now()-started,error:e.stack||e.message});
     console.error('FAIL',name,e.message);
   } finally {if(session)await session.context.close();}
 }
@@ -207,6 +208,77 @@ async function main() {
     await run('dry forecast and all duration controls',config('dry'),async({page})=>{
       await expectText(page,'#precipEvents',/No measurable precipitation/);await durations(page);
     });
+    await run('observation details work with the keyboard and survive refresh',config('details',{aqi:35,uv:6}),async({page})=>{
+      const details=page.locator('#ccDetails'), summary=details.locator('summary');
+      assert(!(await details.evaluate(el=>el.open)));
+      assert(!(await details.getByText('Pressure',{exact:true}).isVisible()));
+      assert(await page.locator('#ccUv').isVisible());
+      assert(await page.locator('#aqiMini').isVisible());
+      assert(await page.locator('#fresh-current').isVisible());
+      assert(await page.locator('#fresh-uv').isVisible());
+      assert(await page.locator('#fresh-aqi').isVisible());
+      await summary.focus();await page.keyboard.press('Enter');
+      assert(await details.getByText('Pressure',{exact:true}).isVisible());
+      await page.evaluate(()=>loadCurrent());
+      assert(await details.evaluate(el=>el.open));
+      assert(await summary.evaluate(el=>el===document.activeElement));
+      await page.evaluate(()=>setLocation({name:'Wentzville, MO',lat:38.81,lon:-90.86,station:'KSTL'}));
+      await page.waitForFunction(()=>document.getElementById('ccDetails')&&snapSafeSeq===locSeq);
+      assert(!(await details.evaluate(el=>el.open)));
+      await expectText(page,'#locNow',/Wentzville/);
+    });
+    await run('phone forecast disclosure keeps its state across refresh and resizing',config('planning details',{uv:8,aqi:35,wind:'25 to 35 mph'}),async({page})=>{
+      const details=page.locator('.bl-more'), summary=details.locator('summary');
+      assert.equal(await details.count(),1);
+      assert(!(await details.evaluate(el=>el.open)));
+      assert(await page.locator('.bl-lead').isVisible());
+      await summary.focus();await page.keyboard.press('Enter');
+      assert(await details.locator('.bl-support').isVisible());
+      await page.evaluate(()=>renderTheCall());
+      assert(await details.evaluate(el=>el.open));
+      assert(await summary.evaluate(el=>el===document.activeElement));
+      await page.setViewportSize({width:768,height:900});
+      assert(await details.evaluate(el=>el.open));
+      await page.setViewportSize({width:390,height:900});
+      assert(await details.evaluate(el=>el.open));
+      await summary.focus();await page.keyboard.press('Enter');
+      await page.evaluate(()=>renderTheCall());
+      assert(!(await details.evaluate(el=>el.open)));
+      await page.setViewportSize({width:768,height:900});
+      await page.waitForFunction(()=>document.querySelector('.bl-more').open);
+      await page.setViewportSize({width:390,height:900});
+      await page.waitForFunction(()=>!document.querySelector('.bl-more').open);
+    });
+    for(const theme of ['light','dark'])for(const width of [320,390,768,1440]){
+      await run('modern layout in '+theme+' at '+width+'px',config('modern layout',{theme,recorded:true,now:Date.parse(recorded.recordedAt),aqi:35,uv:6}),async({page})=>{
+        assert.equal(await page.locator('html').getAttribute('data-theme'),theme);
+        if(width<=390){
+          const bottom=await page.locator('.cc-temp').evaluate(el=>el.getBoundingClientRect().bottom);
+          assert(bottom<844,'the current temperature should be visible on an 844px-tall phone: '+bottom);
+        }
+        await page.locator('#jumpNav a[href="#currentCard"]').click();
+        await page.clock.runFor(100);
+        await page.waitForFunction(()=>document.querySelector('#jumpNav [aria-current="location"]')?.hash==='#currentCard');
+        assert.equal(await page.locator('#jumpNav [aria-current="location"]').getAttribute('href'),'#currentCard');
+        await page.locator('#jumpNav a[href="#radarCard"]').click();
+        await page.clock.runFor(100);
+        await page.waitForFunction(()=>document.querySelector('#jumpNav [aria-current="location"]')?.hash==='#radarCard');
+        assert.equal(await page.locator('#jumpNav [aria-current="location"]').getAttribute('href'),'#radarCard');
+        await page.locator('#climateCard').evaluate(el=>el.scrollIntoView());
+        await page.clock.runFor(100);
+        await page.waitForFunction(()=>document.querySelector('#jumpNav [aria-current="location"]')?.hash==='#climateCard');
+        assert.equal(await page.locator('#jumpNav [aria-current="location"]').getAttribute('href'),'#climateCard');
+        for(const selector of ['#themeBtn','#refresh','#geoBtn','#ccDetails summary','#hourlyOptions button']){
+          const heights=await page.locator(selector).evaluateAll(els=>els.map(el=>el.getBoundingClientRect().height));
+          assert(heights.every(h=>h>=44),'controls retain a 44px touch target: '+selector);
+        }
+        const radar=page.locator('#rsTabs [data-l="radar"]'), satellite=page.locator('#rsTabs [data-l="sat"]');
+        await radar.click();
+        assert.equal(await radar.getAttribute('aria-pressed'),'false');
+        assert.equal(await satellite.getAttribute('aria-pressed'),'true');
+        await durations(page);
+      },width);
+    }
     await run('rain bursts separated by six known dry hours',config('rain',{qpf:[[0,6,25.4],[6,6,0],[12,6,12.7],[18,78,0]],pop:80,condition:'Showers And Thunderstorms'}),async({page})=>{
       assert.equal(await page.locator('.precip-event').count(),1);await expectText(page,'.precip-total',/~1\.50″ rain/);await durations(page);
     });
