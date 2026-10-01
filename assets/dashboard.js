@@ -4066,7 +4066,7 @@ function ensureMapLibraries(){
           clearTimeout(timer);link.onload=null;link.onerror=null;
           if(err){link.remove();reject(err);}else{original.remove();resolve();}
         }
-        link.onload=function(){done();};link.onerror=function(){done(new Error("Map stylesheet unavailable"));};
+        link.onload=function(){link.media="all";done();};link.onerror=function(){done(new Error("Map stylesheet unavailable"));};
         timer=setTimeout(function(){done(new Error("Map stylesheet timed out"));},20000);
         document.head.appendChild(link);
       });
