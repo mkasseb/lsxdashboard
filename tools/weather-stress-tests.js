@@ -105,7 +105,7 @@ async function open(c, width=390) {
         ['maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js','@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js','application/javascript']
       ];
       const asset=mapFiles.find(([part])=>u.href.includes(part));
-      if(asset) return route.fulfill({status:200,contentType:asset[2],body:fs.readFileSync(require.resolve(asset[1]))});
+      if(asset) return route.fulfill({status:c.mapLibrariesDown?503:200,contentType:asset[2],body:c.mapLibrariesDown?'':fs.readFileSync(require.resolve(asset[1]))});
       if(u.hostname==='tiles.openfreemap.org')return reply(c.mapStyleDown?{}:{version:8,sources:{},layers:[{id:'background',type:'background',paint:{'background-color':'#18202d'}}]},c.mapStyleDown?503:200);
       if(u.hostname==='opengeo.ncep.noaa.gov'||u.hostname==='gibs.earthdata.nasa.gov'){
         if(/GetCapabilities/i.test(u.href))return route.fulfill({contentType:'text/xml',body:'<Dimension name="time">'+Array.from({length:31},(_,i)=>new Date(c.now-(60-i*2)*60000).toISOString()).join(',')+'</Dimension>'});
@@ -498,6 +498,7 @@ async function main() {
     });
     await run('receding river forecast',config('river falling',{river:[19,17,15]}),async({page})=>await expectText(page,'#rivers',/falling to 15 ft/));
     await run('map CDN or style outage keeps official radar and observation links',config('maps unavailable'),async({page})=>{
+      await page.waitForFunction(()=>mapsInFlight===null);
       await expectText(page,'#radar',/Map didn.t load/);assert(await page.locator('#radar a[href*="radar.weather.gov"]').count());assert(await page.locator('#stnmap a[href*="weather.gov"]').count());
     });
     await run('100 concurrent refresh requests are coalesced',config('refresh storm',{delay:20,pop:60}),async({page})=>{
@@ -724,6 +725,15 @@ async function main() {
       await page.locator('#radarPlay').click();assert.equal(await page.evaluate(()=>radarPlaying),false);
       await page.locator('#rsFull').click();await page.keyboard.press('Escape');
       assert.equal(await page.locator('#radar .leaflet-container').count(),0);
+      assert.equal(await page.locator('#radar').evaluate(el=>el.classList.contains('leaflet-container')),true);
+    },1280);
+    await run('real map libraries recover after an initial CDN failure',config('map CDN retry',{maps:true,mapLibrariesDown:true}),async session=>{
+      const {page}=session;
+      await page.waitForFunction(()=>mapsInFlight===null);
+      await expectText(page,'#radar',/Map didn.t load/);
+      session.change(config('map CDN recovered',{maps:true}));
+      await page.locator('#radar [data-retry-maps]').click();
+      await page.waitForFunction(()=>rvMap&&stnMap&&radarFrames.length>1&&radarFrames.every(f=>f.layer._ok>0));
       assert.equal(await page.locator('#radar').evaluate(el=>el.classList.contains('leaflet-container')),true);
     },1280);
     await run('real map tile failure cannot read as clear radar',config('tile failure',{maps:true,mapTilesDown:true}),async({page})=>{

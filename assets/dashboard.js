@@ -4043,8 +4043,9 @@ function ensureMapLibraries(){
     var original=[].slice.call(document.querySelectorAll("script[src]")).filter(function(node){return node.src.indexOf(lib.part)>=0;})[0];
     if(!original) throw new Error("Map dependency unavailable");
     return new Promise(function(resolve,reject){
-      var script=original.cloneNode(false), timer;
-      script.removeAttribute("defer");
+      var script=document.createElement("script"), timer;
+      // Cloning an already-started script also clones its inert execution state.
+      [].forEach.call(original.attributes,function(attr){if(attr.name!=="defer")script.setAttribute(attr.name,attr.value);});
       function done(err){clearTimeout(timer);script.onload=null;script.onerror=null;script.remove();if(err)reject(err);else resolve();}
       script.onload=function(){done(lib.ready()?null:new Error("Map dependency did not initialize"));};
       script.onerror=function(){done(new Error("Map dependency unavailable"));};
