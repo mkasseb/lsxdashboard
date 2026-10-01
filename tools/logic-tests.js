@@ -1116,8 +1116,15 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
     c('cold', 70, false, 'cold morning'), c('precip', 40), c('cold', 85, false, 'freezing early')
   ]), { lead: 'cold:freezing early', supports: ['precip:precip'] });
 
-  check('outdoor-window scan no longer stops after 5 PM',
-    /if\(maxFl>=99\|\|wet0>=0\|\|wMax>=25\)/.test(SRC), true);
+  const eveningNow=new Date('2026-10-01T22:00:00Z'); // 5 PM Central
+  const eveningHours=Array.from({length:4},(_,i)=>({
+    startTime:new Date(+eveningNow+i*3600000).toISOString(),endTime:new Date(+eveningNow+(i+1)*3600000).toISOString(),
+    temperature:72,windSpeed:'5 mph',relativeHumidity:{value:40},
+    probabilityOfPrecipitation:{value:i===0?80:0},isDaytime:true,shortForecast:i===0?'Rain':'Clear'
+  }));
+  check('outdoor-window scan still finds a dry evening window after 5 PM',
+    SUBJECT.bottomLineHourlyCandidates(SUBJECT.bottomLineHours(eveningHours),{now:eveningNow,aqi:35})
+      .some(c=>c.topic==='outdoors'&&c.headline.includes('6pm')),true);
   const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(7, 0, 0, 0);
   const tomorrowEnd = new Date(tomorrow); tomorrowEnd.setHours(9);
   check('tomorrow outdoor window carries its day', SUBJECT.windowSpan(tomorrow, tomorrowEnd), '7am–9am tomorrow');

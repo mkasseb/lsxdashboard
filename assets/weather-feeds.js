@@ -133,7 +133,7 @@ function loadForecast(){
   return pointsFor(current.lat,current.lon).then(function(pt){
     if(!fresh()) return;
     var fUrl=pt.properties.forecast, hUrl=pt.properties.forecastHourly;
-    // Hourly is only an enhancer (humidity + 24h strip). If it fails, the 7-day must still render.
+    // Daily and hourly failures are independent; either healthy response can still render.
     return Promise.all([getJSON(fUrl,HEADERS,locSignal()).catch(function(){return null;}), getJSON(hUrl,HEADERS,locSignal()).catch(function(){return null;})]).then(function(res){
       if(!fresh()) return;   // user moved while this was in flight
       var f=res[0], h=res[1];

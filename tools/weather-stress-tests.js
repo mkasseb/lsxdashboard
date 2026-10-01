@@ -73,6 +73,7 @@ let browser;
 async function open(c, width=390) {
   const context=await browser.newContext({viewport:{width,height:900},timezoneId:c.timezone||'America/Chicago'});
   const page=await context.newPage();
+  page.setDefaultTimeout(15000);
   await page.clock.install({time:new Date(c.now)});
   if(c.storage)await page.addInitScript(storage=>Object.entries(storage).forEach(([key,value])=>localStorage.setItem(key,typeof value==='string'?value:JSON.stringify(value))),c.storage);
   if(c.geo)await page.addInitScript(geo=>Object.defineProperty(navigator,'geolocation',{value:{getCurrentPosition:success=>queueMicrotask(()=>success({coords:{latitude:geo.lat,longitude:geo.lon,accuracy:25}}))}}),c.geo);
