@@ -930,6 +930,7 @@ function buildRadarFrames(times){
     if(!keep[t]){ if(rvMap.hasLayer(radarPool[t])) rvMap.removeLayer(radarPool[t]); delete radarPool[t]; }
   });
   preloadRadarFrames(radarFrames.map(function(f){ return f.layer; }),gen);
+  syncSkyHealth(); // The newest layer is new evidence, even if the previous layer was down.
 }
 /* A sweep this old is not "now" no matter what the clock face says. Three missed cycles: the
    scheduler re-reads the time dimension every 4 minutes, so anything past ~15 means the feed has
@@ -4029,6 +4030,7 @@ refreshAll();
 var mapsCanStart=false, mapsInFlight=null;
 function mapFallback(id){
   var el=document.getElementById(id);
+  if(el&&el.closest(".maplock-wrap"))el.closest(".maplock-wrap").classList.add("map-unavailable");
   var href=id==="radar"?"https://radar.weather.gov/station/KLSX/standard":"https://www.weather.gov/wrh/timeseries?site=KSTL";
   if(el) el.innerHTML='<div class="imgfail">Map didn’t load. <button type="button" data-retry-maps>Retry maps</button> <a href="'+href+'" target="_blank" rel="noopener">'+(id==="radar"?"Open NWS radar":"Open NWS obs")+' ↗</a></div>';
 }
@@ -4060,7 +4062,7 @@ function ensureMaps(){
   var theme=effectiveLight()?"light":"dark";
   mapsInFlight=ensureMapLibraries().then(function(){return loadMapStyle(theme);}).then(function(style){
     if(!rvMap){
-      try{document.getElementById("radar").innerHTML="";initRadarMap(style);}
+      try{document.getElementById("radar").innerHTML="";initRadarMap(style);document.getElementById("radar").closest(".maplock-wrap").classList.remove("map-unavailable");}
       catch(e){if(rvMap)rvMap.remove();rvMap=null;rvBase=null;baseLabels=null;mapFallback("radar");}
     }
     if(!stnMap){
