@@ -4054,7 +4054,24 @@ function ensureMapLibraries(){
       timer=setTimeout(function(){done(new Error("Map dependency timed out"));},20000);
       document.head.appendChild(script);
     });
-  });},Promise.resolve());
+  });},Promise.resolve()).then(function(){
+    // A CDN outage can also leave the map stylesheets unloaded.
+    return Promise.all([].slice.call(document.querySelectorAll('link[rel="stylesheet"]')).filter(function(node){
+      return /leaflet\/1\.9\.4\/|maplibre-gl@5\.24\.0\//.test(node.href)&&!node.sheet;
+    }).map(function(original){
+      return new Promise(function(resolve,reject){
+        var link=document.createElement("link"),timer;
+        [].forEach.call(original.attributes,function(attr){link.setAttribute(attr.name,attr.value);});
+        function done(err){
+          clearTimeout(timer);link.onload=null;link.onerror=null;
+          if(err){link.remove();reject(err);}else{original.remove();resolve();}
+        }
+        link.onload=function(){done();};link.onerror=function(){done(new Error("Map stylesheet unavailable"));};
+        timer=setTimeout(function(){done(new Error("Map stylesheet timed out"));},20000);
+        document.head.appendChild(link);
+      });
+    }));
+  });
 }
 function ensureMaps(){
   if(!mapsCanStart||rvMap&&stnMap) return Promise.resolve();

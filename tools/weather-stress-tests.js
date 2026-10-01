@@ -735,6 +735,7 @@ async function main() {
       await page.locator('#radar [data-retry-maps]').click();
       await page.waitForFunction(()=>rvMap&&stnMap&&radarFrames.length>1&&radarFrames.every(f=>f.layer._ok>0));
       assert.equal(await page.locator('#radar').evaluate(el=>el.classList.contains('leaflet-container')),true);
+      assert.equal(await page.locator('#radar .leaflet-map-pane').evaluate(el=>getComputedStyle(el).position),'absolute');
     },1280);
     await run('real map tile failure cannot read as clear radar',config('tile failure',{maps:true,mapTilesDown:true}),async({page})=>{
       await page.waitForFunction(()=>rvMap&&radarDown());
