@@ -4040,6 +4040,7 @@ function ensureMapLibraries(){
     {part:"maplibre-gl@5.24.0/",ready:function(){return !!window.maplibregl;}},
     {part:"maplibre-gl-leaflet@",ready:function(){return !!(window.L&&L.maplibreGL);}}
   ];
+  var retryStyles=libraries.some(function(lib){return !lib.ready();});
   return libraries.reduce(function(chain,lib){return chain.then(function(){
     if(lib.ready()) return;
     var original=[].slice.call(document.querySelectorAll("script[src]")).filter(function(node){return node.src.indexOf(lib.part)>=0;})[0];
@@ -4057,7 +4058,7 @@ function ensureMapLibraries(){
   });},Promise.resolve()).then(function(){
     // A CDN outage can also leave the map stylesheets unloaded.
     return Promise.all([].slice.call(document.querySelectorAll('link[rel="stylesheet"]')).filter(function(node){
-      return /leaflet\/1\.9\.4\/|maplibre-gl@5\.24\.0\//.test(node.href)&&!node.sheet;
+      return /leaflet\/1\.9\.4\/|maplibre-gl@5\.24\.0\//.test(node.href)&&(retryStyles||!node.sheet);
     }).map(function(original){
       return new Promise(function(resolve,reject){
         var link=document.createElement("link"),timer;
