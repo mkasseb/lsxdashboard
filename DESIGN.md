@@ -192,6 +192,9 @@ supporting cues are then ranked by consequence: useful wet timing receives a pro
 a dry forecast competes normally with air quality, wind, overnight comfort and other decisions.
 Duplicate topics collapse before selection, so two ways of describing the same cold trough or heat
 episode cannot consume the card.
+On desktop, the near-term section owns the two-column layout beneath its full-width heading:
+the lead sits beside its supporting cues. A lead without supporting cues fills the width, and
+tablet and phone layouts stack the advice.
 
 The synthesized outdoor window now searches the full forecast horizon, including tomorrow after
 an evening page load. For heat and wind, that candidate can be folded into the lead as an exact
