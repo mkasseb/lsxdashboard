@@ -1806,4 +1806,8 @@ body{transition:none}
    near-white cloud/snow/moon shapes. It applies to current, hourly and daily icons alike.
    Local sprite fallbacks already inherit the theme's high-contrast text colour. */
 :root[data-theme="light"] .wxi,
-:root[data-theme="light"] .h24-ic{filter:brightness(.55) drop-shadow(0 0 .7px rgba(20,43,62,.95))}
+:root[data-theme="light"] .h24-ic{filter:brightness(var(--weather-icon-brightness,.55)) drop-shadow(0 0 .7px rgba(20,43,62,.95))}
+
+/* Subpixel wind/tornado lines need more contrast than the filled condition artwork. */
+.wxi[src*="/wind.svg"],.wxi[src*="/tornado.svg"],
+.h24-ic[href*="/wind.svg"],.h24-ic[href*="/tornado.svg"]{--weather-icon-brightness:.35}
