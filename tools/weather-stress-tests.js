@@ -79,6 +79,14 @@ async function open(c, width=390) {
   page.setDefaultTimeout(15000);
   if(c.measure){const cdp=await context.newCDPSession(page);await cdp.send('Emulation.setCPUThrottlingRate',{rate:4});}
   await page.clock.install({time:new Date(c.now)});
+  if(c.webglBlocked)await page.addInitScript(()=>{
+    window.testWebglBlocked=true;
+    const getContext=HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext=function(type,...args){
+      if(window.testWebglBlocked&&/webgl/i.test(type))return null;
+      return getContext.call(this,type,...args);
+    };
+  });
   if(c.storage)await page.addInitScript(storage=>Object.entries(storage).forEach(([key,value])=>localStorage.setItem(key,typeof value==='string'?value:JSON.stringify(value))),c.storage);
   if(c.geo)await page.addInitScript(geo=>Object.defineProperty(navigator,'geolocation',{value:{getCurrentPosition:success=>queueMicrotask(()=>success({coords:{latitude:geo.lat,longitude:geo.lon,accuracy:25}}))}}),c.geo);
   if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v19',snapshot),c.snapshot);
@@ -765,6 +773,59 @@ async function main() {
       const mapStyles=await page.evaluate(()=>[...document.querySelectorAll('link[rel="stylesheet"]')].map(n=>({href:n.href,media:n.media,loaded:!!n.sheet})));
       assert.equal(await page.locator('#radar .leaflet-map-pane').evaluate(el=>getComputedStyle(el).position),'absolute',JSON.stringify(mapStyles));
     },1280);
+    await run('real map WebGL failure exposes retries and recovers both maps',config('WebGL recovery',{maps:true,webglBlocked:true}),async({page})=>{
+      await page.waitForFunction(()=>mapsInFlight===null);
+      await expectText(page,'#radar',/Map didn.t load/);
+      assert.equal(await page.evaluate(()=>rvMap),null);
+      await page.evaluate(()=>requestContext('stations'));
+      await expectText(page,'#stnmap',/Map didn.t load/);
+      assert.equal(await page.evaluate(()=>stnMap),null);
+      assert(await page.locator('#radar a[href*="radar.weather.gov"]').count());
+      assert(await page.locator('#stnmap a[href*="weather.gov"]').count());
+      await page.locator('#rsFull').click();
+      for(let i=0;i<2;i++){
+        await page.locator('#radar [data-retry-maps]').click();
+        await page.waitForFunction(()=>mapsInFlight===null);
+        assert(await page.locator('#radar [data-retry-maps]').isVisible());
+        assert.equal(await page.evaluate(()=>rvMap),null);
+        assert.equal(await page.evaluate(()=>stnMap),null);
+      }
+      await page.keyboard.press('Escape');
+      assert.equal(await page.evaluate(()=>document.activeElement.id),'rsFull');
+      // Restore the graphics capability without navigating or reloading the page.
+      await page.evaluate(()=>{window.testWebglBlocked=false;});
+      await page.locator('#stnmap [data-retry-maps]').click();
+      await page.waitForFunction(()=>mapsInFlight===null&&rvMap&&stnMap&&radarFrames.length>1&&radarFrames.every(f=>f.layer._ok>0));
+      for(const id of ['radar','stnmap']){
+        assert.equal(await page.locator('#'+id+' .leaflet-map-pane').count(),1);
+        assert.equal(await page.locator('#'+id+' .leaflet-control-zoom').count(),1);
+        assert.equal(await page.locator('#'+id+' [data-retry-maps]').count(),0);
+      }
+      await page.evaluate(async()=>{window.recoveredRadar=rvMap;window.recoveredStation=stnMap;await Promise.all([ensureMaps(),ensureMaps(),ensureMaps()]);});
+      assert(await page.evaluate(()=>rvMap===window.recoveredRadar&&stnMap===window.recoveredStation));
+      await page.locator('#rsFull').click();assert.equal(await page.locator('#radarCard').getAttribute('aria-modal'),'true');await page.keyboard.press('Escape');
+      await page.locator('#radarPlay').click();
+      const before=await page.evaluate(()=>radarIdx);await page.clock.runFor(950);
+      assert.notEqual(await page.evaluate(()=>radarIdx),before);
+      await page.locator('#radarPlay').click();
+    },1165);
+    await run('real station WebGL failure leaves an initialized radar intact',config('station WebGL recovery',{maps:true,webglBlocked:true}),async({page})=>{
+      await page.waitForFunction(()=>mapsInFlight===null);
+      await page.evaluate(()=>{window.testWebglBlocked=false;});
+      await page.locator('#radar [data-retry-maps]').click();
+      await page.waitForFunction(()=>mapsInFlight===null&&rvMap&&radarFrames.length>1);
+      await page.evaluate(()=>{window.initialRadar=rvMap;window.testWebglBlocked=true;return requestContext('stations');});
+      assert.equal(await page.evaluate(()=>stnMap),null);
+      assert(await page.evaluate(()=>rvMap===window.initialRadar));
+      await page.locator('#stnmap [data-retry-maps]').click();await page.waitForFunction(()=>mapsInFlight===null);
+      assert(await page.locator('#stnmap [data-retry-maps]').isVisible());
+      await page.evaluate(()=>{window.testWebglBlocked=false;});
+      await page.locator('#stnmap [data-retry-maps]').click();
+      await page.waitForFunction(()=>mapsInFlight===null&&stnMap);
+      assert(await page.evaluate(()=>rvMap===window.initialRadar));
+      assert.equal(await page.locator('#radar .leaflet-map-pane').count(),1);
+      assert.equal(await page.locator('#stnmap .leaflet-map-pane').count(),1);
+    },1165);
     await run('real map tile failure cannot read as clear radar',config('tile failure',{maps:true,mapTilesDown:true}),async({page})=>{
       await page.waitForFunction(()=>rvMap&&radarDown());
       await expectText(page,'#radarTime',/radar unavailable/);
