@@ -2044,15 +2044,15 @@ function climAllOK(c,showSnow){
 
 
 /* ============ CLIMATE CONTEXT — records, rankings, streaks ============
-   Four keyless ACIS queries, cached for up to 12 hours as small DERIVED facts (~10 KB)
+   Five keyless ACIS queries, cached for up to 12 hours as small DERIVED facts (~10 KB)
    rather than raw history:
-     1. the same calendar day across every year of record → true daily records + a percentile
+     1. today and tomorrow across every year of record (two queries) → date-matched records + percentiles
      2. monthly totals across every year          → "already wetter than N of M Julys"
      3. the last two years of dailies             → dry streaks, "warmest since"
      4. normals for the week ahead                → per-day departures in the 7-day detail
    A pre-POR start date (1850) is fine — ACIS pads with "M", which we filter. Everything here
    degrades to silence: a number we can't verify is never shown. */
-var CTX_KEY="lsxCtx_v3";
+var CTX_KEY="lsxCtx_v4";
 var ctx={ready:false, recHi:null, recLo:null, recPcp:null, doyHi:[], doyLo:[],
          monWet:[], monWarm:[], monMtd:null, monMean:null, monName:"", years:0,
          dry:null, hist:null, normWeek:{}, recStation:""};
@@ -2068,6 +2068,10 @@ var _deepCache={};
 
 var MONTHS=["January","February","March","April","May","June","July","August","September","October","November","December"];
 function ctxTodayKey(){ return weatherParts().key; }
+function contextRecord(date){
+  if(!ctx.ready) return null;
+  return ctx.recordsByDate&&ctx.recordsByDate[date] || (ctx.recordDate===date?ctx:null);
+}
 function ctxNumPairs(rows,col,pickMax){
   // → {best:{v,y}, sorted:[v...]} over one column, ignoring M/T padding
   var vals=[], best=null;
@@ -2127,20 +2131,21 @@ function renderContext(){
   if(!ctx.ready){ el.innerHTML=""; return; }
   var L=[];
   function line(ico,html,cls){ L.push('<div class="cx'+(cls?" "+cls:"")+'"><span class="cxi">'+ic(ico)+'</span><span>'+html+'</span></div>'); }
-  var md=fmtMD(ctx.recordDate?calendarDate(ctx.recordDate):weatherDay());
-  // records for today — only from a sample that can support the claim; attribute the deep
+  var record=contextRecord(climate.fcHiDate)||contextRecord(ctx.recordDate)||ctx;
+  var md=fmtMD(record.recordDate?calendarDate(record.recordDate):weatherDay());
+  // records for the forecast date — only from a sample that can support the claim; attribute the deep
   // station when it isn't the local one
-  var deepOK=ctx.years>=CTX_MIN_YEARS;
-  if(deepOK&&ctx.recHi&&ctx.recLo){
-    line("record","Record for "+md+": high <b class=\"cx-rec\">"+Math.round(ctx.recHi.v)+"°</b> ("+ctx.recHi.y+")"
-      +" · low <b class=\"cx-cold\">"+Math.round(ctx.recLo.v)+"°</b> ("+ctx.recLo.y+")"
-      +' <span class="cx-src">· '+ctx.years+" years"
+  var deepOK=record.years>=CTX_MIN_YEARS;
+  if(deepOK&&record.recHi&&record.recLo){
+    line("record","Record for "+md+": high <b class=\"cx-rec\">"+Math.round(record.recHi.v)+"°</b> ("+record.recHi.y+")"
+      +" · low <b class=\"cx-cold\">"+Math.round(record.recLo.v)+"°</b> ("+record.recLo.y+")"
+      +' <span class="cx-src">· '+record.years+" years"
       +(ctx.recStation?" · "+esc(shortStn(ctx.recStation)):"")+'</span>');
-  }else if(ctx.years>0&&!deepOK){
-    line("info","Stations near here have short records ("+ctx.years+" yrs) — daily records omitted");
+  }else if(record.years>0&&!deepOK){
+    line("info","Stations near here have short records ("+record.years+" yrs) — daily records omitted");
   }
-  // where today's forecast high would land among all same-dates
-  var r=deepOK&&climate.fcHiDate===ctx.recordDate?ctxRankBelow(ctx.doyHi,climate.fcHi):null;
+  // where the forecast high would land among its matching calendar dates
+  var r=deepOK&&climate.fcHiDate===record.recordDate?ctxRankBelow(record.doyHi,climate.fcHi):null;
   if(r&&climate.fcHi!=null){
     var pos=Math.max(0,Math.min(100,r.pct));
     L.push('<div class="cx cx-rank">'
@@ -3609,14 +3614,15 @@ function renderTheCall(){
   }
   // — climate context: only genuinely notable framings earn a candidate (and only from a record
   //    deep enough to mean anything) —
-  if(ctx.ready&&ctx.recordDate===climate.fcHiDate&&ctx.years>=CTX_MIN_YEARS&&climate.fcHi!=null&&ctx.recHi){
-    var gap=ctx.recHi.v-climate.fcHi;
+  var forecastRecord=contextRecord(climate.fcHiDate);
+  if(forecastRecord&&forecastRecord.years>=CTX_MIN_YEARS&&climate.fcHi!=null&&forecastRecord.recHi){
+    var gap=forecastRecord.recHi.v-climate.fcHi;
     if(gap<=0) push(92,"record","climate","Context","Record warmth possible",
-      "Could reach the "+fmtMD(calendarDate(climate.fcHiDate))+" record of "+Math.round(ctx.recHi.v)+"° from "+ctx.recHi.y+".","","context",true);
+      "Could reach the "+fmtMD(calendarDate(climate.fcHiDate))+" record of "+Math.round(forecastRecord.recHi.v)+"° from "+forecastRecord.recHi.y+".","","context",true);
     else if(gap<=4) push(88,"record","climate","Context","Near-record warmth",
-      "Within "+Math.round(gap)+"° of the "+fmtMD(calendarDate(climate.fcHiDate))+" record: "+Math.round(ctx.recHi.v)+"° in "+ctx.recHi.y+".","","context",true);
+      "Within "+Math.round(gap)+"° of the "+fmtMD(calendarDate(climate.fcHiDate))+" record: "+Math.round(forecastRecord.recHi.v)+"° in "+forecastRecord.recHi.y+".","","context",true);
     else{
-      var rk=ctxRankBelow(ctx.doyHi,climate.fcHi);
+      var rk=ctxRankBelow(forecastRecord.doyHi,climate.fcHi);
       if(rk&&rk.pct>=90) push(74,"stats","climate","Context","Unusually warm",
         "Warmer than "+rk.below+" of "+rk.total+" "+fmtMD(calendarDate(climate.fcHiDate))+"s on record.","","context",true);
       else if(rk&&rk.pct<=10) push(74,"stats","climate","Context","Unusually cool",
@@ -4065,7 +4071,7 @@ function ensureMapLibraries(){
   });},Promise.resolve()).then(function(){
     // A CDN outage can also leave the map stylesheets unloaded.
     return Promise.all([].slice.call(document.querySelectorAll('link[rel="stylesheet"]')).filter(function(node){
-      return /leaflet\/1\.9\.4\/|maplibre-gl@5\.24\.0\//.test(node.href)&&(retryStyles||!node.sheet);
+      return /leaflet\/1\.9\.4\/|maplibre-gl@5\.24\.0\//.test(node.href)&&(retryStyles||!node.sheet||node.media==="print");
     }).map(function(original){
       return new Promise(function(resolve,reject){
         var link=document.createElement("link"),timer;
