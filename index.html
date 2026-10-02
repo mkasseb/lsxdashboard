@@ -521,16 +521,12 @@
   <span id="lastUpdate">&mdash;</span>
 </footer>
 
-<!-- DEFERRED on purpose: as a blocking tag this had to be downloaded and executed before the
-     browser would even start parsing the script below — which meant the instant-paint snapshot
-     restore, the whole point of which is to run before any network I/O, was itself waiting on a
-     cdnjs round trip. Deferred scripts still execute before DOMContentLoaded, so the map inits
-     hang off that event instead. -->
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"
+<!-- Map dependencies are inert descriptors. The bounded loader owns their order and retries. -->
+<script type="application/json" data-map-src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"
   integrity="sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO" crossorigin="anonymous"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js"
+<script type="application/json" data-map-src="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.js"
   integrity="sha384-5+cfbwT0iiub6VsQAdn6yz16nr6sDiQoHx6tm4O8OVYXHYOxcffFmCJBL0dgdvGp" crossorigin="anonymous"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"
+<script type="application/json" data-map-src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"
   integrity="sha384-tXYNKOHx4T02jMP7YYCtBxPIv1B5gaA5mcVPBzqMp6d7VzWzxJgI2aWF/nJLrQdS" crossorigin="anonymous"></script>
 <script src="/assets/weather-core.js"></script>
 <script src="/assets/weather-feeds.js"></script>

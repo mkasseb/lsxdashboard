@@ -90,13 +90,13 @@ async function open(c, width=390) {
   if(c.storage)await page.addInitScript(storage=>Object.entries(storage).forEach(([key,value])=>localStorage.setItem(key,typeof value==='string'?value:JSON.stringify(value))),c.storage);
   if(c.geo)await page.addInitScript(geo=>Object.defineProperty(navigator,'geolocation',{value:{getCurrentPosition:success=>queueMicrotask(()=>success({coords:{latitude:geo.lat,longitude:geo.lon,accuracy:25}}))}}),c.geo);
   if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v19',snapshot),c.snapshot);
-  const errors=[],requests=[];
+  const errors=[],requests=[],delayedMapScripts=[];
   page.on('pageerror',e=>errors.push(e.message));
   let active=c;
   await context.route('**/*',async route=>{
     const req=route.request(),u=new URL(req.url());
     if(u.hostname==='lsx-weather-test.invalid') {
-      if(u.pathname==='/')return route.fulfill({status:200,contentType:'text/html',body:active.maps?html.replace(/integrity="[^"]*"/g,""):html});
+      if(u.pathname==='/')return route.fulfill({status:200,contentType:'text/html',headers:active.productionCsp?{'Content-Security-Policy':fs.readFileSync(path.join(root,'_headers'),'utf8').match(/Content-Security-Policy: (.*)/)[1]}:{},body:active.maps&&!active.badMapIntegrity?html.replace(/integrity="[^"]*"/g,""):html});
       const asset=assets[u.pathname];
       return route.fulfill({status:asset?200:404,contentType:asset?.type||'text/plain',body:asset?(active.eagerContext?asset.content.replace('var deferredFeeds={stations:false,context:false};','var deferredFeeds={stations:true,context:true};'):asset.content):'Missing static asset'});
     }
@@ -118,6 +118,7 @@ async function open(c, width=390) {
         ['maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js','@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js','application/javascript']
       ];
       const asset=mapFiles.find(([part])=>u.href.includes(part));
+      if(asset&&c.mapScriptHang&&u.pathname.endsWith('.js')){delayedMapScripts.push({route,asset});return;}
       if(asset) return route.fulfill({status:c.mapLibrariesDown?503:200,contentType:asset[2],body:c.mapLibrariesDown?'':fs.readFileSync(require.resolve(asset[1]))});
       if(u.hostname==='tiles.openfreemap.org'&&c.mapStyleHang)return;
       if(/GetCapabilities|DescribeDomains/i.test(u.href)&&c.mapTimeHang)return;
@@ -202,7 +203,7 @@ async function open(c, width=390) {
   });
   await page.goto('https://lsx-weather-test.invalid/'+(c.search||''),{waitUntil:'domcontentloaded'});
   if(!c.skipWait)await page.waitForFunction(()=>typeof refreshInFlight!=='undefined'&&refreshInFlight===null&&snapSafeSeq===locSeq);
-  return {page,context,errors,requests,change:c=>{active=c;}};
+  return {page,context,errors,requests,change:c=>{active=c;},releaseMapScripts:()=>Promise.all(delayedMapScripts.map(({route,asset})=>route.fulfill({contentType:asset[2],body:fs.readFileSync(require.resolve(asset[1]))}).catch(()=>{})))};
 }
 async function expectText(page,selector,pattern) {
   assert.match(await page.locator(selector).innerText(),pattern);
@@ -275,10 +276,11 @@ async function run(name,c,test,width=390) {
   } catch(e) {
     results.push({name,status:'failed',width,ms:Date.now()-started,error:e.message});
     console.error('FAIL',name,e.stack);
+    if(session&&c.maps)console.error('MAP_DIAGNOSTICS',JSON.stringify(await session.page.evaluate(()=>({boot:typeof mapBoot==='undefined'?null:mapBoot,radar:!!rvMap,station:!!stnMap,libraries:[!!window.L,!!window.maplibregl,!!(window.L&&L.maplibreGL)]})).catch(()=>null)));
   } finally {if(session)await session.context.close();}
 }
 async function main() {
-  browser=await playwright[browserName].launch({headless:true,...(browserName==='chromium'?{executablePath:process.env.CHROMIUM_PATH||undefined,args:['--no-sandbox','--enable-unsafe-swiftshader']}: {})});
+  browser=await playwright[browserName].launch({headless:browserName!=='firefox',...(browserName==='firefox'?{firefoxUserPrefs:{'webgl.force-enabled':true,'webgl.disabled':false,'webgl.enable-webgl2':true,'gfx.webrender.software':true}}:{}),...(browserName==='chromium'?{executablePath:process.env.CHROMIUM_PATH||undefined,args:['--no-sandbox','--enable-unsafe-swiftshader']}: {})});
   try {
     await run('dry forecast and all duration controls',config('dry'),async({page})=>{
       await expectText(page,'#precipEvents',/No measurable precipitation/);await durations(page);
@@ -826,6 +828,41 @@ async function main() {
       const mapStyles=await page.evaluate(()=>[...document.querySelectorAll('link[rel="stylesheet"]')].map(n=>({href:n.href,media:n.media,loaded:!!n.sheet})));
       assert.equal(await page.locator('#radar .leaflet-map-pane').evaluate(el=>getComputedStyle(el).position),'absolute',JSON.stringify(mapStyles));
     },1280);
+    await run('map bootstrap rejects integrity-mismatched dependency bytes',config('bad integrity',{maps:true,badMapIntegrity:true,productionCsp:true}),async({page,errors})=>{
+      await page.waitForFunction(()=>mapsInFlight===null);
+      await expectText(page,'#radar',/Retry maps/);
+      await page.locator('#radarCard .map-diagnostics summary').click();await page.waitForFunction(()=>document.querySelector('.map-diagnostics pre').textContent.length>0);
+      await expectText(page,'#radarCard',/integrity/);
+      assert.equal(await page.evaluate(()=>!!window.L),false);
+      // WebKit reports its deliberate SRI rejection as a page error as well as rejecting fetch.
+      assert(errors.every(e=>/cdnjs\.cloudflare\.com\/ajax\/libs\/leaflet\/1\.9\.4\/leaflet\.min\.js due to access control checks\.$/.test(e)));errors.length=0;
+      assert.equal(await page.locator('#radar .leaflet-map-pane').count(),0);
+    });
+    await run('mobile map bootstrap timeout retry and late script completion',config('script stalled',{maps:true,mapScriptHang:true,skipWait:true,touch:true,productionCsp:true}),async session=>{
+      const {page}=session;
+      await page.waitForFunction(()=>mapBoot.events.some(x=>x.includes('Requesting leaflet')));
+      assert.notEqual(await page.evaluate(()=>document.readyState),'loading');
+      await expectText(page,'#radar',/Loading map/);
+      assert.equal(await page.locator('#rsTabs .rs-tab.on').count(),0);
+      await page.clock.runFor(21000);await page.waitForFunction(()=>mapsInFlight===null);
+      await expectText(page,'#radar',/Retry maps/);await page.locator('#radarCard .map-diagnostics summary').tap();await page.waitForFunction(()=>document.querySelector('.map-diagnostics pre').textContent.length>0);await expectText(page,'#radarCard',/leaflet.*cdnjs.cloudflare.com/s);
+      await expectText(page,'#radarTime',/unavailable/);
+      assert(await page.locator('#radar [data-retry-maps]').isVisible());
+      await page.locator('#radar [data-retry-maps]').tap();await page.waitForFunction(()=>mapsInFlight!==null);
+      await page.clock.runFor(21000);await page.waitForFunction(()=>mapsInFlight===null);
+      await expectText(page,'#radar',/Retry maps/);
+      session.change(config('script recovered',{maps:true,touch:true}));
+      await page.locator('#radar [data-retry-maps]').tap();
+      await page.evaluate(()=>Promise.all([ensureMaps(),ensureMaps()]));
+      await page.waitForFunction(()=>rvMap&&radarFrames.length>1&&radarFrames.every(f=>f.layer._ok>0));
+      await page.evaluate(()=>{window.savedLeaflet=L;window.savedRadar=rvMap;});
+      await session.releaseMapScripts();await page.waitForTimeout(100);
+      assert(await page.evaluate(()=>L===savedLeaflet&&rvMap===savedRadar));
+      assert.equal(await page.locator('#radar .leaflet-map-pane').count(),1);
+      assert.equal(await page.locator('#radar .leaflet-control-zoom').count(),1);
+      assert(await page.locator('#radar .leaflet-tile-loaded').count()>0);
+      await page.locator('#rsFull').tap();await page.locator('#rsFull').tap();
+    },390);
     await run('loaded print-only map CSS recovers with healthy scripts',config('print CSS',{maps:true}),async({page})=>{
       await page.waitForFunction(()=>rvMap&&mapsInFlight===null);
       const before=await page.evaluate(()=>{const links=[...document.querySelectorAll('link[rel="stylesheet"]')].filter(n=>/leaflet\/1\.9\.4\/|maplibre-gl@5\.24\.0\//.test(n.href));links.forEach(n=>n.media='print');return links.map(n=>!!n.sheet);});
@@ -886,6 +923,8 @@ async function main() {
       assert(await page.evaluate(()=>rvMap===window.initialRadar));
       assert.equal(await page.locator('#radar .leaflet-map-pane').count(),1);
       assert.equal(await page.locator('#stnmap .leaflet-map-pane').count(),1);
+      assert.equal(await page.locator('#stnmap .leaflet-control-zoom').count(),1);
+      assert.equal(await page.locator('#stnmap').evaluate(n=>!!n.closest('.map-unavailable')),false);
     },1165);
     await run('real map tile failure cannot read as clear radar',config('tile failure',{maps:true,mapTilesDown:true}),async({page})=>{
       await page.waitForFunction(()=>rvMap&&radarDown());
