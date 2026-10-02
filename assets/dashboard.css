@@ -1806,6 +1806,6 @@ body{transition:none}
    clouds, snow and golden suns from the card without tinting their interiors. */
 :root[data-theme="light"] .wxi,
 :root[data-theme="light"] .h24-ic{
-  filter:drop-shadow(.6px 0 0 #344b60) drop-shadow(-.6px 0 0 #344b60)
-         drop-shadow(0 .6px 0 #344b60) drop-shadow(0 -.6px 0 #344b60);
+  filter:drop-shadow(.85px 0 0 #344b60) drop-shadow(-.85px 0 0 #344b60)
+         drop-shadow(0 .85px 0 #344b60) drop-shadow(0 -.85px 0 #344b60);
 }
