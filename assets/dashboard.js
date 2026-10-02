@@ -946,6 +946,7 @@ function syncRadarBadge(){
   var lbl=document.getElementById("radarTime");
   if(!lbl) return;
   lbl.className="radar-time";
+  if(!rvMap){lbl.textContent=typeof mapBoot!=="undefined"&&mapBoot.phase==="error"?"map unavailable":"loading map…";return;}
   if(!skyOn.radar){ lbl.textContent=""; return; }
   if(radarDown()){ lbl.textContent="radar unavailable"; lbl.classList.add("down"); return; }
   if(!radarFrames.length){
@@ -2551,10 +2552,11 @@ function syncSkyMeta(){
   /* The key belongs to reflectivity, so it lives and dies with it — and it goes away when the
      layer is down too, because a guide to colours the map is not painting is just clutter. */
   var lg=document.getElementById("rsLegend");
-  if(lg) lg.classList.toggle("on", !!skyOn.radar && !radarDown());
+  if(lg) lg.classList.toggle("on", !!rvMap && !!skyOn.radar && !radarDown());
   [].slice.call(document.querySelectorAll("#rsTabs .rs-tab")).forEach(function(b){
     var on=!!skyOn[b.getAttribute("data-l")];
-    b.classList.toggle("on",on);
+    b.disabled=!rvMap;
+    b.classList.toggle("on",on&&!!rvMap);
     b.setAttribute("aria-pressed",on?"true":"false");
   });
 }
@@ -4037,15 +4039,21 @@ document.getElementById("alerts").addEventListener("click",function(e){
 tick();
 refreshAll();
 
-/* Maps wait for the deferred Leaflet; everything above has already painted and started fetching.
-   If cdnjs is unreachable this still fires with L undefined, and both inits render their own
-   "open the official map" fallback exactly as before. */
-var mapsCanStart=false, mapsInFlight=null;
+/* The DOM above is parsed; third-party downloads must never gate startup or context controls. */
+var mapsCanStart=true, mapsInFlight=null;
+var mapBoot={phase:"loading",started:Date.now(),events:[]};
+function mapStage(detail){
+  mapBoot.events.push(Math.round((Date.now()-mapBoot.started)/1000)+"s: "+detail);
+  if(mapBoot.events.length>12)mapBoot.events.shift();
+}
+function mapDiagnostics(){
+  return '<details class="map-diagnostics"><summary>Map diagnostics</summary><pre>'+esc(mapBoot.events.join("\n"))+'</pre><small>Diagnostic text stays on this device.</small></details>';
+}
 function mapFallback(id){
   var el=document.getElementById(id);
   if(el&&el.closest(".maplock-wrap"))el.closest(".maplock-wrap").classList.add("map-unavailable");
   var href=id==="radar"?"https://radar.weather.gov/station/KLSX/standard":"https://www.weather.gov/wrh/timeseries?site=KSTL";
-  if(el) el.innerHTML='<div class="imgfail">Map didn’t load. <button type="button" data-retry-maps>Retry maps</button> <a href="'+href+'" target="_blank" rel="noopener">'+(id==="radar"?"Open NWS radar":"Open NWS obs")+' ↗</a></div>';
+  if(el) el.innerHTML='<div class="imgfail">Map didn’t load. <button type="button" data-retry-maps>Retry maps</button> <a href="'+href+'" target="_blank" rel="noopener">'+(id==="radar"?"Open NWS radar":"Open NWS obs")+' ↗</a>'+mapDiagnostics()+'</div>';
 }
 function ensureMapLibraries(){
   var libraries=[
@@ -4056,17 +4064,28 @@ function ensureMapLibraries(){
   var retryStyles=libraries.some(function(lib){return !lib.ready();});
   return libraries.reduce(function(chain,lib){return chain.then(function(){
     if(lib.ready()) return;
-    var original=[].slice.call(document.querySelectorAll("script[src]")).filter(function(node){return node.src.indexOf(lib.part)>=0;})[0];
+    var original=[].slice.call(document.querySelectorAll("script[data-map-src]")).filter(function(node){return node.getAttribute("data-map-src").indexOf(lib.part)>=0;})[0];
     if(!original) throw new Error("Map dependency unavailable");
     return new Promise(function(resolve,reject){
-      var script=document.createElement("script"), timer;
-      // Cloning an already-started script also clones its inert execution state.
-      [].forEach.call(original.attributes,function(attr){if(attr.name!=="defer")script.setAttribute(attr.name,attr.value);});
-      function done(err){clearTimeout(timer);script.onload=null;script.onerror=null;script.remove();if(err)reject(err);else resolve();}
-      script.onload=function(){done(lib.ready()?null:new Error("Map dependency did not initialize"));};
-      script.onerror=function(){done(new Error("Map dependency unavailable"));};
-      timer=setTimeout(function(){done(new Error("Map dependency timed out"));},20000);
-      document.head.appendChild(script);
+      var url=original.getAttribute("data-map-src"),controller=new AbortController(),settled=false;
+      var label=lib.part+" ("+new URL(url).hostname+")";
+      mapStage("Requesting "+label);
+      function done(err){
+        if(settled)return;settled=true;clearTimeout(timer);
+        mapStage(label+": "+(err?err.message:"ready"));
+        if(err)reject(err);else resolve();
+      }
+      var timer=setTimeout(function(){done(new Error("Download timed out after 20s"));controller.abort();},20000);
+      // Abort before execution: removing a script element alone does not reliably cancel its download.
+      // Fetch enforces the descriptor's SRI; existing CSP permits inline execution of verified bytes.
+      fetch(url,{mode:"cors",integrity:original.getAttribute("integrity")||"",signal:controller.signal})
+        .then(function(response){if(!response.ok)throw new Error("HTTP "+response.status);return response.text();})
+        .then(function(source){
+          if(settled)return;
+          var script=document.createElement("script");script.textContent=source;
+          try{document.head.appendChild(script);done(lib.ready()?null:new Error("Library did not initialize"));}
+          finally{script.remove();}
+        }).catch(function(error){done(new Error("Download/integrity/CORS failure: "+error.message));});
     });
   });},Promise.resolve()).then(function(){
     // A CDN outage can also leave the map stylesheets unloaded.
@@ -4075,6 +4094,7 @@ function ensureMapLibraries(){
     }).map(function(original){
       return new Promise(function(resolve,reject){
         var link=document.createElement("link"),timer;
+        mapStage("Loading CSS "+new URL(original.href).hostname+new URL(original.href).pathname);
         [].forEach.call(original.attributes,function(attr){link.setAttribute(attr.name,attr.value);});
         function done(err){
           clearTimeout(timer);link.onload=null;link.onerror=null;
@@ -4096,29 +4116,33 @@ function ensureMaps(){
   if(!mapsCanStart||rvMap&&(stnMap||!feedRequested("stations"))) return Promise.resolve();
   if(mapsInFlight) return mapsInFlight;
   var theme=effectiveLight()?"light":"dark";
-  mapsInFlight=ensureMapLibraries().then(function(){return loadMapStyle(theme);}).then(function(style){
+  mapBoot.phase="loading";mapStage("Starting maps");
+  if(!rvMap){document.getElementById("radar").closest(".maplock-wrap").classList.add("map-unavailable");document.getElementById("radar").innerHTML='<div class="imgfail" role="status">Loading map…</div>';}
+  syncRadarBadge();syncSkyMeta();
+  mapsInFlight=ensureMapLibraries().then(function(){mapStage("Requesting basemap style (tiles.openfreemap.org)");return loadMapStyle(theme);}).then(function(style){
     if(!rvMap){
       try{document.getElementById("radar").innerHTML="";initRadarMap(style);document.getElementById("radar").closest(".maplock-wrap").classList.remove("map-unavailable");}
       catch(e){
         var failedRadar=rvMap;rvMap=null;rvBase=null;baseLabels=null;
-        removePartialMap(failedRadar);mapFallback("radar");
+        removePartialMap(failedRadar);mapBoot.phase="error";mapStage("Radar initialization: "+e.message);mapFallback("radar");
       }
     }
     if(!stnMap&&feedRequested("stations")){
       try{document.getElementById("stnmap").innerHTML="";initStationMap(style);renderStationLayer();}
       catch(e){
         var failedStation=stnMap;stnMap=null;stnBase=null;
-        removePartialMap(failedStation);mapFallback("stnmap");
+        removePartialMap(failedStation);mapStage("Station initialization: "+e.message);mapFallback("stnmap");
       }
     }
     if((effectiveLight()?"light":"dark")!==theme){updateRadarBase();updateStationBase();}
-  }).catch(function(){
+  }).catch(function(error){
+    mapBoot.phase="error";mapStage("Startup failed: "+error.message);
     if(!rvMap)mapFallback("radar");
     if(!stnMap&&feedRequested("stations"))mapFallback("stnmap");
-  }).finally(function(){mapsInFlight=null;});
+  }).finally(function(){mapsInFlight=null;if(rvMap)mapBoot.phase="ready";syncRadarBadge();syncSkyMeta();});
   return mapsInFlight;
 }
-document.addEventListener("DOMContentLoaded",function(){mapsCanStart=true;initContextView();ensureMaps();});
+queueMicrotask(function(){initContextView();ensureMaps();});
 document.addEventListener("click",function(e){if(e.target.closest("[data-retry-maps]"))ensureMaps();});
 
 /* ---- Unified scheduler: one ticker, pauses when backgrounded, tracks real freshness ---- */

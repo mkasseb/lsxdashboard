@@ -1645,3 +1645,6 @@
 .context-toggle{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:7px 10px;cursor:pointer}
 .context-toggle{margin:0 0 10px}
 .context-body[hidden]{display:none}
+
+.map-diagnostics{max-width:100%;text-align:left;margin-top:12px}
+.map-diagnostics pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}

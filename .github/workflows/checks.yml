@@ -41,7 +41,7 @@ jobs:
       - name: Run production-page weather scenarios
         env:
           WEATHER_BROWSER: ${{ matrix.browser }}
-          WEATHER_CASE_FILTER: ${{ matrix.browser == 'chromium' && '.*' || 'fullscreen|individual context|risk explanations|hourly refresh preserves|missing hour' }}
+          WEATHER_CASE_FILTER: ${{ matrix.browser == 'chromium' && '.*' || 'bootstrap|print-only|fullscreen|individual context|risk explanations|hourly refresh preserves|missing hour' }}
         run: |
           NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" WEATHER_STRESS_REPORT="$RUNNER_TEMP/weather-scenarios.json" node tools/weather-stress-tests.js
       - uses: actions/upload-artifact@v4
