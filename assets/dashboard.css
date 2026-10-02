@@ -784,11 +784,8 @@
   .day .dn .dnd{font-weight:600;font-size:var(--fs-xs);color:var(--muted);margin-left:6px}
   .daily.no-dnd .dnd{display:none}
   .day .di{font-size:21px;text-align:center;display:flex;align-items:center;justify-content:center}
-  /* The filled forecast artwork includes near-white clouds. Give only the 7-day icons a
-     dark surface in light mode; the local sprite fallback inherits the light icon colour. */
-  :root[data-theme="light"] .day .di{width:30px;height:30px;justify-self:center;
-    border-radius:8px;background:#293d54;color:#f5f8ff;
-    box-shadow:inset 0 0 0 1px rgba(255,255,255,.14)}
+  /* Keep the existing icon slot dimensions in both themes; artwork sits on the card. */
+  :root[data-theme="light"] .day .di{width:30px;height:30px;justify-self:center}
   .day .dp{font-size:var(--fs-xs);color:var(--accent);text-align:center;font-variant-numeric:tabular-nums;min-width:0}
   .tbar{position:relative;height:7px;border-radius:4px;background:var(--chip);min-width:0}
   .tbar .tfill{position:absolute;top:0;bottom:0;border-radius:4px;min-width:8px}
@@ -1805,5 +1802,8 @@ body{transition:none}
 .river-row .rsub{grid-row:3;margin:0;min-width:0;line-height:1.5}
 .river-row .river-pin{align-self:flex-start;margin-top:8px}
 
-/* Filled hourly cloud artwork is nearly white; keep it legible on light panels. */
-:root[data-theme="light"] .h24-ic{filter:brightness(.55)}
+/* Theme-aware artwork treatment darkens the external SVG fills AND strokes, including
+   near-white cloud/snow/moon shapes. It applies to current, hourly and daily icons alike.
+   Local sprite fallbacks already inherit the theme's high-contrast text colour. */
+:root[data-theme="light"] .wxi,
+:root[data-theme="light"] .h24-ic{filter:brightness(.55) drop-shadow(0 0 .4px rgba(20,43,62,.65))}

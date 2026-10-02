@@ -71,3 +71,7 @@ All rows below are implemented with original IDs and controls retained. The old 
 ## Release boundary
 
 Draft PR and branch preview only. No merge or production deployment is authorized. Parent visual comparison remains part of review.
+
+## Light-mode icon refinement
+
+Removed the dark seven-day icon badge while retaining its dimensions and all row spacing. A shared light-theme CSS filter adjusts external SVG fills and strokes across current, hourly and daily artwork; a subpixel contour keeps thin wind/tornado marks readable without a tile. Dark-mode artwork, condition mappings, animation, alternative text and CDN fallbacks remain unchanged. `tools/icon-theme-tests.js` renders 23 actual SVG variants, verifies transparent slots and visible 3:1-contrast pixels, checks unknown-state fallback semantics, and captures light/dark galleries at 390, 768 and 1440px. MIT-licensed artwork fixtures are test-only.

@@ -38,7 +38,7 @@ jobs:
           node-version: '22'
       - name: Install browser test tools outside the static app
         run: |
-          npm install --prefix "$RUNNER_TEMP/lsx-browser" playwright@1.62.1 leaflet@1.9.4 maplibre-gl@5.24.0 @maplibre/maplibre-gl-leaflet@0.1.4
+          npm install --prefix "$RUNNER_TEMP/lsx-browser" playwright@1.62.1 pngjs@7.0.0 leaflet@1.9.4 maplibre-gl@5.24.0 @maplibre/maplibre-gl-leaflet@0.1.4
           node "$RUNNER_TEMP/lsx-browser/node_modules/playwright/cli.js" install --with-deps ${{ matrix.browser }}
       - name: Run production-page weather scenarios
         env:
@@ -59,6 +59,12 @@ jobs:
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: |
           NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" REDESIGN_ARTIFACTS="$RUNNER_TEMP/redesign" xvfb-run -a node tools/redesign-tests.js
+      - name: Verify weather icon artwork in both themes
+        env:
+          WEATHER_BROWSER: ${{ matrix.browser }}
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" REDESIGN_ARTIFACTS="$RUNNER_TEMP/redesign" xvfb-run -a node tools/icon-theme-tests.js
       - uses: actions/upload-artifact@v4
         if: always()
         with:
