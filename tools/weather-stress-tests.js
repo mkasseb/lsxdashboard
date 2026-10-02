@@ -276,6 +276,7 @@ async function run(name,c,test,width=390) {
   } catch(e) {
     results.push({name,status:'failed',width,ms:Date.now()-started,error:e.message});
     console.error('FAIL',name,e.stack);
+    if(session&&c.maps)console.error('MAP_DIAGNOSTICS',JSON.stringify(await session.page.evaluate(()=>({boot:typeof mapBoot==='undefined'?null:mapBoot,radar:!!rvMap,station:!!stnMap,libraries:[!!window.L,!!window.maplibregl,!!(window.L&&L.maplibreGL)]})).catch(()=>null)));
   } finally {if(session)await session.context.close();}
 }
 async function main() {
