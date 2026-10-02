@@ -1170,7 +1170,11 @@ function loadWarnPolygons(feats){
 }
 function loadRadar(){  // recenter on location change
   if(!rvMap) return;
-  rvMap.setView([current.lat,current.lon], rvMap.getZoom()||7);
+  // Forecast reset/repaint resizes the stretched desktop map during this same turn.
+  // An animated pan keeps its old pixel destination and can finish off-center after resize.
+  // A location selection is the only recenter trigger; ordinary resize preserves a user's view.
+  rvMap.invalidateSize({animate:false});
+  rvMap.setView([current.lat,current.lon], rvMap.getZoom()||7, {animate:false});
   if(rvMarker) rvMarker.setLatLng([current.lat,current.lon]);
 }
 

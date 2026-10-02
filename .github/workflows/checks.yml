@@ -46,6 +46,12 @@ jobs:
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: |
           NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" REDESIGN_ARTIFACTS="$RUNNER_TEMP/redesign" xvfb-run -a node tools/icon-theme-tests.js
+      - name: Verify radar camera through location and layout changes
+        env:
+          WEATHER_BROWSER: ${{ matrix.browser }}
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" REDESIGN_ARTIFACTS="$RUNNER_TEMP/redesign" xvfb-run -a node tools/radar-camera-tests.js
       - name: Run production-page weather scenarios
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
