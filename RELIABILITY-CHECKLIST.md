@@ -26,3 +26,24 @@ Browser scenarios intercept external requests. Real pinned Leaflet/MapLibre libr
 ## Performance experiment
 
 Run `NODE_PATH=<test dependencies>/node_modules CHROMIUM_PATH=<chromium> node tools/context-performance.js`. Five alternating pairs compare fresh contexts with only initial demand state changed. Both receive identical controlled payloads, pinned map libraries, 4x CPU throttling and 80ms per external request. Output separates request/observation/ACIS counts, station map allocation, and readiness wall time. Results from the isolated cloud Chromium run (five pairs): median startup requests fell **138 → 119** (15 station observations and 4 deep-climate requests deferred); the second map was not allocated before demand. Median DOM nodes fell **4,415 → 3,093**. Median controlled readiness was **2,565 → 2,383 ms** (about 7%); timing is secondary evidence in this synthetic environment. Current/hourly weather and the radar were ready in every sample. The on-demand regression additionally checks all 15 station markers after approach. The JSON sample data is in `tools/fixtures/context-performance.json`.
+
+
+## All-season stress coverage
+
+`tools/seasonal-tests.js` exercises 2,880 deterministic temperature × humidity × wind × AQI combinations, rotating condition types and seasonal/DST/year-boundary dates. Assertions cover finite bounded feels-like values, deterministic priority regardless of candidate order, AQI escalation, strong wind, heat, dangerous wind chill, winter classification, fog, and suppression of conflicting favorable advice. Explicit boundary cases cover later hazardous precipitation, flash freezes, missing wind, delayed hourly starts, and official alerts that disagree with otherwise benign modeled conditions. The separate accumulation suite supplies 2,000 generated cases with an independent oracle and inches/mm/cm units.
+
+Browser scenarios additionally cover fair weather in each season; humid/dry extreme heat; blizzard, sleet, freezing rain and a near-freezing transition; extreme cold/wind chill; damaging wind; afternoon fog; wildfire smoke; compound heat/smoke/tornado; drought; future observation timestamps; old/missing/future AQI timestamps; fresh alert expiration and cancellation; contradictory frozen-precipitation feeds; and local wind/fog/smoke alerts with benign forecasts. Earlier scenarios cover heavy rain, flash/river flooding, severe storms, mixed winter accumulations, observation/endpoint outages, source mismatch, midnight and DST. Assertions check guidance and warning meaning, accumulation labels/totals, chart controls, map evidence, and sane visible numbers. These are representative scenarios and defined invariants, not exhaustive proof for every real weather event.
+
+### Independent audit follow-through
+
+| Reproduced concern | Resolution | Evidence |
+| --- | --- | --- |
+| Hourly feed starts four hours ahead but says rain now | Leading coverage gap blocks unqualified comfort; wet timing uses the actual first timestamp | Seasonal helper and browser leading-gap tests |
+| Rain first hides later freezing/snow/storm rounds | Later hazardous round receives its own candidate and timestamp | Explicit rain → break → thunder/snow/freezing-rain assertions |
+| Afternoon/evening cold disappears when next morning is mild | Any-hour freezing cue; severe feels-like cold has explicit priority and exposure guidance | Flash-freeze helper and extreme-cold browser scenario |
+| High Wind Warning with calm model still endorses outdoors | Conflicting official wind/heat evidence and fog/smoke alerts constrain favorable advice | Helper and browser conflicting-alert cases |
+| Missing nighttime wind certifies ventilation | Unknown wind prevents favorable open-window guidance | Missing-wind boundary assertion |
+| AQI HTTP success makes yesterday's value current | Source observation timestamp required, at most two hours old and no more than ten minutes ahead; retrieval time remains separate | Missing/old/future AQI browser cases |
+| Fresh alerts use event end beyond message expiration | Both fresh and retained evidence use earliest end/expiration; clock expiry retires list, briefing and map evidence | Fresh and retained earlier-expiration browser tests |
+
+The seasonal expansion also corrected blizzard classification, visibility guidance outside morning hours, and zero-QPF/positive-frozen-amount contradictions. Compact context observes actual card size changes and disclosure visibility to keep asynchronously refreshed cards packed correctly.

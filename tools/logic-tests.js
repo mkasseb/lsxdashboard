@@ -817,9 +817,9 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
   check('a cold morning without a sharp fall stays a cold-morning candidate',
     topic(C(H, {now: new Date(2026, 7, 14, 0)}), 'cold').headline, 'Cold morning');
 
-  for (const [hour, expected] of [[3, false], [4, true], [9, true], [10, false]]) {
+  for (const [hour, expected] of [[3, true], [4, true], [9, true], [10, true]]) {
     H = hours(new Date(2026, 7, 14, 0), 12, i => ({fog: i === hour}));
-    check(`fog at ${hour}:00 respects the morning-drive window`, !!topic(C(H, {now: new Date(2026, 7, 14, 0)}), 'fog'), expected);
+    check(`fog at ${hour}:00 keeps visibility advice at any hour`, !!topic(C(H, {now: new Date(2026, 7, 14, 0)}), 'fog'), expected);
   }
   for (const [mph, expected] of [[24, null], [25, 'Windy near 2pm'], [34, 'Windy near 2pm'], [35, 'Very windy near 2pm']]) {
     H = hours(NOW, 12, i => ({mph: i === 2 ? mph : 5}));

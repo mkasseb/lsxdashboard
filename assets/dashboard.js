@@ -3826,6 +3826,12 @@ function fmtLeft(ms){ return ms<=0?null:(fmtSpan(ms)+(ms<60000?"":" left")); }
 function tickCountdowns(){
   var now=Date.now();
   if(alertsRetained) renderRetainedAlerts();
+  else if(lastAlertData&&lastAlertData.features.some(function(f){return alertEvidenceEnd(f.properties)<=now;})){
+    lastAlertData={features:liveAlertFeatures(lastAlertData.features,now)};
+    if(feedState(feedChecks.alerts,now,FEEDS.alerts.age)!=="ready"){
+      alertsRetained=true;retainedAlertKey="";renderRetainedAlerts();
+    }else renderAlertsData(lastAlertData);
+  }
   if(callLocalAlert&&callLocalAlert.ends>0&&callLocalAlert.ends<=now){
     callLocalAlert=bottomLineLocalAlert(callAlertGroups,now);
     renderTheCall();
@@ -4291,10 +4297,15 @@ window.addEventListener("load", function(){ scheduleMasonry(); setTimeout(schedu
 // Class and native disclosure state catch expand/collapse height changes; the engine's style writes
 // are filtered out (no loop). Hoisted so reorderMasonryDOM can disconnect it — moving children
 // fires childList records, which would otherwise re-enter layout forever.
-var _mObs=null, _mObsOpts={childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:["class","open"]};
+var _mObs=null, _mObsOpts={childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:["class","open","hidden"]};
 (function(){
   var m=document.querySelector(".masonry");
   if(m){
+    // Source text, disclosure and font metrics can change height after the mutation's frame.
+    if(window.ResizeObserver){
+      var sizes=new ResizeObserver(scheduleMasonry);
+      [].forEach.call(m.children,function(card){if(card.classList.contains("card"))sizes.observe(card);});
+    }
     // re-pack whenever a child image finishes loading
     [].slice.call(m.querySelectorAll("img")).forEach(function(img){ img.addEventListener("load",scheduleMasonry); img.addEventListener("error",scheduleMasonry); });
     // re-pack when card contents change (data loads in)

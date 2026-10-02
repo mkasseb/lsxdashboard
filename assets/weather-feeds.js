@@ -310,10 +310,10 @@ function loadAlerts(){
     if(!fresh()||seq!==alertRequestSeq) return;
     var data=res[0];
     if(!data||!Array.isArray(data.features)||!data.features.every(function(f){return f&&f.properties&&typeof f.properties.event==="string";})) throw new Error("Invalid alerts");
-    lastAlertData=data; alertsRetained=false; retainedAlertKey="";
+    lastAlertData={features:liveAlertFeatures(data.features,Date.now())}; alertsRetained=false; retainedAlertKey="";
     alertUpdateNotice();
     feedUpdate("alerts",zonesResolved()?"ready":"partial",data.updated);
-    renderAlertsData(data);
+    renderAlertsData(lastAlertData);
   }).catch(function(){
     if(!fresh()||seq!==alertRequestSeq) return;
     alertsRetained=true; retainedAlertKey="";
@@ -422,7 +422,7 @@ function renderAlertsData(data){
       });
       var latest=0, earliest=0, counties=[];
       segs.forEach(function(f){
-        var p2=f.properties, e=Date.parse(p2.ends||p2.expires||"")||0;
+        var p2=f.properties, e=alertEvidenceEnd(p2);
         var s=Date.parse(p2.onset||p2.effective||p2.sent||"")||0;   // when the window actually opened
         if(e>latest) latest=e;
         if(s&&(!earliest||s<earliest)) earliest=s;
@@ -568,7 +568,7 @@ function renderAlertsData(data){
         }).join("<br>")+'</div>';
       } else if(g.segs.length>1){
         detail+='<div class="a2-seg"><b>'+g.segs.length+' zone groups:</b> '+g.segs.map(function(f){
-          var p2=f.properties, e=p2.ends||p2.expires;
+          var p2=f.properties, e=alertEvidenceEnd(p2);
           var es=e?new Date(e).toLocaleString("en-US", {timeZone:WEATHER_TZ,weekday:"short",hour:"numeric",minute:"2-digit"}):"\u2014";
           var ar=(p2.areaDesc||"").split(";").length;
           return esc(String(ar))+" counties until "+esc(es);
@@ -764,7 +764,9 @@ function loadAqi(){
     if(!fresh()) return;   // user moved while this was in flight
     var cur=d.current||{}, aqi=cur.us_aqi, info=aqiInfo(aqi);
     if(typeof aqi!=="number"||!isFinite(aqi)||aqi<0) throw new Error("Invalid AQI");
-    feedUpdate("aqi","ready",typeof cur.time==="number"?cur.time*1000:null);
+    var observed=typeof cur.time==="number"?cur.time*1000:0;
+    if(!observed||observed>Date.now()+10*60000||Date.now()-observed>2*3600000) throw new Error("AQI observation time unavailable or stale");
+    feedUpdate("aqi","ready",observed);
     aqiState={val:(aqi!=null)?aqi:null, pm:(cur.pm2_5!=null)?Math.round(cur.pm2_5):null, err:false};
     // The dedicated card only appears when air quality is a story: AQI > 100 ("Unhealthy for
     // Sensitive Groups" and worse — EPA's literal "Hazardous" is 301+, far too rare a trigger).

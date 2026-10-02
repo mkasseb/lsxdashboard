@@ -21,6 +21,7 @@ jobs:
           node-version: '22'
       - run: python3 tools/check.py
       - run: node tools/logic-tests.js
+      - run: node tools/seasonal-tests.js
 
   browser:
     strategy:

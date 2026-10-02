@@ -41,8 +41,9 @@ function feeds(c, id='0') {
   const now=c.now, start=Math.floor(now/H)*H;
   const periods=Array.from({length:168},(_,i)=>{
     const time=start+i*H, hour=Number(stamp(time).slice(11,13));
-    return {number:i+1,name:'',startTime:stamp(time),endTime:stamp(time+H),isDaytime:hour>=7&&hour<19,temperature:c.temp+(c.wave?Math.round(Math.sin(i/6)*c.wave):0),temperatureUnit:'F',temperatureTrend:null,probabilityOfPrecipitation:{unitCode:'wmoUnit:percent',value:c.pop},dewpoint:{unitCode:'wmoUnit:degC',value:10},relativeHumidity:{unitCode:'wmoUnit:percent',value:80},windSpeed:c.wind,windDirection:'SW',icon:'',shortForecast:c.condition,detailedForecast:''};
+    return {number:i+1,name:'',startTime:stamp(time),endTime:stamp(time+H),isDaytime:hour>=7&&hour<19,temperature:c.temp+(c.wave?Math.round(Math.sin(i/6)*c.wave):0),temperatureUnit:'F',temperatureTrend:null,probabilityOfPrecipitation:{unitCode:'wmoUnit:percent',value:c.pop},dewpoint:{unitCode:'wmoUnit:degC',value:10},relativeHumidity:{unitCode:'wmoUnit:percent',value:c.rh===undefined?80:c.rh},windSpeed:c.wind,windDirection:'SW',icon:'',shortForecast:c.condition,detailedForecast:''};
   });
+  if(c.transition)periods.forEach((p,i)=>{p.temperature=29+Math.min(i,6);p.shortForecast=i<3?'Sleet And Freezing Rain':i<6?'Rain And Snow':'Rain';});
   if(c.delayedRain)periods.forEach((p,i)=>{p.probabilityOfPrecipitation.value=i>=6&&i<12?80:0;p.shortForecast=i>=6&&i<12?'Rain':'Sunny';});
   if(c.missingHourly) { periods[4].temperature=null; periods[10].probabilityOfPrecipitation.value=null; }
   const daily=Array.from({length:14},(_,i)=>{
@@ -50,12 +51,13 @@ function feeds(c, id='0') {
   });
   if(c.weekRain){daily[6].name='Saturday';daily[6].shortForecast='Thunderstorms';daily[6].probabilityOfPrecipitation.value=80;}
   if(c.hourlyGap) periods.splice(6,1);
+  if(c.leadingGap)periods.splice(0,4);
   if(c.hourlyExpired)periods.forEach(p=>{p.startTime=stamp(Date.parse(p.startTime)-8*24*H);p.endTime=stamp(Date.parse(p.endTime)-8*24*H);});
   return {
     points:{properties:{forecast:'https://api.weather.gov/gridpoints/LSX/'+id+'/forecast',forecastHourly:'https://api.weather.gov/gridpoints/LSX/'+id+'/forecast/hourly',forecastGridData:'https://api.weather.gov/gridpoints/LSX/'+id,observationStations:'https://api.weather.gov/gridpoints/LSX/'+id+'/stations',county:'https://api.weather.gov/zones/county/MOC183',forecastZone:'https://api.weather.gov/zones/forecast/MOZ052',fireWeatherZone:'https://api.weather.gov/zones/fire/MOZ052',timeZone:'America/Chicago',cwa:'LSX',relativeLocation:{properties:{city:'Lake St. Louis',state:'MO'}}}},
     hourly:{properties:{updateTime:new Date(now-H).toISOString(),periods}},daily:{properties:{updateTime:new Date(now-H).toISOString(),periods:daily}},
     grid:{properties:{updateTime:new Date(now-H).toISOString(),quantitativePrecipitation:layer(now,c.qpf,c.unit),snowfallAmount:layer(now,c.snow,c.unit),iceAccumulation:layer(now,c.ice,c.unit),windGust:layer(now,c.gusts,'wmoUnit:km_h-1')}},
-    observation:{properties:{timestamp:new Date(now-(c.staleObservation?3*H:5*60000)).toISOString(),temperature:{value:(c.temp-32)*5/9},dewpoint:{value:10},relativeHumidity:{value:80},windSpeed:{value:16.1},windDirection:{value:225},windGust:{value:null},barometricPressure:{value:101325},visibility:{value:16093},textDescription:c.condition}}
+    observation:{properties:{timestamp:new Date(now+(c.futureObservation?H:c.staleObservation?-3*H:-5*60000)).toISOString(),temperature:{value:(c.temp-32)*5/9},dewpoint:{value:10},relativeHumidity:{value:80},windSpeed:{value:16.1},windDirection:{value:225},windGust:{value:null},barometricPressure:{value:101325},visibility:{value:16093},textDescription:c.condition}}
   };
 }
 function alert(event, now, away=false) {
@@ -126,8 +128,10 @@ async function open(c, width=390) {
       if(params.sdate==='por')return reply({data:[['2025-09',3,72],['2026-09',2,71]]});
       return reply({data:[['2026-09-30',75,50,0],['2026-10-01',74,49,0]]});
     }
+    if(c.drought!=null&&u.href.includes('/USDM_current/'))return reply(features([{DM:c.drought}]));
+    if(c.drought!=null&&u.href.includes('/cpc_drought_outlk/')&&u.pathname.includes('/query'))return reply(features([{outlook:'Persistence'}]));
     if(c.offline) return reply({error:'simulated outage'},503);
-    if(u.hostname==='air-quality-api.open-meteo.com'&&c.aqi!=null) return reply({current:{us_aqi:c.aqi,pm2_5:75,pm10:90}});
+    if(u.hostname==='air-quality-api.open-meteo.com'&&c.aqi!=null) return reply({current:{us_aqi:c.aqi,time:c.aqiMissingTime?undefined:(c.now-(c.aqiAgeHours||0)*H)/1000,pm2_5:75,pm10:90}});
     if(u.hostname==='api.open-meteo.com'&&c.uv!=null) return reply({hourly:{time:[c.now/1000,(c.now+H)/1000],uv_index:[c.uv,c.uv+1]},daily:{time:Array.from({length:7},(_,i)=>stamp(c.now+i*24*H).slice(0,10)),uv_index_max:Array(7).fill(c.uv+1)}});
     if(u.hostname==='api.water.noaa.gov'&&c.river){
       if(u.pathname.endsWith('/stageflow/forecast')) return reply({issuedTime:c.riverForecastMissingTime?undefined:new Date(c.now-(c.riverForecastAgeHours||1)*H).toISOString(),data:c.river.map((primary,i)=>({primary,validTime:new Date(c.now+i*24*H).toISOString()}))});
@@ -203,6 +207,7 @@ async function noCardOverlap(page) {
   await page.evaluate(()=>Promise.all([...document.querySelectorAll('.masonry > .card')].flatMap(card=>
     card.getAnimations().map(animation=>animation.finished.catch(()=>{}))
   )));
+  await page.waitForFunction(()=>{const boxes=[...document.querySelectorAll('.masonry > .card')].map(c=>c.getBoundingClientRect());return boxes.every((a,i)=>boxes.slice(i+1).every(b=>Math.min(a.right,b.right)-Math.max(a.left,b.left)<=1||Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)<=1));});
   const overlaps=await page.locator('.masonry > .card').evaluateAll(cards=>{
     const boxes=cards.map(card=>({id:card.id,box:card.getBoundingClientRect()})).filter(c=>c.box.width&&c.box.height);
     return boxes.flatMap((a,i)=>boxes.slice(i+1).filter(b=>
@@ -823,6 +828,68 @@ async function main() {
       assert.equal(await page.evaluate(()=>radarFallback),true);
       session.change(config('time recovered',{maps:true}));await page.evaluate(()=>refreshRadarLayer());
       await page.waitForFunction(()=>radarFrames.length>1&&!radarFallback);
+    });
+    const seasons=[
+      ['winter fair','2026-01-15T18:00:00Z',{temp:40,rh:40},/Cold morning/],
+      ['spring fair','2026-04-15T18:00:00Z',{temp:65,rh:40},/Excellent outdoor/],
+      ['summer fair','2026-07-15T18:00:00Z',{temp:82,rh:40},/Excellent outdoor/],
+      ['autumn fair','2026-10-15T18:00:00Z',{temp:60,rh:40},/Excellent outdoor/],
+      ['humid summer heat','2026-07-15T18:00:00Z',{temp:96,rh:85},/Dangerous heat/],
+      ['extreme dry heat','2026-07-15T18:00:00Z',{temp:112,rh:10},/Dangerous heat/],
+      ['blizzard','2026-01-15T18:00:00Z',{temp:15,pop:100,wind:'35 to 45 mph',condition:'Blizzard',snow:[[0,6,203.2],[6,90,0]],event:'Blizzard Warning'},/wintry|travel|snow/i],
+      ['sleet','2026-02-15T18:00:00Z',{temp:29,pop:90,condition:'Sleet',snow:[[0,6,50.8],[6,90,0]]},/Snow or wintry mix/],
+      ['freezing rain','2026-02-15T18:00:00Z',{temp:31,pop:90,condition:'Freezing Rain',ice:[[0,6,6.35],[6,90,0]],event:'Ice Storm Warning'},/wintry|travel|slick/i],
+      ['freezing transition','2026-03-15T18:00:00Z',{temp:31,pop:90,transition:true,snow:[[0,6,25.4],[6,90,0]],ice:[[0,6,2.54],[6,90,0]]},/Snow or wintry mix/],
+      ['extreme cold and wind chill','2026-01-15T18:00:00Z',{temp:-25,wind:'35 mph'},/Dangerous cold/],
+      ['damaging wind','2026-04-15T18:00:00Z',{temp:65,rh:40,wind:'60 to 75 mph',event:'High Wind Warning'},/wind|outdoor objects/i],
+      ['afternoon dense fog','2026-11-15T18:00:00Z',{temp:65,rh:90,condition:'Dense Fog',event:'Dense Fog Advisory'},/Fog|visibility/],
+      ['wildfire smoke','2026-08-15T18:00:00Z',{temp:72,aqi:325,condition:'Smoke'},/Hazardous air quality/],
+      ['compound heat and smoke','2026-08-15T18:00:00Z',{temp:105,rh:70,aqi:325},/Hazardous air quality/],
+      ['compound tornado heat and smoke','2026-06-15T18:00:00Z',{temp:100,rh:80,aqi:325,pop:90,condition:'Severe Thunderstorms',event:'Tornado Warning'},/basement|interior room/]
+    ];
+    for(const [name,date,extra,expected] of seasons){
+      const now=Date.parse(date), c=config(name,{now,aqi:35,...(extra.snow||extra.ice?{qpf:[[0,6,12.7],[6,90,0]]}:{}),...extra,alerts:extra.event?[alert(extra.event,now)]:[]});
+      await run('seasonal '+name,c,async({page})=>{
+        await expectText(page,'#callRow',expected);
+        const body=await page.locator('#callRow').innerText();
+        assert(!/NaN|undefined|Infinity/.test(body+await page.locator('#hourly24').innerText()));
+        if(!name.includes(' fair'))assert(!/Excellent outdoor|Good window-opening|Use this window for strenuous/.test(body));
+        if(extra.event){await expectText(page,'#alerts',new RegExp(extra.event));assert(await page.evaluate(()=>lastWarnFeats.length>0));}
+        if(extra.snow)await expectText(page,'#precipEvents',/Snow/);
+        if(extra.ice)await expectText(page,'#precipEvents',/Ice/);
+        await durations(page);
+      });
+    }
+    await run('seasonal drought is distinct from short-term dry weather',config('drought',{drought:3,aqi:35}),async({page})=>{
+      await expectText(page,'#drNow',/D3.*Extreme/);await expectText(page,'#drMonth',/persist/i);
+      await expectText(page,'#precipEvents',/No measurable precipitation/);assert.equal(await page.evaluate(()=>feedChecks.drought.status),'ready');
+    });
+    await run('seasonal future observation is not current',config('future observation',{futureObservation:true}),async({page})=>{
+      await expectText(page,'#current',/Current observation unavailable/);assert.equal(await page.evaluate(()=>heroNow.temp),null);await durations(page);
+    });
+    await run('seasonal cancellation clears warning list briefing and map',config('cancelled warning',{alerts:[alert('Tornado Warning',base)],pop:90,condition:'Thunderstorms',aqi:35}),async session=>{
+      session.change(config('cancelled',{alerts:[],aqi:35}));await session.page.evaluate(()=>loadAlerts());
+      assert.equal(await session.page.evaluate(()=>lastWarnFeats.length),0);assert.equal(await session.page.evaluate(()=>callLocalAlert),null);
+      await expectText(session.page,'#alerts',/No active/);assert(await session.page.locator('#radarAlertNote').isHidden());
+    });
+    for(const extra of [{aqiMissingTime:true},{aqiAgeHours:24},{aqiAgeHours:-1}])await run('seasonal AQI source time '+JSON.stringify(extra),config('AQI time',{aqi:35,...extra}),async({page})=>{
+      assert.equal(await page.evaluate(()=>feedChecks.aqi.status),'unavailable');
+      await expectText(page,'#briefStatus',/Air quality is unverified/);assert(!/Excellent outdoor|Good window-opening/.test(await page.locator('#callRow').innerText()));
+    });
+    await run('seasonal leading hourly gap cannot mean rain now',config('leading gap',{leadingGap:true,aqi:35,pop:90,condition:'Thunderstorms'}),async({page})=>{
+      const text=await page.locator('#callRow').innerText();assert(!/\bnow\b/.test(text));assert(/from ~/.test(text));
+      assert(!/Excellent outdoor|Good window-opening/.test(text));await expectText(page,'#hourly24',/gaps/);
+    });
+    await run('seasonal fresh warning expires across list briefing and map',config('fresh expiry',{alerts:[{...alert('Tornado Warning',base),properties:{...alert('Tornado Warning',base).properties,expires:new Date(base+30000).toISOString()}}],aqi:35}),async({page})=>{
+      await page.evaluate(()=>stopSchedule());assert.equal(await page.evaluate(()=>callLocalAlert.ends),base+30000);
+      await page.clock.setSystemTime(new Date(base+45000));await page.evaluate(()=>tickCountdowns());
+      assert.equal(await page.evaluate(()=>callLocalAlert),null);assert.equal(await page.evaluate(()=>lastWarnFeats.length),0);assert(!/Tornado Warning/.test(await page.locator('#alerts').innerText()));
+    });
+    await run('seasonal contradictory zero QPF and positive snow cannot claim dry',config('inconsistent frozen',{snow:[[0,6,25.4],[6,90,0]]}),async({page})=>{
+      await expectText(page,'#precipEvents',/incomplete/);assert(!/No measurable precipitation/.test(await page.locator('#precipEvents').innerText()));
+    });
+    for(const event of ['High Wind Warning','Dense Fog Advisory','Dense Smoke Advisory'])await run('seasonal conflicting '+event,config('alert constraint',{temp:65,rh:40,aqi:35,alerts:[alert(event,base)]}),async({page})=>{
+      assert(!/Excellent outdoor|Good window-opening/.test(await page.locator('#callRow').innerText()));await expectText(page,'#alerts',new RegExp(event));
     });
     await run('complete outage renders explicit unavailable states',config('offline',{offline:true}),async({page})=>{
       await expectText(page,'#hourly24',/unavailable/);await expectText(page,'#precipEvents',/unavailable/);assert.equal(await page.locator('.spc-threat-value').filter({hasText:'Unavailable'}).count(),6);assert(!(await page.locator('#refresh').isDisabled()));
