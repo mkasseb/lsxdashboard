@@ -1648,3 +1648,127 @@
 
 .map-diagnostics{max-width:100%;text-align:left;margin-top:12px}
 .map-diagnostics pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
+
+/* Calm, responsive composition. Weather state and control hooks remain unchanged. */
+:root{
+  --bg:#071522;--panel:#0d2031;--panel-2:#142b3e;--border:#294052;
+  --text:#eaf2f8;--muted:#a9bac9;--accent:#70d4ed;
+  --glass1:#0d2031;--glass2:#0d2031;--reading-top:#0d2031;--reading-bottom:#0d2031;
+  --shadow:none;--secondary-shadow:none;--r-lg:12px;--r-md:8px;--r-pill:8px;
+  --fs-display:72px;--fs-section:18px;--fs-card-title:16px;--fs-lg:16px;
+  --maxw:1400px;--jump-h:64px;
+}
+:root[data-theme="light"]{
+  --bg:#edf3f7;--panel:#fff;--panel-2:#e5eef4;--border:#b9cbd8;
+  --text:#142b3e;--muted:#486175;--accent:#09657d;
+  --glass1:#fff;--glass2:#fff;--reading-top:#fff;--reading-bottom:#fff;
+  --shadow:none;--secondary-shadow:none;
+}
+body{background:var(--bg);font-size:16px;padding:16px max(16px,env(safe-area-inset-right)) 24px max(16px,env(safe-area-inset-left))}
+#wxbg{opacity:.16}
+header{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:0 16px}
+header .top{grid-column:1/-1;gap:16px;margin-bottom:10px;flex-wrap:nowrap}
+.brand{gap:8px;flex-shrink:0}.brand h1{font-size:24px;letter-spacing:-.04em}
+.brand .sub{display:none}.brand-word{font-size:13px;letter-spacing:0;font-weight:500;color:var(--muted)}
+.logo{width:32px;height:32px;flex-basis:32px;border-radius:8px}.logo svg{width:32px;height:32px}
+.top .locNow{border-left:1px solid var(--border);padding-left:16px;min-width:0;line-height:1.3}
+.top .locNow-label{display:block;font-size:12px}.top .locNow-place strong{font-size:16px}
+.top .locNow-place .ic{display:none}
+.header-right{flex-wrap:nowrap;flex-shrink:0;gap:8px}.clock .time{font-size:14px}.clock .date{font-size:12px}
+.locbar{margin:0;gap:8px;flex-wrap:nowrap}.locsearch{max-width:420px;flex-basis:240px}
+.location-tools{margin:0;align-self:start;max-width:460px}
+.location-tools summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-size:13px;color:var(--muted)}
+.location-tools[open]{grid-column:1/-1;max-width:none;padding:10px 0}
+#locFeedback{grid-column:1/-1}#locFeedback:empty{display:none}
+.jump-wrap{max-width:var(--maxw);width:100%;margin:12px auto 16px;display:flex;align-items:center;gap:16px;background:var(--bg);border-block:1px solid var(--border);border-radius:0}
+.sticky-context{background:none;border:0;padding:8px 0;flex:0 1 260px;min-width:0}
+.jump{flex:1;min-width:0;border:0;border-radius:0;background:none;box-shadow:none;padding:0}
+.jump a{border-radius:0;min-height:44px;color:var(--muted);border-bottom:2px solid transparent}
+.jump a[aria-current="location"]{border-bottom-color:var(--accent);color:var(--text);background:var(--inset)}
+.jump-step{top:0;bottom:0}
+.redesign-grid{display:flex;flex-direction:column;gap:16px;align-items:stretch}
+.redesign-grid>*,.weather-hero>*,.planning-grid>*{min-width:0}
+.card{background:var(--panel);border:1px solid var(--border);box-shadow:none;padding:20px;border-radius:12px}
+.card.hero::before{display:none}.card h2{font-size:20px;align-items:baseline;flex-wrap:wrap}
+#alertsCard{padding:0;border:0;background:none}#mcd:empty{display:none}
+.weather-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border:1px solid var(--border);border-radius:12px;background:var(--panel)}
+.weather-hero>.card{border:0;background:none;margin:0;border-radius:0}
+.weather-hero #callCard{border-left:1px solid var(--border)}
+.weather-hero #current{justify-content:flex-start;gap:0}
+.cc-main{margin-bottom:12px}.cc-temp{font-size:72px}.cc-desc{font-size:18px}
+.cc-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.cc-item{border:0;border-radius:0;padding:6px 0;background:none}
+.cc-item .k{text-transform:none;letter-spacing:0}.cc-item .v{font-size:16px}
+.cc-expo{margin-top:10px}
+.call-head{flex-wrap:wrap}.callrow>section{grid-template-columns:1fr;gap:10px}
+.bl-headline{font-size:26px;line-height:1.2}.bl-lead{gap:10px;padding-left:10px}
+.bl-support{grid-template-columns:1fr}.bl-support li{border-left:0;border-top:1px solid var(--border);padding:8px 0}
+.bl-detail,.bl-action{font-size:15px}.bl-sheadline,.bl-sdetail{font-size:14px}
+.brief-author{font-size:12px}.disclosure{font-size:14px}
+.planning-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
+#h24Card{grid-column:1;grid-row:1}#radarCard{grid-column:2;grid-row:1/3}#forecastCard{grid-column:1;grid-row:2}
+.hourly-head{flex-wrap:wrap;gap:8px}.hourly-head h2{margin:0;flex:1 1 100%}
+.hourly-duration{font-size:13px;color:var(--muted)}.hourly-options{margin-left:auto}
+#radarCard .rs-head{flex-wrap:wrap;gap:12px}#radarCard .rs-head h2{font-size:20px}
+body:not(.radar-full) #radarCard .imgwrap{aspect-ratio:1/1;max-height:600px}
+#radarCard .frame{min-height:0}
+.daily{gap:0}.day-item{border:0;border-bottom:1px solid var(--border);border-radius:0;background:none}
+.day-item:last-child{border-bottom:0}.day{padding:10px 0;min-height:58px;grid-template-columns:minmax(90px,1.3fr) 32px 52px minmax(38px,1fr) 78px 12px;gap:10px}
+.day .dn{font-size:14px}.day .dcond{font-size:12px}.day .dt{font-size:14px}.day-detail{padding:0 0 12px}
+.railhead{margin:8px 0 0}.rail-t{font-size:22px}
+.masonry .card h2{font-size:18px}.masonry .card{padding:18px}
+.r-now-label{font-size:12px;font-weight:500;color:var(--muted);margin-right:5px}
+.r-forecast-label{font-weight:700;color:var(--text)}
+@media(max-width:1000px){
+  .planning-grid{grid-template-columns:1fr}#h24Card,#radarCard,#forecastCard{grid-column:auto;grid-row:auto}
+  body:not(.radar-full) #radarCard .imgwrap{aspect-ratio:16/10}
+  .brand-word{display:none}.clock{display:none}
+  .weather-hero{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+}
+@media(max-width:680px){
+  :root{--jump-h:94px}
+  header{gap:0 8px}header .top{gap:10px;margin-bottom:8px;flex-wrap:wrap}
+  .brand h1{font-size:24px}.logo{display:none}.top .locNow{padding-left:10px;flex:1}
+  .top .locNow-label{display:none}.top .locNow-place strong{font-size:14px}
+  .header-right{width:auto;margin-left:auto;gap:4px}.header-right button{padding:8px}
+  #refreshLabel{font-size:12px}.header-right .dot{width:6px;height:6px}
+  .locbar{grid-column:1/-1;margin-bottom:0}.locsearch{max-width:none}#geoBtn .g-txt{display:none}
+  .location-tools{grid-column:1/-1}.location-tools summary{min-height:36px}
+  .jump-wrap{display:block;margin:4px auto 12px}.sticky-context{padding:4px 0;min-height:28px}
+  .jump a{padding:0 13px}.jump{width:100%}.jump-step{top:28px}
+  .card{padding:16px}.redesign-grid,.planning-grid{gap:12px}
+  .weather-hero{grid-template-columns:1fr}.weather-hero #callCard{border-left:0;border-top:1px solid var(--border)}
+  .weather-hero>.card{padding:16px}.cc-temp{font-size:64px}.cc-grid{gap:4px 10px}
+  .cc-item .v{font-size:15px}.card h2,#radarCard .rs-head h2{font-size:20px}
+  .bl-headline{font-size:24px}.day{grid-template-columns:minmax(65px,1fr) 24px 48px minmax(22px,.7fr) 70px 10px;gap:6px;padding:10px 0}
+  .day .dn,.day .dt{font-size:13px}.day .di .wxi{width:26px;height:26px}
+  .hourly-options button{padding:8px 10px}.rs-right{flex-wrap:wrap}
+  body:not(.radar-full) #radarCard .imgwrap{aspect-ratio:1.2}
+}
+@media(max-width:360px){
+  .top .locNow{flex-basis:150px}.header-right{flex-basis:100%;justify-content:flex-end}
+  .cc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .day{grid-template-columns:minmax(50px,1fr) 22px 44px minmax(14px,.5fr) 62px 10px;gap:4px}
+  .day .dt{font-size:12px}.hourly-options{margin-left:0}
+}
+/* Keep complete observations and source ages compact without hiding any values. */
+body{transition:none}
+.weather-hero #currentCard{border-radius:12px 0 0 12px}
+.weather-hero #callCard{border-radius:0 12px 12px 0}
+#currentCard .feed-status{font-size:12px;line-height:1.4;margin-top:4px;padding-top:0}
+#currentCard .cc-grid{gap:4px 12px}
+#currentCard .cc-item{display:flex;align-items:baseline;justify-content:space-between;gap:6px;flex-wrap:wrap}
+#currentCard .cc-item .v{margin:0}
+#currentCard .cc-expo{margin-top:8px}
+#currentCard .stn{margin-top:8px}
+#callCard .brief-planning{margin-top:10px;padding-top:8px}
+#callCard .brief-section-title{margin:4px 0}
+#h24Card .precip-events{margin-bottom:12px;padding-bottom:10px}
+#h24Card .feed-status{margin-top:4px}
+@media(max-width:680px){
+  #currentCard .cc-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 16px}
+  #currentCard .cc-item .k{font-size:12px}#currentCard .cc-item .v{font-size:14px}
+  .cc-main{margin-bottom:8px}.cc-today{margin-bottom:8px}
+  .cc-uv,.aqi-mini{padding:8px}.cc-expo .s{font-size:12px}
+  .bl-lead{grid-template-columns:minmax(0,1fr)}.bl-lead-ico{display:none}
+}

@@ -89,7 +89,7 @@ async function open(c, width=390) {
   });
   if(c.storage)await page.addInitScript(storage=>Object.entries(storage).forEach(([key,value])=>localStorage.setItem(key,typeof value==='string'?value:JSON.stringify(value))),c.storage);
   if(c.geo)await page.addInitScript(geo=>Object.defineProperty(navigator,'geolocation',{value:{getCurrentPosition:success=>queueMicrotask(()=>success({coords:{latitude:geo.lat,longitude:geo.lon,accuracy:25}}))}}),c.geo);
-  if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v19',snapshot),c.snapshot);
+  if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v20',snapshot),c.snapshot);
   const errors=[],requests=[],delayedMapScripts=[];
   page.on('pageerror',e=>errors.push(e.message));
   let active=c;

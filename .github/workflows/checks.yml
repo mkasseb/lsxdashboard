@@ -53,9 +53,17 @@ jobs:
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: |
           NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" xvfb-run -a node tools/cache-upgrade-tests.js
+      - name: Verify redesign layout and controls
+        env:
+          WEATHER_BROWSER: ${{ matrix.browser }}
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" REDESIGN_ARTIFACTS="$RUNNER_TEMP/redesign" xvfb-run -a node tools/redesign-tests.js
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: weather-scenarios-${{ matrix.browser }}
-          path: ${{ runner.temp }}/weather-scenarios.json
+          path: |
+            ${{ runner.temp }}/weather-scenarios.json
+            ${{ runner.temp }}/redesign
           if-no-files-found: ignore
