@@ -845,7 +845,7 @@ async function main() {
       await expectText(page,'#radar',/Loading map/);
       assert.equal(await page.locator('#rsTabs .rs-tab.on').count(),0);
       await page.clock.runFor(21000);await page.waitForFunction(()=>mapsInFlight===null);
-      await expectText(page,'#radar',/Retry maps/);await page.locator('#radarCard .map-diagnostics summary').tap();await expectText(page,'#radarCard',/leaflet.*cdnjs.cloudflare.com/s);
+      await expectText(page,'#radar',/Retry maps/);await page.locator('#radarCard .map-diagnostics summary').tap();await page.waitForFunction(()=>document.querySelector('.map-diagnostics pre').textContent.length>0);await expectText(page,'#radarCard',/leaflet.*cdnjs.cloudflare.com/s);
       await expectText(page,'#radarTime',/unavailable/);
       assert(await page.locator('#radar [data-retry-maps]').isVisible());
       await page.locator('#radar [data-retry-maps]').tap();await page.waitForFunction(()=>mapsInFlight!==null);
