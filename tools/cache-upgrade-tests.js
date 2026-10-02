@@ -9,9 +9,10 @@ const old=Object.fromEntries(names.map(name=>[name,cp.execFileSync('git',['show'
 const vendors=[['leaflet/1.9.4/leaflet.min.js','leaflet/dist/leaflet.js'],['leaflet/1.9.4/leaflet.min.css','leaflet/dist/leaflet.css'],['maplibre-gl@5.24.0/dist/maplibre-gl.js','maplibre-gl/dist/maplibre-gl.js'],['maplibre-gl@5.24.0/dist/maplibre-gl.css','maplibre-gl/dist/maplibre-gl.css'],['@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js','@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js']];
 let priming=true,unversioned=false,requests=[],base;
 function controlled(text){
-  // Preserve real local cache semantics; only external map dependencies/data are made deterministic.
+  // Preserve real local cache semantics; external map resources and ancillary outages are deterministic.
   return text.replace(/https:\/\/cdnjs.cloudflare.com\/ajax\/libs\//g,base+'/vendor/').replace(/https:\/\/cdn.jsdelivr.net\/npm\//g,base+'/vendor/')
-    .replace(/https:\/\/tiles.openfreemap.org/g,base+'/style').replace(/https:\/\/opengeo.ncep.noaa.gov/g,base+'/radar').replace(/https:\/\/gibs.earthdata.nasa.gov/g,base+'/sat');
+    .replace(/https:\/\/tiles.openfreemap.org/g,base+'/style').replace(/https:\/\/opengeo.ncep.noaa.gov/g,base+'/radar').replace(/https:\/\/gibs.earthdata.nasa.gov/g,base+'/sat')
+    .replace(/https:\/\/([a-zA-Z0-9.-]+)/g,base+'/external/$1');
 }
 const server=http.createServer((req,res)=>{
   const u=new URL(req.url,base),p=u.pathname;requests.push(req.url);
@@ -26,6 +27,7 @@ const server=http.createServer((req,res)=>{
     res.setHeader('Content-Type',name.endsWith('.css')?'text/css':'application/javascript');
     res.end(controlled(priming?old[name].toString():fs.readFileSync(path.join(root,'assets',name),'utf8')));return;
   }
+  if(p.startsWith('/external/')){res.writeHead(503,{'Content-Type':'application/json'}).end(JSON.stringify({error:'Controlled ancillary outage'}));return;}
   const vendor=vendors.find(([part])=>p==='/vendor/'+part);
   if(vendor){res.setHeader('Content-Type',p.endsWith('.css')?'text/css':'application/javascript');res.end(fs.readFileSync(require.resolve(vendor[1])));return;}
   if(p.startsWith('/style/')){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({version:8,sources:{},layers:[{id:'background',type:'background',paint:{'background-color':'#18202d'}}]}));return;}
