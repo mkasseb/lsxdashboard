@@ -89,7 +89,7 @@ async function open(c, width=390) {
   });
   if(c.storage)await page.addInitScript(storage=>Object.entries(storage).forEach(([key,value])=>localStorage.setItem(key,typeof value==='string'?value:JSON.stringify(value))),c.storage);
   if(c.geo)await page.addInitScript(geo=>Object.defineProperty(navigator,'geolocation',{value:{getCurrentPosition:success=>queueMicrotask(()=>success({coords:{latitude:geo.lat,longitude:geo.lon,accuracy:25}}))}}),c.geo);
-  if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v19',snapshot),c.snapshot);
+  if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v20',snapshot),c.snapshot);
   const errors=[],requests=[],delayedMapScripts=[];
   page.on('pageerror',e=>errors.push(e.message));
   let active=c;
@@ -310,7 +310,10 @@ async function main() {
       await expectText(session.page,'#hourly24',/unavailable/);
     });
     for(const width of [320,1280])await run('risk explanations work by tap and remain open after refresh at '+width+'px',config('risk help'),async({page})=>{
-      await page.locator('#riskHelp summary').click();await expectText(page,'#riskHelp',/category rank, not a probability/);
+      await page.evaluate(()=>{window.disclosureTrace=[];for(const type of ['pointerdown','pointerup','mousedown','mouseup','click','toggle'])document.addEventListener(type,e=>{const r=document.querySelector('#riskHelp summary').getBoundingClientRect();window.disclosureTrace.push({type,target:e.target.outerHTML?.slice(0,160),x:e.clientX,y:e.clientY,rect:{x:r.x,y:r.y,width:r.width,height:r.height},open:document.getElementById('riskHelp').open,pressed:masonryPointerActive});},true);});
+      await page.locator('#riskHelp summary').click();
+      try{await page.waitForFunction(()=>document.getElementById('riskHelp').open);}catch(e){console.error('DISCLOSURE_TRACE',JSON.stringify(await page.evaluate(()=>window.disclosureTrace)));throw e;}
+      await expectText(page,'#riskHelp',/category rank, not a probability/);
       await noCardOverlap(page);
       assert.equal(await page.evaluate(()=>document.activeElement.parentElement.id),'riskHelp');
       await page.locator('#riskHelp summary').focus();await page.evaluate(()=>loadSpc());
@@ -952,13 +955,35 @@ async function main() {
       });
       assert(!/Good window-opening|Excellent outdoor/.test(text));
     });
+    await run('individual context content updates pack before next paint',config('context growth'),async({page})=>{
+      const overlaps=await page.evaluate(async()=>{
+        const m=document.querySelector('.masonry'),first=[...m.children].filter(c=>c.classList.contains('card')).sort((a,b)=>a.offsetTop-b.offsetTop)[0];
+        const content=document.createElement('div');content.style.height='600px';first.appendChild(content);
+        // Mutation observers run in this checkpoint, before the next animation frame.
+        await Promise.resolve();
+        const boxes=[...m.children].filter(c=>c.classList.contains('card')).map(c=>({id:c.id,r:c.getBoundingClientRect()}));
+        const collisions=boxes.flatMap((a,i)=>boxes.slice(i+1).filter(b=>Math.min(a.r.right,b.r.right)-Math.max(a.r.left,b.r.left)>1&&Math.min(a.r.bottom,b.r.bottom)-Math.max(a.r.top,b.r.top)>1).map(b=>[a.id,b.id]));
+        content.remove();return collisions;
+      });
+      assert.deepEqual(overlaps,[],'Feed growth must not leave overlapping hit targets until the next frame');
+    },1280);
+    await run('individual context repack preserves a pressed disclosure',config('pressed disclosure'),async({page})=>{
+      const summary=page.locator('#riskHelp summary');await summary.scrollIntoViewIfNeeded();
+      const box=await summary.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();
+      // A resize or feed update can request a column-count change between down and up.
+      // The existing target must receive its native click before cards move or reparent.
+      await page.evaluate(()=>{const m=document.querySelector('.masonry');m.style.width='900px';layoutMasonry();});
+      await page.mouse.up();await page.waitForFunction(()=>document.getElementById('riskHelp').open);
+      await page.evaluate(()=>{document.querySelector('.masonry').style.width='';layoutMasonry();});
+      await noCardOverlap(page);await expectText(page,'#riskHelp',/category rank, not a probability/);
+    },1280);
     for(const width of [320,390,1280])await run('individual context touch and layout '+width,config('individual context',{touch:true,aqi:35}),async({page})=>{
       assert.equal(await page.locator('#compactView').count(),0);
       for(const id of ['afdCard','obsCard','climateCard','droughtCard','cpcCard','linksCard']){
         const toggle=page.locator('#'+id+' .context-toggle'),body=page.locator('#'+id+'Body');
         assert.equal(await toggle.getAttribute('aria-controls'),id+'Body');
         assert.equal(await toggle.getAttribute('aria-expanded'),'true');
-        await toggle.tap();assert(await body.isHidden());assert.equal(await toggle.getAttribute('aria-expanded'),'false');
+        await toggle.tap();assert(await body.isHidden(),id+' must collapse after a touch tap');assert.equal(await toggle.getAttribute('aria-expanded'),'false');
         await toggle.tap();assert(await body.isVisible());assert.equal(await toggle.getAttribute('aria-expanded'),'true');
       }
       await page.locator('#climateCard .context-toggle').tap();

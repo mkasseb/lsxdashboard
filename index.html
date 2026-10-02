@@ -52,7 +52,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css"
   integrity="sha384-uTttxo/aOKbdE5RlD/SPzSDoDmNvGlUYPjONi2MN/b7c9HPSvW07OIuyP7uL6jxK" crossorigin="anonymous"
   media="print" onload="this.media='all'">
-<link rel="stylesheet" href="/assets/dashboard.css?v=1450d8bf953dd840">
+<link rel="stylesheet" href="/assets/dashboard.css?v=4ed68ee20476ade5">
 </head>
 <body>
 <!-- First focusable thing on the page, and deliberately ahead of the sprite so it stays that way.
@@ -69,6 +69,16 @@
      The interface and generic-data marks below are drawn from, or closely after, Feather
      (https://feathericons.com, © 2013-2023 Cole Bemis, MIT) — credited in the README's licence
      table alongside Meteocons, which the footer links. The weather-specific glyphs are original. -->
+<!-- Keep this filter renderable (not display:none) for all three browser engines. -->
+<svg aria-hidden="true" focusable="false" width="0" height="0" style="position:absolute;overflow:hidden" xmlns="http://www.w3.org/2000/svg"><defs>
+  <filter id="weatherIconOutline" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+    <feGaussianBlur in="SourceAlpha" stdDeviation=".8" result="edge"/>
+    <feComponentTransfer in="edge" result="edgeSolid"><feFuncA type="linear" slope="16" intercept="-.5"/></feComponentTransfer>
+    <feFlood flood-color="#526373" result="edgeColor"/>
+    <feComposite in="edgeColor" in2="edgeSolid" operator="in" result="outline"/>
+    <feMerge><feMergeNode in="outline"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+</defs></svg>
 <svg id="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></symbol>
@@ -149,7 +159,7 @@
       </svg>
     </div>
     <div>
-      <h1>LSX Dashboard</h1>
+      <h1>LSX <span class="brand-word">Dashboard</span></h1>
       <!-- Where, in plain English. "NWS LSX County Warning Area" is exact and tells a stranger
            nothing; LSX in the title already carries the office reference for anyone who knows it.
            No institutional noun on the end — this is not an NWS operation and the subtitle is the
@@ -157,6 +167,7 @@
       <div class="sub">Eastern Missouri and Southwest Illinois Weather</div>
     </div>
   </div>
+  <span class="locNow" id="locNow"></span>
   <div class="header-right">
     <button class="refresh-btn" id="refresh" title="Refresh everything now">
       <span class="dot" id="statusDot" data-state="loading"></span><span id="refreshLabel">Refresh</span>
@@ -176,7 +187,6 @@
            role="combobox" aria-expanded="false" aria-controls="locSug" aria-autocomplete="list">
     <div id="locSug" class="locsug" role="listbox" aria-label="Location suggestions"></div>
   </form>
-  <span class="locNow" id="locNow"></span>
 </div>
 <details id="locationTools" class="disclosure location-tools">
   <summary>Saved locations &amp; sharing</summary>
@@ -201,8 +211,8 @@
 <nav class="jump" id="jumpNav" aria-label="Jump to a section">
   <a href="#alertsCard">Alerts</a>
   <a href="#currentCard">Now</a>
-  <a href="#radarCard">Sky</a>
   <a href="#h24Card">Hourly</a>
+  <a href="#radarCard">Radar</a>
   <a href="#forecastCard">7-Day</a>
   <a href="#riversCard">Rivers</a>
   <a href="#climateCard">Climate</a>
@@ -216,34 +226,19 @@
 <div id="snapBar" class="snapbar"><span class="sb-spin"></span><span id="snapBarText"></span></div>
 
 
-<div class="grid">
-
-  <!-- ALERTS — banners, not a card: each active hazard is a two-line strip that expands in
-       place, and in calm weather this collapses to a single reassurance line. `bannered` strips
-       the card chrome; the h2 stays for the document outline and the jump nav, visually hidden
-       (its weather.gov link moved into each banner's drawer — a focusable link inside clipped
-       text is a keyboard trap). #alertsScope is the list's scope: the place name, or "LSX" when
-       zone lookup failed and the list fell back to the whole county warning area. -->
-  <section class="card col-12 bannered" id="alertsCard">
+<div class="grid redesign-grid">
+<section class="card  bannered" id="alertsCard">
     <h2>Active Watches, Warnings &amp; Advisories — <span id="alertsScope">LSX</span></h2>
     <p id="alertUpdateNote" class="feed-status" data-state="unavailable" role="status" hidden></p>
     <div id="alerts"><div class="loading">Loading alerts…</div></div>
   </section>
-
-  <!-- MESOSCALE DISCUSSION — SPC's short-fused note that severe weather (usually a watch) is
-       expected in the next 1–3 hours. It rides directly under the alert banners because that is
-       what it is: the step between an outlook and a watch, and during the hour it exists it can
-       be the most decision-relevant thing on the page. It started life inside the Risk Outlook
-       card down in the masonry, where "watch likely within the hour" sat below the fold behind
-       three rows of day-scale pills. Empty — and therefore invisible — almost always; loadMcd()
-       owns it. -->
-  <div id="mcd" class="col-12"></div>
-
-  <!-- BOTTOM LINE (id stays callCard) — plain-English verdicts computed client-side from the
-       hourly forecast, UV, AQI and climate context. The page reasoning on the visitor's behalf,
-       so it sits directly under the alerts: safety first, then what today actually means,
-       on the first screen whatever the weather is doing. -->
-  <section class="card col-12" id="callCard">
+<div id="mcd"></div>
+<div class="weather-hero">
+<section class="card hero" id="currentCard">
+      <h2>Now <span class="sr" id="railNowSub"></span><span class="link" id="ccStation">&mdash;</span></h2>
+      <div id="current"><div class="loading">Loading…</div></div>
+    </section>
+<section class="card " id="callCard">
     <div class="call-head">
       <h2>Bottom Line</h2>
       <span class="call-horizon" id="callHorizon">Next 24 hours</span>
@@ -260,46 +255,24 @@
       <div id="briefEvidence"></div>
     </details>
   </section>
-
-  <!-- ── RIGHT NOW: the hero band. Everything a visitor opens this page to learn is in the
-       first screen — conditions on the left, radar on the right, the verdicts underneath. ── -->
-  <div class="railhead rail-now col-12">
-    <span class="rail-t">Right now</span>
-    <span class="rail-s" id="railNowSub"></span>
-  </div>
-
-  <!-- CURRENT -->
-  <div class="stack col-4">
-    <!-- Readings only. The 24-hour chart used to sit under here as a second sub-section; it is its
-         own band below the pair now (see #h24Card) because the page shell changed the arithmetic
-         this column is subject to. #current is still rebuilt wholesale by loadCurrent() on every
-         refresh and failure, so nothing that has to survive that may be nested inside it. -->
-    <section class="card hero" id="currentCard">
-      <h2>Now <span class="link" id="ccStation">&mdash;</span></h2>
-      <div id="current"><div class="loading">Loading…</div></div>
-    </section>
-    <!-- AQI — hidden unless air quality is actually notable (AQI > 100); the everyday reading
-         lives as a one-line summary inside Current Conditions -->
-    <section class="card" id="aqiCard">
-      <h2>Air Quality
-        <a class="link" href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a>
-      </h2>
-      <div id="aqi"></div>
-    </section>
-  </div>
-
-  <!-- SKY HERO — radar and satellite STACKED on one map.
-       They answer the same question at different scales ("what is overhead, and what is heading
-       this way"), and the honest way to show that is one over the other: cloud shield from GOES,
-       reflectivity from the radar sitting inside it, so you can see the storm and the system that
-       is carrying it in a single glance. It used to be two alternating views because the satellite
-       was NESDIS's sector JPEG — a fixed-extent picture that cannot align with a pannable map. The
-       satellite is now NASA GIBS's GOES-East GeoColor tile layer, in the map's own projection, so
-       it registers with the radar at every zoom and pan and the tabs became layer toggles. -->
-  <div class="stack col-8">
-  <section class="card hero" id="radarCard">
+</div>
+<div class="planning-grid">
+<section class="card " id="h24Card">
+    <div class="hourly-head">
+      <h2>Plan your day <span class="hourly-location" id="h24loc"></span></h2>
+      <span class="hourly-duration" id="h24Title">Next 24 hours</span>
+      <div class="hourly-options" id="hourlyOptions" role="group" aria-label="Hourly forecast duration">
+        <button type="button" data-hours="24" aria-pressed="true" disabled>24 hours</button>
+        <button type="button" data-hours="48" aria-pressed="false" disabled>48 hours</button>
+        <button type="button" data-hours="72" aria-pressed="false" disabled>72 hours</button>
+      </div>
+    </div>
+    <div class="precip-events" id="precipEvents"><div class="loading">Loading precipitation amounts…</div></div>
+    <div id="hourly24"><div class="loading">Loading hourly…</div></div>
+  </section>
+<section class="card hero" id="radarCard">
     <div class="rs-head">
-      <h2 id="skyTitle">Sky</h2>
+      <h2 id="skyTitle">Local radar</h2>
       <span class="rs-tabs" id="rsTabs" role="group" aria-label="Map layers">
         <button type="button" class="rs-tab on" data-l="radar" aria-pressed="true">Radar</button>
         <button type="button" class="rs-tab on" data-l="sat" aria-pressed="true">Satellite</button>
@@ -359,63 +332,32 @@
     </div>
     <div class="imgcap" id="rsCap"><span></span><span></span></div>
   </section>
-  </div>
-
-  <!-- ── NEXT 24 HOURS — its own full-width band again.
-       This chart was folded into the conditions card to save a card's worth of chrome, and at the
-       time that was free: the page had no width ceiling, so the column it moved into was 617px at
-       1920 and the Sky card opposite grew tall enough to roughly match it. The shell cap removed
-       both halves of that. The column is now 456px at every desktop width — narrow enough that the
-       chart has to thin its hour labels — while the map, whose height follows its width, came back
-       to 503px and left the pair ~240px unequal with the whitespace under the map.
-       Full width answers both with one move: 24 points get ~58px each instead of ~19, and the pair
-       balances to within ~70px without touching the map's shape, which is the thing the Sky card's
-       aspect rules exist to protect. It sits BELOW the pair rather than between the two columns:
-       the band reads conditions-and-sky first, then what the next day does, then the week.
-       Still a sibling of #current rather than a child, for the same reason as before — loadCurrent()
-       rebuilds #current wholesale and would take the chart down with it. ── -->
-  <section class="card col-12" id="h24Card">
-    <div class="hourly-head">
-      <h2><span id="h24Title">Next 24 hours</span> <span id="h24loc"></span></h2>
-      <div class="hourly-options" id="hourlyOptions" role="group" aria-label="Hourly forecast duration">
-        <button type="button" data-hours="24" aria-pressed="true" disabled>24 hours</button>
-        <button type="button" data-hours="48" aria-pressed="false" disabled>48 hours</button>
-        <button type="button" data-hours="72" aria-pressed="false" disabled>72 hours</button>
-      </div>
-    </div>
-    <div class="precip-events" id="precipEvents"><div class="loading">Loading precipitation amounts…</div></div>
-    <div id="hourly24"><div class="loading">Loading hourly…</div></div>
-  </section>
-
-  <!-- ── THE WEEK AHEAD & DEEPER CONTEXT ── -->
-  <div class="railhead col-12">
-    <span class="rail-t">The week ahead &amp; deeper context</span>
-    <span class="rail-s">forecast discussion, outlooks, rivers, drought, climate</span>
-  </div>
-
-  <!-- THE PULSE — the NWS forecaster's reasoning now follows Current Conditions and the
-       full-width 24-hour chart, immediately before the 7-day forecast band. This order lets the
-       observations and hourly evolution establish what is happening first, then uses the human
-       discussion to explain why before the reader reaches the day-by-day week.
-       It stays full-width and outside the masonry so its prose reads as one continuous briefing
-       and the 7-day card remains the first packed weekly product.
-       extractAFD prefers Key Messages, then Synopsis, then Short Term. Its Short-Term fallback
-       accepts both LSX's qualified `.SHORT TERM /THROUGH THURSDAY/...` form and the plain
-       `.SHORT TERM...` heading, with both forms covered by the pure logic tests.) -->
-  <section class="card col-12" id="afdCard">
+<section class="card" id="forecastCard">
+      <h2>7-Day Forecast</h2>
+      <div class="daily" id="daily"><div class="loading">Loading forecast…</div></div>
+    </section>
+</div>
+<div class="railhead"><span class="rail-t">Around your area</span><span class="rail-s">Local conditions, outlooks &amp; official forecast context</span></div>
+<div class="masonry">
+<section class="card " id="riversCard">
+      <h2>River &amp; Flood Gauges — live levels <span class="qpfchip" id="qpf7"></span>
+        <a class="link" href="https://water.noaa.gov/" target="_blank" rel="noopener" title="National Water Prediction Service — NOAA’s river gauge and flood forecast site">NWPS ↗</a>
+      </h2>
+      <div class="river" id="rivers"><div class="loading">Loading gauges…</div></div>
+    </section>
+<section class="card" id="aqiCard">
+      <h2>Air Quality
+        <a class="link" href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a>
+      </h2>
+      <div id="aqi"></div>
+    </section>
+<section class="card " id="afdCard">
     <h2>The Pulse — NWS Forecast Discussion
       <a class="link" href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener">Full discussion ↗</a>
     </h2>
     <div id="afd"><div class="loading">Loading discussion…</div></div>
   </section>
-
-  <!-- ── Self-packing masonry band: cards flow into the shortest column (no manual balancing, no gaps) ── -->
-  <div class="masonry col-12">
-    <section class="card" id="forecastCard">
-      <h2>7-Day Forecast</h2>
-      <div class="daily" id="daily"><div class="loading">Loading forecast…</div></div>
-    </section>
-    <section class="card" id="riskCard">
+<section class="card" id="riskCard">
       <h2>Risk Outlook
         <a class="link" href="https://www.spc.noaa.gov/products/outlook/day1otlk.html" target="_blank" rel="noopener">Maps ↗</a>
       </h2>
@@ -433,14 +375,14 @@
       </details>
       <div class="imgcap"><span id="spcLoc">SPC &middot; WPC</span><span>storm &middot; flood</span></div>
     </section>
-    <section class="card" id="hazardsCard">
+<section class="card" id="hazardsCard">
       <h2>Hazards Outlook
         <a class="link" href="https://www.wpc.ncep.noaa.gov/threats/threats.php" target="_blank" rel="noopener" title="Weather Prediction Center — NOAA’s national precipitation and hazards guidance">WPC ↗</a>
       </h2>
       <div id="hazards"><div class="loading">Loading hazards…</div></div>
       <div class="imgcap"><span><abbr title="Climate Prediction Center">CPC</abbr>/<abbr title="Weather Prediction Center">WPC</abbr> U.S. Hazards</span><span id="hazIssued">days 3–14</span></div>
     </section>
-    <section class="card" id="obsCard">
+<section class="card" id="obsCard">
       <h2>Station Plot — Live Surface Obs
         <a class="link" href="https://www.weather.gov/wrh/timeseries?site=KSTL" target="_blank" rel="noopener">NWS ↗</a>
       </h2>
@@ -454,15 +396,7 @@
       <div class="stn-ex" id="stnEx"></div>
       <div class="imgcap"><span>NWS &middot; regional <abbr title="Automated Surface Observing System — the automated weather stations at airports">ASOS</abbr>/<abbr title="the routine surface weather report those stations file, usually hourly">METAR</abbr></span><span id="stnAge">tap a station for detail</span></div>
     </section>
-    <!-- RIVERS — wide (spans 2 columns in the masonry) -->
-    <section class="card wide" id="riversCard">
-      <h2>River &amp; Flood Gauges — live levels <span class="qpfchip" id="qpf7"></span>
-        <a class="link" href="https://water.noaa.gov/" target="_blank" rel="noopener" title="National Water Prediction Service — NOAA’s river gauge and flood forecast site">NWPS ↗</a>
-      </h2>
-      <div class="river" id="rivers"><div class="loading">Loading gauges…</div></div>
-    </section>
-    <!-- DROUGHT OUTLOOK — current (USDM) + monthly & seasonal forecast (CPC) -->
-    <section class="card" id="droughtCard">
+<section class="card" id="droughtCard">
       <h2>Drought Outlook
         <a class="link" href="https://www.drought.gov/" target="_blank" rel="noopener">drought.gov ↗</a>
       </h2>
@@ -471,7 +405,7 @@
       <div class="dr-tier"><span class="dr-when">Season <span class="dr-sub">(3 mo)</span></span><span id="drSeason"><span class="dr-load">…</span></span></div>
       <div class="imgcap"><span><abbr title="U.S. Drought Monitor — the weekly national drought map">USDM</abbr> &middot; <abbr title="Climate Prediction Center">CPC</abbr> outlooks</span><span><abbr title="National Integrated Drought Information System">NIDIS</abbr> / drought.gov</span></div>
     </section>
-    <section class="card" id="climateCard">
+<section class="card" id="climateCard">
       <h2>Climate vs Normal
         <a class="link" href="https://xmacis.rcc-acis.org/" target="_blank" rel="noopener" title="Applied Climate Information System — the NOAA regional climate centers’ station archive">ACIS ↗</a>
       </h2>
@@ -481,15 +415,14 @@
       <div id="cnCtx" class="cn-ctx"></div>
       <div class="imgcap"><span>Station: <span id="cnStation">…</span></span><span title="The 30-year averages NOAA compares today against, recomputed each decade">1991–2020 normals</span></div>
     </section>
-    <section class="card" id="cpcCard">
+<section class="card" id="cpcCard">
       <h2>Week Ahead Leanings
         <a class="link" href="https://www.cpc.ncep.noaa.gov/products/predictions/610day/" target="_blank" rel="noopener" title="Climate Prediction Center — NOAA’s 6–14 day and seasonal outlooks">CPC ↗</a>
       </h2>
       <div id="cpc"><div class="loading">Loading outlooks…</div></div>
       <div class="imgcap"><span>Climate Prediction Center</span><span>6–14 days out</span></div>
     </section>
-    <!-- QUICK LINKS (folded into masonry so it packs instead of stranding) -->
-    <section class="card" id="linksCard">
+<section class="card" id="linksCard">
       <h2>Deep-Dive Links</h2>
       <div class="quicklinks">
         <a href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg>Forecast Discussion (<abbr title="Area Forecast Discussion — the forecasters’ own written reasoning">AFD</abbr>)</a>
@@ -503,11 +436,8 @@
         <a href="https://water.noaa.gov/#@=-90.3,38.6,7" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-flood"/></svg>Flood Map</a>
       </div>
     </section>
-  </div>
-
-
 </div>
-
+</div>
 </main>
 
 <!-- The canonical attribution table lives in the README's licence section. On-page data credits
@@ -529,9 +459,9 @@
 <script type="application/json" data-map-src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"
   integrity="sha384-tXYNKOHx4T02jMP7YYCtBxPIv1B5gaA5mcVPBzqMp6d7VzWzxJgI2aWF/nJLrQdS" crossorigin="anonymous"></script>
 <script src="/assets/weather-core.js?v=8184114e25bf92d3"></script>
-<script src="/assets/weather-feeds.js?v=7035ba44c6ecc3c7"></script>
+<script src="/assets/weather-feeds.js?v=54cca3240f6da5fd"></script>
 <script src="/assets/forecast-view.js?v=dc9e8b257f6acc64"></script>
 <script src="/assets/dashboard-context.js?v=9e972fd51f4d5fd2"></script>
-<script src="/assets/dashboard.js?v=6a6891a86c024f7e"></script>
+<script src="/assets/dashboard.js?v=399f30be04e7b690"></script>
 </body>
 </html>

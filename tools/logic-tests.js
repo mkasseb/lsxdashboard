@@ -140,10 +140,10 @@ function check(name, actual, expected) {
 }
 
 /* Restored chart markup must carry its duration and details rather than a prior fixed view. */
-check('freshness and Central Time markup migration bumps the snapshot key',
-  /var SNAP_KEY="lsxSnap_v19"/.test(SRC), true);
-check('the previous v18 snapshot is explicitly discarded',
-  /"lsxSnap_v18"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
+check('river display markup migration bumps the snapshot key',
+  /var SNAP_KEY="lsxSnap_v20"/.test(SRC), true);
+check('the previous v19 snapshot is explicitly discarded',
+  /"lsxSnap_v19"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
 const snapshotParts = new Function(lift(/^var FEEDS=\{[\s\S]*?^\};/m, 'FEEDS')+'\n'+
   lift(/^var SNAP_PARTS=.*$/m, 'SNAP_PARTS')+'; return SNAP_PARTS;')();
 check('saved HTML cannot restore stale current readings, risk or briefing',

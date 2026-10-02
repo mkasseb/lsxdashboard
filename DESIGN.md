@@ -710,3 +710,10 @@ The satellite refresh swaps layers rather than calling `redraw()`, which drops e
 and leaves a hole while replacements load: build the new layer, swap once it has painted.
 Both-layers-off is reachable by clicking but is never *restored* from `localStorage` — landing on
 a bare basemap with nothing on screen explaining why is a broken first impression.
+
+
+## October 2026 visual composition
+
+The current composition supersedes the historical hero/masonry placement notes above. Alerts and short-fused discussions remain first. Now and dashboard-generated Bottom Line advice share a bordered hero without suppressing any recommendations, observations or source states. The desktop planning grid stacks the complete hourly widget and compact seven-day card in the left column. A successfully rendered radar fills the right column to the same bottom edge without setting either forecast row height. On map startup failure, the compact retry/official-link panel sits above seven-day on the right; mobile DOM order is hourly, radar, seven-day. Rivers, AQI and official discussion join the retained lower context cards.
+
+The forecast now observes its own size and content to fit row dates because it no longer lives in masonry. Navigation resolves active sections from current geometry after scroll, resize, disclosure and masonry layout, with a clicked target breaking ties for side-by-side sections. River display labels separate observed Now from forecast peak-in-window or falling trend; arithmetic and freshness gates are unchanged. Snapshot v20 retires older unlabeled river markup. Every local asset remains content-versioned through `tools/version_assets.py --write`.

@@ -153,8 +153,10 @@ The full design rationale — what each decision replaced, and why — lives in
   elsewhere; neither speaks for the other.
 - **Colour is scarce.** Saturated colour means severity, links are blue; that is the whole budget.
   Type carries the hierarchy through the `--fs-*`/`--r-*`/`--sp-*` scales.
-- **The page is ordered by what a visitor came for.** Alerts and any active mesoscale discussion,
-  the Bottom Line, Now and Sky, event precipitation and the 24–72-hour chart, The Pulse, then the masonry — in DOM order.
+- **The page is ordered by what a visitor came for.** Alerts and active mesoscale discussions,
+  a combined Now / Bottom Line hero, hourly planning, radar and seven-day forecast, then local
+  context. Hourly and a compact seven-day card stack beside a full-height radar; phones read hourly,
+  radar, then seven-day. Every existing card and individual disclosure remains available.
 - **Radar is a peek, not the product.** The map's height is an aspect ratio, never leftover space;
   radar and satellite stack on one Leaflet map; the loop targets a 60-minute span, not a sweep
   count; and a dead tile layer is detected per layer so it can never read as clear skies.
@@ -205,10 +207,6 @@ in [`DESIGN.md`](DESIGN.md#adding-a-card-adding-a-loader).
 
 ## Known gaps
 
-- The hero pair only bottom-aligns in one direction. The reading column stretches to meet the Sky
-  card, so the ordinary case is flush — but when the AQI card earns its slot the left column becomes
-  the taller of the two, and the leftover reappears under the map. Stretching the map to absorb it
-  stays off the table: its height is an aspect ratio, not a number looking for a value.
 - The satellite follows a *scrub* but does not *animate*. A real satellite loop needs a preloaded
   parallel GOES stack, and the cost is in the tiles — see
   [`DESIGN.md`](DESIGN.md#the-satellite-follows-the-scrub-and-the-reason-it-does-not-follow-playback-is-bytes).
@@ -269,3 +267,11 @@ clause is the reason a fork is the forker's problem: a stale copy still serving 
 during a severe event is the failure this project can neither detect nor control. The footer line —
 *not an official NWS product; during severe weather defer to official warnings and a NOAA Weather
 Radio* — applies to every copy, and forks are asked to keep it intact.
+
+## Redesign review
+
+The specification-driven visual refresh is tracked in [the feature parity checklist](docs/redesign-parity.md).
+Run `NODE_PATH=/path/to/test/node_modules CHROMIUM_PATH=/usr/bin/chromium node tools/redesign-tests.js`
+for the additional phone/tablet/desktop checks in both themes. Set `REDESIGN_ARTIFACTS` to save
+explicitly labeled fixture screenshots; these sample values and controlled map tiles are test-only.
+The existing weather, seasonal and real-cache upgrade suites remain required.

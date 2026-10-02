@@ -1170,7 +1170,12 @@ function loadWarnPolygons(feats){
 }
 function loadRadar(){  // recenter on location change
   if(!rvMap) return;
-  rvMap.setView([current.lat,current.lon], rvMap.getZoom()||7);
+  // Forecast reset/repaint resizes the stretched desktop map during this same turn.
+  // An animated pan keeps its old pixel destination and can finish off-center after resize.
+  // A location selection is the only recenter trigger; ordinary resize preserves a user's view.
+  // Keep ResizeObserver's last stable size here: the synchronous forecast reset can
+  // shrink and restore the DOM before the observer sees any net size change.
+  rvMap.setView([current.lat,current.lon], rvMap.getZoom()||7, {animate:false});
   if(rvMarker) rvMarker.setLatLng([current.lat,current.lon]);
 }
 
@@ -3729,8 +3734,8 @@ function renderTheCall(){
 // v17: saved fragments carry their original validated check times and Central Time labels.
 // v18: the feed registry owns cached fragments; river rows include persistent pin controls.
 // v19: time-scaled hourly gaps, dated climate comparisons and verified gauge timestamps.
-var SNAP_KEY="lsxSnap_v19", snapRestored=false;
-try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13","lsxSnap_v14","lsxSnap_v15","lsxSnap_v16","lsxSnap_v17","lsxSnap_v18"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
+var SNAP_KEY="lsxSnap_v20", snapRestored=false;
+try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13","lsxSnap_v14","lsxSnap_v15","lsxSnap_v16","lsxSnap_v17","lsxSnap_v18","lsxSnap_v19"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
 var SNAP_PARTS=Object.keys(FEEDS).reduce(function(parts,k){return parts.concat((FEEDS[k].snapshot||[]).map(function(p){return Object.assign({feed:k},p);}));},[]);
 function saveSnapshot(){
   // Mid-transition the DOM still shows the OLD place while `current` is already the new one --
@@ -4206,7 +4211,10 @@ if(!document.hidden) startSchedule();
 document.getElementById("refresh").addEventListener("click",function(){ refreshAll(); });
 
 /* ---- JavaScript masonry: pack band cards by their REAL measured height ---- */
+var masonryPointerActive=false;
 function layoutMasonry(){
+  // Preserve the pressed target until its native click/toggle has completed.
+  if(masonryPointerActive)return;
   var m=document.querySelector(".masonry"); if(!m) return;
   var GAP=16, w=m.clientWidth;
   var cols = w<=680 ? 1 : (w<=1100 ? 2 : 3);
@@ -4230,11 +4238,10 @@ function layoutMasonry(){
   //  (Alerts/Pulse/Current/Radar/Hourly are fixed heroes above this masonry.)
   function tier(id){
     var RANK={
-      forecastCard:1,   // 7-day forecast — most-checked product
+      riversCard:1, aqiCard:1, afdCard:1, // local context follows the fixed planning band
       riskCard:2,       // severe storm/flood/fire risk
       hazardsCard:3,    // hazards outlook (days 3–14)
       obsCard:4,        // station plot — current regional obs
-      riversCard:5,     // river/flood gauges
       droughtCard:6,    // drought outlook
       climateCard:7,    // climate vs normal
       cpcCard:8,        // week-ahead leanings
@@ -4316,7 +4323,8 @@ function layoutMasonry(){
   }
   m.style.height=Math.max.apply(null,colH)+"px";
   reorderMasonryDOM(m,data);
-  fitDayDates();   // the 7-day card now has its final width — see that function for why here
+  fitDayDates();
+  document.dispatchEvent(new Event("lsxlayout"));
 }
 /* Tab order and screen-reader order follow the DOM, but these cards are absolutely positioned, so
    after packing they can read in a wholly different order than they appear. Put the nodes into
@@ -4354,6 +4362,15 @@ var _mObs=null, _mObsOpts={childList:true,subtree:true,characterData:true,attrib
 (function(){
   var m=document.querySelector(".masonry");
   if(m){
+    m.addEventListener("pointerdown",function(){masonryPointerActive=true;},true);
+    function releasePointer(){
+      // Native click follows pointerup before the next animation frame. Reparenting a card
+      // between those events can discard the click in WebKit even when focus is restored.
+      requestAnimationFrame(function(){masonryPointerActive=false;scheduleMasonry();});
+    }
+    document.addEventListener("pointerup",releasePointer,true);
+    document.addEventListener("pointercancel",releasePointer,true);
+    window.addEventListener("blur",releasePointer);
     // Source text, disclosure and font metrics can change height after the mutation's frame.
     if(window.ResizeObserver){
       var sizes=new ResizeObserver(scheduleMasonry);
@@ -4362,7 +4379,47 @@ var _mObs=null, _mObsOpts={childList:true,subtree:true,characterData:true,attrib
     // re-pack whenever a child image finishes loading
     [].slice.call(m.querySelectorAll("img")).forEach(function(img){ img.addEventListener("load",scheduleMasonry); img.addEventListener("error",scheduleMasonry); });
     // re-pack when card contents change (data loads in)
-    if(window.MutationObserver){ _mObs=new MutationObserver(scheduleMasonry); _mObs.observe(m,_mObsOpts); }
+    // Pack feed/disclosure growth in the mutation checkpoint. Deferring to another frame
+    // leaves absolutely positioned cards overlapping briefly and can send pointerdown
+    // to a different card than pointerup, even while the intended summary is visible.
+    if(window.MutationObserver){ _mObs=new MutationObserver(layoutMasonry); _mObs.observe(m,_mObsOpts); }
   }
 })();
 scheduleMasonry();
+
+/* The fixed forecast band has its own resize/content lifecycle now. */
+(function(){
+  var card=document.getElementById("forecastCard");
+  if(window.ResizeObserver) new ResizeObserver(fitDayDates).observe(card);
+  if(window.MutationObserver) new MutationObserver(fitDayDates).observe(card,{childList:true,subtree:true,characterData:true});
+})();
+
+/* Active navigation follows rendered geometry, including independent disclosures and repacking. */
+(function(){
+  var nav=document.getElementById("jumpNav"), bar=nav.parentElement, queued=false, clicked=null;
+  var links=[].slice.call(nav.querySelectorAll('a'));
+  function update(){
+    queued=false;
+    var edge=Math.max(bar.getBoundingClientRect().bottom+16,parseFloat(getComputedStyle(document.getElementById("currentCard")).scrollMarginTop)+2);
+    var candidates=links.map(function(link){return {link:link,box:document.querySelector(link.getAttribute('href')).getBoundingClientRect()};})
+      .filter(function(item){return item.box.height>0;})
+      .sort(function(a,b){return a.box.top-b.box.top||a.box.left-b.box.left;});
+    var active=candidates[0];
+    candidates.forEach(function(item){if(item.box.top<=edge&&(!active||item.box.top>active.box.top+4))active=item;});
+    if(window.scrollY+window.innerHeight>=document.documentElement.scrollHeight-2){
+      var visible=candidates.filter(function(item){return item.box.top<window.innerHeight&&item.box.bottom>edge;});
+      if(visible.length)active=visible[visible.length-1];
+    }
+    var chosen=candidates.find(function(item){return item.link===clicked;});
+    if(chosen&&active&&Math.abs(chosen.box.top-active.box.top)<=4)active=chosen;
+    links.forEach(function(link){if(active&&link===active.link)link.setAttribute('aria-current','location');else link.removeAttribute('aria-current');});
+  }
+  function schedule(){if(!queued){queued=true;requestAnimationFrame(update);}}
+  window.addEventListener('scroll',schedule,{passive:true});
+  window.addEventListener('resize',schedule);
+  if(window.ResizeObserver)new ResizeObserver(schedule).observe(document.getElementById('main'));
+  document.addEventListener('lsxlayout',schedule);
+  document.addEventListener('toggle',schedule,true);
+  nav.addEventListener('click',function(e){clicked=e.target.closest('a');schedule();});
+  schedule();
+})();
