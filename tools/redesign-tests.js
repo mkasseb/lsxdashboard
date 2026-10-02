@@ -10,7 +10,7 @@ const out=process.env.REDESIGN_ARTIFACTS;
 async function main(){
  const browser=await playwright[engine].launch({headless:engine!=='firefox',...(engine==='chromium'?{executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox','--enable-unsafe-swiftshader']}: {})});setBrowser(browser);
  const report=[];
- try{for(const width of [320,390,768,1024,1180,1440])for(const theme of ['dark','light']){
+ try{for(const width of [320,390,768,1024,1180,1440,1920])for(const theme of ['dark','light']){
   const s=await open(config('layout fixture',{maps:true,touch:width<768,aqi:32,uv:4,river:[20,25,22]}),width),p=s.page;
   try{
    await p.evaluate(t=>applyTheme(t),theme);
@@ -20,8 +20,10 @@ async function main(){
    assert.equal(await p.locator('#hourlyOptions button').count(),3);
    assert.equal(await p.locator('#rsTabs button').count(),2);
    const boxes=await p.evaluate(()=>Object.fromEntries(['currentCard','callCard','h24Card','radarCard','forecastCard'].map(id=>{const r=document.getElementById(id).getBoundingClientRect();return[id,{x:r.x,y:r.y,right:r.right,bottom:r.bottom}];})));
-   if(width>1000){assert(Math.abs(boxes.h24Card.y-boxes.radarCard.y)<2);assert(boxes.h24Card.right<=boxes.radarCard.x);assert(boxes.forecastCard.y>=Math.max(boxes.h24Card.bottom,boxes.radarCard.bottom));assert(Math.abs(boxes.forecastCard.x-boxes.h24Card.x)<2);assert(Math.abs(boxes.forecastCard.right-boxes.radarCard.right)<2);assert(Math.abs(boxes.currentCard.y-boxes.callCard.y)<2);}
+   if(width>1000){assert(Math.abs(boxes.h24Card.y-boxes.radarCard.y)<2);assert(boxes.h24Card.right<=boxes.radarCard.x);assert(Math.abs(boxes.forecastCard.y-boxes.h24Card.bottom-16)<2,'No dead band above Week');assert(Math.abs(boxes.forecastCard.x-boxes.h24Card.x)<2);assert(Math.abs(boxes.forecastCard.right-boxes.h24Card.right)<2);assert(Math.abs(boxes.forecastCard.bottom-boxes.radarCard.bottom)<2,'Radar must fill the full forecast column');assert(Math.abs(boxes.currentCard.y-boxes.callCard.y)<2);}
    else {assert(boxes.radarCard.y>=boxes.h24Card.bottom);assert(boxes.forecastCard.y>=boxes.radarCard.bottom);}
+   const radarSize=await p.locator('#radar').boundingBox();if(width>1000)assert(radarSize.height>600,'Successful map must render at full column height, not fallback height');
+   const rowHeights=await p.locator('#daily .day').evaluateAll(rows=>rows.map(r=>r.getBoundingClientRect().height));assert(rowHeights.every(h=>h>=44&&h<=56),'Compact rows keep 44px touch targets');
    if(width<=680)assert(boxes.callCard.y>=boxes.currentCard.bottom);
    await p.locator('#daily .day').first().click();assert.equal(await p.locator('#daily .day').first().getAttribute('aria-expanded'),'true');
    await p.locator('#daily .day').first().press('Enter');assert.equal(await p.locator('#daily .day').first().getAttribute('aria-expanded'),'false');
@@ -47,7 +49,7 @@ async function main(){
     return ['--text','--muted','--accent'].flatMap(f=>['--bg','--panel','--panel-2'].map(b=>{let x=lum(c.getPropertyValue(f).trim()),y=lum(c.getPropertyValue(b).trim());return {f,b,ratio:(Math.max(x,y)+.05)/(Math.min(x,y)+.05)};}));
    });for(const c of contrast)assert(c.ratio>=4.5,JSON.stringify(c));
    assert.deepEqual(s.errors,[]);
-   if(out&&[390,1180,1440].includes(width)){
+   if(out&&[390,768,1180,1440,1920].includes(width)){
     fs.mkdirSync(out,{recursive:true});await p.evaluate(()=>{window.scrollTo(0,0);document.querySelectorAll('img.wxi').forEach(wxiFail);document.querySelectorAll('.context-toggle[aria-expanded="false"]').forEach(b=>b.click());});
     await p.clock.runFor(500);await p.evaluate(()=>layoutMasonry());
     await p.waitForFunction(()=>{const boxes=[...document.querySelectorAll('.masonry>.card')].map(c=>c.getBoundingClientRect()).filter(r=>r.width&&r.height);return boxes.every((a,i)=>boxes.slice(i+1).every(b=>Math.min(a.right,b.right)-Math.max(a.left,b.left)<=1||Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)<=1));});
@@ -56,9 +58,40 @@ async function main(){
     await p.screenshot({path:path.join(out,engine+'-'+width+'-'+theme+'.png'),fullPage:true});
     await p.screenshot({path:path.join(out,engine+'-'+width+'-'+theme+'-first-screen.png')});
    }
+   if(width>1000){s.change(config('forecast outage',{maps:true,hourlyDown:true,dailyDown:true}));await p.evaluate(()=>loadForecast());const mapBox=await p.locator('#radar').boundingBox();assert(mapBox.height>=278,'Working radar keeps its 280px framed minimum when forecasts are unavailable: '+JSON.stringify(mapBox));}
    report.push({width,theme,status:'passed'});console.log('PASS '+engine+' '+width+' '+theme);
   }finally{await s.context.close();}
- }}finally{await browser.close();}
+ }
+ // A short fallback must not stand in for a fully rendered map during layout review.
+ for(const width of [390,768,1180,1440,1920])for(const theme of ['dark','light']){
+  const scenario=config('map failure layout',{maps:true,mapLibrariesDown:true,touch:width<768,aqi:32});
+  const s=await open(scenario,width),p=s.page;
+  try{
+   await p.evaluate(t=>applyTheme(t),theme);
+   await p.locator('#radar [data-retry-maps]').waitFor();
+   const boxes=await p.evaluate(()=>Object.fromEntries(['h24Card','radarCard','forecastCard'].map(id=>{const r=document.getElementById(id).getBoundingClientRect();return[id,{x:r.x,y:r.y,right:r.right,bottom:r.bottom}];})));
+   if(width>1000){
+    assert(Math.abs(boxes.h24Card.y-boxes.radarCard.y)<2);
+    assert(Math.abs(boxes.forecastCard.x-boxes.radarCard.x)<2);
+    assert(boxes.forecastCard.y-boxes.radarCard.bottom<=96,'Failure state must not leave a large band above Week');
+    assert(boxes.radarCard.bottom-boxes.radarCard.y<400,'Failure panel stays compact');
+   }else {assert(boxes.radarCard.y>=boxes.h24Card.bottom);assert(boxes.forecastCard.y>=boxes.radarCard.bottom);}
+   assert(await p.locator('#radar a[href="https://radar.weather.gov/station/KLSX/standard"]').isVisible());
+   assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+   if(out){
+    fs.mkdirSync(out,{recursive:true});await p.evaluate(()=>{window.scrollTo(0,0);document.querySelectorAll('img.wxi').forEach(wxiFail);const n=document.createElement('p');n.textContent='VISUAL QA • deterministic sample weather • map startup failure';n.style.cssText='font:12px system-ui;color:var(--muted);margin:0 0 12px';document.querySelector('header').before(n);});
+    await p.clock.runFor(500);await p.evaluate(()=>layoutMasonry());
+    await p.screenshot({path:path.join(out,engine+'-'+width+'-'+theme+'-map-failure.png'),fullPage:true});
+   }
+   s.change({...scenario,mapLibrariesDown:false});await p.locator('#radar [data-retry-maps]').click();
+   await p.waitForFunction(()=>document.querySelectorAll('#radar .leaflet-tile-loaded').length>0);
+   if(width>1000)await p.waitForFunction(()=>Math.abs(document.getElementById('radarCard').getBoundingClientRect().bottom-document.getElementById('forecastCard').getBoundingClientRect().bottom)<2);
+   assert.equal(await p.locator('#radar .leaflet-map-pane').count(),1);assert.equal(await p.locator('#radar .leaflet-map-pane').evaluate(e=>getComputedStyle(e).position),'absolute');assert(await p.locator('#radar .leaflet-control-zoom').isVisible());assert(await p.locator('#radar .leaflet-tile-loaded').first().isVisible());assert.equal(await p.locator('#radar [data-retry-maps]').count(),0);
+   assert.deepEqual(s.errors,[]);
+   report.push({width,theme,mapState:'failure and retry',status:'passed'});console.log('PASS '+engine+' '+width+' '+theme+' failure/retry');
+  }finally{await s.context.close();}
+ }
+ }finally{await browser.close();}
  if(out)fs.writeFileSync(path.join(out,engine+'-layout-report.json'),JSON.stringify(report,null,2));
  console.log(report.length+' layout/interaction cases passed');
 }

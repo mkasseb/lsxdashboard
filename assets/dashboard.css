@@ -1707,12 +1707,13 @@ header .top{grid-column:1/-1;gap:16px;margin-bottom:10px;flex-wrap:nowrap}
 .bl-detail,.bl-action{font-size:15px}.bl-sheadline,.bl-sdetail{font-size:14px}
 .brief-author{font-size:12px}.disclosure{font-size:14px}
 .planning-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
-#h24Card{grid-column:1;grid-row:1}#radarCard{grid-column:2;grid-row:1}#forecastCard{grid-column:1/-1;grid-row:2}
+#h24Card{grid-column:1;grid-row:1}#radarCard{grid-column:2;grid-row:1/3}#forecastCard{grid-column:1;grid-row:2}
 .hourly-head{flex-wrap:wrap;gap:8px}.hourly-head h2{margin:0;flex:1 1 100%}
 .hourly-duration{font-size:13px;color:var(--muted)}.hourly-options{margin-left:auto}
 #radarCard .rs-head{flex-wrap:wrap;gap:12px}#radarCard .rs-head h2{font-size:20px}
 body:not(.radar-full) #radarCard .imgwrap{aspect-ratio:1/1;max-height:600px}
 #radarCard .frame{min-height:0}
+#radarCard .map-unavailable #radar{background:var(--panel-2)}
 .daily{gap:0}.day-item{border:0;border-bottom:1px solid var(--border);border-radius:0;background:none}
 .day-item:last-child{border-bottom:0}.day{padding:10px 0;min-height:58px;grid-template-columns:minmax(90px,1.3fr) 32px 52px minmax(38px,1fr) 78px 12px;gap:10px}
 .day .dn{font-size:14px}.day .dcond{font-size:12px}.day .dt{font-size:14px}.day-detail{padding:0 0 12px}
@@ -1774,11 +1775,24 @@ body{transition:none}
   .bl-lead{grid-template-columns:minmax(0,1fr)}.bl-lead-ico{display:none}
 }
 
-/* The complete hourly and weekly products vary independently in height. Put the week across
-   both columns so no empty half-column is reserved below the bounded radar. */
+/* The left column owns its natural hourly + weekly height. The map fills the right column
+   with actual tiles, rather than contributing an intrinsic height that strands space above Week.
+   Scope to inline desktop: fullscreen and the mobile/tablet sequence keep their own sizing. */
+#forecastCard .day{min-height:44px;padding-block:6px}
 @media(min-width:1001px){
-  #forecastCard .day{grid-template-columns:minmax(180px,1fr) 32px 64px minmax(120px,2fr) 100px 16px;gap:16px}
-  #forecastCard .day .dn{white-space:normal}
+  .planning-grid{grid-template-rows:min-content min-content}
+  #forecastCard .day{grid-template-columns:minmax(90px,1.2fr) 28px 52px minmax(40px,1fr) 78px 12px;gap:8px}
+  body:not(.radar-full) .planning-grid #radarCard{align-self:stretch;display:flex;flex-direction:column;min-height:0}
+  body:not(.radar-full) .planning-grid #radarCard .rs-view{flex:1;min-height:0}
+  body:not(.radar-full) .planning-grid #radarCard .imgwrap{flex:1;aspect-ratio:auto;min-height:280px;max-height:none}
+  body:not(.radar-full) .planning-grid #radarCard #radar{position:absolute;inset:0;height:100%;width:100%}
+  /* A failed map has no geographic content to fill a tall column. Keep its retry/official link
+     compact above Week on the right, with Hourly alongside. Loading alone does not switch layout. */
+  body:not(.radar-full) .planning-grid:has(#radar [data-retry-maps]) #h24Card{grid-row:1/3}
+  body:not(.radar-full) .planning-grid:has(#radar [data-retry-maps]) #radarCard{grid-row:1;align-self:start;display:block}
+  body:not(.radar-full) .planning-grid:has(#radar [data-retry-maps]) #forecastCard{grid-column:2;grid-row:2}
+  body:not(.radar-full) .planning-grid:has(#radar [data-retry-maps]) #radarCard .imgwrap{min-height:0}
+  body:not(.radar-full) .planning-grid:has(#radar [data-retry-maps]) #radarCard #radar{position:relative;inset:auto;height:auto}
 }
 /* Keep gauge identity, Now and forecast prose readable even in a narrow desktop context card.
    DOM/source values and the separate pin button remain unchanged. */

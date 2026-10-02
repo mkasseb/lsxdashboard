@@ -18,7 +18,7 @@ All rows below are implemented with original IDs and controls retained. The old 
 | h24Card, hourlyOptions, precipEvents, hourly24 | Beside radar desktop; above radar mobile | 24/48/72 switches, chart/slider keyboard/touch, selected timestamp and focus retention, gaps, amounts and event horizons |
 | radarCard, rsTabs, rsFull, rsRadar, radar, radarPlay/Slider, rsLegend/rsWarnKey/rsCap | Generous radar pane | Actual rendered tiles/panes, layer toggles, pan/zoom/touch lock, playback/scrub, legends, fullscreen focus/Escape, diagnostics and official link |
 | Radar/station map bootstrap and per-layer recovery | Existing map surfaces | Initial failure, bounded startup, retry, late scripts/styles, WebGL fallback, tile outage, stale/pending source cues |
-| forecastCard/daily | Full-width aligned seven-day band below hourly/radar | All daytime/nighttime periods, details and links; no horizon reduction or clipped content |
+| forecastCard/daily | Compact seven-day below hourly; full-height radar beside both | All daytime/nighttime periods, details and links; no horizon reduction or clipped content |
 | aqiCard/aqi | Lower local context | AQI/UV values, guidance, attribution, ages, unavailable state and AirNow link |
 | afdCard/afd | Lower official discussion | All NWS-authored content, individual disclosures and full discussion link; generated-vs-NWS distinction |
 | riskCard/spc/spcThreats/riskHelp | Retained lower context | Storm/flood/fire, tornado/wind/hail, every period and explanation, touch/keyboard behavior, attribution |
@@ -39,7 +39,7 @@ All rows below are implemented with original IDs and controls retained. The old 
 - Redesigned static/hash, logic and seasonal suites: passed.
 - Redesigned full Chromium weather suite after layout repair: 145 passed, 0 failed. The final weather rerun also passed 145/145 before the last navigation-only refinement and snapshot cleanup; exact-commit CI runs the suite again.
 - Redesigned Chromium real-cache upgrade: passed. Negative control reproduces stale-script blank radar; versioned upgrade fetches all six assets and renders map tiles/controls/diagnostics.
-- PASS: all 12 cases in `tools/redesign-tests.js`: phone 320/390, tablet 768, desktop 1024/1180/1440 in dark/light; card inventory, geometry, daily keyboard disclosures, hourly period/slider/focus retention, advice disclosure, navigation after repack, river labels, page/card bounds, palette contrast and JS errors. Screenshots are explicitly labeled deterministic QA fixtures.
+- PASS: all 24 cases in `tools/redesign-tests.js`: phone 320/390, tablet 768, desktop 1024/1180/1440/1920 in dark/light; card inventory, geometry, daily keyboard disclosures, hourly period/slider/focus retention, advice disclosure, navigation after repack, river labels, page/card bounds, palette contrast and JS errors. Screenshots are explicitly labeled deterministic QA fixtures.
 - Existing suite additionally covers all-season hazards/advice, missing/pending/stale/saved sources, map rendered panes/tiles, startup timeout/retry/late completion, map style/tile failures, fullscreen focus, playback, touch, location/favorites/sharing, dates and repeated refresh.
 - Firefox/WebKit are unavailable locally. Installation failed with HTTP 403 `Domain forbidden` at browser download hosts. Existing CI matrix and the added layout suite cover these browsers on GitHub; record exact-commit results in the PR. WebKit browser testing is not physical iPhone Safari validation.
 
@@ -57,8 +57,9 @@ All rows below are implemented with original IDs and controls retained. The old 
 - Hourly retains all 24/48/72-hour chart interactions, accumulation details and source states, so its card is taller than the six-hour illustration.
 - Forecast rows retain temperature ranges and expandable complete forecast details, rather than flattening them into a static sample table.
 - Lower context retains every card and the existing individual expanded/collapsed behavior. No global Compact context control exists.
-- After live preview review, seven-day spans both desktop columns and river rows stack name, Now and forecast detail to eliminate the empty half-column and narrow prose.
-- Radar uses a generous bounded map shape rather than stretching to the height of arbitrary forecast content.
+- After actual Mac Safari review, hourly and compact seven-day stack in one desktop column. Successful radar fills the adjacent column; no separate map aspect ratio can create a dead band above seven-day. Rows keep at least 44px touch targets. A confirmed startup failure uses a compact error/retry panel above seven-day on the right, avoiding a tall empty fallback. Retry restores the full-height map. Mobile/tablet ordering remains hourly, radar, seven-day.
+- River rows retain full-width name, Now and forecast detail.
+- Tests explicitly assert successful rendered tile height and card bottom alignment, compact forecast rows, and separate failure/retry layout at 1180/1440/1920 plus phone/tablet in both themes.
 - River rising endpoints are labeled peak **in window** and retain “rising to”; falling forecasts are labeled **Forecast trend**, never a false crest.
 - No sample values or QA labels are included in production assets. QA screenshots use controlled map tiles; live upstream availability needs the branch preview.
 
