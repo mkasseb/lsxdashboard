@@ -31,11 +31,6 @@ function initContextView(){
     button.addEventListener('click',function(){expand(card,body.hidden);});
     card.appendChild(button);card.appendChild(body);
   });
-  var compact=document.getElementById('compactView');
-  compact.addEventListener('click',function(){
-    var on=compact.getAttribute('aria-pressed')!=='true';compact.setAttribute('aria-pressed',String(on));
-    ids.forEach(function(id){expand(document.getElementById(id),!on);});
-  });
   document.getElementById('jumpNav').addEventListener('click',function(e){
     var link=e.target.closest('a');if(!link)return;
     var card=document.querySelector(link.getAttribute('href'));

@@ -142,7 +142,7 @@ function loadForecast(){
         failDaily();
       }else{
         feedUpdate("daily","ready",f.properties.updateTime||f.properties.updated||f.properties.generatedAt);
-        try{renderDailyForecast(f,h);}catch(e){failDaily();}
+        try{renderDailyForecast(f,h);renderContext();}catch(e){failDaily();}
       }
       if(h){ // hourly strip only when the hourly feed succeeded
         var hrs=forecastWindowHours(h.properties.periods,24,Date.now());
@@ -1096,8 +1096,10 @@ function loadClimate(){
 
 function loadClimateContext(){
   deferredFeeds.context=true;
-  var fresh=locGuard();
-  try{ localStorage.removeItem("lsxCtx_v1"); localStorage.removeItem("lsxCtx_v2"); }catch(e){}   // pre-split cache format
+  var locationFresh=locGuard(), requestDate=ctxTodayKey();
+  var generation=loadClimateContext.generation=(loadClimateContext.generation||0)+1;
+  function fresh(){return locationFresh()&&generation===loadClimateContext.generation&&requestDate===ctxTodayKey();}
+  try{ localStorage.removeItem("lsxCtx_v1"); localStorage.removeItem("lsxCtx_v2"); localStorage.removeItem("lsxCtx_v3"); }catch(e){}   // pre-split cache format
   return climStation(current.lat,current.lon).then(function(st){
    return deepStation(current.lat,current.lon).then(function(deep){
     // Depth vs locality: daily records/rankings come from the deep legacy station; monthly,
@@ -1120,9 +1122,10 @@ function loadClimateContext(){
     var today=y+"-"+mm+"-"+dd;
     var wkEnd=new Date(calendarDate(today).getTime()+6*86400000);
     var wkEndStr=wkEnd.toISOString().slice(0,10);
-    var histStart=(y-2)+"-"+mm+"-"+dd;
+    var histStart=(y-2)+"-"+mm+"-"+(mm==="02"&&dd==="29"?"28":dd);
+    var tomorrow=new Date(calendarDate(today).getTime()+86400000).toISOString().slice(0,10);
     return Promise.allSettled([
-      acisPost("StnData",{sid:rec.sid,sdate:"1850-"+mm+"-"+dd,edate:today,
+      acisPost("StnData",{sid:rec.sid,sdate:(mm==="02"&&dd==="29"?"1852-":"1850-")+mm+"-"+dd,edate:today,
         elems:[{name:"maxt",interval:[1,0,0],duration:1,reduce:"max"},
                {name:"mint",interval:[1,0,0],duration:1,reduce:"min"},
                {name:"pcpn",interval:[1,0,0],duration:1,reduce:"sum"}]}),
@@ -1132,7 +1135,11 @@ function loadClimateContext(){
       acisPost("StnData",{sid:st.sid,sdate:histStart,edate:today,
         elems:[{name:"maxt"},{name:"mint"},{name:"pcpn"}]}),
       acisPost("StnData",{sid:st.sid,sdate:today,edate:wkEndStr,
-        elems:[{name:"maxt",normal:"1"},{name:"mint",normal:"1"}]})
+        elems:[{name:"maxt",normal:"1"},{name:"mint",normal:"1"}]}),
+      acisPost("StnData",{sid:rec.sid,sdate:(tomorrow.slice(5)==="02-29"?"1852-":"1850-")+tomorrow.slice(5),edate:tomorrow,
+        elems:[{name:"maxt",interval:[1,0,0],duration:1,reduce:"max"},
+               {name:"mint",interval:[1,0,0],duration:1,reduce:"min"},
+               {name:"pcpn",interval:[1,0,0],duration:1,reduce:"sum"}]})
     ]).then(function(rs){
       if(!fresh()) return;   // user moved while this was in flight
       function data(i){
@@ -1145,15 +1152,18 @@ function loadClimateContext(){
                 monWet:[], monWarm:[], monMtd:null, monMean:null, monName:MONTHS[now.month],
                 years:0, dry:null, hist:null, normWeek:{},
                 recStation:(rec.sid!==st.sid)?(rec.name||rec.sid):""};
-      // 1 — this calendar day, every year
-      var doy=data(0);
-      if(doy){
-        var hi=ctxNumPairs(doy,1,true), lo=ctxNumPairs(doy,2,false), pc=ctxNumPairs(doy,3,true);
-        nctx.recHi=hi.best; nctx.doyHi=hi.sorted;
-        nctx.recLo=lo.best; nctx.doyLo=lo.sorted;
-        nctx.recPcp=pc.best;
-        nctx.years=hi.sorted.length;
-      }
+      // Fetch each calendar date independently; an unavailable date never borrows another's record.
+      nctx.recordsByDate={};
+      [today,tomorrow].forEach(function(date,index){
+        var rows=data(index===0?0:4);
+        if(!rows) return;
+        rows=rows.filter(function(row){return String(row[0]).slice(5,10)===date.slice(5);});
+        var hi=ctxNumPairs(rows,1,true), lo=ctxNumPairs(rows,2,false), pc=ctxNumPairs(rows,3,true);
+        var record={recordDate:date,recHi:hi.best,recLo:lo.best,recPcp:pc.best,
+                    doyHi:hi.sorted,doyLo:lo.sorted,years:hi.sorted.length};
+        nctx.recordsByDate[date]=record;
+        if(index===0) Object.assign(nctx,record);
+      });
       // 2 — monthly totals, every year (current partial month kept separately)
       var mon=data(1);
       if(mon){
@@ -1189,8 +1199,8 @@ function loadClimateContext(){
         var h=acisNum(r[1]), l=acisNum(r[2]);
         if(h!=null||l!=null) nctx.normWeek[r[0]]={hi:h, lo:l};
       });
-      nctx.ready=!!(nctx.recHi||nctx.monWet.length||nctx.hist);
-      var complete=[0,1,2,3].every(function(i){var rows=data(i);return rows&&rows.length;});
+      nctx.ready=!!(nctx.recHi||nctx.recordsByDate[tomorrow]&&nctx.recordsByDate[tomorrow].recHi||nctx.monWet.length||nctx.hist);
+      var complete=[0,1,2,3,4].every(function(i){var rows=data(i);return rows&&rows.length;});
       feedUpdate("context",nctx.ready?(complete?"ready":"partial"):"unavailable");
       ctx=nctx;
       if(ctx.ready){ try{ localStorage.setItem(CTX_KEY,JSON.stringify({key:key,ctx:ctx,status:feedChecks.context.status,checkedAt:feedChecks.context.successAt})); }catch(e){} }

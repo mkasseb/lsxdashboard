@@ -133,6 +133,12 @@ async function open(c, width=390) {
     if(c.climateFixture&&u.hostname==='data.rcc-acis.org'){
       const params=JSON.parse(new URLSearchParams(req.postData()||'').get('params')||'{}');
       if(u.pathname.endsWith('StnMeta'))return reply({meta:[{sids:['KSTL 3'],name:'St Louis',ll:[-90.37,38.75],valid_daterange:[['1850-01-01','2026-09-30']]}]});
+      if(c.datedRecords&&/^185[02]-/.test(String(params.sdate))){
+        assert.equal(new Date(params.sdate+'T12:00:00Z').toISOString().slice(0,10),params.sdate,'ACIS start date must be valid, including leap day');
+        const today=stamp(c.now).slice(0,10),date=params.edate;
+        if(c.tomorrowRecordsDown&&date!==today)return reply({error:'record outage'},503);
+        return reply({data:Array.from({length:40},(_,i)=>[(date.endsWith('02-29')?1868+i*4:1970+i)+date.slice(4),date===today?90:100,20,0])});
+      }
       if(params.sdate==='por')return reply({data:[['2025-09',3,72],['2026-09',2,71]]});
       return reply({data:[['2026-09-30',75,50,0],['2026-10-01',74,49,0]]});
     }
@@ -705,6 +711,53 @@ async function main() {
       assert(!/would rank warmer/.test(await page.locator('#cnCtx').innerText()));
       assert(!/Record warmth possible|Near-record warmth/.test(await page.locator('#callRow').innerText()));
     });
+    for(const now of [Date.parse('2026-10-01T02:00:00Z'),Date.parse('2027-01-01T02:00:00Z'),Date.parse('2028-02-29T02:00:00Z')])await run('tomorrow historical records fetched and rendered '+now,config('dated records',{now,climateFixture:true,datedRecords:true}),async({page})=>{
+      await page.evaluate(()=>requestContext('context'));
+      const result=await page.evaluate(()=>{
+        const today=ctxTodayKey(),tomorrow=new Date(calendarDate(today).getTime()+86400000).toISOString().slice(0,10);
+        climate.fcHiDate=tomorrow;climate.fcHi=101;renderContext();renderTheCall();
+        return {today,tomorrow,record:ctx.recordsByDate&&ctx.recordsByDate[tomorrow],todayRecord:ctx.recordsByDate&&ctx.recordsByDate[today],key:CTX_KEY};
+      });
+      await expectText(page,'#cnCtx',/Record for .*high 100°/);
+      assert.equal(result.record.recordDate,result.tomorrow);assert.equal(result.record.recHi.v,100);
+      assert.equal(result.todayRecord.recHi.v,90);assert.equal(result.record.years,40);
+      await expectText(page,'#cnCtx',/Record for .*high 100°/);await expectText(page,'#cnCtx',/would rank warmer than/);
+      const cached=await page.evaluate(async()=>{const before=JSON.stringify(ctx.recordsByDate);await loadClimateContext();return before===JSON.stringify(ctx.recordsByDate);});assert(cached);
+    });
+    await run('tomorrow records outage preserves today without borrowing its record',config('record outage',{climateFixture:true,datedRecords:true,tomorrowRecordsDown:true}),async({page})=>{
+      await page.evaluate(()=>requestContext('context'));
+      const state=await page.evaluate(()=>{const tomorrow=new Date(calendarDate(ctxTodayKey()).getTime()+86400000).toISOString().slice(0,10);return {today:contextRecord(ctxTodayKey()).recHi.v,tomorrow:contextRecord(tomorrow),status:feedChecks.context.status};});
+      assert.deepEqual(state,{today:90,tomorrow:null,status:'partial'});
+    });
+    for(const reason of ['newer request','location change','Central midnight'])await run('dated record response rejects '+reason,config('record race',{climateFixture:true,datedRecords:true}),async({page})=>{
+      await page.evaluate(()=>requestContext('context'));
+      await page.evaluate(()=>{
+        stopSchedule();localStorage.removeItem(CTX_KEY);
+        window.originalAcis=acisPost;window.recordRelease=null;
+        acisPost=function(endpoint,params){if(/^185[02]-/.test(String(params.sdate))&&!window.recordRelease)return new Promise(resolve=>{window.recordRelease=()=>resolve({data:[['2000-'+params.edate.slice(5),150,10,0]]});});return originalAcis(endpoint,params);};
+        window.oldRecordJob=loadClimateContext();
+      });
+      await page.waitForFunction(()=>!!window.recordRelease);
+      if(reason==='Central midnight')await page.clock.setSystemTime(new Date('2026-10-01T05:01:00Z'));
+      const unchanged=await page.evaluate(async reason=>{
+        acisPost=originalAcis;
+        if(reason==='location change')locSeq++;
+        if(reason==='newer request')await loadClimateContext();
+        const before=JSON.stringify(ctx),cache=localStorage.getItem(CTX_KEY);
+        recordRelease();await oldRecordJob;
+        return before===JSON.stringify(ctx)&&cache===localStorage.getItem(CTX_KEY);
+      },reason);assert(unchanged);
+    });
+    await run('Central midnight fetches the next pair of historical record dates',config('record rollover',{now:Date.parse('2026-10-01T04:59:00Z'),climateFixture:true,datedRecords:true}),async session=>{
+      const {page}=session;await page.evaluate(()=>requestContext('context'));
+      assert.equal(await page.evaluate(()=>ctx.recordDate),'2026-09-30');
+      session.change(config('after midnight',{now:Date.parse('2026-10-01T05:01:00Z'),climateFixture:true,datedRecords:true}));
+      await page.clock.setSystemTime(new Date('2026-10-01T05:01:00Z'));
+      await page.evaluate(()=>runDue());
+      await page.waitForFunction(()=>ctx.ready&&ctx.recordDate==='2026-10-01');
+      assert.deepEqual(await page.evaluate(()=>Object.keys(ctx.recordsByDate)),['2026-10-01','2026-10-02']);
+      assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem(CTX_KEY)).key.split('|').at(-1)),'2026-10-01');
+    });
     await run('calendar rollover retires the old climate context before refreshing',config('midnight climate'),async({page})=>{
       await page.clock.setSystemTime(new Date('2026-10-01T05:01:00Z'));
       const state=await page.evaluate(()=>{ctx.ready=true;climate.normHi=90;runDue();return {ready:ctx.ready,normal:climate.normHi};});
@@ -772,6 +825,14 @@ async function main() {
       assert.equal(await page.locator('#radar').evaluate(el=>el.classList.contains('leaflet-container')),true);
       const mapStyles=await page.evaluate(()=>[...document.querySelectorAll('link[rel="stylesheet"]')].map(n=>({href:n.href,media:n.media,loaded:!!n.sheet})));
       assert.equal(await page.locator('#radar .leaflet-map-pane').evaluate(el=>getComputedStyle(el).position),'absolute',JSON.stringify(mapStyles));
+    },1280);
+    await run('loaded print-only map CSS recovers with healthy scripts',config('print CSS',{maps:true}),async({page})=>{
+      await page.waitForFunction(()=>rvMap&&mapsInFlight===null);
+      const before=await page.evaluate(()=>{const links=[...document.querySelectorAll('link[rel="stylesheet"]')].filter(n=>/leaflet\/1\.9\.4\/|maplibre-gl@5\.24\.0\//.test(n.href));links.forEach(n=>n.media='print');return links.map(n=>!!n.sheet);});
+      assert.deepEqual(before,[true,true]);
+      await page.evaluate(()=>ensureMapLibraries());
+      assert.deepEqual(await page.evaluate(()=>[...document.querySelectorAll('link[rel="stylesheet"]')].filter(n=>/leaflet\/1\.9\.4\/|maplibre-gl@5\.24\.0\//.test(n.href)).map(n=>n.media)),['all','all']);
+      assert.equal(await page.locator('#radar .leaflet-map-pane').evaluate(n=>getComputedStyle(n).position),'absolute');
     },1280);
     await run('real map WebGL failure exposes retries and recovers both maps',config('WebGL recovery',{maps:true,webglBlocked:true}),async({page})=>{
       await page.waitForFunction(()=>mapsInFlight===null);
@@ -852,11 +913,18 @@ async function main() {
       });
       assert(!/Good window-opening|Excellent outdoor/.test(text));
     });
-    for(const width of [320,390,1280])await run('compact context touch and layout '+width,config('compact',{touch:true,aqi:35}),async({page})=>{
-      await page.locator('#compactView').tap();
-      assert.equal(await page.locator('#compactView').getAttribute('aria-pressed'),'true');
-      assert(await page.locator('#climateCardBody').isHidden());
-      assert(await page.locator('#obsCardBody').isHidden());
+    for(const width of [320,390,1280])await run('individual context touch and layout '+width,config('individual context',{touch:true,aqi:35}),async({page})=>{
+      assert.equal(await page.locator('#compactView').count(),0);
+      for(const id of ['afdCard','obsCard','climateCard','droughtCard','cpcCard','linksCard']){
+        const toggle=page.locator('#'+id+' .context-toggle'),body=page.locator('#'+id+'Body');
+        assert.equal(await toggle.getAttribute('aria-controls'),id+'Body');
+        assert.equal(await toggle.getAttribute('aria-expanded'),'true');
+        await toggle.tap();assert(await body.isHidden());assert.equal(await toggle.getAttribute('aria-expanded'),'false');
+        await toggle.tap();assert(await body.isVisible());assert.equal(await toggle.getAttribute('aria-expanded'),'true');
+      }
+      await page.locator('#climateCard .context-toggle').tap();
+      await page.locator('#obsCard .context-toggle').tap();
+      assert(await page.locator('#afdCardBody').isVisible());
       for(const id of ['alertsCard','callCard','currentCard','radarCard','h24Card','riskCard','riversCard'])assert(await page.locator('#'+id).isVisible());
       await noCardOverlap(page);await noOverflow(page);
       await page.locator('#jumpNav a[href="#climateCard"]').tap();
@@ -867,6 +935,17 @@ async function main() {
       await noOverflow(page);await page.locator('#rsFull').tap();
       assert.equal(await page.evaluate(()=>document.activeElement.id),'rsFull');
     },width);
+    await run('individual context reload keeps saved content accessible',config('context reload',{climateFixture:true,datedRecords:true}),async({page})=>{
+      await page.evaluate(()=>requestContext('context'));
+      await page.locator('#climateCard .context-toggle').click();
+      await page.evaluate(()=>saveSnapshot());
+      await page.reload();await page.waitForFunction(()=>!!document.querySelector('#climateCard .context-toggle'));
+      assert.equal(await page.locator('#compactView').count(),0);
+      for(const id of ['afdCard','obsCard','climateCard','droughtCard','cpcCard','linksCard']){
+        assert.equal(await page.locator('#'+id+' .context-toggle').getAttribute('aria-expanded'),'true');
+        assert(await page.locator('#'+id+'Body').isVisible());
+      }
+    });
     await run('deferred station and climate work starts on approach or request',config('deferral',{maps:true,climateFixture:true}),async({page,requests})=>{
       assert.equal(await page.evaluate(()=>stnMap),null);
       assert.equal(await page.evaluate(()=>deferredFeeds.context),false);

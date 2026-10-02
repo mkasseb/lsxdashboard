@@ -1,6 +1,6 @@
-# PR 49 completion evidence
+# Reliability completion evidence
 
-Scope: the accepted October 1 reliability proposal, including compact context and measured performance work. PR 48's wholesale makeover is not included.
+Scope: the accepted October 1 reliability proposal, including individual context disclosures and measured performance work. PR 48's wholesale makeover is not included.
 
 | Requirement | Implementation | Regression evidence |
 | --- | --- | --- |
@@ -8,12 +8,12 @@ Scope: the accepted October 1 reliability proposal, including compact context an
 | Timestamp timeline and gaps | `forecastWindowHours`, timestamp-based SVG positions and broken segments; incomplete coverage limits favorable claims | Missing-hour spacing and advice; DST; 24/48/72-hour controls |
 | Independent forecasts | `validatedForecast` filters malformed periods; separate daily/hourly success state and rendering | Daily HTTP failure and malformed daily periods preserve hourly; malformed/empty/elapsed hourly preserve daily |
 | River observation vs retrieval age | `riverObservationState`; 2-hour observation tolerance (multiple reporting cycles), separately labeled successful checks; 48-hour forecast issuance limit | Missing/stale observations and old forecast issuance; crest/rising/falling scenarios |
-| Date-matched climate | Forecast high/low dates, record date and weekly normals; Central midnight invalidation | Tonight/tomorrow vs today's record; midnight; multiple browser timezones |
+| Date-matched climate | Separate historical-record queries and derived cache entries for today/tomorrow; forecast-date selection in context and briefing; weekly normals; location/request/date guards and Central midnight refresh | Actual fetched tomorrow record displayed; year-end/leap day; partial outage; cache; superseded/location/midnight races; next-day refetch; multiple browser timezones |
 | Retained warnings | `liveAlertFeatures`, `renderRetainedAlerts`; last-verified notice on both warning list and radar (including fullscreen), original expiration, cancellation/new-warning uncertainty; map and briefing retire expired evidence | Outage, retained local warning, expiry, recovery |
 | Hourly navigation | Sticky Hourly link | Narrow navigation and duration controls |
 | Missing alerts/AQI affects recommendations | `briefingComfortAllowed`, prominent `briefStatus` | Unknown exposure and alert outage scenarios; no favorable comfort advice |
-| Optional compact everyday view | `dashboard-context.js`: context disclosures, compact control, climate navigation opens its disclosure; warnings/current/briefing/radar/hourly remain prominent | 320/390/1280px touch, focus, overlap and overflow checks; default stays expanded |
-| Map recovery | Bounded request adapter, retryable style/time metadata and script/CSS dependencies; reachable retry controls; tile-health badge | Real libraries with controlled map styles/tiles: timeout, outage/retry, CSS recovery, animation and tile failures |
+| Optional compact everyday view | `dashboard-context.js`: individual context disclosures; redundant global Compact context removed by request; climate navigation opens its disclosure; warnings/current/briefing/radar/hourly remain prominent | 320/390/1280px individual touch toggles, focus, overlap and overflow checks; saved-content reload stays accessible; default stays expanded |
+| Map recovery | Bounded request adapter, retryable style/time metadata and script/CSS dependencies; reachable retry controls; tile-health badge | Real libraries with controlled map styles/tiles: timeout, outage/retry, loaded print-only CSS with healthy scripts, WebGL teardown/retry, animation and tile failures |
 | Fullscreen accessibility | Dialog role/name, inert background, focus trap, Escape and focus restoration | Keyboard traversal; touch open/close; targeted Firefox/WebKit CI |
 | Measured safe deferral | Demand state for station requests/map and deep climate records, 300px approach observer and explicit opening; current/basic climate remain immediate | `tools/context-performance.js` paired controlled phone-sized experiment; deferred approach/request regression |
 | Focused modularization | Pure decisions in `weather-core.js`, loaders in `weather-feeds.js`, explicit validated daily payloads into `forecast-view.js`; optional context state in `dashboard-context.js` | Static syntax/CSP checks, logic and production-page browser suites |
@@ -25,8 +25,9 @@ Browser scenarios intercept external requests. Real pinned Leaflet/MapLibre libr
 
 ## Performance experiment
 
-Run `NODE_PATH=<test dependencies>/node_modules CHROMIUM_PATH=<chromium> node tools/context-performance.js`. Five alternating pairs compare fresh contexts with only initial demand state changed. Both receive identical controlled payloads, pinned map libraries, 4x CPU throttling and 80ms per external request. Output separates request/observation/ACIS counts, station map allocation, and readiness wall time. Results from the isolated cloud Chromium run (five pairs): median startup requests fell **138 → 119** (15 station observations and 4 deep-climate requests deferred); the second map was not allocated before demand. Median DOM nodes fell **4,415 → 3,093**. Median controlled readiness was **2,565 → 2,383 ms** (about 7%); timing is secondary evidence in this synthetic environment. Current/hourly weather and the radar were ready in every sample. The on-demand regression additionally checks all 15 station markers after approach. The JSON sample data is in `tools/fixtures/context-performance.json`.
+Run `NODE_PATH=<test dependencies>/node_modules CHROMIUM_PATH=<chromium> node tools/context-performance.js`. Five alternating pairs compare fresh contexts with only initial demand state changed. Both receive identical controlled payloads, pinned map libraries, 4x CPU throttling and 80ms per external request. Output separates request/observation/ACIS counts, station map allocation, and readiness wall time. Historical results from PR 49's isolated cloud Chromium run (five pairs): median startup requests fell **138 → 119** (15 station observations and 4 deep-climate requests deferred); the second map was not allocated before demand. Median DOM nodes fell **4,415 → 3,093**. Median controlled readiness was **2,565 → 2,383 ms** (about 7%); timing is secondary evidence in this synthetic environment. Current/hourly weather and the radar were ready in every sample. The on-demand regression additionally checks all 15 station markers after approach. The JSON sample data is in `tools/fixtures/context-performance.json`.
 
+The follow-up adds one deferred historical-record query. Five new controlled pairs confirm startup requests **139 → 119** (15 station observations and 5 deep-climate requests deferred), with current/hourly weather and radar ready in each sample. See `tools/fixtures/context-performance-followup.json`. This run overlapped another browser suite, so its wall-clock timings are not used to claim a speed improvement; the earlier isolated timings above describe the PR 49 version.
 
 ## All-season stress coverage
 
@@ -46,4 +47,10 @@ Browser scenarios additionally cover fair weather in each season; humid/dry extr
 | AQI HTTP success makes yesterday's value current | Source observation timestamp required, at most two hours old and no more than ten minutes ahead; retrieval time remains separate | Missing/old/future AQI browser cases |
 | Fresh alerts use event end beyond message expiration | Both fresh and retained evidence use earliest end/expiration; clock expiry retires list, briefing and map evidence | Fresh and retained earlier-expiration browser tests |
 
-The seasonal expansion also corrected blizzard classification, visibility guidance outside morning hours, and zero-QPF/positive-frozen-amount contradictions. Compact context observes actual card size changes and disclosure visibility to keep asynchronously refreshed cards packed correctly.
+The seasonal expansion also corrected blizzard classification, visibility guidance outside morning hours, and zero-QPF/positive-frozen-amount contradictions. Individual context disclosures observe actual card size changes and disclosure visibility to keep asynchronously refreshed cards packed correctly.
+
+## Follow-up reconciliation
+
+PR 49 initially suppressed mismatched tomorrow/today record comparisons but did not fetch tomorrow's historical record, and its CSS retry missed already-loaded print-only styles when scripts were healthy. The earlier completion claim was too broad. The follow-up implements both missing paths. Two new assertions were run against merge `8d3ae35` and failed for the expected visible reasons (today's 90° record instead of tomorrow's 100° record; both styles still `print`); they pass with the fixes. Cache version v4 prevents reuse of the old single-date schema. Leap-day query start dates use a valid leap year.
+
+The global Compact context control had no persisted setting in the shipped version; its state was only a DOM attribute. It and its handler/styles are removed. Individual controls remain accessible, default to expanded on reload, and retain demand loading and navigation behavior. A snapshot/reload regression verifies previously collapsed content remains accessible.
