@@ -22,7 +22,7 @@ async function main(){
    const boxes=await p.evaluate(()=>Object.fromEntries(['currentCard','callCard','h24Card','radarCard','forecastCard'].map(id=>{const r=document.getElementById(id).getBoundingClientRect();return[id,{x:r.x,y:r.y,right:r.right,bottom:r.bottom}];})));
    if(width>1000){assert(Math.abs(boxes.h24Card.y-boxes.radarCard.y)<2);assert(boxes.h24Card.right<=boxes.radarCard.x);assert(Math.abs(boxes.forecastCard.y-boxes.h24Card.bottom-16)<2,'No dead band above Week');assert(Math.abs(boxes.forecastCard.x-boxes.h24Card.x)<2);assert(Math.abs(boxes.forecastCard.right-boxes.h24Card.right)<2);assert(Math.abs(boxes.forecastCard.bottom-boxes.radarCard.bottom)<2,'Radar must fill the full forecast column');assert(Math.abs(boxes.currentCard.y-boxes.callCard.y)<2);}
    else {assert(boxes.radarCard.y>=boxes.h24Card.bottom);assert(boxes.forecastCard.y>=boxes.radarCard.bottom);}
-   const radarSize=await p.locator('#radar').boundingBox();if(width>1000)assert(radarSize.height>600,'Successful map must render at full column height, not fallback height');
+   const radarSize=await p.locator('#radar').boundingBox(),loadedTiles=await p.locator('#radar .leaflet-tile-loaded').count();if(width>1000)assert(radarSize.height>600,'Successful map must render at full column height, not fallback height');
    const rowHeights=await p.locator('#daily .day').evaluateAll(rows=>rows.map(r=>r.getBoundingClientRect().height));assert(rowHeights.every(h=>h>=44&&h<=56),'Compact rows keep 44px touch targets');
    if(width<=680)assert(boxes.callCard.y>=boxes.currentCard.bottom);
    await p.locator('#daily .day').first().click();assert.equal(await p.locator('#daily .day').first().getAttribute('aria-expanded'),'true');
@@ -59,7 +59,7 @@ async function main(){
     await p.screenshot({path:path.join(out,engine+'-'+width+'-'+theme+'-first-screen.png')});
    }
    if(width>1000){s.change(config('forecast outage',{maps:true,hourlyDown:true,dailyDown:true}));await p.evaluate(()=>loadForecast());const mapBox=await p.locator('#radar').boundingBox();assert(mapBox.height>=277.5,'Working radar keeps its 280px framed minimum when forecasts are unavailable: '+JSON.stringify(mapBox));}
-   report.push({width,theme,status:'passed'});console.log('PASS '+engine+' '+width+' '+theme);
+   report.push({width,theme,status:'passed',planning:boxes,renderedMap:radarSize,loadedTiles,forecastRowHeights:rowHeights});console.log('PASS '+engine+' '+width+' '+theme);
   }finally{await s.context.close();}
  }
  // A short fallback must not stand in for a fully rendered map during layout review.
@@ -88,7 +88,7 @@ async function main(){
    if(width>1000)await p.waitForFunction(()=>Math.abs(document.getElementById('radarCard').getBoundingClientRect().bottom-document.getElementById('forecastCard').getBoundingClientRect().bottom)<2);
    assert.equal(await p.locator('#radar .leaflet-map-pane').count(),1);assert.equal(await p.locator('#radar .leaflet-map-pane').evaluate(e=>getComputedStyle(e).position),'absolute');assert(await p.locator('#radar .leaflet-control-zoom').isVisible());assert(await p.locator('#radar .leaflet-tile-loaded').first().isVisible());assert.equal(await p.locator('#radar [data-retry-maps]').count(),0);
    assert.deepEqual(s.errors,[]);
-   report.push({width,theme,mapState:'failure and retry',status:'passed'});console.log('PASS '+engine+' '+width+' '+theme+' failure/retry');
+   report.push({width,theme,mapState:'failure and retry',status:'passed',failurePlanning:boxes,recoveredMap:await p.locator('#radar').boundingBox(),recoveredTiles:await p.locator('#radar .leaflet-tile-loaded').count()});console.log('PASS '+engine+' '+width+' '+theme+' failure/retry');
   }finally{await s.context.close();}
  }
  }finally{await browser.close();}

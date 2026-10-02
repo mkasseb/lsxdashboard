@@ -45,6 +45,8 @@ All rows below are implemented with original IDs and controls retained. The old 
 
 ## Diagnosed regressions and fixes
 
+- Light-theme hourly cloud artwork is darkened in CSS only; pixel sampling of the actual CDN cloud SVG improves contrast against the white panel from 1.11:1 to 3.66:1.
+
 - WebKit event tracing exposed transient overlap during deferred content growth: pointer-down hit the records panel while pointer-up hit the intended risk summary. Content mutations now repack before the next paint; a regression test fails on the delayed implementation and passes on the fix. Repacking also waits until a held pointer completes its native click.
 
 - Removed top/left travel animations on repacked context cards: targets must not travel between touch-down and click while another card loads or collapses.
@@ -61,6 +63,7 @@ All rows below are implemented with original IDs and controls retained. The old 
 - Lower context retains every card and the existing individual expanded/collapsed behavior. No global Compact context control exists.
 - After actual Mac Safari review, hourly and compact seven-day stack in one desktop column. Successful radar fills the adjacent column; no separate map aspect ratio can create a dead band above seven-day. Rows keep at least 44px touch targets. A confirmed startup failure uses a compact error/retry panel above seven-day on the right, avoiding a tall empty fallback. Retry restores the full-height map. Mobile/tablet ordering remains hourly, radar, seven-day.
 - River rows retain full-width name, Now and forecast detail.
+- Successful Chromium map evidence: 807px rendered map height at 1180px, 889px at 1440/1920px, with loaded tiles in both themes; radar/week bottom difference 0px and hourly/week gap 16px. Exact geometry and tile counts are retained in CI layout reports.
 - Tests explicitly assert successful rendered tile height and card bottom alignment, compact forecast rows, and separate failure/retry layout at 1180/1440/1920 plus phone/tablet in both themes.
 - River rising endpoints are labeled peak **in window** and retain “rising to”; falling forecasts are labeled **Forecast trend**, never a false crest.
 - No sample values or QA labels are included in production assets. QA screenshots use controlled map tiles; live upstream availability needs the branch preview.

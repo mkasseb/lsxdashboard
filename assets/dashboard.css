@@ -1804,3 +1804,6 @@ body{transition:none}
 .river-row .rval{white-space:nowrap}
 .river-row .rsub{grid-row:3;margin:0;min-width:0;line-height:1.5}
 .river-row .river-pin{align-self:flex-start;margin-top:8px}
+
+/* Filled hourly cloud artwork is nearly white; keep it legible on light panels. */
+:root[data-theme="light"] .h24-ic{filter:brightness(.55)}
