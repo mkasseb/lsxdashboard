@@ -44,6 +44,10 @@ try{for(const width of [1180,1440,1920]){
    document.getElementById('h24Card').style.minHeight='1600px';rvMap.invalidateSize({animate:false});
   });
   await p.waitForFunction(()=>current.lat===38.9517&&snapSafeSeq===locSeq);await settled(p);centered(await geometry(p));steps.push({state:'selected town and forecast resize',...await geometry(p)});
+  // Reproduce a transient reset that returns to the previously observed height:
+  // ResizeObserver need not report it, but loadRadar has measured the smaller canvas.
+  await p.evaluate(()=>{const card=document.getElementById('h24Card');card.style.minHeight='1200px';loadRadar();card.style.minHeight='1600px';});
+  await settled(p);centered(await geometry(p));steps.push({state:'transient resize returns to previously observed height',...await geometry(p)});
   await p.evaluate(()=>{document.getElementById('h24Card').style.minHeight='';});await settled(p);centered(await geometry(p));
   // Real map camera operations; resizing may not snap a deliberately explored view home.
   await p.evaluate(()=>{rvMap.setZoom(8,{animate:false});rvMap.panBy([130,80],{animate:false});});await settled(p);const chosen=await geometry(p);assert(Math.hypot(...chosen.offset)>100);
