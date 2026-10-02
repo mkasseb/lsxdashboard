@@ -4046,14 +4046,26 @@ function mapStage(detail){
   mapBoot.events.push(Math.round((Date.now()-mapBoot.started)/1000)+"s: "+detail);
   if(mapBoot.events.length>12)mapBoot.events.shift();
 }
-function mapDiagnostics(){
-  return '<details class="map-diagnostics"><summary>Map diagnostics</summary><pre>'+esc(mapBoot.events.join("\n"))+'</pre><small>Diagnostic text stays on this device.</small></details>';
+function mapDiagnosticsText(){
+  return "Map bootstrap v1 · "+mapBoot.phase+" · document "+document.readyState+"\n"
+    +"Libraries: Leaflet "+!!window.L+", MapLibre "+!!window.maplibregl+", adapter "+!!(window.L&&L.maplibreGL)+"\n"
+    +"Radar: map "+!!rvMap+", panes "+document.querySelectorAll('#radar .leaflet-map-pane').length
+    +", controls "+document.querySelectorAll('#radar .leaflet-control-zoom').length
+    +", loaded tiles "+document.querySelectorAll('#radar .leaflet-tile-loaded').length+"\n"
+    +mapBoot.events.join("\n");
 }
+function initMapDiagnostics(){
+  var panel=document.createElement("details");panel.className="map-diagnostics";
+  panel.innerHTML='<summary>Map diagnostics</summary><pre></pre><small>Diagnostic text stays on this device.</small>';
+  panel.addEventListener("toggle",function(){if(panel.open)panel.querySelector('pre').textContent=mapDiagnosticsText();});
+  document.getElementById("radar").closest(".maplock-wrap").after(panel);
+}
+
 function mapFallback(id){
   var el=document.getElementById(id);
   if(el&&el.closest(".maplock-wrap"))el.closest(".maplock-wrap").classList.add("map-unavailable");
   var href=id==="radar"?"https://radar.weather.gov/station/KLSX/standard":"https://www.weather.gov/wrh/timeseries?site=KSTL";
-  if(el) el.innerHTML='<div class="imgfail">Map didn’t load. <button type="button" data-retry-maps>Retry maps</button> <a href="'+href+'" target="_blank" rel="noopener">'+(id==="radar"?"Open NWS radar":"Open NWS obs")+' ↗</a>'+mapDiagnostics()+'</div>';
+  if(el) el.innerHTML='<div class="imgfail">Map didn’t load. <button type="button" data-retry-maps>Retry maps</button> <a href="'+href+'" target="_blank" rel="noopener">'+(id==="radar"?"Open NWS radar":"Open NWS obs")+' ↗</a></div>';
 }
 function ensureMapLibraries(){
   var libraries=[
@@ -4068,7 +4080,7 @@ function ensureMapLibraries(){
     if(!original) throw new Error("Map dependency unavailable");
     return new Promise(function(resolve,reject){
       var url=original.getAttribute("data-map-src"),controller=new AbortController(),settled=false;
-      var label=lib.part+" ("+new URL(url).hostname+")";
+      var label=lib.part+" ["+url+"]";
       mapStage("Requesting "+label);
       function done(err){
         if(settled)return;settled=true;clearTimeout(timer);
@@ -4142,7 +4154,7 @@ function ensureMaps(){
   }).finally(function(){mapsInFlight=null;if(rvMap)mapBoot.phase="ready";syncRadarBadge();syncSkyMeta();});
   return mapsInFlight;
 }
-queueMicrotask(function(){initContextView();ensureMaps();});
+queueMicrotask(function(){initMapDiagnostics();initContextView();ensureMaps();});
 document.addEventListener("click",function(e){if(e.target.closest("[data-retry-maps]"))ensureMaps();});
 
 /* ---- Unified scheduler: one ticker, pauses when backgrounded, tracks real freshness ---- */

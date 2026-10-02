@@ -280,7 +280,7 @@ async function run(name,c,test,width=390) {
   } finally {if(session)await session.context.close();}
 }
 async function main() {
-  browser=await playwright[browserName].launch({headless:true,...(browserName==='chromium'?{executablePath:process.env.CHROMIUM_PATH||undefined,args:['--no-sandbox','--enable-unsafe-swiftshader']}: {})});
+  browser=await playwright[browserName].launch({headless:browserName!=='firefox',...(browserName==='firefox'?{firefoxUserPrefs:{'webgl.force-enabled':true,'webgl.disabled':false,'webgl.enable-webgl2':true,'gfx.webrender.software':true}}:{}),...(browserName==='chromium'?{executablePath:process.env.CHROMIUM_PATH||undefined,args:['--no-sandbox','--enable-unsafe-swiftshader']}: {})});
   try {
     await run('dry forecast and all duration controls',config('dry'),async({page})=>{
       await expectText(page,'#precipEvents',/No measurable precipitation/);await durations(page);
@@ -828,12 +828,14 @@ async function main() {
       const mapStyles=await page.evaluate(()=>[...document.querySelectorAll('link[rel="stylesheet"]')].map(n=>({href:n.href,media:n.media,loaded:!!n.sheet})));
       assert.equal(await page.locator('#radar .leaflet-map-pane').evaluate(el=>getComputedStyle(el).position),'absolute',JSON.stringify(mapStyles));
     },1280);
-    await run('map bootstrap rejects integrity-mismatched dependency bytes',config('bad integrity',{maps:true,badMapIntegrity:true,productionCsp:true}),async({page})=>{
+    await run('map bootstrap rejects integrity-mismatched dependency bytes',config('bad integrity',{maps:true,badMapIntegrity:true,productionCsp:true}),async({page,errors})=>{
       await page.waitForFunction(()=>mapsInFlight===null);
       await expectText(page,'#radar',/Retry maps/);
-      await page.locator('#radar .map-diagnostics summary').click();
-      await expectText(page,'#radar',/integrity/);
+      await page.locator('#radarCard .map-diagnostics summary').click();await page.waitForFunction(()=>document.querySelector('.map-diagnostics pre').textContent.length>0);
+      await expectText(page,'#radarCard',/integrity/);
       assert.equal(await page.evaluate(()=>!!window.L),false);
+      // WebKit reports its deliberate SRI rejection as a page error as well as rejecting fetch.
+      assert(errors.every(e=>/cdnjs\.cloudflare\.com\/ajax\/libs\/leaflet\/1\.9\.4\/leaflet\.min\.js due to access control checks\.$/.test(e)));errors.length=0;
       assert.equal(await page.locator('#radar .leaflet-map-pane').count(),0);
     });
     await run('mobile map bootstrap timeout retry and late script completion',config('script stalled',{maps:true,mapScriptHang:true,skipWait:true,touch:true,productionCsp:true}),async session=>{
@@ -843,7 +845,7 @@ async function main() {
       await expectText(page,'#radar',/Loading map/);
       assert.equal(await page.locator('#rsTabs .rs-tab.on').count(),0);
       await page.clock.runFor(21000);await page.waitForFunction(()=>mapsInFlight===null);
-      await expectText(page,'#radar',/Retry maps/);await page.locator('#radar .map-diagnostics summary').tap();await expectText(page,'#radar',/leaflet.*cdnjs.cloudflare.com/s);
+      await expectText(page,'#radar',/Retry maps/);await page.locator('#radarCard .map-diagnostics summary').tap();await expectText(page,'#radarCard',/leaflet.*cdnjs.cloudflare.com/s);
       await expectText(page,'#radarTime',/unavailable/);
       assert(await page.locator('#radar [data-retry-maps]').isVisible());
       await page.locator('#radar [data-retry-maps]').tap();await page.waitForFunction(()=>mapsInFlight!==null);
