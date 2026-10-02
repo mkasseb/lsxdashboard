@@ -1802,10 +1802,6 @@ body{transition:none}
 .river-row .rsub{grid-row:3;margin:0;min-width:0;line-height:1.5}
 .river-row .river-pin{align-self:flex-start;margin-top:8px}
 
-/* Preserve natural artwork fills in light mode. A fine slate contour separates pale
-   clouds, snow and golden suns from the card without tinting their interiors. */
+/* Preserve natural fills; the shared SVG contour gives pale artwork a crisp edge. */
 :root[data-theme="light"] .wxi,
-:root[data-theme="light"] .h24-ic{
-  filter:drop-shadow(.85px 0 0 #344b60) drop-shadow(-.85px 0 0 #344b60)
-         drop-shadow(0 .85px 0 #344b60) drop-shadow(0 -.85px 0 #344b60);
-}
+:root[data-theme="light"] .h24-ic{filter:url(#weatherIconOutline)}

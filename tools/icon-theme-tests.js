@@ -35,7 +35,7 @@ const lum=rgb=>rgb.map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4)
     assert(await slot.evaluate(e=>getComputedStyle(e).backgroundColor==='rgba(0, 0, 0, 0)'&&getComputedStyle(e).boxShadow==='none'),'No badge behind '+names[i]);
     const png=PNG.sync.read(await slot.locator('img').screenshot({animations:'disabled'}));let readable=0,golden=0;
     for(let j=0;j<png.data.length;j+=4){const l=lum([...png.data.slice(j,j+3)]),contrast=(Math.max(background,l)+.05)/(Math.min(background,l)+.05);if(contrast>=3)readable++;const [r,g,b]=png.data.slice(j,j+3);if(r>=220&&g>=130&&g<=225&&b<110)golden++;}
-    if(readable<8&&out)fs.writeFileSync(path.join(out,'failed-'+names[i]+'.png'),PNG.sync.write(png));
+    if(readable<8&&out){fs.writeFileSync(path.join(out,'failed-'+names[i]+'.png'),PNG.sync.write(png));console.error('ICON_PIXEL_EVIDENCE',names[i],PNG.sync.write(png).toString('base64'));}
     assert(readable>=8,`${names[i]} ${theme}: ${readable} readable pixels; darkest RGB ${JSON.stringify([...png.data].filter((_,i)=>i%4!==3).reduce((n,v)=>Math.min(n,v),255))}`);if(names[i]==='clear-day')assert(golden>=8,`${theme}: sun must retain bright golden fill, found ${golden} golden pixels`);samples.push({name:names[i],readablePixels:readable,goldenPixels:golden});
    }
    // Unknown conditions retain their existing mapped artwork and accessible fallback label.

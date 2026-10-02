@@ -52,7 +52,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css"
   integrity="sha384-uTttxo/aOKbdE5RlD/SPzSDoDmNvGlUYPjONi2MN/b7c9HPSvW07OIuyP7uL6jxK" crossorigin="anonymous"
   media="print" onload="this.media='all'">
-<link rel="stylesheet" href="/assets/dashboard.css?v=84843e9c6749fe13">
+<link rel="stylesheet" href="/assets/dashboard.css?v=4ed68ee20476ade5">
 </head>
 <body>
 <!-- First focusable thing on the page, and deliberately ahead of the sprite so it stays that way.
@@ -69,6 +69,16 @@
      The interface and generic-data marks below are drawn from, or closely after, Feather
      (https://feathericons.com, © 2013-2023 Cole Bemis, MIT) — credited in the README's licence
      table alongside Meteocons, which the footer links. The weather-specific glyphs are original. -->
+<!-- Keep this filter renderable (not display:none) for all three browser engines. -->
+<svg aria-hidden="true" focusable="false" width="0" height="0" style="position:absolute;overflow:hidden" xmlns="http://www.w3.org/2000/svg"><defs>
+  <filter id="weatherIconOutline" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+    <feMorphology in="SourceAlpha" operator="dilate" radius="1" result="edge"/>
+    <feComponentTransfer in="edge" result="edgeSolid"><feFuncA type="linear" slope="4"/></feComponentTransfer>
+    <feFlood flood-color="#526373" result="edgeColor"/>
+    <feComposite in="edgeColor" in2="edgeSolid" operator="in" result="outline"/>
+    <feMerge><feMergeNode in="outline"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+</defs></svg>
 <svg id="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
   <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
   <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z"/></symbol>
