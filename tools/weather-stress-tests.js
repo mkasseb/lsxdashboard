@@ -310,7 +310,7 @@ async function main() {
       await expectText(session.page,'#hourly24',/unavailable/);
     });
     for(const width of [320,1280])await run('risk explanations work by tap and remain open after refresh at '+width+'px',config('risk help'),async({page})=>{
-      await page.locator('#riskHelp summary').click();await expectText(page,'#riskHelp',/category rank, not a probability/);
+      await page.locator('#riskHelp summary').click();await page.waitForFunction(()=>document.getElementById('riskHelp').open);await expectText(page,'#riskHelp',/category rank, not a probability/);
       await noCardOverlap(page);
       assert.equal(await page.evaluate(()=>document.activeElement.parentElement.id),'riskHelp');
       await page.locator('#riskHelp summary').focus();await page.evaluate(()=>loadSpc());
@@ -952,6 +952,16 @@ async function main() {
       });
       assert(!/Good window-opening|Excellent outdoor/.test(text));
     });
+    await run('individual context repack preserves a pressed disclosure',config('pressed disclosure'),async({page})=>{
+      const summary=page.locator('#riskHelp summary');await summary.scrollIntoViewIfNeeded();
+      const box=await summary.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();
+      // A resize or feed update can request a column-count change between down and up.
+      // The existing target must receive its native click before cards move or reparent.
+      await page.evaluate(()=>{const m=document.querySelector('.masonry');m.style.width='900px';layoutMasonry();});
+      await page.mouse.up();await page.waitForFunction(()=>document.getElementById('riskHelp').open);
+      await page.evaluate(()=>{document.querySelector('.masonry').style.width='';layoutMasonry();});
+      await noCardOverlap(page);await expectText(page,'#riskHelp',/category rank, not a probability/);
+    },1280);
     for(const width of [320,390,1280])await run('individual context touch and layout '+width,config('individual context',{touch:true,aqi:35}),async({page})=>{
       assert.equal(await page.locator('#compactView').count(),0);
       for(const id of ['afdCard','obsCard','climateCard','droughtCard','cpcCard','linksCard']){

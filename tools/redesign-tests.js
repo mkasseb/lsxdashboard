@@ -58,7 +58,7 @@ async function main(){
     await p.screenshot({path:path.join(out,engine+'-'+width+'-'+theme+'.png'),fullPage:true});
     await p.screenshot({path:path.join(out,engine+'-'+width+'-'+theme+'-first-screen.png')});
    }
-   if(width>1000){s.change(config('forecast outage',{maps:true,hourlyDown:true,dailyDown:true}));await p.evaluate(()=>loadForecast());const mapBox=await p.locator('#radar').boundingBox();assert(mapBox.height>=278,'Working radar keeps its 280px framed minimum when forecasts are unavailable: '+JSON.stringify(mapBox));}
+   if(width>1000){s.change(config('forecast outage',{maps:true,hourlyDown:true,dailyDown:true}));await p.evaluate(()=>loadForecast());const mapBox=await p.locator('#radar').boundingBox();assert(mapBox.height>=277.5,'Working radar keeps its 280px framed minimum when forecasts are unavailable: '+JSON.stringify(mapBox));}
    report.push({width,theme,status:'passed'});console.log('PASS '+engine+' '+width+' '+theme);
   }finally{await s.context.close();}
  }

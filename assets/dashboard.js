@@ -4206,7 +4206,10 @@ if(!document.hidden) startSchedule();
 document.getElementById("refresh").addEventListener("click",function(){ refreshAll(); });
 
 /* ---- JavaScript masonry: pack band cards by their REAL measured height ---- */
+var masonryPointerActive=false;
 function layoutMasonry(){
+  // Preserve the pressed target until its native click/toggle has completed.
+  if(masonryPointerActive)return;
   var m=document.querySelector(".masonry"); if(!m) return;
   var GAP=16, w=m.clientWidth;
   var cols = w<=680 ? 1 : (w<=1100 ? 2 : 3);
@@ -4354,6 +4357,15 @@ var _mObs=null, _mObsOpts={childList:true,subtree:true,characterData:true,attrib
 (function(){
   var m=document.querySelector(".masonry");
   if(m){
+    m.addEventListener("pointerdown",function(){masonryPointerActive=true;},true);
+    function releasePointer(){
+      // Native click follows pointerup before the next animation frame. Reparenting a card
+      // between those events can discard the click in WebKit even when focus is restored.
+      requestAnimationFrame(function(){masonryPointerActive=false;scheduleMasonry();});
+    }
+    document.addEventListener("pointerup",releasePointer,true);
+    document.addEventListener("pointercancel",releasePointer,true);
+    window.addEventListener("blur",releasePointer);
     // Source text, disclosure and font metrics can change height after the mutation's frame.
     if(window.ResizeObserver){
       var sizes=new ResizeObserver(scheduleMasonry);
