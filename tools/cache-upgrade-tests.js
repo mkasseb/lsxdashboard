@@ -23,7 +23,7 @@ const server=http.createServer((req,res)=>{
   }
   if(p.startsWith('/assets/')){
     const name=path.basename(p);if(!names.includes(name)){res.writeHead(404).end();return;}
-    res.setHeader('Cache-Control',priming?'public, max-age=14400, must-revalidate':'public, max-age=0, must-revalidate');
+    res.setHeader('Cache-Control',priming?'public, max-age=14400, must-revalidate':'no-cache, max-age=0, must-revalidate');
     res.setHeader('Content-Type',name.endsWith('.css')?'text/css':'application/javascript');
     res.end(controlled(priming?old[name].toString():fs.readFileSync(path.join(root,'assets',name),'utf8')));return;
   }
