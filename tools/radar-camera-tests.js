@@ -4,8 +4,22 @@ const assert=require('node:assert/strict'),fs=require('fs'),path=require('path')
 const {open,config,setBrowser}=require('./weather-stress-tests');
 const engine=process.env.WEATHER_BROWSER||'chromium',out=process.env.REDESIGN_ARTIFACTS;
 async function settled(p){
- await p.waitForFunction(()=>rvMap&&document.querySelector('#radar .leaflet-tile-loaded')&&rvMap.getSize().x===radar.clientWidth&&rvMap.getSize().y===radar.clientHeight&&!(rvMap._panAnim&&rvMap._panAnim._inProgress)&&!rvMap._animatingZoom);
- await p.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ // ResizeObserver and the native layout engine may run after Playwright's clock RAF.
+ // Wait for stable rendered geometry, without moving or correcting the camera in the test.
+ let last='',stable=0;
+ try{await p.waitForFunction(()=>rvMap&&document.querySelector('#radar .leaflet-tile-loaded'));
+  for(let i=0;i<60;i++){
+   const state=await p.evaluate(()=>{
+    const r=radar.getBoundingClientRect(),m=rvMarker.getElement().getBoundingClientRect(),sz=rvMap.getSize();
+    return{size:[sz.x,sz.y],dom:[radar.clientWidth,radar.clientHeight],box:[r.x,r.y,r.width,r.height],pin:[m.x,m.y],pan:!!(rvMap._panAnim&&rvMap._panAnim._inProgress),zoom:!!rvMap._animatingZoom};
+   });
+   const key=JSON.stringify(state);
+   stable=key===last?stable+1:0;last=key;
+   if(stable>=5&&state.size.every((v,i)=>v===state.dom[i])&&!state.pan&&!state.zoom)return;
+   await p.waitForTimeout(100);
+  }
+  throw new Error('Radar geometry did not settle: '+last);
+ }catch(e){console.error('RADAR_SETTLE',last,await p.evaluate(()=>({map:!!rvMap,tiles:document.querySelectorAll('#radar .leaflet-tile-loaded').length,retry:!!document.querySelector('[data-retry-maps]'),size:rvMap&&rvMap.getSize(),dom:[radar.clientWidth,radar.clientHeight]})));throw e;}
 }
 async function geometry(p){return p.evaluate(()=>{
  const r=radar.getBoundingClientRect(),m=rvMarker.getElement().getBoundingClientRect(),c=rvMap.getCenter(),pin=rvMarker.getLatLng(),gl=rvBase._glMap.getCenter(),gp=rvMap.project([gl.lat,gl.lng]),cp=rvMap.project(c);
