@@ -310,7 +310,10 @@ async function main() {
       await expectText(session.page,'#hourly24',/unavailable/);
     });
     for(const width of [320,1280])await run('risk explanations work by tap and remain open after refresh at '+width+'px',config('risk help'),async({page})=>{
-      await page.locator('#riskHelp summary').click();await page.waitForFunction(()=>document.getElementById('riskHelp').open);await expectText(page,'#riskHelp',/category rank, not a probability/);
+      await page.evaluate(()=>{window.disclosureTrace=[];for(const type of ['pointerdown','pointerup','mousedown','mouseup','click','toggle'])document.addEventListener(type,e=>{const r=document.querySelector('#riskHelp summary').getBoundingClientRect();window.disclosureTrace.push({type,target:e.target.outerHTML?.slice(0,160),x:e.clientX,y:e.clientY,rect:{x:r.x,y:r.y,width:r.width,height:r.height},open:document.getElementById('riskHelp').open,pressed:masonryPointerActive});},true);});
+      await page.locator('#riskHelp summary').click();
+      try{await page.waitForFunction(()=>document.getElementById('riskHelp').open);}catch(e){console.error('DISCLOSURE_TRACE',JSON.stringify(await page.evaluate(()=>window.disclosureTrace)));throw e;}
+      await expectText(page,'#riskHelp',/category rank, not a probability/);
       await noCardOverlap(page);
       assert.equal(await page.evaluate(()=>document.activeElement.parentElement.id),'riskHelp');
       await page.locator('#riskHelp summary').focus();await page.evaluate(()=>loadSpc());
