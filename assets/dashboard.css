@@ -1640,3 +1640,9 @@
     .day .dt{gap:2px;font-size:var(--fs-xs)}
   }
   footer a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+
+/* Optional compact context keeps the primary weather and all hazard cards visible. */
+.context-toggle,#compactView{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:7px 10px;cursor:pointer}
+.context-toggle{margin:0 0 10px}
+.context-body[hidden]{display:none}
+#compactView[aria-pressed="true"]{outline:2px solid var(--muted)}

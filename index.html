@@ -320,6 +320,7 @@
         <span class="link" id="rsLink"><a href="https://radar.weather.gov/station/KLSX/standard" target="_blank" rel="noopener">Official KLSX ↗</a></span>
       </span>
     </div>
+    <p id="radarAlertNote" class="feed-status" data-state="unavailable" hidden></p>
     <div class="rs-view" id="rsRadar">
       <div class="imgwrap maplock-wrap">
         <div id="radar" class="frame"></div>
@@ -389,6 +390,7 @@
   <!-- ── THE WEEK AHEAD & DEEPER CONTEXT ── -->
   <div class="railhead col-12">
     <span class="rail-t">The week ahead &amp; deeper context</span>
+    <button type="button" id="compactView" aria-pressed="false">Compact context</button>
     <span class="rail-s">forecast discussion, outlooks, rivers, drought, climate</span>
   </div>
 
@@ -533,6 +535,8 @@
   integrity="sha384-tXYNKOHx4T02jMP7YYCtBxPIv1B5gaA5mcVPBzqMp6d7VzWzxJgI2aWF/nJLrQdS" crossorigin="anonymous"></script>
 <script src="/assets/weather-core.js"></script>
 <script src="/assets/weather-feeds.js"></script>
+<script src="/assets/forecast-view.js"></script>
+<script src="/assets/dashboard-context.js"></script>
 <script src="/assets/dashboard.js"></script>
 </body>
 </html>

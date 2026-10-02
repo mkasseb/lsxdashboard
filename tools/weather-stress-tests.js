@@ -8,7 +8,8 @@
 const fs = require('fs');
 const path = require('path');
 const assert = require('node:assert/strict');
-const {chromium} = require('playwright');
+const playwright = require('playwright');
+const browserName=process.env.WEATHER_BROWSER||'chromium';
 const root = path.join(__dirname, '..');
 const {html, assets} = require('./source');
 const recorded = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/weather/lsx-recorded.json'), 'utf8'));
@@ -71,9 +72,10 @@ const features=a=>({features:a.map(attributes=>({attributes}))});
 const results=[];
 let browser;
 async function open(c, width=390) {
-  const context=await browser.newContext({viewport:{width,height:900},timezoneId:c.timezone||'America/Chicago'});
+  const context=await browser.newContext({viewport:{width,height:900},hasTouch:!!c.touch,timezoneId:c.timezone||'America/Chicago'});
   const page=await context.newPage();
   page.setDefaultTimeout(15000);
+  if(c.measure){const cdp=await context.newCDPSession(page);await cdp.send('Emulation.setCPUThrottlingRate',{rate:4});}
   await page.clock.install({time:new Date(c.now)});
   if(c.storage)await page.addInitScript(storage=>Object.entries(storage).forEach(([key,value])=>localStorage.setItem(key,typeof value==='string'?value:JSON.stringify(value))),c.storage);
   if(c.geo)await page.addInitScript(geo=>Object.defineProperty(navigator,'geolocation',{value:{getCurrentPosition:success=>queueMicrotask(()=>success({coords:{latitude:geo.lat,longitude:geo.lon,accuracy:25}}))}}),c.geo);
@@ -86,12 +88,13 @@ async function open(c, width=390) {
     if(u.hostname==='lsx-weather-test.invalid') {
       if(u.pathname==='/')return route.fulfill({status:200,contentType:'text/html',body:active.maps?html.replace(/integrity="[^"]*"/g,""):html});
       const asset=assets[u.pathname];
-      return route.fulfill({status:asset?200:404,contentType:asset?.type||'text/plain',body:asset?.content||'Missing static asset'});
+      return route.fulfill({status:asset?200:404,contentType:asset?.type||'text/plain',body:asset?(active.eagerContext?asset.content.replace('var deferredFeeds={stations:false,context:false};','var deferredFeeds={stations:true,context:true};'):asset.content):'Missing static asset'});
     }
     // Capture a request's scenario before any delay; later switches must not rewrite an old response.
     const scenario=clone(active);
     const c=scenario.locations?.[u.searchParams.get('geometry')]||scenario;
     requests.push(u.href);
+    if(c.measure)await new Promise(resolve=>setTimeout(resolve,80));
     const reply=(body,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(body)}).catch(()=>{});
 
     // Exercise real, pinned map libraries against deterministic styles, tiles and time metadata.
@@ -106,6 +109,8 @@ async function open(c, width=390) {
       ];
       const asset=mapFiles.find(([part])=>u.href.includes(part));
       if(asset) return route.fulfill({status:c.mapLibrariesDown?503:200,contentType:asset[2],body:c.mapLibrariesDown?'':fs.readFileSync(require.resolve(asset[1]))});
+      if(u.hostname==='tiles.openfreemap.org'&&c.mapStyleHang)return;
+      if(/GetCapabilities|DescribeDomains/i.test(u.href)&&c.mapTimeHang)return;
       if(u.hostname==='tiles.openfreemap.org')return reply(c.mapStyleDown?{}:{version:8,sources:{},layers:[{id:'background',type:'background',paint:{'background-color':'#18202d'}}]},c.mapStyleDown?503:200);
       if(u.hostname==='opengeo.ncep.noaa.gov'||u.hostname==='gibs.earthdata.nasa.gov'){
         if(/GetCapabilities/i.test(u.href))return route.fulfill({contentType:'text/xml',body:'<Dimension name="time">'+Array.from({length:31},(_,i)=>new Date(c.now-(60-i*2)*60000).toISOString()).join(',')+'</Dimension>'});
@@ -115,6 +120,12 @@ async function open(c, width=390) {
       }
     }
 
+    if(c.climateFixture&&u.hostname==='data.rcc-acis.org'){
+      const params=JSON.parse(new URLSearchParams(req.postData()||'').get('params')||'{}');
+      if(u.pathname.endsWith('StnMeta'))return reply({meta:[{sids:['KSTL 3'],name:'St Louis',ll:[-90.37,38.75],valid_daterange:[['1850-01-01','2026-09-30']]}]});
+      if(params.sdate==='por')return reply({data:[['2025-09',3,72],['2026-09',2,71]]});
+      return reply({data:[['2026-09-30',75,50,0],['2026-10-01',74,49,0]]});
+    }
     if(c.offline) return reply({error:'simulated outage'},503);
     if(u.hostname==='air-quality-api.open-meteo.com'&&c.aqi!=null) return reply({current:{us_aqi:c.aqi,pm2_5:75,pm10:90}});
     if(u.hostname==='api.open-meteo.com'&&c.uv!=null) return reply({hourly:{time:[c.now/1000,(c.now+H)/1000],uv_index:[c.uv,c.uv+1]},daily:{time:Array.from({length:7},(_,i)=>stamp(c.now+i*24*H).slice(0,10)),uv_index_max:Array(7).fill(c.uv+1)}});
@@ -133,7 +144,7 @@ async function open(c, width=390) {
       if(u.pathname.startsWith('/points/')) return reply(f.points);
       if(u.pathname.endsWith('/forecast/hourly')&&chosen.hourlyHang)return;
       if(u.pathname.endsWith('/forecast/hourly')) return reply(chosen.hourlyDown||chosen.hourlyMalformed?{}:chosen.hourlyEmpty?{properties:{periods:[]}}:f.hourly,chosen.hourlyDown?503:200);
-      if(u.pathname.endsWith('/forecast')) return reply(chosen.dailyDown?{}:f.daily,chosen.dailyDown?503:200);
+      if(u.pathname.endsWith('/forecast')) return reply(chosen.dailyDown?{}:chosen.dailyMalformed?{properties:{periods:[null,{temperature:'hot'},{}]}}:f.daily,chosen.dailyDown?503:200);
       if(u.pathname.startsWith('/gridpoints/')&&!u.pathname.endsWith('/stations')) return reply(chosen.gridDown?{}:chosen.gridMalformed?{properties:{}}:f.grid,chosen.gridDown?503:200);
       if(u.pathname.endsWith('/observations/latest')) return reply(f.observation);
       if(u.pathname.endsWith('/stations')) return reply({features:[{geometry:{type:'Point',coordinates:[-90.79,38.8]},properties:{stationIdentifier:'KSUS',name:'Test station'}}]});
@@ -233,7 +244,7 @@ function accumulationCases(count) {
   });
 }
 async function run(name,c,test,width=390) {
-  if(process.env.WEATHER_CASE_FILTER&&!name.includes(process.env.WEATHER_CASE_FILTER)) return;
+  if(process.env.WEATHER_CASE_FILTER&&!new RegExp(process.env.WEATHER_CASE_FILTER,'i').test(name)) return;
   let session;
   const started=Date.now();
   try {
@@ -244,11 +255,11 @@ async function run(name,c,test,width=390) {
     console.log('PASS',name);
   } catch(e) {
     results.push({name,status:'failed',width,ms:Date.now()-started,error:e.message});
-    console.error('FAIL',name,e.message);
+    console.error('FAIL',name,e.stack);
   } finally {if(session)await session.context.close();}
 }
 async function main() {
-  browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||undefined,headless:true,args:['--no-sandbox','--enable-unsafe-swiftshader']});
+  browser=await playwright[browserName].launch({headless:true,...(browserName==='chromium'?{executablePath:process.env.CHROMIUM_PATH||undefined,args:['--no-sandbox','--enable-unsafe-swiftshader']}: {})});
   try {
     await run('dry forecast and all duration controls',config('dry'),async({page})=>{
       await expectText(page,'#precipEvents',/No measurable precipitation/);await durations(page);
@@ -499,7 +510,7 @@ async function main() {
     await run('receding river forecast',config('river falling',{river:[19,17,15]}),async({page})=>await expectText(page,'#rivers',/falling to 15 ft/));
     await run('map CDN or style outage keeps official radar and observation links',config('maps unavailable'),async({page})=>{
       await page.waitForFunction(()=>mapsInFlight===null);
-      await expectText(page,'#radar',/Map didn.t load/);assert(await page.locator('#radar a[href*="radar.weather.gov"]').count());assert(await page.locator('#stnmap a[href*="weather.gov"]').count());
+      await page.evaluate(()=>requestContext('stations'));await expectText(page,'#radar',/Map didn.t load/);assert(await page.locator('#radar a[href*="radar.weather.gov"]').count());assert(await page.locator('#stnmap a[href*="weather.gov"]').count());
     });
     await run('100 concurrent refresh requests are coalesced',config('refresh storm',{delay:20,pop:60}),async({page})=>{
       const same=await page.evaluate(async()=>{const jobs=Array.from({length:100},()=>refreshAll());const same=jobs.every(j=>j===jobs[0]);await jobs[0];return same;});assert(same);assert(!(await page.locator('#refresh').isDisabled()));await durations(page);
@@ -701,12 +712,22 @@ async function main() {
       session.change(config('alert outage',{alertsDown:true,aqi:35}));await page.evaluate(()=>loadAlerts());
       await expectText(page,'#alerts',/Tornado Warning/);await expectText(page,'#alertUpdateNote',/New warnings or cancellations cannot be verified/);
       assert.equal(await page.evaluate(()=>feedChecks.alerts.status),'unavailable');
+      await expectText(page,'#radarAlertNote',/last verified/);
+      await page.locator('#rsFull').click();assert(await page.locator('#radarAlertNote').isVisible());await page.keyboard.press('Escape');
       await page.clock.setSystemTime(new Date(base+6*60000));await page.evaluate(()=>tickCountdowns());
       await expectText(page,'#alerts',/Couldn.t load alerts/);
       assert.equal(await page.evaluate(()=>callLocalAlert),null);
       assert.equal(await page.evaluate(()=>lastWarnFeats.length),0);
       session.change(config('alerts recovered',{aqi:35}));await page.evaluate(()=>loadAlerts());
       assert(await page.locator('#alertUpdateNote').isHidden());await expectText(page,'#alerts',/No active/);
+    });
+    await run('retained warning respects message expiration before event end',config('short message',{alerts:[{...alert('Tornado Warning',base),properties:{...alert('Tornado Warning',base).properties,expires:new Date(base+60000).toISOString()}}]}),async session=>{
+      const {page}=session;await page.evaluate(()=>stopSchedule());
+      session.change(config('outage',{alertsDown:true}));await page.evaluate(()=>loadAlerts());
+      assert.equal(await page.evaluate(()=>callLocalAlert.ends),base+60000);
+      await page.clock.setSystemTime(new Date(base+120000));await page.evaluate(()=>tickCountdowns());
+      assert.equal(await page.evaluate(()=>lastWarnFeats.length),0);assert.equal(await page.evaluate(()=>callLocalAlert),null);
+      await expectText(page,'#alertUpdateNote',/No unexpired previously verified alerts remain/);
     });
     await run('fullscreen radar contains focus and restores the page',config('fullscreen keyboard'),async({page})=>{
       await page.locator('#rsFull').click();
@@ -717,7 +738,7 @@ async function main() {
       assert.equal(await page.evaluate(()=>document.activeElement.id),'rsFull');
     });
     await run('real map rendering retries an initial style failure',config('map retry',{maps:true,mapStyleDown:true}),async session=>{
-      const {page}=session;await expectText(page,'#radar',/Map didn.t load/);
+      const {page}=session;await page.evaluate(()=>requestContext('stations'));await expectText(page,'#radar',/Map didn.t load/);
       session.change(config('map recovered',{maps:true}));await page.evaluate(()=>refreshAll());
       await page.waitForFunction(()=>rvMap&&stnMap&&radarFrames.length>1&&radarFrames.every(f=>f.layer._ok>0));
       await page.locator('#radarPlay').click();
@@ -733,6 +754,7 @@ async function main() {
       await expectText(page,'#radar',/Map didn.t load/);
       session.change(config('map CDN recovered',{maps:true}));
       await page.locator('#radar [data-retry-maps]').click();
+      await page.evaluate(()=>requestContext('stations'));
       await page.waitForFunction(()=>rvMap&&stnMap&&radarFrames.length>1&&radarFrames.every(f=>f.layer._ok>0));
       assert.equal(await page.locator('#radar').evaluate(el=>el.classList.contains('leaflet-container')),true);
       const mapStyles=await page.evaluate(()=>[...document.querySelectorAll('link[rel="stylesheet"]')].map(n=>({href:n.href,media:n.media,loaded:!!n.sheet})));
@@ -743,6 +765,65 @@ async function main() {
       await expectText(page,'#radarTime',/radar unavailable/);
     },1280);
 
+
+    await run('malformed daily periods preserve hourly chart and near-term guidance',config('daily malformed',{dailyMalformed:true,aqi:35}),async({page})=>{
+      await expectText(page,'#daily',/Forecast unavailable/);await durations(page);
+      assert.equal(await page.evaluate(()=>feedChecks.hourly.status),'ready');
+      assert(await page.locator('#callRow').innerText());
+    });
+    await run('unverified alerts and AQI visibly limit outdoor guidance',config('unknown exposure'),async({page})=>{
+      await expectText(page,'#briefStatus',/Air quality is unverified/);
+      assert(!/Excellent outdoor|Good window-opening/.test(await page.locator('#callRow').innerText()));
+      await page.evaluate(()=>{feedChecks.alerts.status='unavailable';renderTheCall();});
+      await expectText(page,'#briefStatus',/Alert status is unverified/);
+    });
+    await run('storm warning cannot coexist with favorable night ventilation',config('night warning',{now:Date.parse('2026-10-01T02:00:00Z'),temp:65,aqi:35}),async({page})=>{
+      const text=await page.evaluate(()=>{
+        const H=bottomLineHours(smart.hourlyAll);H.forEach(h=>{h.rh=40;h.dew=45;h.thund=false;});
+        const candidates=bottomLineHourlyCandidates(H,{now:new Date(),aqi:35,allowComfort:true});
+        candidates.push(bottomCandidate(95,'bolt','storm','Storm','Storms','Storms nearby','Go indoors','danger'));
+        return JSON.stringify(buildBottomLine(candidates,{event:'Severe Thunderstorm Warning',level:'warning'}));
+      });
+      assert(!/Good window-opening|Excellent outdoor/.test(text));
+    });
+    for(const width of [320,390,1280])await run('compact context touch and layout '+width,config('compact',{touch:true,aqi:35}),async({page})=>{
+      await page.locator('#compactView').tap();
+      assert.equal(await page.locator('#compactView').getAttribute('aria-pressed'),'true');
+      assert(await page.locator('#climateCardBody').isHidden());
+      assert(await page.locator('#obsCardBody').isHidden());
+      for(const id of ['alertsCard','callCard','currentCard','radarCard','h24Card','riskCard','riversCard'])assert(await page.locator('#'+id).isVisible());
+      await noCardOverlap(page);await noOverflow(page);
+      await page.locator('#jumpNav a[href="#climateCard"]').tap();
+      assert(await page.locator('#climateCardBody').isVisible());
+      await noCardOverlap(page);
+      await page.locator('#rsFull').tap();
+      assert.equal(await page.locator('#radarCard').getAttribute('role'),'dialog');
+      await noOverflow(page);await page.locator('#rsFull').tap();
+      assert.equal(await page.evaluate(()=>document.activeElement.id),'rsFull');
+    },width);
+    await run('deferred station and climate work starts on approach or request',config('deferral',{maps:true,climateFixture:true}),async({page,requests})=>{
+      assert.equal(await page.evaluate(()=>stnMap),null);
+      assert.equal(await page.evaluate(()=>deferredFeeds.context),false);
+      assert(!requests.some(u=>u.includes('/stations/KSTL/observations')));
+      await page.locator('#obsCard').scrollIntoViewIfNeeded();
+      await page.waitForFunction(()=>stnMap&&deferredFeeds.stations&&feedChecks.stations.status==='ready'&&stnLayer.getLayers().length===STN_LIST.length);
+      await page.evaluate(()=>requestContext('context'));
+      assert.equal(await page.evaluate(()=>deferredFeeds.context),true);
+      assert(await page.evaluate(()=>feedChecks.context.successAt>0));
+    });
+    await run('map style timeout recovers without reloading',config('style timeout',{maps:true,mapStyleHang:true,skipWait:true}),async session=>{
+      const {page}=session;await page.waitForFunction(()=>mapsCanStart&&mapsInFlight&&Object.keys(mapStylePromises).length>0);
+      await page.clock.runFor(21000);await page.waitForFunction(()=>mapsInFlight===null);
+      await expectText(page,'#radar',/Retry maps/);
+      session.change(config('style recovered',{maps:true}));await page.locator('#radar [data-retry-maps]').click();
+      await page.waitForFunction(()=>rvMap&&radarFrames.length>1);
+    });
+    await run('map time metadata timeout recovers without reloading',config('time timeout',{maps:true,mapTimeHang:true}),async session=>{
+      const {page}=session;await page.clock.runFor(21000);
+      assert.equal(await page.evaluate(()=>radarFallback),true);
+      session.change(config('time recovered',{maps:true}));await page.evaluate(()=>refreshRadarLayer());
+      await page.waitForFunction(()=>radarFrames.length>1&&!radarFallback);
+    });
     await run('complete outage renders explicit unavailable states',config('offline',{offline:true}),async({page})=>{
       await expectText(page,'#hourly24',/unavailable/);await expectText(page,'#precipEvents',/unavailable/);assert.equal(await page.locator('.spc-threat-value').filter({hasText:'Unavailable'}).count(),6);assert(!(await page.locator('#refresh').isDisabled()));
       assert.equal(await page.locator('#statusDot').getAttribute('data-state'),'unavailable');
@@ -752,10 +833,11 @@ async function main() {
       assert(!/No hazards flagged/.test(await page.locator('#hazards').innerText()));
     },320);
   } finally {await browser.close();}
-  const report={testedAt:new Date().toISOString(),recordedSourceAt:recorded.recordedAt,scope:'Production dashboard in Chromium; synthetic weather extremes and one recorded live LSX replay. AQI, UV and rivers are simulated in selected cases; real map libraries use controlled styles and tiles for initialization, recovery, playback, fullscreen and tile failures. Other ancillary feeds exercise unavailable fallbacks.',passed:results.filter(r=>r.status==='passed').length,failed:results.filter(r=>r.status==='failed').length,results};
+  const report={testedAt:new Date().toISOString(),recordedSourceAt:recorded.recordedAt,browser:browserName,scope:'Production dashboard in selected Playwright browser; synthetic weather extremes and one recorded live LSX replay. AQI, UV and rivers are simulated in selected cases; real map libraries use controlled styles and tiles for initialization, recovery, playback, fullscreen and tile failures. Other ancillary feeds exercise unavailable fallbacks.',passed:results.filter(r=>r.status==='passed').length,failed:results.filter(r=>r.status==='failed').length,results};
   const reportPath=process.env.WEATHER_STRESS_REPORT||'/tmp/lsx-weather-stress-report.json';
   fs.writeFileSync(reportPath,JSON.stringify(report,null,2)+'\n');
   console.log(report.passed+' passed; '+report.failed+' failed; report '+reportPath);
   if(report.failed)process.exitCode=1;
 }
-main().catch(e=>{console.error(e);process.exitCode=1;});
+if(require.main===module)main().catch(e=>{console.error(e);process.exitCode=1;});
+module.exports={open,config,setBrowser:value=>{browser=value;}};

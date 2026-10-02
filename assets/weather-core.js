@@ -829,7 +829,7 @@ function bottomLineHourlyCandidates(H,opts){
     var ok=true,muggy=false,lo=999;
     night.forEach(function(h){
       if(h.t<lo) lo=h.t;
-      if(h.t<50||h.t>72||h.pop==null||h.pop>=25||(h.mph!=null&&h.mph>14)||h.dew==null||h.dew>64) ok=false;
+      if(h.t<50||h.t>72||h.pop==null||h.pop>=25||(h.mph!=null&&h.mph>14)||h.dew==null||h.dew>64||h.thund||h.wint) ok=false;
       if(h.dew!=null&&h.dew>=67&&h.t>=70) muggy=true;
     });
     if(ok&&!muggy&&comfortOK&&!gaps) push(50,"moon","overnight","Tonight","Comfortable overnight",
@@ -844,7 +844,7 @@ function bottomLineHourlyCandidates(H,opts){
     var dhi=-999,nice=true;
     dayH.forEach(function(h){
       if(h.t!=null&&h.t>dhi) dhi=h.t;
-      if(h.t==null||h.pop==null||h.pop>=20||h.t<58||h.t>88||(h.fl!=null&&h.fl>=95)||(h.mph!=null&&h.mph>15)||(h.dew!=null&&h.dew>66)) nice=false;
+      if(h.t==null||h.pop==null||h.pop>=20||h.t<58||h.t>88||(h.fl!=null&&h.fl>=95)||(h.mph==null||h.mph>15)||(h.dew==null||h.dew>66)||h.thund||h.wint) nice=false;
     });
     if(nice) push(55,"check","outdoors","Outdoor plans","Excellent outdoor conditions",
       dhi+"° and dry through "+when(dayH[dayH.length-1].end||new Date(+dayH[dayH.length-1].d+3600000))+".",
@@ -855,7 +855,7 @@ function bottomLineHourlyCandidates(H,opts){
     var windowHours=[];
     for(i=0;i<n;i++){
       var hb=H[i];
-      if(!hb.day||hb.hr<7||hb.hr>20||hb.pop==null) continue;
+      if(!hb.day||hb.hr<7||hb.hr>20||hb.pop==null||hb.pop>=40||hb.thund||hb.wint||hb.fog||hb.mph==null||hb.mph>=25) continue;
       var fl2=(hb.fl!=null)?hb.fl:hb.t;
       if(fl2==null) continue;
       var sc=Math.abs(fl2-70)*1.3;
@@ -1077,8 +1077,11 @@ function bottomLineWindowAction(candidate,outdoor){
 }
 
 function buildBottomLine(candidates,localAlert){
+  var shelterWarning=localAlert&&(localAlert.level==="warning"||localAlert.level==="emergency")
+    &&/tornado|thunderstorm|flash flood|winter|ice storm|blizzard|dust/i.test(localAlert.event||"");
   var sorted=(candidates||[]).filter(function(c){
-    return c&&typeof c.priority==="number"&&c.topic&&c.headline;
+    if(!c||shelterWarning&&c.tone==="good"&&(c.topic==="overnight"||c.topic==="outdoors")) return false;
+    return typeof c.priority==="number"&&c.topic&&c.headline;
   }).slice().sort(bottomLineCmp);
   var seen={}, unique=[];
   sorted.forEach(function(c){
@@ -1433,4 +1436,25 @@ function sharedLocation(search){
   var p=new URLSearchParams(search), lat=p.get("lat"), lon=p.get("lon");
   if(lat==null||lon==null||!lat.trim()||!lon.trim()) return null;
   return validLocation({name:p.get("place")||"Shared location",lat:Number(lat),lon:Number(lon),precision:p.get("kind")==="city"?"representative":"point"});
+}
+
+/* Validate each forecast independently before any renderer can consume malformed periods. */
+function validatedForecast(data,now){
+  if(!data||!data.properties||!Array.isArray(data.properties.periods)) return null;
+  var periods=data.properties.periods.filter(function(p){
+    return p&&typeof p.temperature==="number"&&isFinite(p.temperature)
+      &&typeof p.name==="string"&&typeof p.isDaytime==="boolean"
+      &&typeof p.shortForecast==="string"&&typeof p.windSpeed==="string"
+      &&(p.detailedForecast==null||typeof p.detailedForecast==="string")
+      &&isFinite(Date.parse(p.startTime))&&Date.parse(p.endTime)>Date.parse(p.startTime);
+  }).sort(function(a,b){return Date.parse(a.startTime)-Date.parse(b.startTime);});
+  if(!periods.some(function(p){return Date.parse(p.endTime)>now;})) return null;
+  return {properties:Object.assign({},data.properties,{periods:periods})};
+}
+
+/* Retained evidence cannot outlive either the event end or the message expiration. */
+function alertEvidenceEnd(properties){
+  var times=[properties.ends,properties.expires].map(function(t){return Date.parse(t||"");})
+    .filter(function(t){return isFinite(t)&&t>0;});
+  return times.length?Math.min.apply(null,times):0;
 }

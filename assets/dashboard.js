@@ -21,11 +21,11 @@ function feedUpdate(key,status,issued){
   freshnessCheck();
 }
 function freshnessCheck(){
-  var now=Date.now(), total=0, counts={ready:0,partial:0,unavailable:0,stale:0,saved:0,loading:0};
+  var now=Date.now(), total=0, counts={deferred:0,ready:0,partial:0,unavailable:0,stale:0,saved:0,loading:0};
   Object.keys(FEEDS).forEach(function(k){
     var cfg=FEEDS[k]; if(cfg.tracked===false) return;
     total++;
-    var c=feedChecks[k], state=feedState(c,now,cfg.age);
+    var c=feedChecks[k], state=feedRequested(k)?feedState(c,now,cfg.age):"deferred";
     counts[state]++;
     if(!cfg.card) return;
     var card=document.getElementById(cfg.card); if(!card) return;
@@ -36,7 +36,7 @@ function freshnessCheck(){
     }
     var text=cfg.label+": ";
     if(state==="ready"||state==="partial") text+=(state==="partial"?"Some data unavailable · ":"")+"checked "+weatherTime(c.successAt,{hour:"numeric",minute:"2-digit"})+" CT";
-    else text+=({loading:"Checking…",unavailable:"Unavailable",stale:"Check overdue",saved:"Saved data · awaiting verification"}[state]||"Unavailable")
+    else text+=({deferred:"Loads when this section approaches or is opened",loading:"Checking…",unavailable:"Unavailable",stale:"Check overdue",saved:"Saved data · awaiting verification"}[state]||"Unavailable")
       +(c.successAt?" · last successful check "+weatherTime(c.successAt,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"");
     if(c.issuedAt&&(state==="ready"||state==="partial"||state==="saved")) text+=" · source "+weatherTime(c.issuedAt,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT";
     el.setAttribute("data-state",state);
@@ -47,6 +47,7 @@ function freshnessCheck(){
     +(counts.partial?" · "+counts.partial+" with incomplete results":"")
     +(counts.loading?" · "+counts.loading+" checking":"")
     +(counts.saved?" · "+counts.saved+" showing saved data":"")
+    +(counts.deferred?" · "+counts.deferred+" on demand":"")
     :(counts.saved?"Showing saved data; current weather is unverified":counts.loading?"Checking weather services…":"Weather data unavailable — no current checks succeeded");
   var dot=document.getElementById("statusDot"), btn=document.getElementById("refresh");
   var state=!good?(counts.loading?"loading":"unavailable"):(bad||counts.partial||counts.saved||counts.loading?"partial":"ready");
@@ -4075,7 +4076,7 @@ function ensureMapLibraries(){
   });
 }
 function ensureMaps(){
-  if(!mapsCanStart||rvMap&&stnMap) return Promise.resolve();
+  if(!mapsCanStart||rvMap&&(stnMap||!feedRequested("stations"))) return Promise.resolve();
   if(mapsInFlight) return mapsInFlight;
   var theme=effectiveLight()?"light":"dark";
   mapsInFlight=ensureMapLibraries().then(function(){return loadMapStyle(theme);}).then(function(style){
@@ -4083,18 +4084,18 @@ function ensureMaps(){
       try{document.getElementById("radar").innerHTML="";initRadarMap(style);document.getElementById("radar").closest(".maplock-wrap").classList.remove("map-unavailable");}
       catch(e){if(rvMap)rvMap.remove();rvMap=null;rvBase=null;baseLabels=null;mapFallback("radar");}
     }
-    if(!stnMap){
-      try{document.getElementById("stnmap").innerHTML="";initStationMap(style);loadStationPlot();}
+    if(!stnMap&&feedRequested("stations")){
+      try{document.getElementById("stnmap").innerHTML="";initStationMap(style);renderStationLayer();}
       catch(e){if(stnMap)stnMap.remove();stnMap=null;stnBase=null;mapFallback("stnmap");}
     }
     if((effectiveLight()?"light":"dark")!==theme){updateRadarBase();updateStationBase();}
   }).catch(function(){
     if(!rvMap)mapFallback("radar");
-    if(!stnMap)mapFallback("stnmap");
+    if(!stnMap&&feedRequested("stations"))mapFallback("stnmap");
   }).finally(function(){mapsInFlight=null;});
   return mapsInFlight;
 }
-document.addEventListener("DOMContentLoaded",function(){mapsCanStart=true;ensureMaps();});
+document.addEventListener("DOMContentLoaded",function(){mapsCanStart=true;initContextView();ensureMaps();});
 document.addEventListener("click",function(e){if(e.target.closest("[data-retry-maps]"))ensureMaps();});
 
 /* ---- Unified scheduler: one ticker, pauses when backgrounded, tracks real freshness ---- */
