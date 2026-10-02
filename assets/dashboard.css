@@ -1806,4 +1806,4 @@ body{transition:none}
    near-white cloud/snow/moon shapes. It applies to current, hourly and daily icons alike.
    Local sprite fallbacks already inherit the theme's high-contrast text colour. */
 :root[data-theme="light"] .wxi,
-:root[data-theme="light"] .h24-ic{filter:brightness(.55) drop-shadow(0 0 .4px rgba(20,43,62,.65))}
+:root[data-theme="light"] .h24-ic{filter:brightness(.55) drop-shadow(0 0 .7px rgba(20,43,62,.95))}
