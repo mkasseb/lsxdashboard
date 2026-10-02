@@ -45,7 +45,7 @@ All rows below are implemented with original IDs and controls retained. The old 
 
 ## Diagnosed regressions and fixes
 
-- Light-theme hourly cloud artwork is darkened in CSS only; pixel sampling of the actual CDN cloud SVG improves contrast against the white panel from 1.11:1 to 3.66:1.
+- Light-theme weather artwork retains its natural colors. A fine contour separates pale artwork from the card; rendered-pixel tests check readable boundaries while a golden-fill assertion prevents brown suns.
 
 - WebKit event tracing exposed transient overlap during deferred content growth: pointer-down hit the records panel while pointer-up hit the intended risk summary. Content mutations now repack before the next paint; a regression test fails on the delayed implementation and passes on the fix. Repacking also waits until a held pointer completes its native click.
 
@@ -74,4 +74,6 @@ Draft PR and branch preview only. No merge or production deployment is authorize
 
 ## Light-mode icon refinement
 
-Removed the dark seven-day icon badge while retaining its dimensions and all row spacing. A shared light-theme CSS filter adjusts external SVG fills and strokes across current, hourly and daily artwork; a subpixel contour keeps thin wind/tornado marks readable without a tile. Dark-mode artwork, condition mappings, animation, alternative text and CDN fallbacks remain unchanged. `tools/icon-theme-tests.js` renders 23 actual SVG variants, verifies transparent slots and visible 3:1-contrast pixels, checks unknown-state fallback semantics, and captures light/dark galleries at 390, 768 and 1440px. MIT-licensed artwork fixtures are test-only.
+Removed the dark seven-day icon badge while retaining its dimensions and all row spacing. Natural golden sun, blue moon and pale cloud/snow fills are preserved; a fine light-theme contour provides separation from the card without blanket brightness filters. Dark-mode artwork, condition mappings, animation, alternative text and CDN fallbacks remain unchanged. `tools/icon-theme-tests.js` renders 23 actual SVG variants, verifies transparent slots and visible 3:1-contrast pixels, requires bright golden sun pixels, checks unknown-state fallback semantics, and captures light/dark galleries at 390, 768 and 1440px. MIT-licensed artwork fixtures are test-only.
+
+The focused palette audit covered text, temperature labels from −10 to 95°F, hourly chart lines/bars, and semantic status colors in both themes. Primary/muted/accent/status text has at least 5.06:1 contrast on its card background; the sampled temperature text has at least 6.46:1. The chart retains its existing temperature hue ramp and cyan precipitation encoding. Official hazard colors are unchanged. Existing readable text and status colors were retained instead of expanding this correction into another palette redesign.

@@ -22,13 +22,21 @@ const lum=rgb=>rgb.map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4)
    await p.locator('#iconReview').scrollIntoViewIfNeeded();
    await p.evaluate(()=>Promise.all([...document.querySelectorAll('#iconReview img')].map(e=>e.decode())));
    const bg=await p.locator('#iconReview').evaluate(e=>getComputedStyle(e).backgroundColor.match(/[\d.]+/g).slice(0,3).map(Number)),background=lum(bg),samples=[];
+   const palette=await p.evaluate(()=>{
+    const e=document.createElement('span');document.body.appendChild(e);const colors=[];
+    for(const name of ['text','muted','accent','good','warn','sev','danger']){e.style.color='var(--'+name+')';colors.push({name,rgb:getComputedStyle(e).color.match(/[\d.]+/g).slice(0,3).map(Number)});}
+    e.style.color='';e.className='tv';
+    for(const temperature of [-10,0,32,50,72,85,95]){e.style.setProperty('--th',tHue(temperature));colors.push({name:temperature+'F text',rgb:getComputedStyle(e).color.match(/[\d.]+/g).slice(0,3).map(Number)});}
+    e.remove();return colors;
+   });
+   for(const c of palette){const l=lum(c.rgb);c.contrast=(Math.max(background,l)+.05)/(Math.min(background,l)+.05);assert(c.contrast>=4.5,`${theme} ${c.name}: text contrast ${c.contrast}`);}
    for(let i=0;i<names.length;i++){
     const slot=p.locator('#iconReview .di').nth(i);
     assert(await slot.evaluate(e=>getComputedStyle(e).backgroundColor==='rgba(0, 0, 0, 0)'&&getComputedStyle(e).boxShadow==='none'),'No badge behind '+names[i]);
-    const png=PNG.sync.read(await slot.locator('img').screenshot({animations:'disabled'}));let readable=0;
-    for(let j=0;j<png.data.length;j+=4){const l=lum([...png.data.slice(j,j+3)]),contrast=(Math.max(background,l)+.05)/(Math.min(background,l)+.05);if(contrast>=3)readable++;}
+    const png=PNG.sync.read(await slot.locator('img').screenshot({animations:'disabled'}));let readable=0,golden=0;
+    for(let j=0;j<png.data.length;j+=4){const l=lum([...png.data.slice(j,j+3)]),contrast=(Math.max(background,l)+.05)/(Math.min(background,l)+.05);if(contrast>=3)readable++;const [r,g,b]=png.data.slice(j,j+3);if(r>=220&&g>=130&&g<=225&&b<110)golden++;}
     if(readable<8&&out)fs.writeFileSync(path.join(out,'failed-'+names[i]+'.png'),PNG.sync.write(png));
-    assert(readable>=8,`${names[i]} ${theme}: ${readable} readable pixels; darkest RGB ${JSON.stringify([...png.data].filter((_,i)=>i%4!==3).reduce((n,v)=>Math.min(n,v),255))}`);samples.push({name:names[i],readablePixels:readable});
+    assert(readable>=8,`${names[i]} ${theme}: ${readable} readable pixels; darkest RGB ${JSON.stringify([...png.data].filter((_,i)=>i%4!==3).reduce((n,v)=>Math.min(n,v),255))}`);if(names[i]==='clear-day')assert(golden>=8,`${theme}: sun must retain bright golden fill, found ${golden} golden pixels`);samples.push({name:names[i],readablePixels:readable,goldenPixels:golden});
    }
    // Unknown conditions retain their existing mapped artwork and accessible fallback label.
    const unknown=await p.evaluate(()=>{const x=document.createElement('div');x.innerHTML=wxImg('Unknown conditions',false,32,true);wxiFail(x.firstChild);return {name:wxName('Unknown conditions',false),label:x.firstChild.getAttribute('aria-label')};});
@@ -40,7 +48,7 @@ const lum=rgb=>rgb.map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4)
     await p.evaluate(()=>Promise.all([...document.querySelectorAll('#forecastCard img.wxi')].map(e=>e.decode())));
     await p.locator('#forecastCard').screenshot({path:path.join(out,`${engine}-forecast-icons-${width}-${theme}.png`)});
    }
-   results.push({width,theme,samples});console.log(`PASS ${engine} ${width} ${theme}: ${names.length} icon types, transparent slots, rendered contrast, unknown fallback`);
+   results.push({width,theme,samples,palette});console.log(`PASS ${engine} ${width} ${theme}: ${names.length} icon types, transparent slots, rendered contrast, unknown fallback`);
   }finally{await s.context.close();}
  }}finally{await browser.close();}
  if(out)fs.writeFileSync(path.join(out,engine+'-icon-report.json'),JSON.stringify(results,null,2));

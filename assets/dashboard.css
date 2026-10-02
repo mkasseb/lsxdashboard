@@ -1802,12 +1802,10 @@ body{transition:none}
 .river-row .rsub{grid-row:3;margin:0;min-width:0;line-height:1.5}
 .river-row .river-pin{align-self:flex-start;margin-top:8px}
 
-/* Theme-aware artwork treatment darkens the external SVG fills AND strokes, including
-   near-white cloud/snow/moon shapes. It applies to current, hourly and daily icons alike.
-   Local sprite fallbacks already inherit the theme's high-contrast text colour. */
+/* Preserve natural artwork fills in light mode. A fine slate contour separates pale
+   clouds, snow and golden suns from the card without tinting their interiors. */
 :root[data-theme="light"] .wxi,
-:root[data-theme="light"] .h24-ic{filter:brightness(var(--weather-icon-brightness,.55)) drop-shadow(0 0 .7px rgba(20,43,62,.95))}
-
-/* Subpixel wind/tornado lines need more contrast than the filled condition artwork. */
-.wxi[src*="/wind.svg"],.wxi[src*="/tornado.svg"],
-.h24-ic[href*="/wind.svg"],.h24-ic[href*="/tornado.svg"]{--weather-icon-brightness:.35}
+:root[data-theme="light"] .h24-ic{
+  filter:drop-shadow(.6px 0 0 #344b60) drop-shadow(-.6px 0 0 #344b60)
+         drop-shadow(0 .6px 0 #344b60) drop-shadow(0 -.6px 0 #344b60);
+}
