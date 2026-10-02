@@ -45,6 +45,8 @@ All rows below are implemented with original IDs and controls retained. The old 
 
 ## Diagnosed regressions and fixes
 
+- WebKit event tracing exposed transient overlap during deferred content growth: pointer-down hit the records panel while pointer-up hit the intended risk summary. Content mutations now repack before the next paint; a regression test fails on the delayed implementation and passes on the fix. Repacking also waits until a held pointer completes its native click.
+
 - Removed top/left travel animations on repacked context cards: targets must not travel between touch-down and click while another card loads or collapses.
 - The old `.grid` start alignment collapsed the newly flex-based lower container, causing narrow probability cells and moving controls. Explicit stretch alignment fixes it; focused overflow/disclosure tests pass.
 - Snapshot-key tests now seed/assert v20 because river presentation labels changed. No calculation changed.

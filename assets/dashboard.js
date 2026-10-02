@@ -4374,7 +4374,10 @@ var _mObs=null, _mObsOpts={childList:true,subtree:true,characterData:true,attrib
     // re-pack whenever a child image finishes loading
     [].slice.call(m.querySelectorAll("img")).forEach(function(img){ img.addEventListener("load",scheduleMasonry); img.addEventListener("error",scheduleMasonry); });
     // re-pack when card contents change (data loads in)
-    if(window.MutationObserver){ _mObs=new MutationObserver(scheduleMasonry); _mObs.observe(m,_mObsOpts); }
+    // Pack feed/disclosure growth in the mutation checkpoint. Deferring to another frame
+    // leaves absolutely positioned cards overlapping briefly and can send pointerdown
+    // to a different card than pointerup, even while the intended summary is visible.
+    if(window.MutationObserver){ _mObs=new MutationObserver(layoutMasonry); _mObs.observe(m,_mObsOpts); }
   }
 })();
 scheduleMasonry();

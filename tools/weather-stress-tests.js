@@ -955,6 +955,18 @@ async function main() {
       });
       assert(!/Good window-opening|Excellent outdoor/.test(text));
     });
+    await run('individual context content updates pack before next paint',config('context growth'),async({page})=>{
+      const overlaps=await page.evaluate(async()=>{
+        const m=document.querySelector('.masonry'),first=[...m.children].filter(c=>c.classList.contains('card')).sort((a,b)=>a.offsetTop-b.offsetTop)[0];
+        const content=document.createElement('div');content.style.height='600px';first.appendChild(content);
+        // Mutation observers run in this checkpoint, before the next animation frame.
+        await Promise.resolve();
+        const boxes=[...m.children].filter(c=>c.classList.contains('card')).map(c=>({id:c.id,r:c.getBoundingClientRect()}));
+        const collisions=boxes.flatMap((a,i)=>boxes.slice(i+1).filter(b=>Math.min(a.r.right,b.r.right)-Math.max(a.r.left,b.r.left)>1&&Math.min(a.r.bottom,b.r.bottom)-Math.max(a.r.top,b.r.top)>1).map(b=>[a.id,b.id]));
+        content.remove();return collisions;
+      });
+      assert.deepEqual(overlaps,[],'Feed growth must not leave overlapping hit targets until the next frame');
+    },1280);
     await run('individual context repack preserves a pressed disclosure',config('pressed disclosure'),async({page})=>{
       const summary=page.locator('#riskHelp summary');await summary.scrollIntoViewIfNeeded();
       const box=await summary.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();
