@@ -10,7 +10,7 @@ const out=process.env.REDESIGN_ARTIFACTS;
 async function main(){
  const browser=await playwright[engine].launch({headless:engine!=='firefox',...(engine==='chromium'?{executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox','--enable-unsafe-swiftshader']}: {})});setBrowser(browser);
  const report=[];
- try{for(const width of [320,390,768,1024,1440])for(const theme of ['dark','light']){
+ try{for(const width of [320,390,768,1024,1180,1440])for(const theme of ['dark','light']){
   const s=await open(config('layout fixture',{maps:true,touch:width<768,aqi:32,uv:4,river:[20,25,22]}),width),p=s.page;
   try{
    await p.evaluate(t=>applyTheme(t),theme);
@@ -20,7 +20,7 @@ async function main(){
    assert.equal(await p.locator('#hourlyOptions button').count(),3);
    assert.equal(await p.locator('#rsTabs button').count(),2);
    const boxes=await p.evaluate(()=>Object.fromEntries(['currentCard','callCard','h24Card','radarCard','forecastCard'].map(id=>{const r=document.getElementById(id).getBoundingClientRect();return[id,{x:r.x,y:r.y,right:r.right,bottom:r.bottom}];})));
-   if(width>1000){assert(Math.abs(boxes.h24Card.y-boxes.radarCard.y)<2);assert(boxes.h24Card.right<=boxes.radarCard.x);assert(boxes.forecastCard.y>=boxes.h24Card.bottom);assert(Math.abs(boxes.currentCard.y-boxes.callCard.y)<2);}
+   if(width>1000){assert(Math.abs(boxes.h24Card.y-boxes.radarCard.y)<2);assert(boxes.h24Card.right<=boxes.radarCard.x);assert(boxes.forecastCard.y>=Math.max(boxes.h24Card.bottom,boxes.radarCard.bottom));assert(Math.abs(boxes.forecastCard.x-boxes.h24Card.x)<2);assert(Math.abs(boxes.forecastCard.right-boxes.radarCard.right)<2);assert(Math.abs(boxes.currentCard.y-boxes.callCard.y)<2);}
    else {assert(boxes.radarCard.y>=boxes.h24Card.bottom);assert(boxes.forecastCard.y>=boxes.radarCard.bottom);}
    if(width<=680)assert(boxes.callCard.y>=boxes.currentCard.bottom);
    await p.locator('#daily .day').first().click();assert.equal(await p.locator('#daily .day').first().getAttribute('aria-expanded'),'true');
@@ -36,6 +36,8 @@ async function main(){
     await p.evaluate(id=>{document.querySelector('#jumpNav a[href="#'+id+'"]').click();document.getElementById(id).scrollIntoView();},id);
     await p.waitForFunction(id=>document.querySelector('#jumpNav a[aria-current="location"]')?.getAttribute('href')==='#'+id,id).catch(async e=>{console.error(JSON.stringify({width,theme,id,geometry:await p.evaluate(()=>({scroll:scrollY,bar:document.querySelector('.jump-wrap').getBoundingClientRect().bottom,links:[...document.querySelectorAll('#jumpNav a')].map(l=>({href:l.hash,active:l.getAttribute('aria-current'),top:document.querySelector(l.hash).getBoundingClientRect().top}))}))}));throw e;});
    }
+   const rivers=await p.locator('#rivers .rlink').evaluateAll(rows=>rows.map(row=>({w:row.clientWidth,prose:row.querySelector('.rsub')?.getBoundingClientRect().width,now:row.querySelector('.rmeta')?.getBoundingClientRect().top,forecast:row.querySelector('.rsub')?.getBoundingClientRect().top})));
+   for(const row of rivers){assert(row.prose>=row.w*.7,'River detail must use the row width: '+JSON.stringify(row));assert(row.now<row.forecast,'Now precedes forecast details');}
    assert.match(await p.locator('#rivers').innerText(),/Now/);assert.match(await p.locator('#rivers').innerText(),/Forecast peak in window/);
    // Measure full document and card bounds; never conceal overflow by changing viewport width.
    const overflow=await p.evaluate(()=>({w:innerWidth,scroll:document.documentElement.scrollWidth,cards:[...document.querySelectorAll('.card')].filter(e=>{let r=e.getBoundingClientRect();return r.width&&(r.left< -1||r.right>innerWidth+1);}).map(e=>e.id)}));
@@ -45,7 +47,7 @@ async function main(){
     return ['--text','--muted','--accent'].flatMap(f=>['--bg','--panel','--panel-2'].map(b=>{let x=lum(c.getPropertyValue(f).trim()),y=lum(c.getPropertyValue(b).trim());return {f,b,ratio:(Math.max(x,y)+.05)/(Math.min(x,y)+.05)};}));
    });for(const c of contrast)assert(c.ratio>=4.5,JSON.stringify(c));
    assert.deepEqual(s.errors,[]);
-   if(out&&[390,1440].includes(width)){
+   if(out&&[390,1180,1440].includes(width)){
     fs.mkdirSync(out,{recursive:true});await p.evaluate(()=>{window.scrollTo(0,0);document.querySelectorAll('img.wxi').forEach(wxiFail);document.querySelectorAll('.context-toggle[aria-expanded="false"]').forEach(b=>b.click());});
     await p.clock.runFor(500);await p.evaluate(()=>layoutMasonry());
     await p.waitForFunction(()=>{const boxes=[...document.querySelectorAll('.masonry>.card')].map(c=>c.getBoundingClientRect()).filter(r=>r.width&&r.height);return boxes.every((a,i)=>boxes.slice(i+1).every(b=>Math.min(a.right,b.right)-Math.max(a.left,b.left)<=1||Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)<=1));});

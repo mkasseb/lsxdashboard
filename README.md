@@ -155,7 +155,7 @@ The full design rationale — what each decision replaced, and why — lives in
   Type carries the hierarchy through the `--fs-*`/`--r-*`/`--sp-*` scales.
 - **The page is ordered by what a visitor came for.** Alerts and active mesoscale discussions,
   a combined Now / Bottom Line hero, hourly planning, radar and seven-day forecast, then local
-  context. Hourly and seven-day share the left desktop column beside radar; phones read hourly,
+  context. Hourly sits beside radar above a full-width seven-day band; phones read hourly,
   radar, then seven-day. Every existing card and individual disclosure remains available.
 - **Radar is a peek, not the product.** The map's height is an aspect ratio, never leftover space;
   radar and satellite stack on one Leaflet map; the loop targets a 60-minute span, not a sweep

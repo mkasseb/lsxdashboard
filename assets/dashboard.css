@@ -1706,7 +1706,7 @@ header .top{grid-column:1/-1;gap:16px;margin-bottom:10px;flex-wrap:nowrap}
 .bl-detail,.bl-action{font-size:15px}.bl-sheadline,.bl-sdetail{font-size:14px}
 .brief-author{font-size:12px}.disclosure{font-size:14px}
 .planning-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
-#h24Card{grid-column:1;grid-row:1}#radarCard{grid-column:2;grid-row:1/3}#forecastCard{grid-column:1;grid-row:2}
+#h24Card{grid-column:1;grid-row:1}#radarCard{grid-column:2;grid-row:1}#forecastCard{grid-column:1/-1;grid-row:2}
 .hourly-head{flex-wrap:wrap;gap:8px}.hourly-head h2{margin:0;flex:1 1 100%}
 .hourly-duration{font-size:13px;color:var(--muted)}.hourly-options{margin-left:auto}
 #radarCard .rs-head{flex-wrap:wrap;gap:12px}#radarCard .rs-head h2{font-size:20px}
@@ -1772,3 +1772,20 @@ body{transition:none}
   .cc-uv,.aqi-mini{padding:8px}.cc-expo .s{font-size:12px}
   .bl-lead{grid-template-columns:minmax(0,1fr)}.bl-lead-ico{display:none}
 }
+
+/* The complete hourly and weekly products vary independently in height. Put the week across
+   both columns so no empty half-column is reserved below the bounded radar. */
+@media(min-width:1001px){
+  #forecastCard .day{grid-template-columns:minmax(180px,1fr) 32px 64px minmax(120px,2fr) 100px 16px;gap:16px}
+  #forecastCard .day .dn{white-space:normal}
+}
+/* Keep gauge identity, Now and forecast prose readable even in a narrow desktop context card.
+   DOM/source values and the separate pin button remain unchanged. */
+.river-row{align-items:flex-start}
+.river-row .rlink{display:grid;grid-template-columns:minmax(0,1fr);gap:7px}
+.river-row .rname{display:contents}
+.river-row .rn-top{grid-row:1;min-width:0;overflow-wrap:anywhere}
+.river-row .rmeta{grid-row:2;display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:8px;text-align:left}
+.river-row .rval{white-space:nowrap}
+.river-row .rsub{grid-row:3;margin:0;min-width:0;line-height:1.5}
+.river-row .river-pin{align-self:flex-start;margin-top:8px}
