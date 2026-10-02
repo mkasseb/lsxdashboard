@@ -15,9 +15,8 @@ function controlled(text){
 }
 const server=http.createServer((req,res)=>{
   const u=new URL(req.url,base),p=u.pathname;requests.push(req.url);
-  if(p==='/prime'){res.setHeader('Content-Type','text/html');res.end('<html><body>Cache priming</body></html>');return;}
-  if(p==='/'){
-    let html=fs.readFileSync(path.join(root,'index.html'),'utf8').replace(/integrity="[^"]*"/g,'');
+  if(p==='/'||p==='/old'){
+    let html=(priming?cp.execFileSync('git',['show',legacy+':index.html'],{cwd:root}).toString():fs.readFileSync(path.join(root,'index.html'),'utf8')).replace(/integrity="[^"]*"/g,'');
     if(unversioned)html=html.replace(/\?v=[a-f0-9]+/g,'');
     res.setHeader('Cache-Control','public, max-age=0, must-revalidate');res.setHeader('Content-Type','text/html');res.end(controlled(html));return;
   }
@@ -25,7 +24,7 @@ const server=http.createServer((req,res)=>{
     const name=path.basename(p);if(!names.includes(name)){res.writeHead(404).end();return;}
     res.setHeader('Cache-Control',priming?'public, max-age=14400, must-revalidate':'public, max-age=0, must-revalidate');
     res.setHeader('Content-Type',name.endsWith('.css')?'text/css':'application/javascript');
-    res.end(priming?old[name]:controlled(fs.readFileSync(path.join(root,'assets',name),'utf8')));return;
+    res.end(controlled(priming?old[name].toString():fs.readFileSync(path.join(root,'assets',name),'utf8')));return;
   }
   const vendor=vendors.find(([part])=>p==='/vendor/'+part);
   if(vendor){res.setHeader('Content-Type',p.endsWith('.css')?'text/css':'application/javascript');res.end(fs.readFileSync(require.resolve(vendor[1])));return;}
@@ -45,12 +44,15 @@ const server=http.createServer((req,res)=>{
     page.on('pageerror',e=>errors.push(e.message));
     try{
       priming=true;unversioned=baseline;
-      await page.goto(base+'/prime');await page.evaluate(async names=>{for(const name of names)await fetch('/assets/'+name).then(r=>r.text());},names);
+      await page.goto(base+'/old',{waitUntil:'domcontentloaded'});
+      await page.waitForFunction(()=>document.querySelectorAll('.context-toggle').length===6);
+      assert.deepEqual(errors,[],'old page loads before upgrade');
       priming=false;requests=[];
       await page.goto(base+'/',{waitUntil:'domcontentloaded'});
       if(baseline){
         await page.waitForFunction(()=>document.querySelectorAll('.context-toggle').length===6);
-        assert(errors.some(e=>/addEventListener|compact/.test(e)),JSON.stringify(errors));
+        await page.waitForTimeout(100);
+        assert(errors.some(e=>/addEventListener|compact/.test(e)),JSON.stringify({errors,requests,diagnostics:await page.locator('.map-diagnostics').count()}));
         assert.equal(await page.locator('.map-diagnostics').count(),0);
         assert.equal(await page.locator('#radar').innerHTML(),'');
         assert.equal(requests.filter(p=>p.startsWith('/assets/')).length,0,'old assets reused without network');
