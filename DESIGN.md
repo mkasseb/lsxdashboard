@@ -274,6 +274,12 @@ ever fixed, re-measure before reaching for one again.
 has a spine. The grid renders in DOM order (no card carries a CSS `order`), so the sequence above
 is exactly the source order of `index.html`.
 
+AQI category wording is shared between the exposure card and the briefing. Unhealthy air suppresses
+favorable outdoor and window-opening cues; unverified alerts or air checks also prevent comfort
+assurances and display a short status beside the advice. Gaps between forecast hours remain unknown
+in both the advice and chart. Chart x positions use timestamps, and curves and filled areas stop at
+missing hours instead of interpolating across the gap.
+
 ## The 24-hour chart is never nested inside `#current`
 
 It has its own full-width card (`#h24Card`) below the hero pair; it previously sat inside
@@ -378,6 +384,9 @@ exactly, and when" case.
 
 ## Fullscreen moves the card, not the map
 
+Fullscreen assigns dialog semantics to the existing card, makes siblings along its ancestry inert,
+and contains Tab navigation. Escape restores the page's previous inert state and the invoking focus.
+
 `body.radar-full` makes `#radarCard` fixed and full-viewport; the Leaflet instance, the loop, the
 warning polygons and the layer toggles are untouched, so nothing needs re-initialising. Escape
 closes it, focus returns to whatever opened it, and body scroll is locked so a wheel gesture over
@@ -446,6 +455,13 @@ AFD, the regional station plot) deliberately opt out of both.
 
 ## Every loader owns its failure
 
+Daily and hourly payloads are validated independently: a failed daily endpoint cannot clear a
+successful hourly response. Alert failures retain only unexpired last-verified products, with an
+explicit warning that new warnings and cancellations cannot be checked. Expiration retires both
+briefing evidence and map geometry without claiming an all-clear. Failed map initialization has
+an explicit retry control and participates in full refresh; styles and time metadata use the same
+20-second request deadline as JSON weather feeds.
+
 Each has a `.catch` that degrades to an official link or to silence. One dead NOAA service must
 never blank a sibling card. Error paints are generation-scoped too, so a superseded failure can't
 deface the location that replaced it.
@@ -457,6 +473,13 @@ that are checked before use, and a figure borrowed from a different station is a
 Suppression beats false precision.
 
 ## Freshness and the region’s clock
+
+Gauge observations need an explicit source timestamp within two hours (or the gauge's configured
+maxAge). Missing, future or older timestamps produce a link with an unverified explanation; they
+cannot contribute a successful live check. Forecast crest/trend guidance additionally needs an
+issuance within 48 hours. Forecast high/low dates select their matching normal, and record rankings
+require the forecast and historical sample to describe the same date. Central midnight invalidates
+calendar-bound context before the scheduler refreshes it.
 
 `FEEDS` records validated loader outcomes, not HTTP traffic or fulfilled task promises. Cards show
 successful-check times separately from source issuance/observation times; unavailable and partial
@@ -489,7 +512,7 @@ loader clears its restored fragments before painting unavailable data. The clima
 cache also preserves its original check time and partial-result status, and expires after 12 hours.
 
 A snapshot is restored markup under the current stylesheet, so changing markup or its freshness
-contract requires bumping `SNAP_KEY`. Version 18 clears earlier snapshots and includes river pin controls.
+contract requires bumping `SNAP_KEY`. Version 19 clears earlier snapshots after changes to hourly time geometry, dated climate comparisons and river source-time validation. Climate context uses cache v3 with an explicit record date.
 
 ## Adding a card, adding a loader
 

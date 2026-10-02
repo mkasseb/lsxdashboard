@@ -56,14 +56,15 @@ samples across both daylight-saving transitions. Interaction checks cover focus 
 preservation, briefing disclosures, sticky location context, favorites, shared URLs and river pins.
 It also checks
 2,000 seeded accumulation cases against a separate oracle. The fixture records its source URLs
-and retrieval time; extreme scenarios are synthetic. Maps exercise their unavailable fallbacks,
-so this suite does not verify live tiles, animations or browser-specific rendering outside Chromium.
+and retrieval time; extreme scenarios are synthetic. Map scenarios load the pinned Leaflet/MapLibre libraries against deterministic tiles and styles,
+including initial style failure/retry, radar playback, tile outages and fullscreen keyboard behavior.
+This suite does not verify live upstream tile availability or browser-specific rendering outside Chromium.
 
 Install Playwright separately from the dashboard (which has no npm dependencies), then run with a
 local Chromium executable:
 
 ```bash
-npm install --prefix /tmp/lsx-browser-tests playwright@1.62.1
+npm install --prefix /tmp/lsx-browser-tests playwright@1.62.1 leaflet@1.9.4 maplibre-gl@5.24.0 @maplibre/maplibre-gl-leaflet@0.1.4
 NODE_PATH=/tmp/lsx-browser-tests/node_modules CHROMIUM_PATH=/usr/bin/chromium \
   node tools/weather-stress-tests.js
 ```
@@ -181,6 +182,20 @@ The full design rationale — what each decision replaced, and why — lives in
   saving again does not renew its TTL. Alerts, current observations and short-fused discussions
   are fetched live. Saved labels persist until their own feed is verified or cleared. Reshaping
   a card’s DOM or freshness metadata means bumping `SNAP_KEY`.
+
+The briefing shares AQI category guidance with the air-quality card. Poor air or unverified alert/air
+checks suppress favorable outdoor and open-window recommendations. Missing hourly samples leave
+real gaps on the time axis and cannot certify an all-day forecast. Daily and hourly endpoint
+failures are isolated.
+
+River rows require an observation timestamp no more than two hours old (configurable per gauge);
+crest guidance also requires a forecast issuance within 48 hours. Unverified rows link to NWPS.
+Climate comparisons carry forecast dates; tomorrow's high never ranks against today's records.
+Calendar-bound climate data are retired at Central midnight and refreshed.
+
+After an alert outage, unexpired last-verified alerts remain clearly marked as unverified and
+expire on their original deadlines. The briefing and map follow the retained state. Map requests
+time out after 20 seconds and failed initialization can be retried from the map or full refresh.
 
 **Adding a card** means registering its lifecycle in `FEEDS`, marking validated outcomes with
 `feedUpdate()`, adding its markup and masonry rank, and clearing any derived weather state on

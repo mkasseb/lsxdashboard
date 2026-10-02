@@ -378,6 +378,8 @@ function precipEventSummary(grid,nowMs,horizonHours){
     // Only call liquid-equivalent QPF "rain" when both frozen-precipitation layers verify zero.
     e.rain=e.snow===0&&e.ice===0;
   });
+  var frozenReported=snow.concat(ice).some(function(p){return p.start<limit&&p.end>nowMs&&p.value>0;});
+  if(!events.length&&frozenReported) complete=false;
   return {events:events,complete:complete,dry:complete&&events.length===0};
 }
 
@@ -682,7 +684,7 @@ function bottomLineHours(hrs){
     var mph=parseMph(p.windSpeed), sf=p.shortForecast||"", t=p.temperature;
     H.push({t:t,d:d,end:end,endText:p.endTime||"",hr:weatherParts(d).hour,pop:pop,rh:rh,mph:mph,
             dew:dewF(t,rh),fl:feelsLikeF(t,rh,mph),
-            thund:/thunder|t-?storm/i.test(sf),wint:/snow|sleet|wintry|freezing/i.test(sf),
+            thund:/thunder|t-?storm/i.test(sf),wint:/snow|sleet|wintry|freezing|blizzard/i.test(sf),
             fog:/fog/i.test(sf),day:!!p.isDaytime});
   });
   return H;
@@ -706,16 +708,29 @@ function stationMiles(lat1,lon1,lat2,lon2){
 /* Every hourly-data decision in one pure function. The renderer supplies normalized hours and
    slower-feed facts; tests supply controlled scenarios. `now` is explicit so "today/tomorrow",
    expired UV peaks and the after-5pm behavior do not depend on the test runner's clock. */
+function aqiInfo(v){
+  if(v==null)return {c:"var(--muted)",t:"—",s:""};
+  // Guidance wording follows the EPA's own AQI category advice rather than paraphrasing it — this is
+  // health information, and the agency that sets the scale has already chosen the words for it.
+  if(v<=50)return {c:"#3ecf8e",t:"Good",s:"Little or no health risk."};
+  if(v<=100)return {c:"#ffd23f",t:"Moderate",s:"Unusually sensitive people should limit prolonged exertion."};
+  if(v<=150)return {c:"#ff9f2f",t:"Unhealthy (Sensitive)",s:"Sensitive groups should reduce prolonged exertion."};
+  if(v<=200)return {c:"#ff6a2f",t:"Unhealthy",s:"Everyone should reduce prolonged outdoor exertion."};
+  if(v<=300)return {c:"#c13bff",t:"Very Unhealthy",s:"Avoid prolonged exertion; move activities indoors."};
+  return {c:"#ff3b3b",t:"Hazardous",s:"Avoid all outdoor physical activity."};
+}
 function bottomLineHourlyCandidates(H,opts){
   H=H||[]; opts=opts||{};
   var now=opts.now||new Date(), n=H.length, i, candidates=[];
+  var gaps=!!(n&&H[0].d>now)||H.some(function(h,j){return j>0&&h.d-H[j-1].d!==3600000;});
+  var comfortOK=opts.allowComfort!==false&&!(opts.aqi>100);
   function push(pri,ico,topic,label,headline,detail,action,tone,context,extra){
     candidates.push(bottomCandidate(pri,ico,topic,label,headline,detail,action,tone,context,extra));
   }
   function when(d){ return whenWord(d,now); }
 
   // Rain/storm window. One wet block owns its weather type; a later storm cannot relabel it.
-  var wet0=-1, wetEnd=-1, hasThunder=false, hasWintry=false, maxPop=0, popMissing=false, popKnown=false;
+  var wet0=-1, wetEnd=-1, hasThunder=false, hasWintry=false, maxPop=0, popMissing=gaps, popKnown=false;
   for(i=0;i<n;i++){
     if(H[i].pop==null) popMissing=true;
     else popKnown=true;
@@ -737,11 +752,11 @@ function bottomLineHourlyCandidates(H,opts){
         "Keep an eye on the forecast for outdoor plans.","neutral");
       else push(40,"sun","precip","Rain","Rain unlikely",
         "Chance stays below 20% through "+when(H[n-1].d)+".",
-        "Outdoor plans look favorable for rain.","neutral");
+        "Keep checking the forecast before outdoor plans.","neutral");
     }else{
       var span=(wetEnd>wet0)
-        ?(wet0===0?"now":"~"+when(H[wet0].d))+"–"+when(H[wetEnd].d)
-        :(wet0===0?"now":"from ~"+when(H[wet0].d));
+        ?(wet0===0&&H[wet0].d<=now?"now":"~"+when(H[wet0].d))+"–"+when(H[wetEnd].d)
+        :(wet0===0&&H[wet0].d<=now?"now":"from ~"+when(H[wet0].d));
       var wet2=-1;
       if(wetEnd>0){ for(i=wetEnd;i<n;i++){ if(H[i].pop>=40){ wet2=i; break; } } }
       var more=(wet2>0)?" · another round ~"+when(H[wet2].d):"";
@@ -759,6 +774,19 @@ function bottomLineHourlyCandidates(H,opts){
     }
   }
 
+  // Later hazardous rounds keep their own timing instead of inheriting the first rain block.
+  var laterSeen={};
+  for(i=wetEnd>wet0?wetEnd:n;i<n;i++){
+    if(H[i].pop==null||H[i].pop<30||!H[i].thund&&!H[i].wint) continue;
+    var laterStorm=H[i].thund, laterTopic=laterStorm?"storm":"winter";
+    if(laterSeen[laterTopic]) continue;
+    laterSeen[laterTopic]=true;
+    push(laterStorm?95:93,laterStorm?"storm":"snow",laterStorm?"storm":"winter",
+      laterStorm?"Later storm timing":"Later travel weather",
+      laterStorm?"Thunderstorms later":"Wintry precipitation later","From ~"+when(H[i].d)+".",
+      laterStorm?"Be ready to move indoors before storms arrive.":"Watch for slick roads and allow extra travel time.","danger",false,{supportRank:0});
+  }
+
   var maxFl=-999, flAt=null;
   for(i=0;i<n;i++){ if(H[i].fl!=null&&H[i].fl>maxFl){ maxFl=H[i].fl; flAt=H[i].d; } }
   if(maxFl>=105) push(100,"heat","heat","Heat","Dangerous heat near "+when(flAt),
@@ -766,10 +794,19 @@ function bottomLineHourlyCandidates(H,opts){
   else if(maxFl>=99) push(72,"heat","heat","Heat","High heat near "+when(flAt),
     "Feels like "+maxFl+"°.","Take frequent breaks during outdoor work.","warning");
 
+  var minFl=Infinity,coldAt=null;
+  for(i=0;i<n;i++){ if(H[i].fl!=null&&H[i].fl<minFl){minFl=H[i].fl;coldAt=H[i].d;} }
+  if(minFl<=-20) push(102,"cold","cold","Cold","Dangerous cold near "+when(coldAt),
+    "Feels like "+minFl+"°.","Limit time outside and cover exposed skin.","danger");
+
   var mMin=999,mAt=null;
   for(i=0;i<n;i++){ if(H[i].hr>=6&&H[i].hr<=9&&H[i].t!=null&&H[i].t<mMin){ mMin=H[i].t; mAt=H[i].d; } }
   var cMin=999,cAt=null;
   for(i=3;i<n;i++){ if(H[i].t!=null&&H[i].t<cMin){ cMin=H[i].t; cAt=H[i].d; } }
+  var firstFreeze=null;
+  for(i=0;i<n;i++){if(H[i].t!=null&&H[i].t<=32){firstFreeze=H[i];break;}}
+  if(firstFreeze&&(!mAt||mMin>32)) push(86,"cold","cold","Cold","Freezing near "+when(firstFreeze.d),
+    firstFreeze.t+"°.","Watch for freezing temperatures and slick spots where surfaces are wet.","danger");
   var cold=coldVerdict(H[0]&&H[0].t,mAt?mMin:null,cAt?cMin:null);
   if(cold==="freezing") push(85,"cold","cold","Cold","Freezing early",
     mMin+"° near "+when(mAt)+".","Plan for freezing temperatures early.","danger");
@@ -778,8 +815,10 @@ function bottomLineHourlyCandidates(H,opts){
   else if(cold==="cold") push(70,"cold","cold","Cold","Cold morning",
     mMin+"° near "+when(mAt)+".","Dress for the cold.","warning");
 
-  for(i=0;i<n;i++){ if(H[i].fog&&H[i].hr>=4&&H[i].hr<=9){
-    push(68,"fog","fog","Visibility","Fog early","Reduced visibility during the morning drive.",
+  for(i=0;i<n;i++){ if(H[i].fog){
+    var morningFog=H[i].hr>=4&&H[i].hr<=9;
+    push(68,"fog","fog","Visibility",morningFog?"Fog early":"Fog near "+when(H[i].d),
+      morningFog?"Reduced visibility during the morning drive.":"Reduced visibility is possible.",
       "Slow down and leave extra following distance.","warning"); break;
   } }
 
@@ -799,8 +838,11 @@ function bottomLineHourlyCandidates(H,opts){
     else if(uvR>=8) push(62,"uv","uv","Sun exposure","Very high UV near "+uvAt,
       "UV index around "+uvR+".","Use sun protection for outdoor plans.","warning");
   }
-  if(opts.aqi!=null&&opts.aqi>100) push(75,"air","air","Air quality","Poor air quality",
-    "AQI "+opts.aqi+".","Sensitive groups should limit prolonged outdoor exertion.","warning");
+  if(opts.aqi!=null&&opts.aqi>100){
+    var air=aqiInfo(opts.aqi);
+    push(opts.aqi>300?110:opts.aqi>200?101:opts.aqi>150?90:75,"air","air","Air quality",
+      air.t+" air quality","AQI "+opts.aqi+".",air.s,opts.aqi>150?"danger":"warning");
+  }
 
   var n0=-1;
   for(i=0;i<n;i++){ if(H[i].hr>=21||H[i].hr<=6){ n0=i; break; } }
@@ -813,10 +855,10 @@ function bottomLineHourlyCandidates(H,opts){
     var ok=true,muggy=false,lo=999;
     night.forEach(function(h){
       if(h.t<lo) lo=h.t;
-      if(h.t<50||h.t>72||h.pop==null||h.pop>=25||(h.mph!=null&&h.mph>14)||h.dew==null||h.dew>64) ok=false;
+      if(h.t<50||h.t>72||h.pop==null||h.pop>=25||(h.mph==null||h.mph>14)||h.dew==null||h.dew>64||h.thund||h.wint||h.fog) ok=false;
       if(h.dew!=null&&h.dew>=67&&h.t>=70) muggy=true;
     });
-    if(ok&&!muggy) push(50,"moon","overnight","Tonight","Comfortable overnight",
+    if(ok&&!muggy&&comfortOK&&!gaps) push(50,"moon","overnight","Tonight","Comfortable overnight",
       "Low near "+lo+"° with dry air.","Good window-opening weather.","good");
     else if(muggy) push(30,"moon","overnight","Tonight","Warm and humid overnight",
       "Low near "+lo+"°.","Open windows may offer little relief.","neutral");
@@ -824,22 +866,22 @@ function bottomLineHourlyCandidates(H,opts){
 
   var localNow=weatherParts(now), today=localNow.key;
   var dayH=H.filter(function(h){ return h.day&&weatherParts(h.d).key===today; });
-  if(dayH.length>=4&&localNow.hour<17){
+  if(comfortOK&&!gaps&&dayH.length>=4&&localNow.hour<17){
     var dhi=-999,nice=true;
     dayH.forEach(function(h){
       if(h.t!=null&&h.t>dhi) dhi=h.t;
-      if(h.t==null||h.pop==null||h.pop>=20||h.t<58||h.t>88||(h.fl!=null&&h.fl>=95)||(h.mph!=null&&h.mph>15)||(h.dew!=null&&h.dew>66)) nice=false;
+      if(h.t==null||h.pop==null||h.pop>=20||h.t<58||h.t>88||(h.fl!=null&&h.fl>=95)||(h.mph==null||h.mph>15)||(h.dew==null||h.dew>66)||h.thund||h.wint||h.fog) nice=false;
     });
     if(nice) push(55,"check","outdoors","Outdoor plans","Excellent outdoor conditions",
-      dhi+"° and dry "+(localNow.hour>=12?"the rest of the day":"all day")+".",
+      dhi+"° and dry through "+when(dayH[dayH.length-1].end||new Date(+dayH[dayH.length-1].d+3600000))+".",
       "Good day to keep outdoor plans.","good");
   }
 
-  if(maxFl>=99||wet0>=0||wMax>=25){
+  if(comfortOK&&(maxFl>=99||wet0>=0||wMax>=25)){
     var windowHours=[];
     for(i=0;i<n;i++){
       var hb=H[i];
-      if(!hb.day||hb.hr<7||hb.hr>20||hb.pop==null) continue;
+      if(!hb.day||hb.hr<7||hb.hr>20||hb.pop==null||hb.pop>=40||hb.thund||hb.wint||hb.fog||hb.mph==null||hb.mph>=25) continue;
       var fl2=(hb.fl!=null)?hb.fl:hb.t;
       if(fl2==null) continue;
       var sc=Math.abs(fl2-70)*1.3;
@@ -915,10 +957,10 @@ function bottomLineWeekCandidates(days,cutoff,hourly){
   }
   var out=[], opts={horizon:"week"};
   var wet=P.filter(function(p){return p.pop>=40;});
-  var wintry=strongest(wet.filter(function(p){return /freezing|sleet|ice|wintry|snow|flurr/i.test(p.forecast);}),
+  var wintry=strongest(wet.filter(function(p){return /freezing|sleet|ice|wintry|snow|flurr|blizzard/i.test(p.forecast);}),
     function(p){return p.pop;});
   var stormy=strongest(wet.filter(function(p){return /thunder|storm|tornado/i.test(p.forecast)&&
-    !/freezing|sleet|ice|wintry|snow|flurr/i.test(p.forecast);}),
+    !/freezing|sleet|ice|wintry|snow|flurr|blizzard/i.test(p.forecast);}),
     function(p){return p.pop;});
   var rainy=!wintry&&!stormy?strongest(wet,function(p){return p.pop;}):null;
   if(wintry) out.push(bottomCandidate(58,"snow","winter","Week ahead · Travel weather",
@@ -1061,8 +1103,14 @@ function bottomLineWindowAction(candidate,outdoor){
 }
 
 function buildBottomLine(candidates,localAlert){
+  var shelterWarning=localAlert&&(localAlert.level==="warning"||localAlert.level==="emergency")
+    &&/tornado|thunderstorm|flash flood|winter|ice storm|blizzard|dust/i.test(localAlert.event||"");
+  var exposureAlert=localAlert&&/smoke|fog|air quality|dust/i.test(localAlert.event||"");
+  var unsupportedWindHeat=localAlert&&/wind|heat/i.test(localAlert.event||"")
+    &&!(candidates||[]).some(function(c){return bottomLineAlertMatch(localAlert,c);});
   var sorted=(candidates||[]).filter(function(c){
-    return c&&typeof c.priority==="number"&&c.topic&&c.headline;
+    if(!c||(shelterWarning||exposureAlert||unsupportedWindHeat)&&c.tone==="good"&&(c.topic==="overnight"||c.topic==="outdoors")) return false;
+    return typeof c.priority==="number"&&c.topic&&c.headline;
   }).slice().sort(bottomLineCmp);
   var seen={}, unique=[];
   sorted.forEach(function(c){
@@ -1276,6 +1324,13 @@ function chaikinRing(ring,iters){
   return closed?pts.concat([pts[0]]):pts;
 }
 
+/* NWPS timestamps describe measurements, not the time the HTTP request succeeded. */
+function riverObservationState(ob,now,maxAge){
+  var t=Date.parse(ob&&ob.validTime||"");
+  if(!isFinite(t)||t<=0||t>now+10*60000) return {state:"unknown",time:0};
+  return {state:now-t>maxAge?"stale":"ready",time:t};
+}
+
 function feedState(check,now,maxAge){
   if(!check) return "loading";
   if(check.saved) return "saved";
@@ -1410,4 +1465,25 @@ function sharedLocation(search){
   var p=new URLSearchParams(search), lat=p.get("lat"), lon=p.get("lon");
   if(lat==null||lon==null||!lat.trim()||!lon.trim()) return null;
   return validLocation({name:p.get("place")||"Shared location",lat:Number(lat),lon:Number(lon),precision:p.get("kind")==="city"?"representative":"point"});
+}
+
+/* Validate each forecast independently before any renderer can consume malformed periods. */
+function validatedForecast(data,now){
+  if(!data||!data.properties||!Array.isArray(data.properties.periods)) return null;
+  var periods=data.properties.periods.filter(function(p){
+    return p&&typeof p.temperature==="number"&&isFinite(p.temperature)
+      &&typeof p.name==="string"&&typeof p.isDaytime==="boolean"
+      &&typeof p.shortForecast==="string"&&typeof p.windSpeed==="string"
+      &&(p.detailedForecast==null||typeof p.detailedForecast==="string")
+      &&isFinite(Date.parse(p.startTime))&&Date.parse(p.endTime)>Date.parse(p.startTime);
+  }).sort(function(a,b){return Date.parse(a.startTime)-Date.parse(b.startTime);});
+  if(!periods.some(function(p){return Date.parse(p.endTime)>now;})) return null;
+  return {properties:Object.assign({},data.properties,{periods:periods})};
+}
+
+/* Retained evidence cannot outlive either the event end or the message expiration. */
+function alertEvidenceEnd(properties){
+  var times=[properties.ends,properties.expires].map(function(t){return Date.parse(t||"");})
+    .filter(function(t){return isFinite(t)&&t>0;});
+  return times.length?Math.min.apply(null,times):0;
 }

@@ -21,8 +21,13 @@ jobs:
           node-version: '22'
       - run: python3 tools/check.py
       - run: node tools/logic-tests.js
+      - run: node tools/seasonal-tests.js
 
   browser:
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -31,14 +36,17 @@ jobs:
           node-version: '22'
       - name: Install browser test tools outside the static app
         run: |
-          npm install --prefix "$RUNNER_TEMP/lsx-browser" playwright@1.62.1
-          node "$RUNNER_TEMP/lsx-browser/node_modules/playwright/cli.js" install --with-deps chromium
+          npm install --prefix "$RUNNER_TEMP/lsx-browser" playwright@1.62.1 leaflet@1.9.4 maplibre-gl@5.24.0 @maplibre/maplibre-gl-leaflet@0.1.4
+          node "$RUNNER_TEMP/lsx-browser/node_modules/playwright/cli.js" install --with-deps ${{ matrix.browser }}
       - name: Run production-page weather scenarios
+        env:
+          WEATHER_BROWSER: ${{ matrix.browser }}
+          WEATHER_CASE_FILTER: ${{ matrix.browser == 'chromium' && '.*' || 'fullscreen|compact context|risk explanations|hourly refresh preserves|missing hour' }}
         run: |
           NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" WEATHER_STRESS_REPORT="$RUNNER_TEMP/weather-scenarios.json" node tools/weather-stress-tests.js
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: weather-scenarios
+          name: weather-scenarios-${{ matrix.browser }}
           path: ${{ runner.temp }}/weather-scenarios.json
           if-no-files-found: ignore

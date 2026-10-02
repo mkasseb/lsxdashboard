@@ -62,19 +62,22 @@ var _pointsCache={};
 
 Object.keys(FEEDS).forEach(function(k){ FEEDS[k].failure=FEEDS[k].failure||"unavailable"; if(FEEDS[k].tracked!==false) feedChecks[k]={status:"loading",successAt:0,issuedAt:0,saved:false}; });
 
-function requestJSON(url,options,signal){
+function requestWeather(url,options,signal,asText){
   var ctl=new AbortController(), timedOut=false;
   function abort(){ ctl.abort(); }
   if(signal){ if(signal.aborted) abort(); else signal.addEventListener("abort",abort,{once:true}); }
   var timer=setTimeout(function(){ timedOut=true; ctl.abort(); },20000);
   return fetch(url,Object.assign({},options,{signal:ctl.signal})).then(function(r){
     if(!r.ok) throw new Error("Weather service returned "+r.status);
-    return r.json();
+    return asText?r.text():r.json();
   }).catch(function(e){
     if(timedOut){ var err=new Error("Weather request timed out"); err.name="TimeoutError"; throw err; }
     throw e;
   }).finally(function(){ clearTimeout(timer); if(signal) signal.removeEventListener("abort",abort); });
 }
+
+function requestJSON(url,options,signal){ return requestWeather(url,options,signal,false); }
+function getText(url){ return requestWeather(url,{},null,true); }
 
 function getJSON(url, headers, signal){
   return requestJSON(url,{headers:headers||{}},signal);
@@ -119,189 +122,28 @@ function loadForecastGrid(){
 function loadForecast(){
   var fresh=locGuard();
   var daily=document.getElementById("daily");
+  function failDaily(){
+    feedUpdate("daily","unavailable");
+    smart.days=[]; smart.weekDays=[]; loadForecast._paint=null;
+    climate.fcHi=null; climate.fcLo=null; climate.fcHiLabel="";
+    climate.fcHiDate=null; climate.fcLoDate=null;
+    daily.innerHTML='<div class="empty">Forecast unavailable. <a href="https://forecast.weather.gov/MapClick.php?lat='+current.lat+'&lon='+current.lon+'" target="_blank" rel="noopener">Open NWS forecast ↗</a></div>';
+    renderHeroToday(); renderVsNormal(); renderContext();
+  }
   return pointsFor(current.lat,current.lon).then(function(pt){
+    if(!fresh()) return;
     var fUrl=pt.properties.forecast, hUrl=pt.properties.forecastHourly;
-    // Hourly is only an enhancer (humidity + 24h strip). If it fails, the 7-day must still render.
-    return Promise.all([getJSON(fUrl,HEADERS,locSignal()), getJSON(hUrl,HEADERS,locSignal()).catch(function(){return null;})]).then(function(res){
+    // Daily and hourly failures are independent; either healthy response can still render.
+    return Promise.all([getJSON(fUrl,HEADERS,locSignal()).catch(function(){return null;}), getJSON(hUrl,HEADERS,locSignal()).catch(function(){return null;})]).then(function(res){
       if(!fresh()) return;   // user moved while this was in flight
-      var f=res[0], h=res[1];
-      if(!f||!f.properties||!Array.isArray(f.properties.periods)||!f.properties.periods.length) throw new Error("Invalid daily forecast");
-      // A malformed or empty HTTP 200 hourly response is still a failed enhancer.
-      // Keep the healthy daily forecast and clear any previous hourly chart.
-      if(h&&h.properties&&Array.isArray(h.properties.periods)){
-        h.properties.periods=h.properties.periods.filter(function(p){return !!p&&p.temperature!=null&&isFinite(p.temperature)&&isFinite(Date.parse(p.startTime))&&Date.parse(p.endTime)>Date.parse(p.startTime);});
-        // Keep valid source periods for daily summaries; the chart clips elapsed hours itself.
-        // A response containing only elapsed periods cannot verify the current forecast.
-        if(!h.properties.periods.some(function(p){return Date.parse(p.endTime)>Date.now();})) h=null;
-      }else h=null;
-      feedUpdate("daily","ready",f.properties.updateTime||f.properties.updated||f.properties.generatedAt);
+      var f=validatedForecast(res[0],Date.now()), h=validatedForecast(res[1],Date.now());
       feedUpdate("hourly",h?"ready":"unavailable",h&&(h.properties.updateTime||h.properties.updated||h.properties.generatedAt));
-      var hByDate=h?hourlyByDate(h.properties.periods):{};
-      var ps=f.properties.periods.slice(0,15);
-      /* Pair day + night periods into single calendar days — seven visible rows, capped ON PURPOSE.
-         After sunset the feed leads with a night-only "Tonight" and ends on a day-only tail
-         (a Thursday with a high and no low — its night isn't issued yet, and the forecast grid
-         holds nothing to recover one from: minTemperature and even the hourly temperature
-         series stop at the same edge). An eighth row carrying that tail was tried and read as
-         broken — a lone high and a dash where every other row shows a pair — so the tail stays
-         dropped from the card: Tonight plus six full days, and the seventh day arrives whole in
-         the morning. The Bottom Line keeps the final period because its seven-day scope needs it. */
-      var weekDays=pairForecastPeriods(ps),days=weekDays.slice(0,7);
-      smart.weekDays=weekDays;
-      smart.days=days;
-      renderHeroToday(); // today's high/low is now known — fill the hero's range bar
-      // Week-wide temp range for bar scaling
-      var wMin=999, wMax=-999;
-      days.forEach(function(d){
-        if(d.day) { wMax=Math.max(wMax,d.day.temperature); wMin=Math.min(wMin,d.day.temperature); }
-        if(d.night){ wMax=Math.max(wMax,d.night.temperature); wMin=Math.min(wMin,d.night.temperature); }
-      });
-      var range=Math.max(1,wMax-wMin);
-      // Cache today's forecast hi/lo for the Climate-vs-Normal card
-      if(days[0]){
-        if(typeof climate!=="undefined"){
-          var fcHi=days[0].day?days[0].day.temperature:null, hiLabel="";
-          if(fcHi==null){ // evening: today's daytime high already passed → use next available daytime high
-            for(var k=1;k<days.length;k++){ if(days[k].day){ fcHi=days[k].day.temperature; hiLabel=" (tmrw)"; break; } }
-          }
-          climate.fcHi=fcHi;
-          climate.fcHiLabel=hiLabel;
-          climate.fcLo=days[0].night?days[0].night.temperature:null;
-          if(typeof renderVsNormal==="function") renderVsNormal();
-        }
+      if(!f){
+        failDaily();
+      }else{
+        feedUpdate("daily","ready",f.properties.updateTime||f.properties.updated||f.properties.generatedAt);
+        try{renderDailyForecast(f,h);}catch(e){failDaily();}
       }
-      function popOf(p){ return (p&&p.probabilityOfPrecipitation&&p.probabilityOfPrecipitation.value!=null)?p.probabilityOfPrecipitation.value:null; }
-      function factsFor(d){
-        var hi=d.day?d.day.temperature:null, lo=d.night?d.night.temperature:null;
-        var main=d.day||d.night;
-        var wall=main&&main.startTime?nwsWallTime(main.startTime):null;
-        var key=wall?wall.key:null;
-        var hrec=(key&&hByDate[key])?hByDate[key]:null;
-        var full=!!(hrec&&hrec.lastH>=18);
-        var rh=full?hrec.rh:null;
-        var highPeriod=d.day||main, lowPeriod=d.night||main;
-        var feelsHigh=(full&&hrec.fl!=null)?hrec.fl
-              :feelsLikeF(highPeriod?highPeriod.temperature:null,rh,parseMph(highPeriod?highPeriod.windSpeed:null));
-        var feelsLow=(full&&hrec.flMin!=null)?hrec.flMin
-              :feelsLikeF(lowPeriod?lowPeriod.temperature:null,null,parseMph(lowPeriod?lowPeriod.windSpeed:null));
-        var lowHr=(full&&hrec.flMinH!=null)?hrec.flMinH:null;
-        var lowLabel=/^tonight$/i.test(d.name)?"Tonight"
-          :(lowHr!=null&&lowHr<12?d.name+" morning":(lowHr!=null&&lowHr<18?d.name:d.name+" night"));
-        var dayPop=popOf(d.day), nightPop=popOf(d.night);
-        return {name:d.name,hi:hi,lo:lo,main:main,month:wall?wall.month:null,dayOfMonth:wall?wall.day:null,
-                key:key,hrec:hrec,full:full,rh:rh,
-                feelsHigh:feelsHigh,feelsLow:feelsLow,feelsLowLabel:lowLabel,
-                dayPop:dayPop,nightPop:nightPop,
-                dayCondition:d.day?d.day.shortForecast:"",nightCondition:d.night?d.night.shortForecast:"",
-                pop:Math.max(dayPop!=null?dayPop:0,nightPop!=null?nightPop:0),
-                wind:main?(((main.windDirection?main.windDirection+" ":"")+(main.windSpeed||"")).trim()||"—"):"—"};
-      }
-      // Stored as a repaintable closure: climate context (per-day normals) usually lands AFTER the
-      // forecast, and renderContext calls this again so the "vs Normal" cell can appear.
-      loadForecast._paint=function(){
-        var open=[], focused=-1;
-        [].slice.call(daily.querySelectorAll(".day-item")).forEach(function(it,i){
-          if(it.classList.contains("open")) open.push(i);
-          if(it.contains(document.activeElement)) focused=i;
-        });
-        daily.innerHTML=paintDays();
-        var items=daily.querySelectorAll(".day-item");
-        open.forEach(function(i){ if(items[i]) setOpen(items[i],items[i].querySelector(".day"),true); });   // keep expanded rows expanded
-        // …and keep the keyboard where it was. This repaint fires on its own schedule (whenever
-        // the climate normals land), and restoring the open rows but not the focus dumped a
-        // keyboard user onto <body> mid-tab. Same courtesy, same index.
-        if(focused>=0&&items[focused]) items[focused].querySelector(".day").focus();
-        // No fitDayDates() here: this innerHTML write is itself a mutation the masonry observer
-        // will see, and the repack it schedules ends in exactly that call — with the card at its
-        // final width, which a measurement taken now wouldn't have.
-      };
-      function paintDays(){ return days.map(function(d){
-        var fact=factsFor(d), hi=fact.hi, lo=fact.lo;
-        var a=(lo!=null?lo:hi), b=(hi!=null?hi:lo);
-        var left=((Math.min(a,b)-wMin)/range)*100, width=Math.max(4,(Math.abs(b-a)/range)*100);
-        var grad="linear-gradient(90deg,"+tCol(Math.min(a,b))+","+tCol(Math.max(a,b))+")";
-        var pop=fact.pop, popText=summaryPopText(pop), main=fact.main, wind=fact.wind;
-        var mMonth=fact.month, mDay=fact.dayOfMonth, _dk=fact.key, hrec=fact.hrec, rh=fact.rh;
-        var hotImpact=forecastImpact(fact.feelsHigh,hi!=null?hi:(main?main.temperature:null));
-        var coldImpact=forecastImpact(fact.feelsLow,lo!=null?lo:(main?main.temperature:null));
-        var impact=(hotImpact&&hotImpact.kind==="hot")?hotImpact:((coldImpact&&coldImpact.kind==="cold")?coldImpact:null);
-        var fl=impact&&impact.kind==="cold"?fact.feelsLow:fact.feelsHigh;
-        var condition=impact?impact.label:compactCondition(main.shortForecast,pop);
-        /* A day period whose night hasn't been issued. The 7-row cap normally leaves the feed's
-           day-only tail on the floor (see the pairing loop), so this fires only when the feed
-           itself comes up short of seven whole days — rare, but a real NWS failure mode. When it
-           does, the missing low is the DATA's edge, not a fetch that failed, and there is no
-           honest number to recover (the grid's minTemperature stops at the same edge). What must
-           not happen is a silent blank: on every other row that slot holds a number, so an empty
-           one reads as "we forgot", when the truth is "NWS hasn't said yet". Same doctrine as
-           ccGap on the conditions card — a dash that says whose gap it is. */
-        var noNight=!!(d.day&&!d.night);
-        var detail="";
-        if(d.day)   detail+='<p class="dd-text"><b>Day</b>'+esc(d.day.detailedForecast||d.day.shortForecast)+'</p>';
-        if(d.night) detail+='<p class="dd-text"><b>Night</b>'+esc(d.night.detailedForecast||d.night.shortForecast)+'</p>';
-        else if(noNight) detail+='<p class="dd-text"><b>Night</b>Not issued yet — the NWS forecast currently ends with the '+esc(d.name)+' daytime period. The overnight low arrives in a later forecast package.</p>';
-        // The date beside the name: "Friday" is ambiguous by day five of a seven-day list, and
-        // NWS sometimes swaps a holiday name in ("Independence Day") that says even less about
-        // where in the week it falls. Visually it's the muted "8/1"; a screen reader gets the
-        // month spelled out instead, since "8 slash 1" is noise. Shown only where the column
-        // can hold it — fitDayDates() measures after paint; see the .dnd rule for why no
-        // media query can make that call.
-        var md=mMonth!=null?'<span class="dnd" aria-hidden="true">'+(mMonth+1)+"/"+mDay+'</span>'
-                  +'<span class="sr">, '+MONTHS[mMonth]+" "+mDay+'</span>':'';
-        return '<div class="day-item">'
-          +'<button class="day" type="button" aria-expanded="false" title="'+esc(main.shortForecast)+'">'
-            +'<div><div class="dn"><span aria-hidden="true">'+esc(compactDayName(d.name))+'</span>'
-              +'<span class="sr">'+esc(d.name)+'</span>'+md+'</div>'
-              +'<div class="dcond'+(impact?' impact-'+impact.kind:'')+'">'+esc(condition)+'</div></div>'
-            +'<div class="di">'+wxImg(main.shortForecast,!!d.day,26,!!impact)+'</div>'
-            +'<div class="dp">'+(popText?ic("drop")
-              +'<span class="sr">Precipitation '+(popText.charAt(0)==="~"?"about ":"")+popText.replace("~","")+'</span>'
-              +'<span aria-hidden="true">'+popText+'</span>':"&nbsp;")+'</div>'
-            +'<div class="tbar"><div class="tfill" style="left:'+left.toFixed(1)+'%;width:'+width.toFixed(1)+'%;background:'+grad+'"></div></div>'
-            // The visible H/L survives colour-vision differences and makes the conventional
-            // high-first order explicit. The clipped words keep the same clarity for a reader.
-            +'<div class="dt'+(((hi==null&&lo!=null)||(hi!=null&&lo==null&&!noNight))?' only-one':'')+'">'
-              +(hi!=null?'<span '+tvAttr(hi)+'><span class="tl" aria-hidden="true">H</span><span class="sr">High </span>'+hi+'°</span>':'')
-              +(lo!=null?'<span '+tvAttr(lo,"lo")+'><span class="tl" aria-hidden="true">L</span><span class="sr">Low </span>'+lo+'°</span>'
-              :(noNight?'<span class="dt-na" title="No low yet — NWS hasn\'t issued '+esc(d.name)+' Night">'
-                +'<span class="sr">Low not yet forecast</span><span aria-hidden="true">L —</span></span>':''))+'</div>'
-            +'<div class="chev" aria-hidden="true">▾</div>'
-          +'</button>'
-          +'<div class="day-detail">'
-            +detail
-            +'<div class="dd-grid">'
-              +'<div class="dd-item"><div class="k">Precip Chance</div><div class="v">'+(pop>0?pop+"%":"0%")+'</div></div>'
-              +'<div class="dd-item"><div class="k">Wind</div><div class="v">'+esc(wind)+'</div></div>'
-              +'<div class="dd-item'+(impact?' impact-'+impact.kind:'')+'"><div class="k">'
-                +(impact&&impact.kind==="hot"?"Peak Feels Like":(impact&&impact.kind==="cold"?"Lowest Feels Like":"Feels Like"))+'</div>'
-                +'<div class="v">'+(fl!=null?fl+"°":"—")+'</div></div>'
-              // The key names the hour the reading came from — the page's habit of saying exactly
-              // what a number is. Usually "(1pm)"; on a Tonight row the winner is an evening hour.
-              +'<div class="dd-item"><div class="k">Humidity'+(rh!=null&&hrec.rhH!=null?' ('+hrWord(hrec.rhH)+')':'')
-                +'</div><div class="v">'+(rh!=null?rh+"%":"—")+'</div></div>'
-              +(function(){   // that day's peak UV, when Open-Meteo has it for the date
-                var du=_dk?uv.daily[_dk]:null;
-                if(du==null) return "";
-                var dr=Math.round(du), dl=uvLevel(dr);
-                return '<div class="dd-item"><div class="k">UV Index</div>'
-                  +'<div class="v"><span class="lvcol" style="color:'+dl.c+'">'+dr+" "+dl.t+'</span></div></div>';
-              })()
-              +(function(){   // how this day sits against the 1991–2020 normal for that date
-                var nw=_dk&&ctx.normWeek?ctx.normWeek[_dk]:null;
-                if(!nw||(nw.hi==null&&nw.lo==null)) return "";
-                function dp(v,n){
-                  if(v==null||n==null) return '<span class="cn-na">—</span>';
-                  var d=Math.round(v-n), s=(d>0?"+":"")+d+"°";
-                  return '<span class="'+(Math.abs(d)<1?"cn-flat":(d>0?"cn-warm":"cn-cool"))+'">'+s+'</span>';
-                }
-                return '<div class="dd-item"><div class="k">vs Normal ('+Math.round(nw.hi)+"°/"+Math.round(nw.lo)+'°)</div>'
-                  +'<div class="v">'+dp(hi,nw.hi)+" / "+dp(lo,nw.lo)+'</div></div>';
-              })()
-            +'</div>'
-          +'</div>'
-        +'</div>';
-      }).join(""); }
-      loadForecast._paint();
       if(h){ // hourly strip only when the hourly feed succeeded
         var hrs=forecastWindowHours(h.properties.periods,24,Date.now());
         smart.hourly=hrs;
@@ -316,13 +158,9 @@ function loadForecast(){
     });
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
-    feedUpdate("daily","unavailable"); feedUpdate("hourly","unavailable");
-    smart.days=[]; smart.weekDays=[]; smart.hourly=[]; smart.hourlyAll=[];
-    loadForecast._paint=null; renderHourly24._hrs=null;
-    climate.fcHi=null; climate.fcLo=null; climate.fcHiLabel="";
+    failDaily(); feedUpdate("hourly","unavailable");
+    smart.hourly=[]; smart.hourlyAll=[]; renderHourly24._hrs=null;
     clearHourlyForecast();
-    daily.innerHTML='<div class="empty">Forecast unavailable. <a href="https://forecast.weather.gov/MapClick.php?lat='+current.lat+'&lon='+current.lon+'" target="_blank" rel="noopener">Open NWS forecast ↗</a></div>';
-    renderHeroToday(); renderVsNormal(); renderContext();
     if(typeof renderTheCall==="function") renderTheCall();
   });
 }
@@ -429,17 +267,64 @@ function loadCurrent(){
   });
 }
 
+var lastAlertData=null, alertsRetained=false, retainedAlertKey="", alertRequestSeq=0;
+function liveAlertFeatures(features,now){
+  return (features||[]).filter(function(f){
+    var p=f.properties||{}, end=alertEvidenceEnd(p);
+    return isFinite(end)&&end>now;
+  });
+}
+function alertUpdateNotice(){
+  var el=document.getElementById("alertUpdateNote"); if(!el) return;
+  el.hidden=!alertsRetained;
+  var retained=liveAlertFeatures(lastAlertData&&lastAlertData.features,Date.now()).length>0;
+  el.textContent=alertsRetained?"Alert updates unavailable. "+(retained?"Showing unexpired alerts last verified "
+    +(feedChecks.alerts.successAt?weatherTime(feedChecks.alerts.successAt,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"earlier")+". ":"No unexpired previously verified alerts remain. ")
+    +"New warnings or cancellations cannot be verified. Check weather.gov/lsx.":"";
+  var mapNote=document.getElementById("radarAlertNote");
+  if(mapNote){mapNote.hidden=el.hidden;mapNote.textContent=el.textContent;}
+}
+function renderAlertsUnavailable(){
+  callLocalAlert=null; callAlertGroups=[];
+  var card=document.getElementById("alertsCard"); card.classList.remove("calm");
+  paintAlerts(document.getElementById("alerts"),'<div class="empty">Couldn\'t load alerts. <a href="https://www.weather.gov/lsx/" target="_blank" rel="noopener">Check weather.gov/lsx ↗</a></div>');
+  loadWarnPolygons([]); watchFeats=[]; watchKey=""; drawWatchPolygons();
+  renderTheCall();
+}
+function renderRetainedAlerts(){
+  var feats=liveAlertFeatures(lastAlertData&&lastAlertData.features,Date.now()).map(function(f){
+    return Object.assign({},f,{properties:Object.assign({},f.properties,{ends:new Date(alertEvidenceEnd(f.properties)).toISOString()})});
+  });
+  var key=JSON.stringify(feats.map(function(f){return f.id||f.properties.id||f.properties.event;}));
+  alertUpdateNotice();
+  if(key===retainedAlertKey) return;
+  retainedAlertKey=key;
+  watchFeats=watchFeats.filter(function(f){var p=f.properties||{};return Date.parse(p.ends||p.expiration||"")>Date.now();});
+  drawWatchPolygons();
+  if(feats.length) renderAlertsData({features:feats});
+  else renderAlertsUnavailable();
+}
 function loadAlerts(){
-  var fresh=locGuard();
-  var el=document.getElementById("alerts"), card=document.getElementById("alertsCard");
-  // zones resolve alongside the alerts (memoised per location) so "covers me" is known at render time
+  var fresh=locGuard(), seq=++alertRequestSeq;
   return Promise.all([getJSON(API+"/alerts/active?area=MO,IL",HEADERS), ensureUserZones()]).then(function(res){
+    if(!fresh()||seq!==alertRequestSeq) return;
     var data=res[0];
-    if(!fresh()) return;   // user moved while this was in flight
     if(!data||!Array.isArray(data.features)||!data.features.every(function(f){return f&&f.properties&&typeof f.properties.event==="string";})) throw new Error("Invalid alerts");
+    lastAlertData={features:liveAlertFeatures(data.features,Date.now())}; alertsRetained=false; retainedAlertKey="";
+    alertUpdateNotice();
     feedUpdate("alerts",zonesResolved()?"ready":"partial",data.updated);
-    loadWarnPolygons(data.features||[]);  // one fetch feeds both list and map
-    loadWatchPolygons(data.features||[]); // …and decides whether the watch fills are worth fetching
+    renderAlertsData(lastAlertData);
+  }).catch(function(){
+    if(!fresh()||seq!==alertRequestSeq) return;
+    alertsRetained=true; retainedAlertKey="";
+    feedUpdate("alerts","unavailable");
+    renderRetainedAlerts();
+  });
+}
+function renderAlertsData(data){
+  var el=document.getElementById("alerts"), card=document.getElementById("alertsCard");
+  loadWarnPolygons(data.features||[]);
+  if(!alertsRetained) loadWatchPolygons(data.features||[]);
     function isLSX(f){
       var p=f.properties||{};
       var aw=(p.parameters&&p.parameters.AWIPSidentifier&&p.parameters.AWIPSidentifier[0])||"";
@@ -467,6 +352,7 @@ function loadAlerts(){
     var scope=document.getElementById("alertsScope");
     if(scope) scope.textContent=localMode?place:"LSX";
     if(typeof tickCountdowns==="function") setTimeout(tickCountdowns,0);   // fill the new countdowns immediately
+    if(feats.length===0&&alertsRetained){ renderAlertsUnavailable(); return; }
     if(feats.length===0){
       /* The scope half earns its place: "no active alerts" without it invites the reader's next
          question, which is "no alerts WHERE — my street, or the region?". This page treats that
@@ -536,7 +422,7 @@ function loadAlerts(){
       });
       var latest=0, earliest=0, counties=[];
       segs.forEach(function(f){
-        var p2=f.properties, e=Date.parse(p2.ends||p2.expires||"")||0;
+        var p2=f.properties, e=alertEvidenceEnd(p2);
         var s=Date.parse(p2.onset||p2.effective||p2.sent||"")||0;   // when the window actually opened
         if(e>latest) latest=e;
         if(s&&(!earliest||s<earliest)) earliest=s;
@@ -682,7 +568,7 @@ function loadAlerts(){
         }).join("<br>")+'</div>';
       } else if(g.segs.length>1){
         detail+='<div class="a2-seg"><b>'+g.segs.length+' zone groups:</b> '+g.segs.map(function(f){
-          var p2=f.properties, e=p2.ends||p2.expires;
+          var p2=f.properties, e=alertEvidenceEnd(p2);
           var es=e?new Date(e).toLocaleString("en-US", {timeZone:WEATHER_TZ,weekday:"short",hour:"numeric",minute:"2-digit"}):"\u2014";
           var ar=(p2.areaDesc||"").split(";").length;
           return esc(String(ar))+" counties until "+esc(es);
@@ -794,7 +680,7 @@ function loadAlerts(){
        items the claim and its tail get dealt into columns instead of wrapping.) */
     var awayEmerg=null;
     glist.forEach(function(g){ if(!awayEmerg&&g.scope==="away"&&isTakeCover(g.lv)) awayEmerg=g; });
-    var calmHTML=(!mineN&&awayN)?'<div class="calmrow'+(awayEmerg?' guarded':'')+'">'
+    var calmHTML=(!alertsRetained&&!mineN&&awayN)?'<div class="calmrow'+(awayEmerg?' guarded':'')+'">'
       +'<span class="cdot"></span><span>No active watches, warnings or advisories for '+esc(place)+'.'
       +(awayEmerg?' <span class="cmut">'+esc(awayEmerg.ev)+' is active elsewhere in the area.</span>':'')
       +'</span></div>':'';
@@ -815,15 +701,9 @@ function loadAlerts(){
         +'<div id="alertsElse">'+awayHTML+'</div>';
     }
     paintAlerts(el,calmHTML+mineHTML+elseHTML);
-  }).catch(function(){
-    if(!fresh()) return;
-    feedUpdate("alerts","unavailable");   // an old location's failed request must not replace the new alert list
-    callLocalAlert=null; callAlertGroups=[];
-    if(typeof renderTheCall==="function") renderTheCall();
-    card.classList.remove("calm");
-    paintAlerts(el,'<div class="empty">Couldn\'t load alerts. <a href="https://www.weather.gov/lsx/" target="_blank" rel="noopener">Check weather.gov/lsx ↗</a></div>');
-  });
+
 }
+
 
 function loadRivers(){
   var el=document.getElementById("rivers"), known=0;
@@ -836,9 +716,13 @@ function loadRivers(){
       var d=res[0], fcSeries=res[1];
       var ob=(d.status&&d.status.observed)||{}, val=ob.primary, unit=ob.primaryUnit||"ft", info=catInfo(ob.floodCategory);
       if(typeof val!=="number"||!isFinite(val)||val<=-500) return riverLinkOnly(r);
+      var age=riverObservationState(ob,Date.now(),r.maxAge||2*3600000);
+      if(age.state!=="ready") return riverLinkOnly(r,age.time
+        ?"Last report "+weatherTime(age.time,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT · stale; current level unverified"
+        :"Observation time unavailable; current level unverified");
       known++;
       // Context: how much headroom is left before action stage, and which way it's heading
-      var sub=[];
+      var sub=["Observed "+weatherTime(age.time,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT"];
       var cats=(d.flood&&d.flood.categories)||{};
       var act=cats.action&&cats.action.stage, minor=cats.minor&&cats.minor.stage;
       var ref=(typeof act==="number"&&act>0)?{v:act,n:"action stage"}
@@ -849,7 +733,10 @@ function loadRivers(){
                       :(Math.round(-gap*10)/10)+" ft over "+ref.n);
       }
       // What the river is forecast to DO — crest, keep climbing, or recede
-      var cr=crestInfo(fcSeries,val);
+      var issue=Date.parse(fcSeries&&fcSeries.issuedTime||"");
+      var forecastFresh=isFinite(issue)&&issue>0&&issue<=Date.now()+10*60000&&Date.now()-issue<=48*3600000;
+      var cr=forecastFresh?crestInfo(fcSeries,val):null;
+      if(fcSeries) sub.push(forecastFresh?"Forecast issued "+weatherTime(issue,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"Forecast issuance unavailable or stale");
       var crestCat=null;
       if(cr){
         var st1=Math.round(cr.stage*10)/10;
@@ -877,7 +764,9 @@ function loadAqi(){
     if(!fresh()) return;   // user moved while this was in flight
     var cur=d.current||{}, aqi=cur.us_aqi, info=aqiInfo(aqi);
     if(typeof aqi!=="number"||!isFinite(aqi)||aqi<0) throw new Error("Invalid AQI");
-    feedUpdate("aqi","ready",typeof cur.time==="number"?cur.time*1000:null);
+    var observed=typeof cur.time==="number"?cur.time*1000:0;
+    if(!observed||observed>Date.now()+10*60000||Date.now()-observed>2*3600000) throw new Error("AQI observation time unavailable or stale");
+    feedUpdate("aqi","ready",observed);
     aqiState={val:(aqi!=null)?aqi:null, pm:(cur.pm2_5!=null)?Math.round(cur.pm2_5):null, err:false};
     // The dedicated card only appears when air quality is a story: AQI > 100 ("Unhealthy for
     // Sensitive Groups" and worse — EPA's literal "Hazardous" is 301+, far too rare a trigger).
@@ -1186,7 +1075,7 @@ function loadClimate(){
     }
     return ask(st.sid).then(function(local){
       if(!fresh()) return;   // user moved while this was in flight
-      climate.normHi=local.normHi; climate.normLo=local.normLo;   // normals are gap-free \u2014 always local
+      climate.normHi=local.normHi; climate.normLo=local.normLo; climate.normDate=today;   // normals are gap-free \u2014 always local
       if(climAllOK(local,showSnow) || !deep || !deep.sid || deep.sid===st.sid){ paint(local,""); return; }
       // Local station is too gappy for the running totals. Month/year anomalies are broad-scale,
       // so a complete nearby record beats four dashes \u2014 borrowed as a COHERENT set from ONE
@@ -1206,8 +1095,9 @@ function loadClimate(){
 }
 
 function loadClimateContext(){
+  deferredFeeds.context=true;
   var fresh=locGuard();
-  try{ localStorage.removeItem("lsxCtx_v1"); }catch(e){}   // pre-split cache format
+  try{ localStorage.removeItem("lsxCtx_v1"); localStorage.removeItem("lsxCtx_v2"); }catch(e){}   // pre-split cache format
   return climStation(current.lat,current.lon).then(function(st){
    return deepStation(current.lat,current.lon).then(function(deep){
     // Depth vs locality: daily records/rankings come from the deep legacy station; monthly,
@@ -1251,7 +1141,7 @@ function loadClimateContext(){
         if(!v||v.error||!Array.isArray(v.data)) return null;
         return v.data;
       }
-      var nctx={ready:false, recHi:null, recLo:null, recPcp:null, doyHi:[], doyLo:[],
+      var nctx={ready:false, recordDate:today, recHi:null, recLo:null, recPcp:null, doyHi:[], doyLo:[],
                 monWet:[], monWarm:[], monMtd:null, monMean:null, monName:MONTHS[now.month],
                 years:0, dry:null, hist:null, normWeek:{},
                 recStation:(rec.sid!==st.sid)?(rec.name||rec.sid):""};
@@ -1380,7 +1270,8 @@ function loadQpf(){
 }
 
 function loadStationPlot(){
-  if(!stnMap||typeof L==="undefined"){ feedUpdate("stations","unavailable"); return Promise.resolve(); }
+  deferredFeeds.stations=true;
+  // Data acquisition is independent of map initialization; renderStationLayer waits for the map.
   var c2f=function(c){return (c==null)?null:Math.round(c*9/5+32);};
   var checked=0;
   var jobs=STN_LIST.map(function(s){
@@ -1677,6 +1568,7 @@ function feedFailure(key){
 
 function runFeed(key){
   var cfg=FEEDS[key], generation=locSeq;
+  if(!feedRequested(key)) return Promise.resolve();
   return Promise.resolve().then(function(){return window[cfg.load]();}).catch(function(e){
     if(isAbort(e)||(cfg.local&&generation!==locSeq)) return;
     feedFailure(key);

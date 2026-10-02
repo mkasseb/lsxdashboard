@@ -361,7 +361,7 @@ ICON_REFS = [
     re.compile(r'href="#i-([a-z0-9-]+)"'),
     re.compile(r'\bico:"([a-z0-9-]+)"'),
     re.compile(r'\bic:"([a-z0-9-]+)"'),
-    re.compile(r'\bpush\(\d+,"([a-z0-9-]+)"'),
+    re.compile(r'\bpush\([^,\n]+,"([a-z0-9-]+)"'),
     re.compile(r'\bline\("([a-z0-9-]+)"'),
 ]
 

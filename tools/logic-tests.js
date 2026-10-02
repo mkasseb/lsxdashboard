@@ -97,6 +97,7 @@ const SUBJECT = new Function(`
   var STN_STALE_MS=2*60*60000;
   ${lift(/^function currentObservationFresh\(o,nowMs\)\{[\s\S]*?^\}/m, 'currentObservationFresh()')}
   ${lift(/^function stationMiles\(lat1,lon1,lat2,lon2\)\{[\s\S]*?^\}/m, 'stationMiles()')}
+  ${lift(/^function aqiInfo\(v\)\{[\s\S]*?^\}/m, 'aqiInfo()')}
   ${lift(/^function bottomLineHourlyCandidates\(H,opts\)\{[\s\S]*?^\}/m, 'bottomLineHourlyCandidates()')}
   ${lift(/^function bottomLineWeekCandidates\(days,cutoff,hourly\)\{[\s\S]*?^\}/m, 'bottomLineWeekCandidates()')}
   ${lift(/^function bottomLineLocalAlert\(groups,nowMs\)\{[\s\S]*?^\}/m, 'bottomLineLocalAlert()')}
@@ -140,9 +141,9 @@ function check(name, actual, expected) {
 
 /* Restored chart markup must carry its duration and details rather than a prior fixed view. */
 check('freshness and Central Time markup migration bumps the snapshot key',
-  /var SNAP_KEY="lsxSnap_v18"/.test(SRC), true);
-check('the previous v17 snapshot is explicitly discarded',
-  /"lsxSnap_v17"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
+  /var SNAP_KEY="lsxSnap_v19"/.test(SRC), true);
+check('the previous v18 snapshot is explicitly discarded',
+  /"lsxSnap_v18"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
 const snapshotParts = new Function(lift(/^var FEEDS=\{[\s\S]*?^\};/m, 'FEEDS')+'\n'+
   lift(/^var SNAP_PARTS=.*$/m, 'SNAP_PARTS')+'; return SNAP_PARTS;')();
 check('saved HTML cannot restore stale current readings, risk or briefing',
@@ -816,9 +817,9 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
   check('a cold morning without a sharp fall stays a cold-morning candidate',
     topic(C(H, {now: new Date(2026, 7, 14, 0)}), 'cold').headline, 'Cold morning');
 
-  for (const [hour, expected] of [[3, false], [4, true], [9, true], [10, false]]) {
+  for (const [hour, expected] of [[3, true], [4, true], [9, true], [10, true]]) {
     H = hours(new Date(2026, 7, 14, 0), 12, i => ({fog: i === hour}));
-    check(`fog at ${hour}:00 respects the morning-drive window`, !!topic(C(H, {now: new Date(2026, 7, 14, 0)}), 'fog'), expected);
+    check(`fog at ${hour}:00 keeps visibility advice at any hour`, !!topic(C(H, {now: new Date(2026, 7, 14, 0)}), 'fog'), expected);
   }
   for (const [mph, expected] of [[24, null], [25, 'Windy near 2pm'], [34, 'Windy near 2pm'], [35, 'Very windy near 2pm']]) {
     H = hours(NOW, 12, i => ({mph: i === 2 ? mph : 5}));
@@ -834,7 +835,7 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
     'Extreme UV near 1pm');
   check('AQI 100 stays quiet', !!topic(weather(H, {aqi: 100}), 'air'), false);
   check('AQI 101 triggers sensitive-group guidance', topic(weather(H, {aqi: 101}), 'air').action,
-    'Sensitive groups should limit prolonged outdoor exertion.');
+    'Sensitive groups should reduce prolonged exertion.');
 
   const NIGHT = new Date(2026, 7, 13, 21);
   H = hours(NIGHT, 6, () => ({t: 65, fl: 65, dew: 50, pop: 0, mph: 5, day: false}));
@@ -1115,8 +1116,15 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
     c('cold', 70, false, 'cold morning'), c('precip', 40), c('cold', 85, false, 'freezing early')
   ]), { lead: 'cold:freezing early', supports: ['precip:precip'] });
 
-  check('outdoor-window scan no longer stops after 5 PM',
-    /if\(maxFl>=99\|\|wet0>=0\|\|wMax>=25\)/.test(SRC), true);
+  const eveningNow=new Date('2026-10-01T22:00:00Z'); // 5 PM Central
+  const eveningHours=Array.from({length:4},(_,i)=>({
+    startTime:new Date(+eveningNow+i*3600000).toISOString(),endTime:new Date(+eveningNow+(i+1)*3600000).toISOString(),
+    temperature:72,windSpeed:'5 mph',relativeHumidity:{value:40},
+    probabilityOfPrecipitation:{value:i===0?80:0},isDaytime:true,shortForecast:i===0?'Rain':'Clear'
+  }));
+  check('outdoor-window scan still finds a dry evening window after 5 PM',
+    SUBJECT.bottomLineHourlyCandidates(SUBJECT.bottomLineHours(eveningHours),{now:eveningNow,aqi:35})
+      .some(c=>c.topic==='outdoors'&&c.headline.includes('6pm')),true);
   const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1); tomorrow.setHours(7, 0, 0, 0);
   const tomorrowEnd = new Date(tomorrow); tomorrowEnd.setHours(9);
   check('tomorrow outdoor window carries its day', SUBJECT.windowSpan(tomorrow, tomorrowEnd), '7am–9am tomorrow');
@@ -1751,6 +1759,41 @@ async function checkGridLoaderIsolation() {
   moved.move(); resolveOld({properties:{old:true}}); await oldRequest;
   check('old location grid response cannot paint a new town',moved.painted,[]);
   check('old location grid response cannot change new town state',moved.getState(),{status:'loading',properties:null,gusts:[]});
+}
+
+
+/* Advice must remain coherent when independently valid feeds describe conflicting conditions. */
+{
+  const now=new Date('2026-10-01T12:00:00Z');
+  const periods=Array.from({length:24},(_,i)=>({
+    startTime:new Date(+now+i*3600000).toISOString(),endTime:new Date(+now+(i+1)*3600000).toISOString(),
+    temperature:i<12?72:60,windSpeed:'5 mph',relativeHumidity:{value:40},
+    probabilityOfPrecipitation:{value:0},isDaytime:i>=1&&i<=12,shortForecast:'Clear'
+  }));
+  const hours=SUBJECT.bottomLineHours(periods);
+  for(const [aqi,action] of [[110,'Sensitive groups should reduce prolonged exertion.'],
+    [180,'Everyone should reduce prolonged outdoor exertion.'],
+    [250,'Avoid prolonged exertion; move activities indoors.'],
+    [325,'Avoid all outdoor physical activity.']]){
+    const candidates=SUBJECT.bottomLineHourlyCandidates(hours,{now,aqi});
+    const model=SUBJECT.buildBottomLine(candidates,null);
+    check('AQI '+aqi+' escalates the briefing guidance',model.lead.action,action);
+    check('AQI '+aqi+' cannot endorse outdoor plans or open windows',
+      candidates.some(c=>c.topic==='outdoors'||c.topic==='overnight'&&c.tone==='good'),false);
+  }
+  check('hazardous AQI still speaks with hourly data unavailable',
+    SUBJECT.bottomLineHourlyCandidates([],{now,aqi:325})[0].action,'Avoid all outdoor physical activity.');
+  const incomplete=SUBJECT.bottomLineHourlyCandidates(hours.filter((_,i)=>i!==6),{now,aqi:35});
+  check('an absent forecast hour prevents an all-day comfort claim',incomplete.some(c=>c.topic==='outdoors'),false);
+  check('an absent forecast hour makes the rain summary incomplete',
+    incomplete.find(c=>c.topic==='precip').headline,'Rain chance incomplete');
+  check('unverified alert or air checks cannot endorse outdoor comfort',
+    SUBJECT.bottomLineHourlyCandidates(hours,{now,aqi:35,allowComfort:false}).some(c=>c.tone==='good'),false);
+  const gauge=new Function(lift(/^function riverObservationState\(ob,now,maxAge\)\{[\s\S]*?^\}/m,'riverObservationState()')+';return riverObservationState;')();
+  check('gauge without a source timestamp remains unknown',gauge({},+now,7200000).state,'unknown');
+  check('stale gauge is not current',gauge({validTime:new Date(+now-3*3600000).toISOString()},+now,7200000).state,'stale');
+  check('future gauge timestamp is unverified',gauge({validTime:new Date(+now+3600000).toISOString()},+now,7200000).state,'unknown');
+  check('recent gauge is current',gauge({validTime:new Date(+now-600000).toISOString()},+now,7200000).state,'ready');
 }
 
 checkLiveFeedFailures().then(checkSpcThreatProducts).then(checkForecastRefreshFailure).then(checkGridLoaderIsolation).then(() => {

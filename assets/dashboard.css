@@ -1094,6 +1094,7 @@
   .maplock-pill{background:rgba(10,14,20,.85);border:1px solid var(--border);border-radius:var(--r-pill);
     padding:9px 16px;font-size:var(--fs-md);font-weight:600;color:#fff;box-shadow:var(--shadow)}
   .maplock-wrap.unlocked .maplock{display:none}
+  .maplock-wrap.map-unavailable .maplock,.maplock-wrap.map-unavailable .maplock-toggle{display:none}
   .maplock-toggle{position:absolute;top:8px;right:8px;z-index:1201;display:none;min-height:0;
     background:rgba(10,14,20,.85);border:1px solid var(--border);border-radius:var(--r-pill);
     padding:7px 13px;font-size:var(--fs-sm);font-weight:600;color:var(--text);cursor:pointer}
@@ -1639,3 +1640,9 @@
     .day .dt{gap:2px;font-size:var(--fs-xs)}
   }
   footer a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+
+/* Optional compact context keeps the primary weather and all hazard cards visible. */
+.context-toggle,#compactView{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:7px 10px;cursor:pointer}
+.context-toggle{margin:0 0 10px}
+.context-body[hidden]{display:none}
+#compactView[aria-pressed="true"]{outline:2px solid var(--muted)}
