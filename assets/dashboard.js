@@ -4081,6 +4081,11 @@ function ensureMapLibraries(){
     }));
   });
 }
+function removePartialMap(map){
+  // MapLibre may throw before creating its GL map; the Leaflet adapter's onRemove then throws
+  // too. Teardown must not prevent the fallback or leave a failed map eligible for reuse.
+  try{if(map) map.remove();}catch(e){}
+}
 function ensureMaps(){
   if(!mapsCanStart||rvMap&&(stnMap||!feedRequested("stations"))) return Promise.resolve();
   if(mapsInFlight) return mapsInFlight;
@@ -4088,11 +4093,17 @@ function ensureMaps(){
   mapsInFlight=ensureMapLibraries().then(function(){return loadMapStyle(theme);}).then(function(style){
     if(!rvMap){
       try{document.getElementById("radar").innerHTML="";initRadarMap(style);document.getElementById("radar").closest(".maplock-wrap").classList.remove("map-unavailable");}
-      catch(e){if(rvMap)rvMap.remove();rvMap=null;rvBase=null;baseLabels=null;mapFallback("radar");}
+      catch(e){
+        var failedRadar=rvMap;rvMap=null;rvBase=null;baseLabels=null;
+        removePartialMap(failedRadar);mapFallback("radar");
+      }
     }
     if(!stnMap&&feedRequested("stations")){
       try{document.getElementById("stnmap").innerHTML="";initStationMap(style);renderStationLayer();}
-      catch(e){if(stnMap)stnMap.remove();stnMap=null;stnBase=null;mapFallback("stnmap");}
+      catch(e){
+        var failedStation=stnMap;stnMap=null;stnBase=null;
+        removePartialMap(failedStation);mapFallback("stnmap");
+      }
     }
     if((effectiveLight()?"light":"dark")!==theme){updateRadarBase();updateStationBase();}
   }).catch(function(){
