@@ -55,6 +55,7 @@ import subprocess
 import sys
 import tempfile
 from urllib.parse import urlsplit
+from version_assets import update_versions
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INDEX = os.path.join(ROOT, "index.html")
@@ -532,6 +533,7 @@ def main():
     served_html = combined + (read(NOT_FOUND) if os.path.exists(NOT_FOUND) else "")
     styles = [(name, content) for name, _, content in assets if name.endswith(".css")]
     results = [
+        update_versions(),
         all(check_style_comments("<style>" + content + "</style>", name) for name, content in styles) if styles else check_style_comments(html),
         check_html_comments(html),
         check_inline_script_syntax(html),

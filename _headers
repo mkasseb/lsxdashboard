@@ -26,3 +26,7 @@
   Permissions-Policy: geolocation=(self), camera=(), microphone=(), payment=(), usb=()
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
+
+# Mutable asset paths must revalidate. Versioned URLs also bypass copies already fresh in browsers.
+/assets/*
+  Cache-Control: no-cache, max-age=0, must-revalidate

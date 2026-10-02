@@ -31,6 +31,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
@@ -45,6 +47,12 @@ jobs:
           WEATHER_CASE_FILTER: ${{ matrix.browser == 'chromium' && '.*' || 'bootstrap|print-only|fullscreen|individual context|risk explanations|hourly refresh preserves|missing hour' }}
         run: |
           NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" WEATHER_STRESS_REPORT="$RUNNER_TEMP/weather-scenarios.json" xvfb-run -a node tools/weather-stress-tests.js
+      - name: Verify upgrade with real browser HTTP cache
+        env:
+          WEATHER_BROWSER: ${{ matrix.browser }}
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" xvfb-run -a node tools/cache-upgrade-tests.js
       - uses: actions/upload-artifact@v4
         if: always()
         with:
