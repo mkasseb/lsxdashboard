@@ -45,6 +45,7 @@ All rows below are implemented with original IDs and controls retained. The old 
 
 ## Diagnosed regressions and fixes
 
+- Removed top/left travel animations on repacked context cards: targets must not travel between touch-down and click while another card loads or collapses.
 - The old `.grid` start alignment collapsed the newly flex-based lower container, causing narrow probability cells and moving controls. Explicit stretch alignment fixes it; focused overflow/disclosure tests pass.
 - Snapshot-key tests now seed/assert v20 because river presentation labels changed. No calculation changed.
 - Active navigation now accounts for the anchor scroll margin and side-by-side target ties, and updates after masonry/disclosure changes.

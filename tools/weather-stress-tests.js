@@ -958,7 +958,7 @@ async function main() {
         const toggle=page.locator('#'+id+' .context-toggle'),body=page.locator('#'+id+'Body');
         assert.equal(await toggle.getAttribute('aria-controls'),id+'Body');
         assert.equal(await toggle.getAttribute('aria-expanded'),'true');
-        await toggle.tap();assert(await body.isHidden());assert.equal(await toggle.getAttribute('aria-expanded'),'false');
+        await toggle.tap();assert(await body.isHidden(),id+' must collapse after a touch tap');assert.equal(await toggle.getAttribute('aria-expanded'),'false');
         await toggle.tap();assert(await body.isVisible());assert.equal(await toggle.getAttribute('aria-expanded'),'true');
       }
       await page.locator('#climateCard .context-toggle').tap();

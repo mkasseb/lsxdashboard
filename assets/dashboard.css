@@ -354,9 +354,10 @@
   .col-12{grid-column:span 12}.col-8{grid-column:span 8}.col-6{grid-column:span 6}
   .col-4{grid-column:span 4}.col-5{grid-column:span 5}.col-7{grid-column:span 7}.col-3{grid-column:span 3}
   .stack{display:flex;flex-direction:column;gap:16px;min-width:0}
-  /* JS-driven masonry: cards absolutely positioned by measured height → perfect packing, recomputed on load/resize */
+  /* Measured masonry repacks immediately: animating top/left can move a disclosure target
+     between touch-down and the synthesized click when another card finishes loading. */
   .masonry{position:relative}
-  .masonry>.card{position:absolute;top:0;left:0;margin:0;transition:top .2s ease,left .2s ease}
+  .masonry>.card{position:absolute;top:0;left:0;margin:0;transition:none}
   .masonry.mready{/* height set inline by JS */}
   /* Fallback before JS runs / if JS disabled: simple vertical flow so nothing overlaps */
   .masonry:not(.mready){display:flex;flex-direction:column;gap:16px}
