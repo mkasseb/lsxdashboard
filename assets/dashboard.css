@@ -1805,3 +1805,11 @@ body{transition:none}
 /* Preserve natural fills; the shared SVG contour gives pale artwork a crisp edge. */
 :root[data-theme="light"] .wxi,
 :root[data-theme="light"] .h24-ic{filter:url(#weatherIconOutline)}
+
+/* Official outlook sources: native links with independent keyboard/touch targets. */
+.source-link{gap:4px;color:var(--accent);text-decoration:underline;text-underline-offset:3px;min-height:44px;display:inline-flex;align-items:center}
+.source-link:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+a.cpc-item{display:block;text-decoration:none;min-width:0}
+a.cpc-item .k{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
+a.cpc-item:hover{border-color:var(--accent)}
+.hz-when:has(.source-link){flex-basis:94px;white-space:normal;padding-top:0}
