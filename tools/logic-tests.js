@@ -139,11 +139,11 @@ function check(name, actual, expected) {
   failed++;
 }
 
-/* Restored chart markup must carry its duration and details rather than a prior fixed view. */
-check('river display markup migration bumps the snapshot key',
-  /var SNAP_KEY="lsxSnap_v20"/.test(SRC), true);
-check('the previous v19 snapshot is explicitly discarded',
-  /"lsxSnap_v19"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
+/* Restored outlook fragments must include the new official source anchors. */
+check('official outlook link markup migration bumps the snapshot key',
+  /var SNAP_KEY="lsxSnap_v21"/.test(SRC), true);
+check('the previous v20 snapshot is explicitly discarded',
+  /"lsxSnap_v20"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
 const snapshotParts = new Function(lift(/^var FEEDS=\{[\s\S]*?^\};/m, 'FEEDS')+'\n'+
   lift(/^var SNAP_PARTS=.*$/m, 'SNAP_PARTS')+'; return SNAP_PARTS;')();
 check('saved HTML cannot restore stale current readings, risk or briefing',

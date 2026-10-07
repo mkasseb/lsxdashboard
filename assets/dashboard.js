@@ -65,6 +65,10 @@ function freshnessCheck(){
 }
 
 function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
+// Source links are native anchors, separate from disclosure buttons and risk explanations.
+function officialSourceLink(url,label,content,cls,descriptionId){
+  return '<a class="'+(cls||"source-link")+'" href="'+esc(url)+'" target="_blank" rel="noopener noreferrer" aria-label="'+esc(label)+' (opens in a new tab)"'+(descriptionId?' aria-describedby="'+esc(descriptionId)+'"':'')+'>'+content+'</a>';
+}
 /* One reference into the inline sprite at the top of <body>. Always aria-hidden: every icon in this
    page sits beside a text label that already says the same thing, so announcing it twice is noise. */
 function ic(name,cls){ return '<svg class="ic'+(cls?" "+cls:"")+'" aria-hidden="true"><use href="#i-'+name+'"/></svg>'; }
@@ -3734,8 +3738,9 @@ function renderTheCall(){
 // v17: saved fragments carry their original validated check times and Central Time labels.
 // v18: the feed registry owns cached fragments; river rows include persistent pin controls.
 // v19: time-scaled hourly gaps, dated climate comparisons and verified gauge timestamps.
-var SNAP_KEY="lsxSnap_v20", snapRestored=false;
-try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13","lsxSnap_v14","lsxSnap_v15","lsxSnap_v16","lsxSnap_v17","lsxSnap_v18","lsxSnap_v19"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
+// v21: CPC tiles and hazards periods now contain official source anchors.
+var SNAP_KEY="lsxSnap_v21", snapRestored=false;
+try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13","lsxSnap_v14","lsxSnap_v15","lsxSnap_v16","lsxSnap_v17","lsxSnap_v18","lsxSnap_v19","lsxSnap_v20"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
 var SNAP_PARTS=Object.keys(FEEDS).reduce(function(parts,k){return parts.concat((FEEDS[k].snapshot||[]).map(function(p){return Object.assign({feed:k},p);}));},[]);
 function saveSnapshot(){
   // Mid-transition the DOM still shows the OLD place while `current` is already the new one --

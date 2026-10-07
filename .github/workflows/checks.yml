@@ -65,6 +65,11 @@ jobs:
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: |
           NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" xvfb-run -a node tools/cache-upgrade-tests.js
+      - name: Verify official source destinations and keyboard/touch links
+        env:
+          WEATHER_BROWSER: ${{ matrix.browser }}
+        run: |
+          NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" xvfb-run -a node tools/source-link-tests.js
       - name: Verify redesign layout and controls
         env:
           WEATHER_BROWSER: ${{ matrix.browser }}

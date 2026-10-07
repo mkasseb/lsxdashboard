@@ -52,7 +52,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css"
   integrity="sha384-uTttxo/aOKbdE5RlD/SPzSDoDmNvGlUYPjONi2MN/b7c9HPSvW07OIuyP7uL6jxK" crossorigin="anonymous"
   media="print" onload="this.media='all'">
-<link rel="stylesheet" href="/assets/dashboard.css?v=4ed68ee20476ade5">
+<link rel="stylesheet" href="/assets/dashboard.css?v=0eeff455f380ccd0">
 </head>
 <body>
 <!-- First focusable thing on the page, and deliberately ahead of the sprite so it stays that way.
@@ -377,7 +377,7 @@
     </section>
 <section class="card" id="hazardsCard">
       <h2>Hazards Outlook
-        <a class="link" href="https://www.wpc.ncep.noaa.gov/threats/threats.php" target="_blank" rel="noopener" title="Weather Prediction Center — NOAA’s national precipitation and hazards guidance">WPC ↗</a>
+        <a class="link" href="https://www.wpc.ncep.noaa.gov/threats/threats.php" target="_blank" rel="noopener noreferrer" aria-label="WPC 3–7 days hazards outlook (opens in a new tab)" title="WPC days 3–7 hazards outlook">WPC 3–7 days ↗</a>
       </h2>
       <div id="hazards"><div class="loading">Loading hazards…</div></div>
       <div class="imgcap"><span><abbr title="Climate Prediction Center">CPC</abbr>/<abbr title="Weather Prediction Center">WPC</abbr> U.S. Hazards</span><span id="hazIssued">days 3–14</span></div>
@@ -400,9 +400,9 @@
       <h2>Drought Outlook
         <a class="link" href="https://www.drought.gov/" target="_blank" rel="noopener">drought.gov ↗</a>
       </h2>
-      <div class="dr-tier"><span class="dr-when">Now</span><span id="drNow"><span class="dr-load">…</span></span></div>
-      <div class="dr-tier"><span class="dr-when">Month ahead</span><span id="drMonth"><span class="dr-load">…</span></span></div>
-      <div class="dr-tier"><span class="dr-when">Season <span class="dr-sub">(3 mo)</span></span><span id="drSeason"><span class="dr-load">…</span></span></div>
+      <div class="dr-tier"><a class="dr-when source-link" href="https://droughtmonitor.unl.edu/CurrentMap.aspx" target="_blank" rel="noopener noreferrer" aria-label="Now — current U.S. Drought Monitor (opens in a new tab)">Now <span aria-hidden="true">↗</span></a><span id="drNow"><span class="dr-load">…</span></span></div>
+      <div class="dr-tier"><a class="dr-when source-link" href="https://www.cpc.ncep.noaa.gov/products/expert_assessment/mdo_summary.php" target="_blank" rel="noopener noreferrer" aria-label="Month ahead — CPC monthly drought outlook (opens in a new tab)">Month ahead <span aria-hidden="true">↗</span></a><span id="drMonth"><span class="dr-load">…</span></span></div>
+      <div class="dr-tier"><a class="dr-when source-link" href="https://www.cpc.ncep.noaa.gov/products/expert_assessment/sdo_summary.php" target="_blank" rel="noopener noreferrer" aria-label="Season (3 mo) — CPC seasonal drought outlook (opens in a new tab)">Season <span class="dr-sub">(3 mo)</span> <span aria-hidden="true">↗</span></a><span id="drSeason"><span class="dr-load">…</span></span></div>
       <div class="imgcap"><span><abbr title="U.S. Drought Monitor — the weekly national drought map">USDM</abbr> &middot; <abbr title="Climate Prediction Center">CPC</abbr> outlooks</span><span><abbr title="National Integrated Drought Information System">NIDIS</abbr> / drought.gov</span></div>
     </section>
 <section class="card" id="climateCard">
@@ -417,7 +417,7 @@
     </section>
 <section class="card" id="cpcCard">
       <h2>Week Ahead Leanings
-        <a class="link" href="https://www.cpc.ncep.noaa.gov/products/predictions/610day/" target="_blank" rel="noopener" title="Climate Prediction Center — NOAA’s 6–14 day and seasonal outlooks">CPC ↗</a>
+        <a class="link" href="https://www.cpc.ncep.noaa.gov/products/predictions/610day/" target="_blank" rel="noopener noreferrer" aria-label="CPC 6–10 day maps (opens in a new tab)" title="CPC 6–10 day temperature and precipitation outlooks">6–10 day maps ↗</a>
       </h2>
       <div id="cpc"><div class="loading">Loading outlooks…</div></div>
       <div class="imgcap"><span>Climate Prediction Center</span><span>6–14 days out</span></div>
@@ -459,9 +459,9 @@
 <script type="application/json" data-map-src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"
   integrity="sha384-tXYNKOHx4T02jMP7YYCtBxPIv1B5gaA5mcVPBzqMp6d7VzWzxJgI2aWF/nJLrQdS" crossorigin="anonymous"></script>
 <script src="/assets/weather-core.js?v=8184114e25bf92d3"></script>
-<script src="/assets/weather-feeds.js?v=54cca3240f6da5fd"></script>
+<script src="/assets/weather-feeds.js?v=94ff6db6d4945ad4"></script>
 <script src="/assets/forecast-view.js?v=dc9e8b257f6acc64"></script>
 <script src="/assets/dashboard-context.js?v=9e972fd51f4d5fd2"></script>
-<script src="/assets/dashboard.js?v=399f30be04e7b690"></script>
+<script src="/assets/dashboard.js?v=ef9295fda6ba3646"></script>
 </body>
 </html>

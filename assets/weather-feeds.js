@@ -919,12 +919,18 @@ function loadCpc(){
     var known=values.filter(Boolean).length;
     feedUpdate("cpc",known===4?"ready":known?"partial":"unavailable");
     function val(i){ return values[i]; }
-    el.innerHTML='<div class="cpc-grid">'
-      +'<div class="cpc-item"><div class="k">6\u201310 Day \u00b7 Temp</div>'+cpcPill("t",val(0))+'</div>'
-      +'<div class="cpc-item"><div class="k">6\u201310 Day \u00b7 Precip</div>'+cpcPill("p",val(1))+'</div>'
-      +'<div class="cpc-item"><div class="k">8\u201314 Day \u00b7 Temp</div>'+cpcPill("t",val(2))+'</div>'
-      +'<div class="cpc-item"><div class="k">8\u201314 Day \u00b7 Precip</div>'+cpcPill("p",val(3))+'</div>'
-      +'</div>';
+    // Each period page contains both temperature and precipitation maps with their legends.
+    el.innerHTML='<div class="cpc-grid">'+[
+      ["610day","6–10 Day","t","Temperature"],
+      ["610day","6–10 Day","p","Precipitation"],
+      ["814day","8–14 Day","t","Temperature"],
+      ["814day","8–14 Day","p","Precipitation"]
+    ].map(function(item,i){
+      return officialSourceLink("https://www.cpc.ncep.noaa.gov/products/predictions/"+item[0]+"/",
+        "CPC "+item[1]+" "+item[3]+" outlook",
+        '<div class="k">'+item[1]+' · '+item[3]+' <span aria-hidden="true">↗</span></div><span id="cpcValue'+i+'">'+cpcPill(item[2],val(i))+'</span>',
+        "cpc-item source-link","cpcValue"+i);
+    }).join("")+'</div>';
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
     feedUpdate("cpc","unavailable");
@@ -983,6 +989,8 @@ function loadHazards(){
     var known=all.filter(function(r){return r.status==="fulfilled";}).length;
     feedUpdate("hazards",known===6?"ready":known?"partial":"unavailable");
     function block(title,list,complete){
+      title=officialSourceLink(title==="Days 3–7"?"https://www.wpc.ncep.noaa.gov/threats/threats.php":"https://www.cpc.ncep.noaa.gov/products/predictions/threats/threats.php",
+        (title==="Days 3–7"?"WPC ":"CPC ")+title+" hazards outlook",esc(title)+' <span aria-hidden="true">↗</span>');
       if(!list.length&&!complete) return '<div class="hz-row"><span class="hz-when">'+title+'</span><span class="hz-none">Hazards data unavailable</span></div>';
       if(!list.length) return '<div class="hz-row hz-clear"><span class="hz-when">'+title+'</span><span class="hz-none">'+ic("check")+'No hazards flagged</span></div>';
       var notes=[];

@@ -268,6 +268,11 @@ during a severe event is the failure this project can neither detect nor control
 *not an official NWS product; during severe weather defer to official warnings and a NOAA Weather
 Radio* — applies to every copy, and forks are asked to keep it intact.
 
+## Official outlook sources
+
+CPC leanings, drought periods and hazards periods open matching official products in a new tab.
+See [the source inventory and interaction checks](docs/official-source-links.md).
+
 ## Redesign review
 
 The specification-driven visual refresh is tracked in [the feature parity checklist](docs/redesign-parity.md).
