@@ -5,6 +5,7 @@ const http=require('http'),fs=require('fs'),path=require('path'),cp=require('chi
 const playwright=require('playwright'),root=path.join(__dirname,'..');
 const legacy='f8976ef0d8101528cec520ff886bb278096f271c';
 const names=['dashboard.css','weather-core.js','weather-feeds.js','forecast-view.js','dashboard-context.js','dashboard.js'];
+const currentNames=[...names,'forecast-range.js'];
 const old=Object.fromEntries(names.map(name=>[name,cp.execFileSync('git',['show',legacy+':assets/'+name],{cwd:root})]));
 const vendors=[['leaflet/1.9.4/leaflet.min.js','leaflet/dist/leaflet.js'],['leaflet/1.9.4/leaflet.min.css','leaflet/dist/leaflet.css'],['maplibre-gl@5.24.0/dist/maplibre-gl.js','maplibre-gl/dist/maplibre-gl.js'],['maplibre-gl@5.24.0/dist/maplibre-gl.css','maplibre-gl/dist/maplibre-gl.css'],['@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js','@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js']];
 let priming=true,unversioned=false,requests=[],base;
@@ -22,7 +23,7 @@ const server=http.createServer((req,res)=>{
     res.setHeader('Cache-Control','public, max-age=0, must-revalidate');res.setHeader('Content-Type','text/html');res.end(controlled(html));return;
   }
   if(p.startsWith('/assets/')){
-    const name=path.basename(p);if(!names.includes(name)){res.writeHead(404).end();return;}
+    const name=path.basename(p);if(!(priming?names:currentNames).includes(name)){res.writeHead(404).end();return;}
     res.setHeader('Cache-Control',priming?'public, max-age=14400, must-revalidate':'no-cache, max-age=0, must-revalidate');
     res.setHeader('Content-Type',name.endsWith('.css')?'text/css':'application/javascript');
     res.end(controlled(priming?old[name].toString():fs.readFileSync(path.join(root,'assets',name),'utf8')));return;
@@ -57,17 +58,18 @@ const server=http.createServer((req,res)=>{
         assert(errors.some(e=>/addEventListener|compact/.test(e)),JSON.stringify({errors,requests,diagnostics:await page.locator('.map-diagnostics').count()}));
         assert.equal(await page.locator('.map-diagnostics').count(),0);
         assert.equal(await page.locator('#radar').innerHTML(),'');
-        assert.equal(requests.filter(p=>p.startsWith('/assets/')).length,0,'old assets reused without network');
+        assert.equal(requests.filter(p=>p.startsWith('/assets/')&&names.includes(path.basename(new URL(p,base).pathname))).length,0,'old assets reused without network');
+        assert.equal(requests.filter(p=>p==='/assets/forecast-range.js').length,1,'new optional asset is not in the legacy cache');
         console.log('PASS negative control: cached PR49 scripts + unversioned new HTML reproduce blank radar and missing diagnostics');
       }else{
         await page.waitForFunction(()=>typeof rvMap!=='undefined'&&rvMap&&radarFrames.length>1&&radarFrames.some(f=>f.layer._ok>0),{},{timeout:30000});
         assert.deepEqual(errors,[]);
-        for(const name of names)assert(requests.some(p=>new RegExp('^/assets/'+name.replaceAll('.','\\.')+'\\?v=[a-f0-9]{16}$').test(p)),name+' fetched at new version URL');
+        for(const name of currentNames)assert(requests.some(p=>new RegExp('^/assets/'+name.replaceAll('.','\\.')+'\\?v=[a-f0-9]{16}$').test(p)),name+' fetched at new version URL');
         assert.equal(await page.locator('.map-diagnostics').count(),1);
         assert.equal(await page.locator('#radar .leaflet-map-pane').count(),1);
         assert.equal(await page.locator('#radar .leaflet-control-zoom').count(),1);
         assert.equal(await page.locator('.context-toggle').count(),6);
-        console.log('PASS versioned upgrade: all six assets fetched, no handler crash, rendered radar tiles/controls and diagnostics');
+        console.log('PASS versioned upgrade: all seven assets fetched, no handler crash, rendered radar tiles/controls and diagnostics');
       }
     }finally{await context.close();}
   }}finally{await browser.close();server.close();}

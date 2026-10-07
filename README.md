@@ -205,6 +205,78 @@ location changes. Refresh, scheduling, reset markup and snapshot lists are gener
 the reasons are
 in [`DESIGN.md`](DESIGN.md#adding-a-card-adding-a-loader).
 
+## Optional NBM temperature-range prototype
+
+On the prototype branch, `/?nbm=1` adds a collapsed **Forecast range** context card.
+Normal visits have no NBM card or NBM fetch. NWS forecasts, headlines, warnings and
+risk decisions remain primary and receive no NBM values. The prototype has no automatic
+publication, deployment, scheduler, database or station fallback.
+
+Generate a local point file, then serve the repo as above:
+
+```bash
+python3 -m venv /tmp/nbm-venv
+/tmp/nbm-venv/bin/pip install eccodes==2.49.0
+# Replace this recorded cycle with a genuinely current published QMD cycle.
+/tmp/nbm-venv/bin/python tools/nbm-extract.py --run 2026100712 \
+  --lat 38.80 --lon -90.79 --output data/nbm-range.json
+```
+
+The generated file is ignored by Git. It is for exactly the requested point; changing
+locations shows missing data until a matching file is extracted. No recorded fixture is
+loaded by the dashboard. Missing files, invalid data and cycles older than 24 hours withhold
+values. Unpublished forecast-hour indexes yield partial coverage. The 24-hour threshold is
+a conservative prototype policy, not a claim about NOAA's delivery SLA. Source-cycle age
+never resets on fetch. Expired intervals are removed on the next scheduled refresh (15 minutes).
+
+The authentic replay in `tools/fixtures/weather/nbm-qmd-recorded.json` was retrieved on
+2026-10-07 from the 12Z QMD cycle. Each member includes its source URL, exact byte range,
+SHA-256, publication time, ETag, decoded cycle, native interval, kelvin/Fahrenheit values,
+GRIB template/statistic and grid identity. Six intervals required **38,305,158 downloaded
+GRIB bytes**, producing about 20 KB of point JSON. The nearest cell is 1.25 km from the
+default point. Percentiles are validated before rendering; they are never sorted to repair
+crossing values. Hourly temperature percentiles are never used to derive extrema.
+
+Actual QMD extrema use `TMP` plus GRIB2 template 4.10 and maximum/minimum statistical
+processing (2/3), in kelvin at 2 m. The verified windows are **18 hours**, not local calendar
+days: for example the October 8 maximum spans Oct 8 07:00 CDT to Oct 9 01:00 CDT; the
+following minimum spans Oct 8 19:00 CDT to Oct 9 13:00 CDT. The card shows these endpoints
+explicitly, using `America/Chicago` independently at each endpoint across DST. P10/P50/P90
+must share one run, cell, interval, statistic and object version. P50 is a model median.
+
+Normal-TLS access checked in the refreshed environment: the
+[S3 bucket](https://noaa-nbm-grib2-pds.s3.amazonaws.com/),
+[NOMADS directory](https://nomads.ncep.noaa.gov/pub/data/nccf/com/blend/prod/) and
+[NBM documentation](https://blend.mdl.nws.noaa.gov/nbm-documentation) returned HTTP 200.
+NOMADS required HTTP/1.1 because its HTTP/2 response had an invalid padded Content-Length.
+The [VLab textcard documentation](https://vlab.noaa.gov/web/mdl/nbm-textcard-v5.0) returned
+HTTP 403 after a successful TLS connection. No restrictions or TLS verification were changed.
+Station fallback is consequently out of scope. Core was available through 22Z while the
+latest observed QMD cycle was 12Z; selected QMD files were published around 19:18–19:25 UTC.
+Neither core's cycle nor an S3 upload timestamp substitutes for the QMD source cycle.
+
+**Before routine use:** agree on a scheduled extraction environment with ecCodes, publication
+discovery/retries, atomic JSON storage and a location-serving strategy. Fetching these messages
+once per cycle and sharing the decoded grid would be more efficient than downloading 38 MB
+per visitor or point. Full-CWA support needs measured grid-processing memory and coverage work;
+this prototype only supports one exact point at a time. Costs depend on cycle frequency,
+retention, compute runtime and serving traffic; no paid services or infrastructure are created
+or committed here. Direct browser GRIB decoding is not implemented.
+
+Offline checks and captured-data browser replay:
+
+```bash
+node tools/nbm-tests.js
+python3 tools/nbm-extract-tests.py
+NODE_PATH=/path/to/playwright/node_modules CHROMIUM_PATH=/usr/bin/chromium \
+  NBM_ARTIFACTS=/tmp/nbm-visual node tools/nbm-browser-tests.js
+```
+
+Tests distinguish authentic recorded values from deliberate invalid-data mutations. The browser
+suite covers collapsed/default-disabled states, narrow/desktop layouts, both themes, non-Central
+browser timezone, unavailable/stale/location-missing data, refresh focus and location races.
+Existing dashboard checks remain required.
+
 ## Known gaps
 
 - The satellite follows a *scrub* but does not *animate*. A real satellite loop needs a preloaded
