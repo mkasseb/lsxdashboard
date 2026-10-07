@@ -28,3 +28,19 @@ assert.match(local('2026-11-01T06:00:00Z'),/Nov 1, 1:00 AM CDT/);
 assert.match(local('2026-11-01T07:00:00Z'),/Nov 1, 1:00 AM CST/);
 assert.match(local('2026-10-09T06:00:00Z'),/Oct 9, 1:00 AM CDT/);
 console.log('PASS NBM authentic replay, provenance/units/order rejection, age, missing/partial, DST endpoints');
+const region=JSON.parse(require('node:zlib').gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-regional-recorded.json.gz'))));
+const at=Date.parse(region.retrievedAt);
+for(const point of [{lat:38.8,lon:-90.79},{lat:38.63,lon:-90.2},{lat:38.52,lon:-89.98},{lat:38.81,lon:-89.95},{lat:38.56,lon:-91.01},
+ {lat:38.2,lon:-91.1},{lat:39.2,lon:-89.5},{lat:38.2,lon:-89.5},{lat:39.2,lon:-91.1}]){
+ const result=validate(region,point,at);assert.equal(result.status,'ready');assert(result.cell.distance<=3);
+}
+const match=validate(region,point,at);
+assert.equal(match.cell.index,data.cell.index);
+for(let i=0;i<6;i++)for(const key of ['p10','p50','p90'])assert(Math.abs(match.periods[i][key]-data.periods[i][key])<1e-5,'Regional extraction matches independent original point capture');
+assert.equal(validate(region,{lat:40,lon:-90},at).status,'missing');
+assert.equal(validate(region,point,Date.parse(region.run)+25*H).status,'stale');
+for(const mutate of [d=>d.coverage.maxDistanceKm=99,d=>d.cells[0][1]=0,d=>d.cells.push(d.cells[0]),
+ d=>d.periods[0].members[0].gridHash='different',d=>d.periods[0].members[0].units='degF',d=>d.periods[0].kelvin=[]]){
+ const d=structuredClone(region);mutate(d);assert.equal(validate(d,point,at).status,'unavailable');
+}
+console.log('PASS authentic regional parity, towns/boundaries, unsupported geography, stale and malformed coverage');

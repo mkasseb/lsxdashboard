@@ -5,8 +5,44 @@ var NbmRange=(function(){
   function finite(v){return typeof v==='number'&&Number.isFinite(v);}
   function time(s){return typeof s==='string'?Date.parse(s):NaN;}
   function same(a,b){return a&&b&&['index','lat','lon','gridHash'].every(function(k){return a[k]===b[k];});}
+  function distance(a,b){
+    var r=Math.PI/180,x=(b.lat-a.lat)*r,y=(b.lon-a.lon)*r;
+    var h=Math.sin(x/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(y/2)**2;
+    return 6371*2*Math.asin(Math.sqrt(Math.min(1,h)));
+  }
+  function regionalPoint(d,point){
+    var c=d.coverage;
+    if(d.units!=='K'||!c||c.south!==38.2||c.north!==39.2||c.west!==-91.1||c.east!==-89.5||c.maxDistanceKm!==3||
+       !Array.isArray(d.cells)||d.cells.length<100||d.cells.length>5000||!Array.isArray(d.periods)||d.periods.length!==6||
+       typeof d.gridHash!=='string'||!/^[a-f0-9]{32}$/.test(d.gridHash)||!finite(point.lat)||!finite(point.lon))throw new Error('Invalid regional coverage');
+    if(point.lat<c.south||point.lat>c.north||point.lon<c.west||point.lon>c.east)return null;
+    var chosen=-1,km=Infinity,seen={};
+    d.cells.forEach(function(cell,i){
+      if(!Array.isArray(cell)||cell.length!==3||!Number.isInteger(cell[0])||cell[0]<0||seen[cell[0]]||
+         !finite(cell[1])||!finite(cell[2])||cell[1]<c.south-.05||cell[1]>c.north+.05||cell[2]<c.west-.05||cell[2]>c.east+.05)throw new Error('Invalid grid cell');
+      seen[cell[0]]=true;
+      var k=distance(point,{lat:cell[1],lon:cell[2]});if(k<km){km=k;chosen=i;}
+    });
+    if(km>c.maxDistanceKm)return null;
+    var cell={index:d.cells[chosen][0],lat:d.cells[chosen][1],lon:d.cells[chosen][2],distance:km,gridHash:d.gridHash};
+    var periods=d.periods.map(function(p){
+      if(!Array.isArray(p.kelvin)||p.kelvin.length!==d.cells.length||!Array.isArray(p.kelvin[chosen])||p.kelvin[chosen].length!==3||
+         !Array.isArray(p.members)||p.members.length!==3)throw new Error('Missing native interval values');
+      var values=p.kelvin[chosen],f=values.map(function(k){if(!finite(k))throw new Error('Invalid Kelvin');return (k-273.15)*9/5+32;});
+      var members=p.members.map(function(m,i){
+        if(m.gridHash!==d.gridHash||m.units!=='K')throw new Error('Mixed regional grid or units');
+        return Object.assign({},m,{cell:cell,kelvin:values[i],fahrenheit:f[i]});
+      });
+      return Object.assign({},p,{p10:f[0],p50:f[1],p90:f[2],members:members});
+    });
+    return Object.assign({},d,{schema:1,units:'degF',requestedPoint:point,cell:cell,periods:periods});
+  }
   function validate(d,point,now){
     function bad(){return {status:'unavailable',reason:'Range data failed validation.'};}
+    if(d&&d.schema===2){
+      try{d=regionalPoint(d,point);}catch(e){return bad();}
+      if(!d)return {status:'missing',reason:'Outside the supported St. Louis metro range coverage (38.2–39.2°N, 91.1–89.5°W), or no grid cell within 3 km.'};
+    }
     if(!d||d.schema!==1||d.source!=='NOAA NBM QMD GRIB2'||d.units!=='degF'||d.timezone!=='America/Chicago'||
        !d.requestedPoint||!finite(d.requestedPoint.lat)||!finite(d.requestedPoint.lon))return bad();
     if(Math.abs(d.requestedPoint.lat-point.lat)>0.000001||Math.abs(d.requestedPoint.lon-point.lon)>0.000001)
@@ -59,7 +95,7 @@ var NbmRange=(function(){
       [p.p10,p.p50,p.p90].forEach(function(v){add('td',Math.round(v)+'°',row);});
     });
     add('p','NOAA NBM QMD · nearest GRIB cell '+result.cell.lat.toFixed(3)+', '+result.cell.lon.toFixed(3)+' · '+result.cell.distance.toFixed(2)+' km from the requested point. One run, cell and native interval per percentile group.');
-    add('p','Local prototype: extracted file updates only when the extraction command runs. A successful refresh does not renew the model cycle age. Values are withheld after 24 hours (prototype freshness limit).');
+    add('p','Prototype: model age follows the QMD cycle, not the page refresh. Values are withheld after 24 hours. Regional data covers only the documented St. Louis metro area; recurring publication is not yet enabled.');
   }
   function load(){
     var fresh=locGuard(),point={lat:current.lat,lon:current.lon};

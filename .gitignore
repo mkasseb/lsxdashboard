@@ -3,3 +3,6 @@
 
 __pycache__/
 /data/nbm-range.json
+/data/nbm-status.json
+/data/history/
+/data/.refresh.lock

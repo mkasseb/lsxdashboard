@@ -24,6 +24,7 @@ jobs:
       - run: node tools/seasonal-tests.js
       - run: node tools/nbm-tests.js
       - run: python3 tools/nbm-extract-tests.py
+      - run: python3 tools/nbm-refresh-tests.py
 
   browser:
     strategy:

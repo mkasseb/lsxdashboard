@@ -17,6 +17,10 @@ CENTRAL = ZoneInfo("America/Chicago")
 ROW = re.compile(r"^\d+:(\d+):d=(\d{10}):(TMP|TMAX|TMIN):2 m above ground:(\d+)-(\d+) hour (max|min) fcst:(10|50|90)% level$")
 
 
+class IncompletePercentiles(ValueError):
+    """A well-formed index group may still be in publication."""
+
+
 def iso(dt):
     return dt.isoformat().replace("+00:00", "Z")
 
@@ -45,45 +49,54 @@ def select_rows(text, run, hour):
             raise ValueError("No upper byte boundary")
         found.append(dict(offset=int(offset), stop=int(lines[i+1].split(":")[1])-1,
                           start=int(start), end=int(end), kind=kind, percentile=int(percentile)))
+    if found and len(found) < 3 and len({x['percentile'] for x in found}) == len(found) and len({(x['start'], x['end'], x['kind']) for x in found}) == 1:
+        raise IncompletePercentiles('Percentile index group not complete')
     if found and (len(found) != 3 or sorted(x["percentile"] for x in found) != [10, 50, 90]
                   or len({(x["start"], x["end"], x["kind"]) for x in found}) != 1):
         raise ValueError("Incomplete or mixed percentile group")
     return found
 
 
+def metadata(g, row, run_time):
+    """Validate native GRIB metadata independently of point/region extraction."""
+    import eccodes as e
+    get = lambda k: e.codes_get(g, k)
+    checks = {"edition": 2, "centre": "kwbc", "productDefinitionTemplateNumber": 10,
+              "discipline": 0, "parameterCategory": 0, "units": "K",
+              "typeOfLevel": "heightAboveGround", "level": 2, "stepUnits": 1,
+              "percentileValue": row["percentile"], "numberOfTimeRange": 1,
+              "typeOfStatisticalProcessing": 2 if row["kind"] == "max" else 3,
+              "startStep": row["start"], "endStep": row["end"], "lengthOfTimeRange": 18,
+              "dataDate": int(run_time.strftime("%Y%m%d")), "dataTime": run_time.hour*100}
+    for key, expected in checks.items():
+        if get(key) != expected:
+            raise ValueError(f"GRIB {key} differs from expected {expected}: {get(key)}")
+    if get("parameterNumber") not in (0, 4 if row["kind"] == "max" else 5):
+        raise ValueError("Not a temperature extrema parameter")
+    end = datetime(*(int(get(k)) for k in ["yearOfEndOfOverallTimeInterval", "monthOfEndOfOverallTimeInterval",
+                  "dayOfEndOfOverallTimeInterval", "hourOfEndOfOverallTimeInterval",
+                  "minuteOfEndOfOverallTimeInterval", "secondOfEndOfOverallTimeInterval"]), tzinfo=UTC)
+    if end != run_time + timedelta(hours=row["end"]):
+        raise ValueError("GRIB interval end disagrees with forecast step")
+    start = end - timedelta(hours=18)
+    return {"run": iso(run_time), "kind": "TMAX" if row["kind"] == "max" else "TMIN",
+            "start": iso(start), "end": iso(end), "localStart": start.astimezone(CENTRAL).isoformat(),
+            "localEnd": end.astimezone(CENTRAL).isoformat(), "percentile": row["percentile"],
+            "template": 10, "statistic": checks["typeOfStatisticalProcessing"]}
+
+
 def decode(data, row, run_time, lat, lon):
     import eccodes as e
     g = e.codes_new_from_message(data)
     try:
-        get = lambda k: e.codes_get(g, k)
-        checks = {"edition": 2, "centre": "kwbc", "productDefinitionTemplateNumber": 10,
-                  "discipline": 0, "parameterCategory": 0, "units": "K",
-                  "typeOfLevel": "heightAboveGround", "level": 2, "stepUnits": 1,
-                  "percentileValue": row["percentile"], "numberOfTimeRange": 1,
-                  "typeOfStatisticalProcessing": 2 if row["kind"] == "max" else 3,
-                  "startStep": row["start"], "endStep": row["end"], "lengthOfTimeRange": 18,
-                  "dataDate": int(run_time.strftime("%Y%m%d")), "dataTime": run_time.hour*100}
-        for key, expected in checks.items():
-            if get(key) != expected:
-                raise ValueError(f"GRIB {key} differs from expected {expected}: {get(key)}")
-        if get("parameterNumber") not in (0, 4 if row["kind"] == "max" else 5):
-            raise ValueError("Not a temperature extrema parameter")
-        end = datetime(*(int(get(k)) for k in ["yearOfEndOfOverallTimeInterval", "monthOfEndOfOverallTimeInterval",
-                      "dayOfEndOfOverallTimeInterval", "hourOfEndOfOverallTimeInterval",
-                      "minuteOfEndOfOverallTimeInterval", "secondOfEndOfOverallTimeInterval"]), tzinfo=UTC)
-        if end != run_time + timedelta(hours=row["end"]):
-            raise ValueError("GRIB interval end disagrees with forecast step")
-        start = end - timedelta(hours=18)
+        result = metadata(g, row, run_time)
         cell = dict(e.codes_grib_find_nearest(g, lat, lon, npoints=1)[0])
         k = float(cell.pop("value"))
         if not math.isfinite(k) or not 180 <= k <= 340 or cell["distance"] > 5:
             raise ValueError("Missing/out-of-range temperature or distant cell")
         cell["lon"] = (cell["lon"]+180) % 360 - 180
-        cell["gridHash"] = get("md5Section3")
-        return {"run": iso(run_time), "kind": "TMAX" if row["kind"] == "max" else "TMIN", "start": iso(start), "end": iso(end),
-                "localStart": start.astimezone(CENTRAL).isoformat(), "localEnd": end.astimezone(CENTRAL).isoformat(),
-                "cell": cell, "kelvin": k, "fahrenheit": (k-273.15)*9/5+32,
-                "percentile": row["percentile"], "template": 10, "statistic": checks["typeOfStatisticalProcessing"]}
+        cell["gridHash"] = e.codes_get(g, "md5Section3")
+        return result | {"cell": cell, "kelvin": k, "fahrenheit": (k-273.15)*9/5+32}
     finally:
         e.codes_release(g)
 

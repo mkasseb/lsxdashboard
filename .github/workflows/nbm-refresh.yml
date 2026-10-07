@@ -1,0 +1,44 @@
+name: NBM refresh rehearsal
+
+# Deliberately no active schedule or deployment.
+on:
+  workflow_dispatch:
+  # After review, proposed cadence (leave disabled until hosting is approved):
+  # schedule:
+  #   - cron: '17 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nbm-refresh-rehearsal
+  cancel-in-progress: false
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install decoder
+        run: python -m pip install -r tools/nbm-requirements.txt
+      - name: Extract latest complete regional QMD cycle
+        run: python tools/nbm-refresh.py --output-dir "$RUNNER_TEMP/nbm-data"
+      - name: Report extraction and resource use
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/nbm-data/nbm-status.json" ]; then
+            python -m json.tool "$RUNNER_TEMP/nbm-data/nbm-status.json" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Extraction did not produce a status file; inspect the failed step.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nbm-regional-rehearsal
+          path: ${{ runner.temp }}/nbm-data
+          retention-days: 3
+          if-no-files-found: error

@@ -1,0 +1,117 @@
+{
+  "source": "authentic regional capture; offline matching analysis",
+  "run": "2026-10-07T12:00:00Z",
+  "points": [
+    {
+      "name": "Lake St. Louis",
+      "point": {
+        "lat": 38.8,
+        "lon": -90.79
+      },
+      "cell": {
+        "index": 1680456,
+        "lat": 38.78902018113442,
+        "lon": -90.79297845469938,
+        "distance": 1.2478891344845109,
+        "gridHash": "363872721a6b7acc03a315fd212b617d"
+      }
+    },
+    {
+      "name": "St. Louis",
+      "point": {
+        "lat": 38.63,
+        "lon": -90.2
+      },
+      "cell": {
+        "index": 1666407,
+        "lat": 38.640671917770575,
+        "lon": -90.20251471331574,
+        "distance": 1.2065978121364398,
+        "gridHash": "363872721a6b7acc03a315fd212b617d"
+      }
+    },
+    {
+      "name": "Belleville",
+      "point": {
+        "lat": 38.52,
+        "lon": -89.98
+      },
+      "cell": {
+        "index": 1654690,
+        "lat": 38.5234495501586,
+        "lon": -89.98086283870629,
+        "distance": 0.39084824555943737,
+        "gridHash": "363872721a6b7acc03a315fd212b617d"
+      }
+    },
+    {
+      "name": "Edwardsville",
+      "point": {
+        "lat": 38.81,
+        "lon": -89.95
+      },
+      "cell": {
+        "index": 1685176,
+        "lat": 38.810587962715516,
+        "lon": -89.93877541339685,
+        "distance": 0.974759485009861,
+        "gridHash": "363872721a6b7acc03a315fd212b617d"
+      }
+    },
+    {
+      "name": "Washington",
+      "point": {
+        "lat": 38.56,
+        "lon": -91.01
+      },
+      "cell": {
+        "index": 1654654,
+        "lat": 38.550000622128984,
+        "lon": -91.00106888831806,
+        "distance": 1.356244913137831,
+        "gridHash": "363872721a6b7acc03a315fd212b617d"
+      }
+    },
+    {
+      "name": "Arnold",
+      "point": {
+        "lat": 38.43,
+        "lon": -90.38
+      },
+      "cell": {
+        "index": 1642951,
+        "lat": 38.42362840626596,
+        "lon": -90.38237618443054,
+        "distance": 0.7381067248296785,
+        "gridHash": "363872721a6b7acc03a315fd212b617d"
+      }
+    },
+    {
+      "name": "Alton",
+      "point": {
+        "lat": 38.89,
+        "lon": -90.18
+      },
+      "cell": {
+        "index": 1692202,
+        "lat": 38.88424240148083,
+        "lon": -90.19144356717885,
+        "distance": 1.1793655387801387,
+        "gridHash": "363872721a6b7acc03a315fd212b617d"
+      }
+    }
+  ],
+  "coverageSweep": {
+    "points": 2665,
+    "maxDistanceKm": 1.7102779554265575
+  },
+  "independentGribCheck": {
+    "method": "ecCodes find_nearest on previously downloaded authentic GRIB, compared to regional array selection",
+    "sha256": "2b62ce0d5d6f21f985d3c148f6e8c25264f67fc15167a47302e2d529cdcb84b9",
+    "percentile": 50,
+    "kind": "TMAX",
+    "start": "2026-10-08T12:00:00Z",
+    "end": "2026-10-09T06:00:00Z",
+    "matchingPoints": 7
+  }
+}

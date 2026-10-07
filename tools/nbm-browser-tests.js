@@ -5,6 +5,7 @@ const {chromium}=require('playwright');
 const {open,config,setBrowser}=require('./weather-stress-tests');
 const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-qmd-recorded.json')));
 const now=Date.parse(fixture.retrievedAt);
+const regional=JSON.parse(require('node:zlib').gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-regional-recorded.json.gz'))));
 async function main(){
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});setBrowser(browser);
  try{
@@ -23,6 +24,14 @@ async function main(){
     await p.evaluate(()=>loadNbmRange());assert(await p.locator('#nbmRangeCard details').evaluate(e=>e.open));
     assert.equal(await p.evaluate(()=>document.activeElement.tagName),'SUMMARY');
     assert.deepEqual(await p.evaluate(()=>({days:JSON.stringify(smart.days),call:document.getElementById('callCard').innerText,daily:document.getElementById('daily').innerText})),before);
+    await p.clock.setFixedTime(new Date(regional.retrievedAt));
+    await p.route('**/data/nbm-range.json',route=>route.fulfill({json:regional}));
+    await p.evaluate(()=>loadNbmRange());assert.equal(await p.locator('.nbm-table tbody tr').count(),6);
+    await p.evaluate(()=>{current={...current,lat:38.52,lon:-89.98};});await p.evaluate(()=>loadNbmRange());
+    assert.equal(await p.locator('.nbm-table tbody tr').count(),6);
+    await p.evaluate(()=>{current={...current,lat:40};});await p.evaluate(()=>loadNbmRange());
+    assert.match(await p.locator('#nbmRange').innerText(),/Outside the supported St. Louis/);
+    await p.evaluate(()=>{current={...current,lat:38.8,lon:-90.79};});await p.evaluate(()=>loadNbmRange());
     for(const theme of ['dark','light']){
      await p.evaluate(t=>{applyTheme(t);layoutMasonry();},theme);await p.clock.runFor(500);
      assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
