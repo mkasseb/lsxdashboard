@@ -30,3 +30,7 @@
 # Mutable asset paths must revalidate. Versioned URLs also bypass copies already fresh in browsers.
 /assets/*
   Cache-Control: no-cache, max-age=0, must-revalidate
+
+# Generated NBM data is mutable; enable serving only after the publication review.
+/data/nbm-range.json
+  Cache-Control: no-cache, max-age=0, must-revalidate

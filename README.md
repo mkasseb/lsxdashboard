@@ -271,7 +271,14 @@ Local writes use a flushed temporary file and atomic replacement, with a writer 
 of cycle rollback. A failed extraction leaves previous data bytes and retrieval/source timestamps
 unchanged and emits `nbm-status.json` with a nonzero process/job result. Status includes fallback
 notes, bytes, requests, elapsed time and peak RSS. Two distinct cycle snapshots are retained under
-`history/`; GRIB downloads are not stored. Runtime JSON, status, lock and history are Git-ignored.
+`history/`; GRIB downloads are not stored. Runtime JSON, receipt, status, lock and history are Git-ignored.
+
+An unchanged-source gate reuses retained output only when its validation receipt matches the bytes,
+validator version and cycle, the current index ranges match, and six one-byte probes confirm unchanged
+source ETags. A missing receipt or source revision requires extraction. An unchanged result reports
+`changed:false` without rewriting data, receipt, history or retrieval time. `nbm-status.json` still
+records the check; a future publisher must gate on `changed`, not commit status timestamps every hour.
+The receipt is local integrity evidence, not a signature or a replacement for source validation.
 
 **Persistence boundary:** the manual workflow uses a fresh temporary directory each run. Its history
 is not cross-run persistence and its artifacts are not a public serving endpoint. Last-good retention
@@ -294,27 +301,59 @@ of the authentic grid found complete supported coverage, with maximum nearest-ce
 Bounds per invocation: 100 HTTP requests, 150 MB response budget, a 10-minute work budget checked
 between requests, 20-second network timeouts, and a 15-minute workflow timeout. These fail closed
 rather than widening the region or dropping checks. Bounded retries may repeat a partially downloaded
-cycle, but the extractor never repeats a full download for each location. No same-cycle reuse across
-fresh workflow runners is implemented yet.
+cycle, but the extractor never repeats a full download for each location. Cross-run reuse requires
+supplying the previously validated JSON and receipt from persistent storage or repository checkout.
 
-At the measured rate, hourly extraction would download about **0.92 GB/day / 27.7 GB per 30 days**,
-with roughly **661 extraction minutes per 30 days**, before setup and retries. These are scenarios,
-not an enabled schedule or a dollar quote. Artifacts include current plus history copies; with the
+The retained-data gate was tested against the original authentic capture without repeating extraction:
+**174,884 bytes**, **30 requests**, **22.767 seconds**, **23.75 MiB RSS**, `changed:false` and identical
+output bytes. Hourly checks therefore do not require hourly GRIB extraction or deployment. Using the
+typical four QMD cycles/day as a planning scenario gives about 120 extractions and 600 unchanged checks
+per 30 days: approximately **4.72 GB downloaded and 338 minutes** of measured work, before startup,
+installation, source revisions and retries. Publication timing and cycle availability are discovered,
+not assumed. A fresh-run rehearsal without retained data would still re-extract each time.
+
+These are scenarios, not an enabled schedule or a dollar quote. Artifacts include current plus history copies; with the
 fresh-run rehearsal and three-day retention, 72 hourly artifacts would hold roughly 73 MB of raw
 JSON before archive compression, plus small status files. Existing repository artifacts share quotas.
 
 This repository is public and uses standard Ubuntu runners, which GitHub currently documents as
 [free runner usage](https://docs.github.com/en/billing/concepts/product-billing/github-actions).
 Storage remains plan-dependent; no account billing entitlement was assumed. Cloudflare Pages Free
-currently allows [500 builds/month](https://developers.cloudflare.com/pages/platform/limits/), so
-hourly Git commits/redeploys (about 720/month) are not the recommended publication design.
+currently allows [500 builds/month](https://developers.cloudflare.com/pages/platform/limits/).
+Publishing only newly validated cycles at four/day would use about **120 builds/month**, leaving
+roughly 380 for ordinary app builds, previews, revisions and other usage within that quota. Actual
+account usage/plan must be checked. Do not equate 720 hourly checks with 720 site builds.
 
-**Decision before enabling:** approve the metro boundary, hourly check cadence and 24-hour age
-limit, then choose an existing authorized static/object-store destination for atomic data updates
-without rebuilding the whole dashboard every hour. That destination needs a defined URL, cache
-policy, durable last-good retention, minimal write authorization and a verified account quota/cost
-budget. None has been provisioned; no credentials or access grants have been created. If independent
-object updates require a new service or credential, that remains a separate approval/setup step.
+**Simplest infrastructure option:** keep the existing Git-connected Pages deployment and publish
+data-only commits only when `changed:true`. A future job would start with the last committed dataset
+and receipt, retain them on failure, validate a complete replacement, then atomically commit only the
+approved data paths against the current branch head. No-op checks must produce no commit or build;
+failed deployment must leave the prior Pages version serving. The existing same-origin data URL and
+new revalidation header avoid CORS changes. This needs no new storage product, but it is not enabled.
+
+**Actual repository constraint:** `main` is protected and the rehearsal grants only `contents: read`.
+Detailed protection/default-token settings were inaccessible to the current integration (403), so
+an unattended writer cannot be assumed permitted. Enabling requires approval of narrowly scoped
+repository writes and a data-update path that satisfies existing branch protections, not a bypass.
+If each data update requires human PR approval, four approvals/day is a real operational tradeoff.
+Do not create a PAT/App token or relax protection just to make the design work.
+
+Automated repository updates add commit noise and long-term Git history; deleting old working-tree
+snapshots does not prune that history. Concurrent app changes require conflict-safe retry rather than
+force-push. GitHub notes that ordinary pushes made with
+[`GITHUB_TOKEN` do not start another Actions run](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow),
+so required validation must run in the publisher itself. Pages documents
+[deployments on branch pushes](https://developers.cloudflare.com/pages/configuration/git-integration/github-integration/),
+but the eventual approved automation identity must be verified in a non-production test before
+assuming it triggers this specific installation. Other automation identities may also trigger the
+ordinary app CI matrix. No automation identity or publishing permission was added here.
+
+**Decision before enabling:** approve geography/cadence/age policy, verify actual build headroom,
+and choose whether protected-branch-compatible data commits are acceptable. If they are, this is the
+recommended first option using existing hosting. If unattended repository writes are unacceptable,
+an independent object-store/static data destination avoids app commits/builds but adds storage,
+write credentials, retention and serving configuration to approve. No new destination, credentials,
+access grant, active recurring job or remote publisher has been provisioned.
 
 Normal-TLS access was verified for the [S3 source](https://noaa-nbm-grib2-pds.s3.amazonaws.com/),
 [NOMADS](https://nomads.ncep.noaa.gov/pub/data/nccf/com/blend/prod/) (HTTP/1.1; malformed HTTP/2 header)

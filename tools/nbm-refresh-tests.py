@@ -3,8 +3,10 @@
 from datetime import datetime, timezone
 import importlib.util
 import json
+import gzip
 from pathlib import Path
 import tempfile
+import time
 import unittest
 from unittest.mock import patch, Mock
 import urllib.error
@@ -15,6 +17,62 @@ spec.loader.exec_module(r)
 
 
 class RefreshTests(unittest.TestCase):
+    def retained_setup(self, directory):
+        data = json.loads(gzip.decompress((Path(__file__).parent/'fixtures/weather/nbm-regional-recorded.json.gz').read_bytes()))
+        r.publish_local(directory, data)
+        planned = [(p['members'][0]['url'], [dict(offset=int(m['byteRange'].split('-')[0]),
+                   stop=int(m['byteRange'].split('-')[1]), percentile=m['percentile']) for m in p['members']]) for p in data['periods']]
+        client = Mock()
+        client.get.side_effect = [(b'G', 206, {'content-range': 'bytes 0-0/1000', 'etag': p['members'][0]['etag']}) for p in data['periods']]
+        return data, planned, client
+
+    def test_unchanged_gate_preserves_validated_bytes_and_age(self):
+        with tempfile.TemporaryDirectory() as directory:
+            p = Path(directory)
+            data, planned, client = self.retained_setup(p)
+            before = (p/'nbm-range.json').read_bytes()
+            self.assertEqual(r.retained_unchanged(client, p, '2026100712', planned), data)
+            self.assertEqual(client.get.call_count, 6)
+            self.assertEqual((p/'nbm-range.json').read_bytes(), before)
+            self.assertTrue(all(call.args[1] == {'Range': 'bytes=0-0'} for call in client.get.call_args_list))
+
+    def test_source_revision_requires_reextraction(self):
+        with tempfile.TemporaryDirectory() as directory:
+            p = Path(directory)
+            _, planned, client = self.retained_setup(p)
+            client.get.side_effect = [(b'G', 206, {'content-range': 'bytes 0-0/1000', 'etag': 'new version'})]
+            self.assertIsNone(r.retained_unchanged(client, p, '2026100712', planned))
+
+    def test_unchanged_refresh_never_extracts_or_republishes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            p = Path(directory)
+            data, planned, client = self.retained_setup(p)
+            client.started, client.bytes, client.requests = time.monotonic(), 0, 0
+            before = (p/'nbm-range.json').read_bytes()
+            with patch.object(r, 'datetime') as clock, patch.object(r, 'Client', return_value=client), \
+                 patch.object(r, 'plan', return_value=planned), patch.object(r, 'region') as extract, \
+                 patch.object(r, 'publish_local') as publish:
+                clock.now.return_value = datetime.fromisoformat(data['retrievedAt'].replace('Z', '+00:00'))
+                clock.strptime.side_effect = datetime.strptime
+                clock.fromisoformat.side_effect = datetime.fromisoformat
+                report = r.refresh(p, run='2026100712')
+            self.assertEqual(report['status'], 'unchanged')
+            self.assertIs(report['changed'], False)
+            extract.assert_not_called()
+            publish.assert_not_called()
+            self.assertEqual((p/'nbm-range.json').read_bytes(), before)
+
+    def test_missing_or_invalid_receipt_cannot_skip_validation(self):
+        for kind in ['missing', 'changed-data', 'new-cycle']:
+            with tempfile.TemporaryDirectory() as directory:
+                p = Path(directory)
+                _, planned, client = self.retained_setup(p)
+                if kind == 'missing': (p/'nbm-receipt.json').unlink()
+                if kind == 'changed-data': (p/'nbm-range.json').write_text('{}')
+                run = '2026100718' if kind == 'new-cycle' else '2026100712'
+                self.assertIsNone(r.retained_unchanged(client, p, run, planned))
+                client.get.assert_not_called()
+
     def test_native_schedule(self):
         for hour in range(24):
             run = f'20261007{hour:02}'

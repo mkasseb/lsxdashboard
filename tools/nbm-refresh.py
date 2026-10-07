@@ -180,6 +180,39 @@ def region(client, run, planned):
     return result
 
 
+def retained_unchanged(client, directory, run, planned):
+    """Reuse only a complete prior validated output with intact receipt and unchanged objects."""
+    target, receipt_path = directory/'nbm-range.json', directory/'nbm-receipt.json'
+    try:
+        if target.stat().st_size > 2_000_000:
+            return None
+        raw = target.read_bytes()
+        data, receipt = json.loads(raw), json.loads(receipt_path.read_text())
+        stamp = datetime.strptime(run, '%Y%m%d%H').replace(tzinfo=UTC)
+        if (receipt != dict(validator='regional-v1', run=nbm.iso(stamp), sha256=hashlib.sha256(raw).hexdigest()) or
+                data.get('run') != nbm.iso(stamp) or data.get('schema') != 2 or data.get('coverage') != COVERAGE or
+                data.get('missingHours') != [] or len(data.get('periods', [])) != 6):
+            return None
+    except (OSError, ValueError, TypeError):
+        return None
+    for period, (url, rows) in zip(data['periods'], planned):
+        members = period.get('members', [])
+        if len(members) != 3 or any(m.get('url') != url or m.get('byteRange') != f"{row['offset']}-{row['stop']}" or
+                                   m.get('percentile') != row['percentile'] for m, row in zip(members, rows)):
+            return None
+        try:
+            body, status, headers = client.get(url, {'Range': 'bytes=0-0'}, 1)
+        except urllib.error.HTTPError as error:
+            if error.code == 404:
+                raise Pending('Previously indexed GRIB object unavailable') from error
+            raise
+        if status != 206 or len(body) != 1 or not headers.get('content-range', '').startswith('bytes 0-0/'):
+            raise ValueError('Source version probe did not honor byte range')
+        if not headers.get('etag') or any(m.get('etag') != headers['etag'] for m in members):
+            return None
+    return data
+
+
 def atomic(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     raw = (json.dumps(value, separators=(',', ':'), allow_nan=False)+'\n').encode()
@@ -208,6 +241,8 @@ def publish_local(directory, data):
     atomic(directory/'history'/f'{stamp}.json', data)
     try:
         size = atomic(target, data)
+        atomic(directory/'nbm-receipt.json', dict(validator='regional-v1', run=data['run'],
+                                                sha256=hashlib.sha256(target.read_bytes()).hexdigest()))
     finally:
         for obsolete in sorted((directory/'history').glob('[0-9]'*10+'.json'), reverse=True)[2:]:
             obsolete.unlink()
@@ -232,11 +267,15 @@ def refresh_locked(directory, run=None, attempts=3, delay=15):
                 if attempt+1 == attempts:
                     raise
                 time.sleep(delay)
-        selected, data, notes = choose_plan(client, candidates, attempts, delay, build=region)
+        def build(client, candidate, planned):
+            retained = retained_unchanged(client, directory, candidate, planned)
+            return (retained, False) if retained is not None else (region(client, candidate, planned), True)
+        selected, (data, changed), notes = choose_plan(client, candidates, attempts, delay, build=build)
         if datetime.now(UTC)-datetime.fromisoformat(data['run'].replace('Z', '+00:00')) >= timedelta(hours=24):
             raise ValueError('Cycle became stale during extraction')
-        size = publish_local(directory, data)
-        report = dict(status='ready' if selected == candidates[0] else 'fallback', dataRun=data['run'],
+        size = publish_local(directory, data) if changed else (directory/'nbm-range.json').stat().st_size
+        report = dict(status=('ready' if changed else 'unchanged') if selected == candidates[0] else 'fallback',
+                      changed=changed, dataRun=data['run'],
                       candidateRuns=candidates, publicationNotes=notes, cells=len(data['cells']), periods=len(data['periods']),
                       outputBytes=size, coverage=COVERAGE)
     except Exception as error:
