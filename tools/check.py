@@ -71,6 +71,8 @@ SITEMAP = os.path.join(ROOT, "sitemap.xml")
 # don't apply fetch directives to a link the user clicks, so these need no CSP entry —
 # but they must be named here so a genuinely new *feed* can't hide among them.
 NAV_ONLY = {
+    # Hourly GRIB provenance validation only; browsers fetch the same-origin extracted JSON.
+    "https://nomads.ncep.noaa.gov",
     "https://atmosphere.copernicus.eu",
     "https://aviationweather.gov",
     "https://creativecommons.org",

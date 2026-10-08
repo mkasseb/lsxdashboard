@@ -34,3 +34,6 @@
 # Generated NBM data is mutable; enable serving only after the publication review.
 /data/nbm-range.json
   Cache-Control: no-cache, max-age=0, must-revalidate
+
+/data/nbm-hourly.json
+  Cache-Control: no-cache, max-age=0, must-revalidate

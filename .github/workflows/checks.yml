@@ -26,6 +26,10 @@ jobs:
       - run: python3 tools/nbm-extract-tests.py
       - run: python3 tools/nbm-refresh-tests.py
       - run: python3 tools/nbm-publish-tests.py
+      - run: node tools/nbm-hourly-tests.js
+      - run: python3 -m pip install -r tools/nbm-requirements.txt
+      - run: python3 tools/nbm-hourly-refresh-tests.py
+      - run: python3 tools/nbm-hourly-publish-tests.py
 
   browser:
     strategy:
@@ -84,6 +88,9 @@ jobs:
         if: matrix.browser == 'chromium'
         run: |
           NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" NBM_ARTIFACTS="$RUNNER_TEMP/redesign/nbm" node tools/nbm-browser-tests.js
+      - name: Verify hourly NBM band and isolation
+        if: matrix.browser == 'chromium'
+        run: NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" NBM_ARTIFACTS="$RUNNER_TEMP/redesign/nbm-hourly" node tools/nbm-hourly-browser-tests.js
       - uses: actions/upload-artifact@v4
         if: always()
         with:

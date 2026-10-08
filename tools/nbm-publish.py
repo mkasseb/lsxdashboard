@@ -12,6 +12,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parent.parent
 PATHS = ('data/nbm-range.json', 'data/nbm-receipt.json')
 UTC = timezone.utc
+MAX_FILE_BYTES = 2_000_000
 
 
 def git(repo, *args, data=None, env=None, check=True):
@@ -30,7 +31,7 @@ def read_at(repo, head, path):
     if not entry.startswith('100644 blob '):
         raise ValueError('Data path must be a regular non-executable file')
     size = int(git(repo, 'cat-file', '-s', f'{head}:{path}').stdout)
-    if size > 2_000_000:
+    if size > MAX_FILE_BYTES:
         raise ValueError('Retained file exceeds bound')
     return git(repo, 'show', f'{head}:{path}').stdout
 
@@ -85,7 +86,7 @@ def publish(repo, directory, expected_head, now=None, before_push=None):
     git(repo, 'fetch', '--no-tags', 'origin', 'refs/heads/main')
     head = git(repo, 'rev-parse', 'FETCH_HEAD').stdout.decode().strip()
     # Do not run an obsolete publisher against newly changed validation/publishing code.
-    if git(repo, 'diff', '--name-only', expected_head, head, '--', 'tools/', 'assets/forecast-range.js', '.github/').stdout:
+    if git(repo, 'diff', '--name-only', expected_head, head, '--', 'tools/', 'assets/forecast-range.js', 'assets/hourly-range.js', '.github/').stdout:
         raise ValueError('Publisher or validation code changed; start a fresh run')
     previous = [read_at(repo, head, p) for p in PATHS]
     if any(x is not None for x in previous) and any(x is None for x in previous):

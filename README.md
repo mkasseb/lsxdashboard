@@ -536,3 +536,67 @@ Run `NODE_PATH=/path/to/test/node_modules CHROMIUM_PATH=/usr/bin/chromium node t
 for the additional phone/tablet/desktop checks in both themes. Set `REDESIGN_ARTIFACTS` to save
 explicitly labeled fixture screenshots; these sample values and controlled map tiles are test-only.
 The existing weather, seasonal and real-cache upgrade suites remain required.
+
+### Optional 24-hour NBM temperature band (dependent review)
+
+The hourly branch depends on the reviewed seven-day work in PR #58. The existing NWS hourly
+line, values, summaries, precipitation, headlines and risk logic remain primary. A checkbox in
+**Plan your day** enables a separate P10–P90 temperature band in the 24-hour view. It plots the
+actual model bounds; the NWS line can be outside them. Slider, keyboard and touch details show
+P10/P50/P90 and the valid Central time with CDT/CST. The range is model guidance, not an NWS
+confidence interval. Longer views remain NWS-only; no interpolation fills missing native hours.
+
+`tools/nbm-hourly-refresh.py` independently extracts instantaneous **TMP at 2 m**, GRIB2 PDT6,
+NOAA centre, Kelvin, native P10/P50/P90. It checks decoded run, forecast step, valid UTC time,
+percentile order and the identical subset grid/cell coordinates across all groups. These fields
+are not the 18-hour TMAX/TMIN extrema. Current inventories were verified to include hourly
+percentiles through f060; later sampled fields are three-hourly. QMD publication is about seven
+hours behind its 00/06/12/18Z cycle, unlike the faster core product. The separate hourly payload
+contains f001–f048, so a source younger than 24 hours can cover the current rolling 24-hour window.
+The browser requires unique exact UTC matches to one-hour NWS periods, with no replacement of
+missing NWS temperatures and no substitution of model values into official forecasts.
+
+The actual download source is NOAA NOMADS' regional GRIB subset service. The region is padded
+by 0.08 degrees before extraction and trimmed to the existing 0.05-degree cell halo. The complete
+rehearsal retained 2,969 cells. Thirty P10/P50/P90 comparisons at corners, edge midpoints and
+interior points in one authentic hour matched the original S3 full-grid native cells and values;
+this is sampled cross-source verification, not proof that all source files are byte-identical.
+The recorded subset GRIB and `nbm-hourly-edge-audit.json` make that check inspectable. All 48
+hours independently passed decoded metadata, coverage and percentile validation.
+
+NOMADS supplies Last-Modified and Content-Length, not S3's ETag. Each original NOMADS object's
+metadata is checked before and after its subset is decoded; the subset SHA256 is recorded.
+S3 listings are used only to discover actually published cycles (NOMADS can return 403 for an
+unpublished path). An access denial is never treated as a retry/fallback signal. The unchanged
+check compares all 48 NOMADS revision indicators and a retained receipt; it is not a cryptographic
+proof against an upstream edit preserving both timestamp and length. No cross-source ETag identity
+is claimed. Source age is based on the actual run; unchanged checks preserve retrieval time.
+
+Hourly bounds are separate from the daily pipeline: **180 requests, 30 MB downloaded, 600 seconds,
+30-second request timeout, two attempts for transient failures, 4 MB output**, and a one-second
+pause between subset requests. The October 8 06Z full rehearsal measured **146 requests,
+6,408,858 bytes, 410.123 seconds, 107.07 MiB peak RSS**, and **3,819,936 bytes of JSON**. The newer
+12Z QMD was not listed. Values are retained to 0.001 K (maximum rounding error 0.0005 K, less than
+0.001°F), avoiding meaningless decimal expansion from subset repacking. The first rehearsal
+rejected oversized output; it did not publish it or relax the size guard. A subsequent unchanged
+check used **50 requests, 1,038 response-body bytes and 23.157 seconds**, without replacing the
+snapshot. Measurements are in `tools/fixtures/weather/nbm-hourly-*-status-recorded.json` and
+`nbm-hourly-status-recorded.json`. Header/transport overhead is not included in body-byte counts.
+
+At 120 changed cycles and 600 unchanged checks per 30 days, these measurements imply roughly
+**0.77 GB of downloaded bodies and 1,052 execution minutes**, before runner setup/retries, in
+addition to the existing daily job. The hourly browser payload adds 3.82 MB uncompressed per
+changed response (1.07 MB with local gzip; actual delivery encoding can differ). If retained as 72 hourly artifacts, one snapshot each is about 275 MB raw before
+compression. These are scenarios, not a new spending commitment. No paid service, credentials or
+browser network permission is added. Reliability and latency of NOAA's subset service remain an
+operational dependency; budget exhaustion or malformed/incomplete groups preserve last-good data,
+which still expires at 24 hours of source age.
+
+`tools/nbm-hourly-publish.py` reuses the existing guarded Git publisher but permits only the hourly
+JSON and receipt. It rejects partial, stale, malformed, oversized, rollback or obsolete-code
+candidates and preserves unrelated files. Real local Git tests cover races and remote rejection.
+The **NBM hourly rehearsal** workflow is manual and read-only: it produces artifacts without a
+schedule or publication job. Production activation remains a separate reviewed rollout; neither
+PR #58 nor this dependent feature is merged by this work. An immutable review preview therefore
+expires normally rather than silently refreshing itself. Hourly model graphics are excluded from
+saved NWS chart HTML and cannot pair with restored-only official data.

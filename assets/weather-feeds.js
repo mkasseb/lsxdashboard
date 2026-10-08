@@ -149,6 +149,7 @@ function loadForecast(){
         var hrs=forecastWindowHours(h.properties.periods,24,Date.now());
         smart.hourly=hrs;
         smart.hourlyAll=h.properties.periods;
+        if(typeof NbmHourly!=="undefined")NbmHourly.forecast(h.properties.periods);
         renderHourly24(h.properties.periods);
         var hl=document.getElementById("h24loc"); if(hl) hl.textContent=current.name.replace(" (home)","");
       }else{

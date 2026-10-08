@@ -219,6 +219,7 @@ function renderHourly24(hrs){
     if(renderHourly24._hrs||!el.querySelector(".h24-svg")) clearHourlyForecast();
     syncHourlyControls(); return;
   }
+  var nbmPoints=typeof NbmHourly!=="undefined"?NbmHourly.presentation(hrs,hourlyHours,Date.now()):[];
   var n=hrs.length, i;
   var hi=-999, lo=999, peak=0, popMissing=false, popKnown=false, temps=[], pops=[], feels=[], maxDiv=0, feelsHi=-999, maxWind=null, maxGust=null, gustMissing=false;
   for(i=0;i<n;i++){
@@ -254,9 +255,22 @@ function renderHourly24(hrs){
   var step = slot>=48?1 : slot>=30?2 : slot>=20?3 : slot>=12?6 : 12;
   var scLo=lo, scHi=hi;
   if(showFeels){ for(i=0;i<n;i++){ if(feels[i]!=null){ if(feels[i]<scLo)scLo=feels[i]; if(feels[i]>scHi)scHi=feels[i]; } } }
+  nbmPoints.forEach(function(p){if(p){scLo=Math.min(scLo,p.p10);scHi=Math.max(scHi,p.p90);}});
   var tMin=scLo-2, tMax=scHi+2, rng=Math.max(4,tMax-tMin);
   function X(i){ return padL+slot*(Date.parse(hrs[i].startTime)-windowStart)/3600000; }
   function Y(t){ return curveTop+(baseY-curveTop)*(1-(t-tMin)/rng); }
+
+  // Actual model bounds at exact UTC samples; split at missing/nonconsecutive hours.
+  var nbmBand="", nbmSegment=[];
+  function flushNbm(){
+    if(nbmSegment.length>1){
+      var upper=nbmSegment.map(function(i){return X(i).toFixed(2)+","+Y(nbmPoints[i].p90).toFixed(2);});
+      var lower=nbmSegment.slice().reverse().map(function(i){return X(i).toFixed(2)+","+Y(nbmPoints[i].p10).toFixed(2);});
+      nbmBand+='<path class="nbm-hourly-band" d="M'+upper.join(' L')+' L'+lower.join(' L')+' Z"/>';
+    }
+    nbmSegment=[];
+  }
+  nbmPoints.forEach(function(p,i){if(!p||!contiguous(i))flushNbm();if(p)nbmSegment.push(i);});flushNbm();
 
   // day/night shading bands (runs of !isDaytime)
   var bands="";
@@ -345,12 +359,12 @@ function renderHourly24(hrs){
   var tracker='<line class="h24-track" x1="-99" y1="'+(curveTop-14)+'" x2="-99" y2="'+(barBase+2)+'" stroke="var(--accent)" stroke-width="1" opacity="0"/>'
     +'<circle class="h24-trackdot" cx="-99" cy="-99" r="4" fill="var(--accent)" opacity="0"/>';
 
-  var svg='<svg class="h24-svg" viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" role="img" aria-label="'+hourlyHours+' hour forecast: temperature curve, precipitation chance bars and shaded nights. Hourly details follow the chart.">'
+  var svg='<svg class="h24-svg" viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" role="img" aria-label="'+hourlyHours+' hour NWS forecast: temperature curve, precipitation chance bars and shaded nights. '+(nbmBand?'Shaded NBM P10–P90 temperature guidance. ':'')+'Hourly details follow the chart.">'
     +'<defs><linearGradient id="h24g" x1="0" y1="0" x2="1" y2="0">'+grad+'</linearGradient>'
     +'<linearGradient id="h24a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+tCol(hi)+'" stop-opacity=".16"/><stop offset="1" stop-color="'+tCol(lo)+'" stop-opacity="0"/></linearGradient></defs>'
     +bands
     +'<line x1="0" y1="'+barBase+'" x2="'+W+'" y2="'+barBase+'" stroke="var(--border)" stroke-width="1"/>'
-    +'<path d="'+area+'" fill="url(#h24a)"/>'
+    +(nbmBand||'<path d="'+area+'" fill="url(#h24a)"/>')
     +feelsPath
     +'<path class="h24-line" d="'+line+'" fill="none" stroke="url(#h24g)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>'
     +bars+icons+tlabels+times+dates+nowMark+tracker
@@ -374,7 +388,8 @@ function renderHourly24(hrs){
       +'<span>'+(pops[idx]==null?'Rain chance unavailable':'Rain '+pops[idx]+'%')+'</span>'
       +'<span>Wind '+esc(wind||"unavailable")+'</span>'
       +'<span>Gusts '+(gust==null?'unavailable':Math.round(gust)+' mph')+'</span>'
-      +'<span class="muted">'+esc(h.shortForecast||"")+'</span>';
+      +'<span class="muted">'+esc(h.shortForecast||"")+'</span>'
+      +(nbmPoints.length?NbmHourly.describe(nbmPoints[idx]):'');
   }
   function selectHour(idx){
     renderHourly24._cursor=idx; renderHourly24._selectedTime=Date.parse(hrs[idx].startTime); cursor.value=idx;
@@ -425,6 +440,7 @@ function renderHourly24(hrs){
 function clearHourlyForecast(){
   var focus=document.activeElement&&document.activeElement.id==="hourlyCursor";
   renderHourly24._hrs=null;
+  if(typeof NbmHourly!=="undefined"){NbmHourly.forecast(null);NbmHourly.presentation([],hourlyHours,Date.now());}
   var el=document.getElementById("hourly24");if(el) el.innerHTML='<div class="empty">Hourly forecast unavailable.</div>';
   syncHourlyControls();
   if(focus){var title=document.getElementById("h24Title");if(title){title.tabIndex=-1;title.focus({preventScroll:true});}}
@@ -2964,6 +2980,7 @@ function locSignal(){ if(!locAbort) locAbort=new AbortController(); return locAb
    town's forecast high ranked against the old town's 96-year record. */
 function resetLocationState(){
   if(typeof NbmRange!=="undefined") NbmRange.reset();
+  if(typeof NbmHourly!=="undefined") NbmHourly.reset();
   lastAlertData=null; alertsRetained=false; retainedAlertKey=""; alertUpdateNotice();
   renderBriefingEvidence._models=null;
   Object.keys(FEEDS).forEach(function(k){if(FEEDS[k].local&&FEEDS[k].tracked!==false) feedChecks[k]={status:"loading",successAt:0,issuedAt:0,saved:false};});
@@ -3760,6 +3777,7 @@ function saveSnapshot(){
     var el=document.getElementById(p.id);
     if(!el) return;
     // NBM is revalidated from its own source; never persist it inside the NWS HTML snapshot.
+    if(p.id==="hourly24"&&el.querySelector(".nbm-hourly-band,.nbm-hourly-detail"))return;
     var snapshotEl=el;
     if(p.id==="daily"){
       snapshotEl=el.cloneNode(true);
