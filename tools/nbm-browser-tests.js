@@ -10,7 +10,7 @@ async function main(){
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});setBrowser(browser);
  try{
   for(const width of [320,390,1440])for(const timezone of ['America/Chicago','Asia/Tokyo']){
-   const s=await open(config('NBM recorded replay',{now,search:'?nbm=1',timezone}),width),p=s.page;
+   const s=await open(config('NBM recorded replay',{now,timezone}),width),p=s.page;
    try{
     assert.equal(await p.locator('#nbmRangeCard details').getAttribute('open'),null);
     assert.match(await p.locator('#nbmRangeCard').innerText(),/unavailable/i);
@@ -54,10 +54,10 @@ async function main(){
     assert.deepEqual(s.errors,[]);console.log('PASS NBM width '+width+' timezone '+timezone);
    }finally{await s.context.close();}
   }
-  const s=await open(config('NBM disabled',{now}),390);
+  const s=await open(config('NBM disabled',{now,search:'?nbm=0'}),390);
   assert.equal(await s.page.locator('#nbmRangeCard').count(),0);
   assert.equal(await s.page.evaluate(()=>Object.hasOwn(FEEDS,'nbmRange')),false);
-  await s.context.close();console.log('PASS disabled by default');
+  await s.context.close();console.log('PASS explicit opt-out');
  }finally{await browser.close();}
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});

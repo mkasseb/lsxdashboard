@@ -160,13 +160,14 @@ class RefreshTests(unittest.TestCase):
         client.requests = 100
         with self.assertRaises(RuntimeError): client.get('https://example.invalid/')
 
-    def test_workflow_is_manual_and_cannot_publish(self):
+    def test_workflow_has_bounded_schedule_and_main_only_writer(self):
         workflow = (Path(__file__).parent.parent/'.github/workflows/nbm-refresh.yml').read_text()
         active = '\n'.join(line for line in workflow.splitlines() if not line.lstrip().startswith('#'))
         self.assertIn('workflow_dispatch:', active)
-        self.assertNotIn('schedule:', active)
+        self.assertIn('schedule:', active)
+        self.assertIn("cron: '17 * * * *'", active)
         self.assertIn('contents: read', active)
-        self.assertIn("if: ${{ false && github.ref == 'refs/heads/main' }}", active)
+        self.assertIn("if: ${{ github.ref == 'refs/heads/main' }}", active)
         self.assertEqual(active.count('contents: write'), 1)
         self.assertNotIn('secrets.', active)
         self.assertIn('retention-days: 3', active)

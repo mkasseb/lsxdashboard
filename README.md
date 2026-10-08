@@ -205,13 +205,12 @@ location changes. Refresh, scheduling, reset markup and snapshot lists are gener
 the reasons are
 in [`DESIGN.md`](DESIGN.md#adding-a-card-adding-a-loader).
 
-## Optional NBM temperature-range prototype
+## Supplemental NBM temperature range
 
-`/?nbm=1` adds a collapsed **Forecast range** context card. Normal visits have no NBM
-card or request. NWS forecasts, headlines, warnings and risk decisions receive no NBM values.
-Production is unchanged; the draft branch does not enable a recurring job or data deployment.
+The **Forecast range** card is visible but collapsed by default. `/?nbm=0` disables it.
+NWS forecasts, headlines, warnings and risk decisions receive no NBM values.
 
-### Regional refresh rehearsal
+### Regional refresh
 
 The smallest supported pipeline is one Python/ecCodes extraction producing static JSON, with
 no database or request-time backend. It downloads each selected GRIB message once for the entire
@@ -222,7 +221,7 @@ python3 -m venv /tmp/nbm-venv
 /tmp/nbm-venv/bin/pip install -r tools/nbm-requirements.txt
 /tmp/nbm-venv/bin/python tools/nbm-refresh.py --output-dir data
 python3 -m http.server 8787
-# Open http://localhost:8787/?nbm=1
+# Open http://localhost:8787/
 ```
 
 Default discovery examines actual QMD publication within the last 24 hours and considers the two
@@ -233,13 +232,11 @@ published cycle may then be used within the same source-age limit. Transient net
 bounded; access denials and invalid GRIB metadata/order fail closed. An explicit `--run YYYYMMDDHH`
 is available for current-cycle validation, not historical data masquerading as live data.
 
-`.github/workflows/nbm-refresh.yml` contains **workflow_dispatch only**. Its hourly proposal
-(`17 * * * *`, UTC) is a comment, not an active schedule. Hourly polling accommodates delayed QMD
-publication; it does not claim NOAA issues a new QMD cycle every hour. GitHub normally requires a
-workflow to exist on the default branch before dispatch is available; before merge, use the local
-refresh command. The extraction job uses read-only access and produces a three-day-retention
-artifact and resource/status summary. The separate approved publisher job below remains hard-disabled.
-No workflow run can currently write production data or upload to Cloudflare.
+`.github/workflows/nbm-refresh.yml` checks hourly at minute 17 UTC and also accepts manual
+workflow dispatch. Publication is restricted to `main`. Hourly checks accommodate delayed QMD
+publication; only changed validated cycles or revisions make a data commit and trigger Pages.
+The extraction job uses read-only access and retains artifacts/status for three days; the separate
+publisher uses only the approved job-scoped built-in token write permission.
 
 ### Coverage and matching
 
@@ -265,7 +262,7 @@ values per cell. Each message preserves its NOAA URL, byte range, SHA-256, ETag,
 cycle, native interval and grid identity. The browser converts the selected cell to Fahrenheit and
 revalidates the percentile group. Cycle age never resets on extraction or page refresh. Data older
 than 24 hours is withheld on the next 15-minute card refresh; expired native intervals are removed.
-The 24-hour limit is prototype policy, not a NOAA SLA.
+The 24-hour limit is dashboard policy, not a NOAA SLA.
 
 Local writes use a flushed temporary file and atomic replacement, with a writer lock and rejection
 of cycle rollback. A failed extraction leaves previous data bytes and retrieval/source timestamps
@@ -283,12 +280,11 @@ The receipt is local integrity evidence, not a signature or a replacement for so
 **Persistence boundary:** the manual workflow uses a fresh temporary directory each run. Its history
 is not cross-run persistence and its artifacts are not a public serving endpoint. Last-good retention
 across jobs requires a persistent publication adapter to load/preserve the existing object;
-the publisher below implements that adapter but remains activation-locked. Without published runtime data, the existing branch
-preview shows unavailable. The committed compressed regional fixture is recorded test evidence only
+the publisher below implements that adapter. If runtime data is absent, the card shows unavailable. The committed compressed regional fixture is recorded test evidence only
 and is never fetched by the dashboard. A retained file becomes stale by source age even if every later
 refresh fails. Job failures/status artifacts provide reporting; no new notification integration exists.
 
-### Data-only publisher — implemented, activation locked
+### Data-only publisher
 
 The approved publisher (`tools/nbm-publish.py`) is wired as a separate job with **job-scoped
 `contents: write`**, using the built-in `GITHUB_TOKEN` through checkout. This permission is
@@ -296,13 +292,13 @@ repository-wide; it is not a GitHub-enforced path permission. The publisher's te
 and final tree comparison permit only `data/nbm-range.json` and `data/nbm-receipt.json`. Other staged
 files, status timestamps, local history and application code cannot enter its commit.
 
-**The job has a literal `false` activation lock and a main-ref condition.** Manual dispatch cannot
-unlock it. There is still no active schedule. Removing that lock and enabling operation require a
-separate reviewed change after verifying hosting allowance/usage, classic branch protection and
-Actions policy. No new token, service, bypass or production write was created. The readable active
-`protect-main` ruleset prohibits deletion and force-push; it has no PR-review rule. Classic protection
-and Actions settings returned HTTP 403, so their restrictions remain unknown. No Cloudflare account
-connection is available to verify actual plan, current build usage or deployment path filters.
+The user authorized rollout using the existing Cloudflare Free plan (500 builds/month), accepting
+that current consumption is unverified. Supplied settings confirm `main` automatic deployments,
+include paths `*`, no build command and root output. Existing branch/Actions rules remain authoritative:
+the readable `protect-main` ruleset blocks deletion and force-push; classic protection and Actions
+settings returned 403. Normal operations must fail on policy rejection; never bypass restrictions,
+create credentials or change security settings. The hourly schedule and main-only publisher implement
+the approved rollout, subject to successful normal merge, workflow and deployment verification.
 
 Extraction now loads the last committed dataset/receipt from `main` into its temporary output,
 allowing unchanged-cycle reuse across jobs. It fails closed on an incomplete retained pair.
@@ -353,7 +349,7 @@ per 30 days: approximately **4.72 GB downloaded and 338 minutes** of measured wo
 installation, source revisions and retries. Publication timing and cycle availability are discovered,
 not assumed. A fresh-run rehearsal without retained data would still re-extract each time.
 
-These are scenarios, not an enabled schedule or a dollar quote. Artifacts include current plus history copies; with the
+These are planning scenarios, not a dollar quote or a guarantee. Artifacts include current plus history copies; with the
 fresh-run rehearsal and three-day retention, 72 hourly artifacts would hold roughly 73 MB of raw
 JSON before archive compression, plus small status files. Existing repository artifacts share quotas.
 
@@ -363,18 +359,18 @@ Storage remains plan-dependent; no account billing entitlement was assumed. Clou
 currently allows [500 builds/month](https://developers.cloudflare.com/pages/platform/limits/).
 Publishing only newly validated cycles at four/day would use about **120 builds/month**, leaving
 roughly 380 for ordinary app builds, previews, revisions and other usage within that quota. Actual
-account usage/plan must be checked. Do not equate 720 hourly checks with 720 site builds.
+current consumption is unverified and was explicitly accepted by the user. Do not equate 720 hourly checks with 720 site builds.
 
 **Simplest infrastructure option:** keep the existing Git-connected Pages deployment and publish
-data-only commits only when `changed:true`. The implemented, activation-locked job starts with the
+data-only commits only when `changed:true`. The job starts with the
 last committed dataset and receipt, retains them on failure, validates a complete replacement, then
 atomically commits only the approved data paths against the current branch head. No-op checks must produce no commit or build;
 failed deployment must leave the prior Pages version serving. The existing same-origin data URL and
-new revalidation header avoid CORS changes. This needs no new storage product, but it is not enabled.
+new revalidation header avoid CORS changes. This uses existing hosting and needs no new storage product.
 
 **Actual repository constraint:** the visible `protect-main` ruleset blocks deletion and force-push.
 Classic protection/default-token settings remain inaccessible (403). The user approved job-scoped
-built-in token writes for this publisher; account restrictions and hosting limits still block activation.
+built-in token writes and rollout despite unverified consumption; existing account restrictions remain authoritative.
 If classic settings require PR review, preserve that review path rather than bypass it. No PAT/App token
 or relaxed protection is needed or authorized.
 
@@ -386,14 +382,13 @@ so required validation must run in the publisher itself. Pages documents
 [deployments on branch pushes](https://developers.cloudflare.com/pages/configuration/git-integration/github-integration/),
 but the eventual approved automation identity must be verified in a non-production test before
 assuming it triggers this specific installation. Other automation identities may also trigger the
-ordinary app CI matrix. Only the approved built-in token permission is declared on the locked job.
+ordinary app CI matrix. Only the approved built-in token permission is declared on the publisher job.
 
-**Before enabling:** verify actual build headroom, classic protection and Actions restrictions, then
-review activation and the geography/cadence/age policy. The data-only existing-hosting approach is
-approved in principle; its activation conditions are still unmet. If account policy prevents it,
-an independent object-store/static data destination avoids app commits/builds but adds storage,
-write credentials, retention and serving configuration to approve. No new destination, credentials or active recurring job has been provisioned. The approved writer
-permission is declared only on the activation-locked publisher job.
+**Operating limits:** four new cycles/day is roughly 120 monthly data builds, not a guarantee.
+Same-cycle NOAA revisions, validation-version changes requiring refreshed output, ordinary app
+commits, previews and retries can add builds. Unchanged checks never commit status timestamps.
+Check usage periodically; if quota is exhausted, preserve last-good data and let source-age expiry
+withhold stale values. Pause the NBM workflow if needed rather than buying services or bypassing policy.
 
 Normal-TLS access was verified for the [S3 source](https://noaa-nbm-grib2-pds.s3.amazonaws.com/),
 [NOMADS](https://nomads.ncep.noaa.gov/pub/data/nccf/com/blend/prod/) (HTTP/1.1; malformed HTTP/2 header)
@@ -411,7 +406,7 @@ NODE_PATH=/path/to/playwright/node_modules CHROMIUM_PATH=/usr/bin/chromium \
 
 Tests distinguish authentic captures from deliberate malformed-data/outage mutations and cover
 regional matching, boundaries, native-period provenance, unit/order failures, DST, retries,
-publication races, retention, atomic interruptions, source-age preservation, and disabled scheduling.
+publication races, retention, atomic interruptions, source-age preservation, and bounded main-only scheduling.
 Existing dashboard checks remain required.
 
 ## Known gaps

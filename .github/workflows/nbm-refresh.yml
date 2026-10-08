@@ -1,11 +1,10 @@
-name: NBM refresh rehearsal
+name: NBM regional refresh
 
-# Deliberately no active schedule or deployment.
+# Hourly checks publish only changed validated cycles/revisions.
 on:
   workflow_dispatch:
-  # After review, proposed cadence (leave disabled until hosting is approved):
-  # schedule:
-  #   - cron: '17 * * * *'
+  schedule:
+    - cron: '17 * * * *'
 
 permissions:
   contents: read
@@ -42,15 +41,14 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: nbm-regional-rehearsal
+          name: nbm-regional-refresh
           path: ${{ runner.temp }}/nbm-data
           retention-days: 3
           if-no-files-found: error
 
   publish:
-    # ACTIVATION LOCK: keep false until account quotas, classic branch protection and
-    # Actions policy are verified and activation is reviewed. Manual dispatch cannot override it.
-    if: ${{ false && github.ref == 'refs/heads/main' }}
+    # Only normal writes to main; existing branch and Actions policies remain authoritative.
+    if: ${{ github.ref == 'refs/heads/main' }}
     needs: extract
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -65,7 +63,7 @@ jobs:
           node-version: '22'
       - uses: actions/download-artifact@v4
         with:
-          name: nbm-regional-rehearsal
+          name: nbm-regional-refresh
           path: ${{ runner.temp }}/nbm-candidate
       - name: Validate and publish only changed forecast data
         run: |

@@ -1,4 +1,4 @@
-/* Opt-in research prototype. No values enter NWS forecasts, headlines or risk decisions. */
+/* Supplemental regional guidance. No values enter NWS forecasts, headlines or risk decisions. */
 var NbmRange=(function(){
   'use strict';
   var H=3600000, MAX_AGE=24*H;
@@ -95,7 +95,7 @@ var NbmRange=(function(){
       [p.p10,p.p50,p.p90].forEach(function(v){add('td',Math.round(v)+'°',row);});
     });
     add('p','NOAA NBM QMD · nearest GRIB cell '+result.cell.lat.toFixed(3)+', '+result.cell.lon.toFixed(3)+' · '+result.cell.distance.toFixed(2)+' km from the requested point. One run, cell and native interval per percentile group.');
-    add('p','Prototype: model age follows the QMD cycle, not the page refresh. Values are withheld after 24 hours. Regional data covers only the documented St. Louis metro area; recurring publication is not yet enabled.');
+    add('p','Model age follows the QMD cycle, not the page refresh. Values are withheld after 24 hours. Regional data covers only the documented St. Louis metro area.');
   }
   function load(){
     var fresh=locGuard(),point={lat:current.lat,lon:current.lon};
@@ -110,9 +110,9 @@ var NbmRange=(function(){
     });
   }
   function init(){
-    if(new URLSearchParams(location.search).get('nbm')!=='1')return;
+    if(new URLSearchParams(location.search).get('nbm')==='0')return;
     var card=document.createElement('section');card.className='card';card.id='nbmRangeCard';
-    card.innerHTML='<h2>Forecast range <span class="sub">Temperature · prototype</span></h2><p id="nbmStatus" role="status">Checking NBM range…</p><details><summary>Temperature range details</summary><div id="nbmRange"></div></details>';
+    card.innerHTML='<h2>Forecast range <span class="sub">Temperature</span></h2><p id="nbmStatus" role="status">Checking NBM range…</p><details><summary>Temperature range details</summary><div id="nbmRange"></div></details>';
     document.querySelector('.masonry').appendChild(card);
     card.querySelector('details').addEventListener('toggle',function(){if(typeof scheduleMasonry==='function')scheduleMasonry();});
     FEEDS.nbmRange={label:'NBM range',card:'nbmRangeCard',load:'loadNbmRange',every:15*60000,age:30*60000,local:true,failure:'unavailable',reset:{nbmStatus:'Checking NBM range…',nbmRange:''}};
