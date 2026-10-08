@@ -1835,3 +1835,9 @@ a.cpc-item:hover{border-color:var(--accent)}
 .nbm-hourly-controls details{font-size:12px;color:var(--muted);line-height:1.5;margin-top:4px}
 .nbm-hourly-controls summary{cursor:pointer;min-height:44px;display:flex;align-items:center;color:var(--accent)}
 .nbm-hourly-controls details p{margin:8px 0}
+
+/* Supplemental model context stays visually below the official briefing. */
+.nbm-brief-note{border-top:1px solid var(--border);margin-top:12px;padding-top:10px;font-size:.85rem;line-height:1.5}
+.nbm-brief-note p{margin:0 0 6px;overflow-wrap:anywhere}
+.nbm-brief-note summary{min-height:44px;display:list-item;align-content:center;cursor:pointer}
+.nbm-brief-note details p{font-size:.8rem;color:var(--muted)}

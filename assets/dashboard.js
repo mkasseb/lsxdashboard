@@ -60,6 +60,7 @@ function freshnessCheck(){
   if(typeof resolveSnapBar==="function") resolveSnapBar();
   renderBriefingStatus();
   if(renderTheCall._comfortAllowed!=null&&renderTheCall._comfortAllowed!==briefingComfortAllowed()) renderTheCall();
+  if(typeof NbmHourly!=="undefined") renderNbmBriefing();
   var evidence=renderBriefingEvidence._models;
   if(evidence) renderBriefingEvidence(evidence.near,evidence.planning,evidence.hours);
 }
@@ -3614,6 +3615,20 @@ function renderBriefingStatus(){
   if(feedState(feedChecks.aqi,Date.now(),FEEDS.aqi.age)!=="ready") notes.push("Air quality is unverified; outdoor comfort guidance is limited.");
   el.textContent=notes.join(" "); el.hidden=!notes.length;
 }
+// Supplemental temperature context never enters the official candidate selector.
+function renderNbmBriefing(){
+  var context=renderTheCall._nbmContext,host=document.getElementById('briefNear'),el=document.getElementById('nbmBriefNote');
+  var note=host&&context&&typeof NbmHourly!=="undefined"?NbmHourly.briefing(smart.hourlyAll,context.candidates,context.model,callLocalAlert,Date.now()):null;
+  if(!note){if(el){if(el.contains(document.activeElement)){var fallback=document.querySelector('#briefWhy summary');if(fallback)fallback.focus({preventScroll:true});}el.remove();}return;}
+  if(!el){
+    el=document.createElement('div');el.id='nbmBriefNote';el.className='nbm-brief-note';
+    el.innerHTML='<p id="nbmBriefText"></p><details><summary>About this model range</summary><p id="nbmBriefSource"></p></details>';
+    host.appendChild(el);
+  }
+  var text=NbmHourly.noteText(note),source='Supplemental temperature guidance; the NWS forecast remains primary. These are not guaranteed limits or an NWS confidence interval. Two consecutive hourly samples qualify; the range above describes only the named hour, not a continuous interval. NBM run '+new Date(note.run).toISOString().slice(0,16).replace('T',' ')+' UTC ('+((Date.now()-note.run)/3600000).toFixed(1)+' hours old). No threshold-crossing probability is calculated.';
+  if(document.getElementById('nbmBriefText').textContent!==text)document.getElementById('nbmBriefText').textContent=text;
+  if(document.getElementById('nbmBriefSource').textContent!==source)document.getElementById('nbmBriefSource').textContent=source;
+}
 function renderTheCall(){
   var card=document.getElementById("callCard"), row=document.getElementById("callRow");
   if(!card||!row) return;
@@ -3662,9 +3677,10 @@ function renderTheCall(){
     "Day "+ctx.dry.days+" with no measurable rain.","","context",true);
 
   var model=buildBottomLine(candidates,callLocalAlert), planning=buildBottomLine(weekCandidates,null);
+  renderTheCall._nbmContext={model:model,candidates:candidates};
   if(alertsRetained&&model.lead&&model.lead.alertAware) model.lead.detail=model.lead.detail.replace("Alert active locally","Last verified local alert");
   var planningEl=document.getElementById("briefPlanning");
-  if(!model.lead&&!planning.lead){ card.classList.remove("has"); row.innerHTML="";planningEl.hidden=true;renderBriefingEvidence._models=null; return; }
+  if(!model.lead&&!planning.lead){ renderNbmBriefing(); card.classList.remove("has"); row.innerHTML="";planningEl.hidden=true;renderBriefingEvidence._models=null; return; }
   function tone(c){ return /^(danger|warning|good|context)$/.test(c.tone)?c.tone:"neutral"; }
   function detail(c){
     var parts=[];
@@ -3687,13 +3703,17 @@ function renderTheCall(){
         +'<div class="bl-slabel">'+esc(c.label)+'</div><div class="bl-sheadline">'+esc(c.headline)+'</div>'
         +(detail(c)?'<div class="bl-sdetail">'+detail(c)+'</div>':'')+'</div></li>'; }).join('')+'</ul>':'');
   }
+  var oldNbm=document.getElementById("nbmBriefNote"),nbmFocus=oldNbm&&oldNbm.contains(document.activeElement)?document.activeElement:null;
   row.innerHTML='<section id="briefNear"><h3 class="brief-section-title">Near-term guidance</h3>'+section(model)+'</section>';
+  if(oldNbm)document.getElementById("briefNear").appendChild(oldNbm);
   var planningFocused=planningEl.contains(document.activeElement);
   planningEl.hidden=!planning.lead;
   if(planning.lead){
     document.getElementById("briefPlanningTitle").textContent="Later-week planning · "+planning.lead.headline+" · "+bottomLineWeekHorizon(smart.weekDays);
     document.getElementById("briefPlanningBody").innerHTML=section(planning);
   }else if(planningFocused){document.querySelector("#briefWhy summary").focus({preventScroll:true});}
+  renderNbmBriefing();
+  if(nbmFocus){var restore=nbmFocus.isConnected?nbmFocus:document.querySelector("#briefWhy summary");if(restore)restore.focus({preventScroll:true});}
   renderBriefingEvidence(model,planning,H);
   card.classList.add("has");
 }
