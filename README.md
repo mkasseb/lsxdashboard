@@ -207,7 +207,21 @@ in [`DESIGN.md`](DESIGN.md#adding-a-card-adding-a-loader).
 
 ## Supplemental NBM temperature range
 
-The **Forecast range** card is visible but collapsed by default. `/?nbm=0` disables it.
+Supplemental NBM ranges appear alongside official NWS day/night entries in the forecast card.
+Expand an entry to compare the NWS temperature and exact interval with the NBM P10/P50/P90
+values and native 18-hour interval. The compact range is P10–P90, not a replacement high/low. A single shared note explains the
+18-hour windows; individual rows keep only the ranges. Exact interval differences remain in expanded details.
+The collapsed **About NBM ranges & unmatched windows** section explains the percentiles,
+source age, nearest cell, coverage, and windows that cannot be paired. `/?nbm=0` disables guidance.
+
+Placement requires a unique same-kind match in both directions covering at least 75% of the
+NWS interval. This overlap rule does not make the windows equivalent: differing endpoints
+are explicitly labeled. Missing official values, ambiguous overlaps, expired periods, and
+invalid or stale model data never produce paired comparisons. Zero temperatures are valid.
+All displayed endpoints use America/Chicago, including each endpoint's DST offset. Model
+annotations are excluded from saved NWS HTML and require both current-location sources after
+reload. The existing static dataset and publisher are reused; no new storage, backend, credentials,
+or infrastructure costs are introduced.
 NWS forecasts, headlines, warnings and risk decisions receive no NBM values.
 
 ### Regional refresh
@@ -225,7 +239,7 @@ python3 -m http.server 8787
 ```
 
 Default discovery examines actual QMD publication within the last 24 hours and considers the two
-newest published cycles. It does not infer readiness from core. Six native maximum/minimum windows
+newest published cycles. It does not infer readiness from core. Eighteen consecutive native maximum/minimum windows (about nine days)
 are required before replacing the current dataset. The newest cycle receives up to three attempts,
 15 seconds apart, including index-before-GRIB and incomplete-index publication races; a prior
 published cycle may then be used within the same source-age limit. Transient network failures are
@@ -275,7 +289,7 @@ notes, bytes, requests, elapsed time and peak RSS. Two distinct cycle snapshots 
 `history/`; GRIB downloads are not stored. Runtime JSON, receipt, status, lock and history are Git-ignored.
 
 An unchanged-source gate reuses retained output only when its validation receipt matches the bytes,
-validator version and cycle, the current index ranges match, and six one-byte probes confirm unchanged
+validator version and cycle, the current index ranges match, and eighteen one-byte probes confirm unchanged
 source ETags. A missing receipt or source revision requires extraction. An unchanged result reports
 `changed:false` without rewriting data, receipt, history or retrieval time. `nbm-status.json` still
 records the check; the publisher gates on `changed` and never commits status timestamps.
@@ -329,7 +343,41 @@ source age even if retained files survive every subsequent failure.
 Offline tests use temporary bare Git remotes, including rejected writes and concurrent updates;
 recorded data is never published by these tests. Run `python3 tools/nbm-publish-tests.py`.
 
-### Measured authentic run and operating decision
+### Full seven-day horizon and measured operating impact
+
+The first prototype deliberately extracted only six native extrema windows (roughly three days).
+Blank later rows were an extraction limit, not evidence that NOAA lacks later percentiles. On
+2026-10-08, current 00Z QMD indexes contained complete native P10/P50/P90 groups through at least
+forecast hour 258. The bounded extractor now selects 18 consecutive windows, with 12-hour-spaced
+endpoints at 06/18 UTC and each native interval retaining its actual 18-hour length. This gives
+buffer beyond seven NWS rows for a cycle up to 24 hours old, partial first/last periods and DST.
+Only unique same-kind overlaps are paired; a missing/ambiguous NWS period is never synthesized.
+
+The consumer also accepts legacy six-window snapshots for compatibility. New publication requires
+all 18 windows; incomplete new cycles retry/fall back within existing limits and never publish a
+shortened replacement. A cached six-window snapshot cannot pass the longer-plan unchanged gate.
+
+The authentic full-horizon rehearsal selected **2026-10-08 00Z**, because the newer 06Z cycle's
+f024 index was not yet published. It validated **2,969 cells, 18 windows, and 54 GRIB messages**:
+**115,295,645 bytes**, **87 requests**, **122.220 seconds**, **184.96 MiB peak RSS**. JSON is
+**1,244,080 bytes** (see the recorded compressed fixture), versus the prototype's 508,060 bytes.
+A second check reused byte-identical data and its original retrieval time: **510,048 bytes**,
+**51 requests**, **40.516 seconds**, **32.0 MiB RSS**, `changed:false`. These measurements are in
+`tools/fixtures/weather/nbm-regional-full-*`; recorded data is used only by tests.
+
+All existing limits remain unchanged: 100 requests, 150 MB, 10-minute extraction budget,
+15-minute workflow timeout, 2 MB candidate-size ceiling and the same supported region. The larger
+extraction leaves less retry headroom; exhausted budgets retain last-good data and its stale state,
+so a delayed cycle is not guaranteed to recover within the same run. The longer
+horizon needs about three times the GRIB transfer per changed cycle and 2.45 times the client JSON
+payload. At 120 changed extractions plus 600 unchanged checks per 30 days, this measured scenario
+is approximately **14.14 GB downloaded and 650 minutes** of work before startup/retries, versus
+4.72 GB and 338 minutes for the earlier prototype measurements. If every hourly artifact retained
+both current and new-history JSON, 72 artifacts would be about 179 MB raw before compression.
+Storage/transfer use increases; no new service, credentials, region, paid entitlement, or billing
+commitment is introduced. Changed-cycle publication frequency and Pages build count are unchanged.
+
+### Original six-window measurements (historical baseline)
 
 On 2026-10-07, automatic discovery selected **12Z QMD**, with 06Z also published. The run extracted
 **2,969 cells and six windows** using **38,480,036 downloaded bytes**, **42 requests**, **55.089 seconds**

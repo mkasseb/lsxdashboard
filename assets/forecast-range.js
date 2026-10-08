@@ -13,7 +13,7 @@ var NbmRange=(function(){
   function regionalPoint(d,point){
     var c=d.coverage;
     if(d.units!=='K'||!c||c.south!==38.2||c.north!==39.2||c.west!==-91.1||c.east!==-89.5||c.maxDistanceKm!==3||
-       !Array.isArray(d.cells)||d.cells.length<100||d.cells.length>5000||!Array.isArray(d.periods)||d.periods.length!==6||
+       !Array.isArray(d.cells)||d.cells.length<100||d.cells.length>5000||!Array.isArray(d.periods)||![6,18].includes(d.periods.length)||
        typeof d.gridHash!=='string'||!/^[a-f0-9]{32}$/.test(d.gridHash)||!finite(point.lat)||!finite(point.lon))throw new Error('Invalid regional coverage');
     if(point.lat<c.south||point.lat>c.north||point.lon<c.west||point.lon>c.east)return null;
     var chosen=-1,km=Infinity,seen={};
@@ -25,7 +25,9 @@ var NbmRange=(function(){
     });
     if(km>c.maxDistanceKm)return null;
     var cell={index:d.cells[chosen][0],lat:d.cells[chosen][1],lon:d.cells[chosen][2],distance:km,gridHash:d.gridHash};
-    var periods=d.periods.map(function(p){
+    var firstEnd=Math.ceil((time(d.run)+12*H)/(12*H))*12*H+6*H;
+    var periods=d.periods.map(function(p,i){
+      if(time(p.end)!==firstEnd+i*12*H||p.kind!==(new Date(time(p.end)).getUTCHours()===6?'TMAX':'TMIN'))throw new Error('Incomplete native horizon');
       if(!Array.isArray(p.kelvin)||p.kelvin.length!==d.cells.length||!Array.isArray(p.kelvin[chosen])||p.kelvin[chosen].length!==3||
          !Array.isArray(p.members)||p.members.length!==3)throw new Error('Missing native interval values');
       var values=p.kelvin[chosen],f=values.map(function(k){if(!finite(k))throw new Error('Invalid Kelvin');return (k-273.15)*9/5+32;});
@@ -75,50 +77,99 @@ var NbmRange=(function(){
   }
   function local(s){return new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'}).format(new Date(s));}
   function age(run,now){return ((now-run)/H).toFixed(1)+' hours';}
-  function paint(result){
-    var body=document.getElementById('nbmRange'),status=document.getElementById('nbmStatus');
-    if(!body||!status)return;
-    body.replaceChildren();
-    status.textContent=result.run?'QMD cycle '+new Date(result.run).toISOString().slice(0,16).replace('T',' ')+' UTC · '+age(result.run,Date.now())+' old':result.reason;
-    function add(tag,text,parent){var el=document.createElement(tag);el.textContent=text;(parent||body).appendChild(el);return el;}
-    if(!result.periods){add('p',result.reason);return;}
-    if(result.status==='partial')add('p','Partial data: some requested native intervals are missing.');
-    add('p','Supplemental model guidance. NWS forecasts and warnings above remain primary. The P10–P90 band contains the central 80% of the modeled distribution; outcomes outside it remain possible. P50 is the median, not the official NWS forecast.');
-    add('p','Native 18-hour extrema windows, not local calendar-day highs and lows. Times use America/Chicago; daylight-saving offsets follow each endpoint.');
-    var table=add('table','');table.className='nbm-table';
-    add('caption','Temperature percentiles (°F)',table);
-    var tr=add('tr','',add('thead','',table));
-    ['Native window','P10','P50','P90'].forEach(function(label){var th=add('th',label,tr);th.scope='col';});
-    var tb=add('tbody','',table);
-    result.periods.forEach(function(p){
-      var row=add('tr','',tb),th=add('th',(p.kind==='TMAX'?'Maximum':'Minimum')+' · '+local(p.start)+' – '+local(p.end),row);th.scope='row';
-      [p.p10,p.p50,p.p90].forEach(function(v){add('td',Math.round(v)+'°',row);});
+  // Pair only a unique same-kind overlap covering >=75% of a valid NWS period.
+  // It is a placement rule, never a claim that the two extrema windows are equivalent.
+  function align(days,periods,now){
+    var entries=[];
+    (days||[]).forEach(function(d,row){['day','night'].forEach(function(part){
+      var n=d[part],a=n&&time(n.startTime),b=n&&time(n.endTime);
+      if(!n||!finite(n.temperature)||n.temperatureUnit!=='F'||!finite(a)||!finite(b)||b<=now||b<=a||b-a>18*H||n.isDaytime!==(part==='day'))return;
+      entries.push({row:row,part:part,nws:n,choices:[]});
+    });});
+    var uses=periods.map(function(){return 0;});
+    entries.forEach(function(e){periods.forEach(function(p,i){
+      var a=time(e.nws.startTime),b=time(e.nws.endTime),s=time(p.start),t=time(p.end);
+      if(p.kind!==(e.part==='day'?'TMAX':'TMIN')||t<=now)return;
+      if(Math.max(0,Math.min(b,t)-Math.max(a,s))/(b-a)>=.75){e.choices.push(i);uses[i]++;}
+    });});
+    var matches=[],used={};
+    entries.forEach(function(e){
+      if(e.choices.length!==1||uses[e.choices[0]]!==1)return;
+      var i=e.choices[0],p=periods[i];used[i]=true;
+      matches.push({row:e.row,part:e.part,nws:e.nws,nbm:p,exact:time(e.nws.startTime)===time(p.start)&&time(e.nws.endTime)===time(p.end)});
     });
-    add('p','NOAA NBM QMD · nearest GRIB cell '+result.cell.lat.toFixed(3)+', '+result.cell.lon.toFixed(3)+' · '+result.cell.distance.toFixed(2)+' km from the requested point. One run, cell and native interval per percentile group.');
-    add('p','Model age follows the QMD cycle, not the page refresh. Values are withheld after 24 hours. Regional data covers only the documented St. Louis metro area.');
+    return {matches:matches,unmatched:periods.filter(function(p,i){return !used[i];})};
   }
+  var raw=null,storedPoint=null,storedSeq=-1,days=[],forecastPoint=null,forecastSeq=-1,requestSeq=0;
+  var failure='Checking NBM model guidance…';
+  function enabled(){return typeof FEEDS!=='undefined'&&!!FEEDS.nbmRange;}
+  function add(tag,text,parent,cls){var el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;parent.appendChild(el);return el;}
+  function bounds(p){return Math.round(p.p10)+'–'+Math.round(p.p90)+'°F';}
+  function windowText(a,b){return local(a)+' – '+local(b);}
+  function render(){
+    if(!enabled())return;
+    var status=document.getElementById('nbmStatus'),body=document.getElementById('nbmInfoBody'),daily=document.getElementById('daily');
+    if(!status||!body||!daily)return;
+    daily.querySelectorAll('.nbm-inline,.nbm-period-detail').forEach(function(el){el.remove();});
+    body.replaceChildren();
+    var currentData=raw&&storedSeq===locSeq&&storedPoint.lat===current.lat&&storedPoint.lon===current.lon;
+    var result=currentData?validate(raw,storedPoint,Date.now()):{status:'unavailable',reason:failure};
+    status.textContent=result.periods?'NBM model guidance · QMD cycle '+new Date(result.run).toISOString().slice(0,16).replace('T',' ')+' UTC · '+age(result.run,Date.now())+' old':result.reason;
+    add('p','NWS temperatures are the official forecast. NBM is separate model guidance: P10–P90 is the central 80% modeled range, with outcomes outside it possible; P50 is the median. No values are averaged or substituted.',body);
+    add('p','NBM maximum/minimum temperatures cover native 18-hour windows, not calendar-day highs/lows. A range appears alongside a day or night only when there is one unambiguous overlapping window. Expand the NWS row to compare both intervals. Rows without a range have no unique, currently usable NBM window. All times are Central, with daylight-saving offsets at each endpoint.',body);
+    if(!result.periods)return;
+    var pairing=align(forecastSeq===locSeq&&forecastPoint&&forecastPoint.lat===current.lat&&forecastPoint.lon===current.lon?days:[],result.periods,Date.now()),items=daily.querySelectorAll('.day-item');
+    var groups={};pairing.matches.forEach(function(m){(groups[m.row]||(groups[m.row]=[])).push(m);});
+    Object.keys(groups).forEach(function(index){
+      var item=items[index];if(!item)return;
+      var matches=groups[index],line=document.createElement('div');line.className='nbm-inline';
+      add('span','NBM P10–P90',line,'nbm-label');
+      matches.forEach(function(m){add('span',(m.part==='day'?'High ':'Low ')+bounds(m.nbm),line,'nbm-band');});
+      item.querySelector('.day').after(line);
+      var detail=document.createElement('div');detail.className='nbm-period-detail';
+      add('h3','Temperature guidance',detail);
+      matches.forEach(function(m){
+        var group=add('div','',detail,'nbm-comparison');
+        add('p','NWS '+(m.part==='day'?'high ':'low ')+m.nws.temperature+'°F · '+windowText(m.nws.startTime,m.nws.endTime),group,'nbm-official');
+        add('p','NBM '+(m.part==='day'?'maximum':'minimum')+' · P10 '+Math.round(m.nbm.p10)+'°F · P50 '+Math.round(m.nbm.p50)+'°F · P90 '+Math.round(m.nbm.p90)+'°F',group);
+        add('p',(m.exact?'Same interval: ':'Different interval (18 hours): ')+windowText(m.nbm.start,m.nbm.end),group,'nbm-window-note');
+      });
+      var grid=item.querySelector('.dd-grid');grid.before(detail);
+    });
+    if(result.status==='partial')add('p','Partial NBM data: some native windows are missing.',body);
+    add('p','Nearest native GRIB cell '+result.cell.lat.toFixed(3)+', '+result.cell.lon.toFixed(3)+' · '+result.cell.distance.toFixed(2)+' km from the selected location. Each percentile group shares one run, cell and interval. Data older than 24 hours is withheld; coverage is limited to the St. Louis metro region.',body);
+    if(pairing.unmatched.length){
+      add('h3','Unpaired model windows',body);
+      add('p','These windows have no unique matching NWS day/night entry with sufficient overlap. They are not paired comparisons or replacements for missing official temperatures.',body);
+      var list=add('ul','',body);
+      pairing.unmatched.forEach(function(p){add('li',(p.kind==='TMAX'?'Maximum':'Minimum')+' · '+windowText(p.start,p.end)+' · P10–P90 '+bounds(p)+' · P50 '+Math.round(p.p50)+'°F',list);});
+    }
+  }
+  function forecast(value){days=value;forecastPoint={lat:current.lat,lon:current.lon};forecastSeq=locSeq;render();}
+  function reset(){raw=null;storedPoint=null;storedSeq=-1;days=[];forecastPoint=null;forecastSeq=-1;requestSeq++;failure='Checking NBM model guidance…';render();}
   function load(){
-    var fresh=locGuard(),point={lat:current.lat,lon:current.lon};
+    var fresh=locGuard(),point={lat:current.lat,lon:current.lon},seq=++requestSeq;
     return getJSON('/data/nbm-range.json',null,locSignal()).then(function(d){
-      if(!fresh())return;
-      var result=validate(d,point,Date.now());paint(result);
+      if(!fresh()||seq!==requestSeq||point.lat!==current.lat||point.lon!==current.lon)return;
+      raw=d;storedPoint=point;storedSeq=locSeq;
+      var result=validate(d,point,Date.now());render();
       feedUpdate('nbmRange',['ready','partial'].includes(result.status)?result.status:'unavailable',d.run);
     }).catch(function(){
-      if(!fresh())return;
-      paint({status:'unavailable',reason:'Forecast range unavailable. No current extracted NBM file could be loaded.'});
+      if(!fresh()||seq!==requestSeq)return;
+      raw=null;failure='NBM model guidance unavailable. NWS forecasts remain primary.';render();
       feedUpdate('nbmRange','unavailable');
     });
   }
   function init(){
     if(new URLSearchParams(location.search).get('nbm')==='0')return;
-    var card=document.createElement('section');card.className='card';card.id='nbmRangeCard';
-    card.innerHTML='<h2>Forecast range <span class="sub">Temperature</span></h2><p id="nbmStatus" role="status">Checking NBM range…</p><details><summary>Temperature range details</summary><div id="nbmRange"></div></details>';
-    document.querySelector('.masonry').appendChild(card);
-    card.querySelector('details').addEventListener('toggle',function(){if(typeof scheduleMasonry==='function')scheduleMasonry();});
-    FEEDS.nbmRange={label:'NBM range',card:'nbmRangeCard',load:'loadNbmRange',every:15*60000,age:30*60000,local:true,failure:'unavailable',reset:{nbmStatus:'Checking NBM range…',nbmRange:''}};
+    var section=document.getElementById('forecastCard'),info=document.createElement('div');info.id='nbmInfo';
+    info.innerHTML='<p id="nbmWindowHelp">NBM uses 18-hour windows; expand a day to compare timing and percentiles.</p><p id="nbmStatus" role="status">Checking NBM model guidance…</p><details><summary>About NBM ranges &amp; unmatched windows</summary><div id="nbmInfoBody"></div></details>';
+    section.appendChild(info);
+    info.querySelector('details').addEventListener('toggle',function(){if(typeof scheduleMasonry==='function')scheduleMasonry();});
+    FEEDS.nbmRange={label:'NBM range',load:'loadNbmRange',every:15*60000,age:30*60000,local:true,failure:'unavailable'};
     feedChecks.nbmRange={status:'loading',successAt:0,issuedAt:0,saved:false};
   }
-  return {validate:validate,local:local,load:load,init:init};
+  return {validate:validate,local:local,align:align,load:load,init:init,forecast:forecast,reset:reset};
 })();
 function loadNbmRange(){return NbmRange.load();}
 if(typeof document!=='undefined')NbmRange.init();

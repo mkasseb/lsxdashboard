@@ -20,6 +20,14 @@ const expected=[
  ['#hazards .hz-row:nth-child(2) a',cpc+'predictions/threats/threats.php','CPC Days 8–14 hazards outlook']
 ];
 async function contracts(page){
+ // Measure resting hit targets after the finite card entrance, not transformed
+ // intermediate animation coordinates. Keep the full 44px requirement.
+ await page.locator('.masonry').evaluate(async e=>{
+  const animations=[];
+  for(let node=e;node;node=node.parentElement)animations.push(...node.getAnimations());
+  await Promise.all(animations.filter(a=>Number.isFinite(a.effect.getComputedTiming().endTime))
+   .map(a=>a.finished.catch(()=>{})));
+ });
  for(const [selector,url,label] of expected){
   const a=page.locator(selector);
   assert.equal(await a.count(),1,selector);
@@ -34,7 +42,12 @@ async function contracts(page){
   }
   assert.equal(await a.locator('a,button,input,summary,[role="button"]').count(),0,'No nested controls');
   assert.equal(await a.evaluate(e=>!!e.parentElement.closest('a,button,summary,[role="button"]')),false);
-  assert((await a.boundingBox()).height>=44,'44px touch target: '+selector);
+  const box=await a.boundingBox();
+  if(!box||box.height<44){
+   const evidence=await a.evaluate(e=>({height:getComputedStyle(e).height,minHeight:getComputedStyle(e).minHeight,
+    ancestors:Array.from((function*(n){for(;n;n=n.parentElement)yield n;})(e)).map(n=>({tag:n.tagName,id:n.id,transform:getComputedStyle(n).transform}))}));
+   assert.fail('44px touch target: '+selector+' '+JSON.stringify({box,evidence}));
+  }
  }
 }
 async function activate(page,context,selector,url,touch){

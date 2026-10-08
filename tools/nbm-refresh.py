@@ -22,6 +22,7 @@ nbm = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(nbm)
 UTC = timezone.utc
 COVERAGE = dict(south=38.2, north=39.2, west=-91.1, east=-89.5, maxDistanceKm=3)
+PERIOD_COUNT = 18  # Nine days of native windows: buffers a <=24h-old cycle around seven NWS rows.
 NS = {'s': 'http://s3.amazonaws.com/doc/2006-03-01/'}
 
 
@@ -68,7 +69,7 @@ def hours_for(run):
     first = cycle+timedelta(hours=18)
     while first.hour not in (6, 18):
         first += timedelta(hours=1)
-    return [int((first-cycle).total_seconds()/3600)+12*i for i in range(6)]
+    return [int((first-cycle).total_seconds()/3600)+12*i for i in range(PERIOD_COUNT)]
 
 
 def plan(client, run):
@@ -191,7 +192,7 @@ def retained_unchanged(client, directory, run, planned):
         stamp = datetime.strptime(run, '%Y%m%d%H').replace(tzinfo=UTC)
         if (receipt != dict(validator='regional-v1', run=nbm.iso(stamp), sha256=hashlib.sha256(raw).hexdigest()) or
                 data.get('run') != nbm.iso(stamp) or data.get('schema') != 2 or data.get('coverage') != COVERAGE or
-                data.get('missingHours') != [] or len(data.get('periods', [])) != 6):
+                data.get('missingHours') != [] or len(data.get('periods', [])) != len(planned)):
             return None
     except (OSError, ValueError, TypeError):
         return None

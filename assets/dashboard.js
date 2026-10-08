@@ -2963,6 +2963,7 @@ function locSignal(){ if(!locAbort) locAbort=new AbortController(); return locAb
 /* Derived state is cleared on every change so a render can never MIX two places -- e.g. the new
    town's forecast high ranked against the old town's 96-year record. */
 function resetLocationState(){
+  if(typeof NbmRange!=="undefined") NbmRange.reset();
   lastAlertData=null; alertsRetained=false; retainedAlertKey=""; alertUpdateNotice();
   renderBriefingEvidence._models=null;
   Object.keys(FEEDS).forEach(function(k){if(FEEDS[k].local&&FEEDS[k].tracked!==false) feedChecks[k]={status:"loading",successAt:0,issuedAt:0,saved:false};});
@@ -3758,7 +3759,13 @@ function saveSnapshot(){
     if(!c||!c.successAt||(!c.saved&&c.status!=="ready"&&c.status!=="partial")||Date.now()-c.successAt>p.ttl) return;
     var el=document.getElementById(p.id);
     if(!el) return;
-    var h=el.innerHTML;
+    // NBM is revalidated from its own source; never persist it inside the NWS HTML snapshot.
+    var snapshotEl=el;
+    if(p.id==="daily"){
+      snapshotEl=el.cloneNode(true);
+      snapshotEl.querySelectorAll(".nbm-inline,.nbm-period-detail").forEach(function(node){node.remove();});
+    }
+    var h=snapshotEl.innerHTML;
     if(!h||/class="loading"/.test(h)) return;   // never cache a spinner
     snap.parts[p.id]=h;
     snap.feeds[p.feed]={status:c.status,successAt:c.successAt,issuedAt:c.issuedAt};
@@ -4250,7 +4257,6 @@ function layoutMasonry(){
       droughtCard:6,    // drought outlook
       climateCard:7,    // climate vs normal
       cpcCard:8,        // week-ahead leanings
-      nbmRangeCard:9,   // opt-in supplemental model temperature range
       linksCard:10      // deep-dive links — reference, lowest
     };
     return (RANK[id]!=null) ? RANK[id] : 50;

@@ -60,7 +60,7 @@ def candidate(directory, now):
             type(status.get('changed')) is not bool or status.get('dataRun') != data['run'] or
             not 0 <= (now-stamp(status['checkedAt'])).total_seconds() <= 1800 or
             not 0 <= (now-stamp(data['run'])).total_seconds() < 86400 or
-            data.get('schema') != 2 or data.get('missingHours') != []):
+            data.get('schema') != 2 or data.get('missingHours') != [] or len(data.get('periods', [])) != 18):
         raise ValueError('Incomplete, failed or stale candidate')
     for period in data['periods']:
         if len(period['kelvin']) != len(data['cells']):
