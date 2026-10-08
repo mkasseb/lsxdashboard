@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Offline transactional publication, cadence and producer-isolation tests."""
 from datetime import datetime, timedelta, timezone
+import gzip
 import hashlib
 import importlib.util
 import json
@@ -33,7 +34,7 @@ class PublishTests(unittest.TestCase):
         git(self.repo, 'remote', 'add', 'origin', str(self.remote)); git(self.repo, 'push', 'origin', 'main')
         self.base = self.head()
         self.now = datetime(2026, 10, 8, 14, 20, tzinfo=timezone.utc)
-        self.data = {name: json.loads((ROOT/p.PATHS[0]).read_text()) for name,p in m.PRODUCTS.items()}
+        self.data = {name: json.loads(gzip.decompress((ROOT/'tools/fixtures/weather'/file).read_bytes())) for name,file in [('daily','nbm-regional-full-recorded.json.gz'),('hourly','nbm-hourly-full-recorded.json.gz')]}
         self.write()
 
     def head(self): return git(self.remote, 'rev-parse', 'main').stdout.decode().strip()
@@ -198,9 +199,21 @@ class RunnerAndCadenceTests(unittest.TestCase):
                 calls.append(args[1]);(d/'nbm-hourly-status.json').write_text('{"status":"unchanged"}')
                 return type('Result',(),{'returncode':0})()
             out=r.refresh(d,execute);self.assertEqual(len(calls),1);self.assertIn('hourly',calls[0]);self.assertEqual(out['status'],'partial')
-    def test_workflow_requires_explicit_activation_and_has_one_schedule(self):
+    def test_release_workflow_default_and_explicit_opt_out(self):
         w=(ROOT/'.github/workflows/nbm-refresh.yml').read_text()
-        self.assertEqual(w.count("vars.NBM_REFRESH_ENABLED == 'true'"),3)
+        import re
+        expressions={name:re.search(r'  '+name+r':\n(?:[^\n]*\n)*?    if: \$\{\{ (.*?) \}\}',w).group(1) for name in ('extract','publish','verify')}
+        for ref in ('refs/heads/main','refs/heads/codex/nbm-hourly-range'):
+            for event in ('schedule','workflow_dispatch'):
+                for flag in ('','true','false'):
+                    for usable in ('true','false'):
+                        values={'github.ref':ref,'github.event_name':event,'vars.NBM_REFRESH_ENABLED':flag,'needs.extract.outputs.publishable':usable,'needs.publish.outputs.verifiable':usable}
+                        actual={}
+                        for job,expression in expressions.items():
+                            for key,value in values.items():expression=expression.replace(key,repr(value))
+                            actual[job]=eval(expression.replace('&&',' and ').replace('||',' or '),{'__builtins__':{}})
+                        enabled=ref=='refs/heads/main' and flag!='false'
+                        self.assertEqual(actual,{'extract':event=='workflow_dispatch' or enabled,'publish':enabled and usable=='true','verify':enabled and event=='workflow_dispatch' and usable=='true'})
         self.assertIn('timeout-minutes: 25',w);self.assertIn('steps.refresh.outputs.publishable',w)
         self.assertIn('nbm-combined-publish.py --directory',w);self.assertEqual(w.count('contents: write'),1)
         hourly=(ROOT/'.github/workflows/nbm-hourly-refresh.yml').read_text();self.assertNotIn('  schedule:',hourly)

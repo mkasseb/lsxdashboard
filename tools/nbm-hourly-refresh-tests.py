@@ -52,7 +52,7 @@ class Tests(unittest.TestCase):
             with patch.object(c,'version',side_effect=[v]*48+[dict(v,contentLength=10001)]),patch.object(c,'request',return_value=(b'test',{})),patch.object(m,'decode',return_value=('a',[],[])):
                 with self.assertRaisesRegex(ValueError,'revised'):m.extract(c,Path(t),'2026100806')
     def test_unchanged_preserves_retrieval(self):
-        d=json.loads((Path(__file__).parent.parent/'data/nbm-hourly.json').read_text())
+        d=json.loads(gzip.decompress((Path(__file__).parent/'fixtures/weather/nbm-hourly-full-recorded.json.gz').read_bytes()))
         c=m.Client()
         with tempfile.TemporaryDirectory()as t,patch.object(m,'retained',return_value=d),patch.object(c,'version',side_effect=[h['publication']for h in d['hours']]),patch.object(c,'request')as request:
             found,changed=m.extract(c,Path(t),'2026100806');self.assertIs(found,d);self.assertFalse(changed);request.assert_not_called()

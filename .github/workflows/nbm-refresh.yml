@@ -1,7 +1,7 @@
 name: NBM combined refresh
 
-# Prepared recurring wiring. Activation requires an explicit reviewed repository variable.
-# One budgeted commit combines changed daily/hourly pairs; neither draft enables it.
+# Release activation is reviewed in code: main runs unless explicitly opted out.
+# Set NBM_REFRESH_ENABLED=false to stop scheduled extraction and all publication.
 on:
   workflow_dispatch:
   schedule:
@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   extract:
-    if: ${{ github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && vars.NBM_REFRESH_ENABLED == 'true') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && vars.NBM_REFRESH_ENABLED != 'false') }}
     outputs:
       publishable: ${{ steps.refresh.outputs.publishable }}
     runs-on: ubuntu-latest
@@ -62,7 +62,7 @@ jobs:
 
   publish:
     # Only normal writes to main; existing branch and Actions policies remain authoritative.
-    if: ${{ github.ref == 'refs/heads/main' && vars.NBM_REFRESH_ENABLED == 'true' && needs.extract.outputs.publishable == 'true' }}
+    if: ${{ github.ref == 'refs/heads/main' && vars.NBM_REFRESH_ENABLED != 'false' && needs.extract.outputs.publishable == 'true' }}
     needs: extract
     outputs:
       verifiable: ${{ steps.publish.outputs.verifiable }}
@@ -102,7 +102,7 @@ jobs:
 
   verify:
     # Real-site browser checks run on manual rollout checks, not every hourly poll.
-    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && vars.NBM_REFRESH_ENABLED == 'true' && needs.publish.outputs.verifiable == 'true' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && vars.NBM_REFRESH_ENABLED != 'false' && needs.publish.outputs.verifiable == 'true' }}
     needs: publish
     runs-on: ubuntu-latest
     timeout-minutes: 12
