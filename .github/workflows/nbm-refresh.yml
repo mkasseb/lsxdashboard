@@ -1,6 +1,7 @@
-name: NBM regional refresh
+name: NBM combined refresh
 
-# Hourly checks publish only changed validated cycles/revisions.
+# Release activation is reviewed in code: main runs unless explicitly opted out.
+# Set NBM_REFRESH_ENABLED=false to stop scheduled extraction and all publication.
 on:
   workflow_dispatch:
   schedule:
@@ -15,41 +16,56 @@ concurrency:
 
 jobs:
   extract:
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/main' && vars.NBM_REFRESH_ENABLED != 'false') }}
+    outputs:
+      publishable: ${{ steps.refresh.outputs.publishable }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
-      - name: Load last committed forecast and receipt
+        with:
+          fetch-depth: 0
+      - name: Load last committed products and publication budget
+        id: seed
         run: |
-          git fetch --no-tags origin refs/heads/main
-          python tools/nbm-publish.py --seed --expected-head FETCH_HEAD --directory "$RUNNER_TEMP/nbm-data"
+          # On a draft, rehearse against its reviewed snapshots. Main always reads fresh main.
+          SEED_HEAD=HEAD
+          if [ "$GITHUB_REF" = 'refs/heads/main' ]; then
+            git fetch --no-tags origin refs/heads/main
+            SEED_HEAD=FETCH_HEAD
+          fi
+          python tools/nbm-combined-publish.py --seed --expected-head "$SEED_HEAD" --directory "$RUNNER_TEMP/nbm-data"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Install decoder
+        if: ${{ steps.seed.outputs.eligible == 'true' }}
         run: python -m pip install -r tools/nbm-requirements.txt
-      - name: Extract latest complete regional QMD cycle
-        run: python tools/nbm-refresh.py --output-dir "$RUNNER_TEMP/nbm-data"
+      - name: Refresh independent products within the publication budget
+        id: refresh
+        run: python tools/nbm-combined-refresh.py --output-dir "$RUNNER_TEMP/nbm-data"
       - name: Report extraction and resource use
         if: always()
         run: |
-          if [ -f "$RUNNER_TEMP/nbm-data/nbm-status.json" ]; then
-            python -m json.tool "$RUNNER_TEMP/nbm-data/nbm-status.json" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f "$RUNNER_TEMP/nbm-data/nbm-combined-status.json" ]; then
+            python -m json.tool "$RUNNER_TEMP/nbm-data/nbm-combined-status.json" >> "$GITHUB_STEP_SUMMARY"
           else
             echo 'Extraction did not produce a status file; inspect the failed step.' >> "$GITHUB_STEP_SUMMARY"
           fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: nbm-regional-refresh
+          name: nbm-combined-refresh
           path: ${{ runner.temp }}/nbm-data
           retention-days: 3
           if-no-files-found: error
 
   publish:
     # Only normal writes to main; existing branch and Actions policies remain authoritative.
-    if: ${{ github.ref == 'refs/heads/main' }}
+    if: ${{ github.ref == 'refs/heads/main' && vars.NBM_REFRESH_ENABLED != 'false' && needs.extract.outputs.publishable == 'true' }}
     needs: extract
+    outputs:
+      verifiable: ${{ steps.publish.outputs.verifiable }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -58,16 +74,18 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: main
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
       - uses: actions/download-artifact@v4
         with:
-          name: nbm-regional-refresh
+          name: nbm-combined-refresh
           path: ${{ runner.temp }}/nbm-candidate
       - name: Validate and publish only changed forecast data
+        id: publish
         run: |
-          python tools/nbm-publish.py --directory "$RUNNER_TEMP/nbm-candidate" --expected-head "$GITHUB_SHA" > "$RUNNER_TEMP/nbm-publication.json"
+          python tools/nbm-combined-publish.py --directory "$RUNNER_TEMP/nbm-candidate" --expected-head "$GITHUB_SHA" > "$RUNNER_TEMP/nbm-publication.json"
       - name: Report publication result
         if: always()
         run: |
@@ -84,7 +102,7 @@ jobs:
 
   verify:
     # Real-site browser checks run on manual rollout checks, not every hourly poll.
-    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && vars.NBM_REFRESH_ENABLED != 'false' && needs.publish.outputs.verifiable == 'true' }}
     needs: publish
     runs-on: ubuntu-latest
     timeout-minutes: 12
@@ -95,7 +113,7 @@ jobs:
           node-version: '22'
       - uses: actions/download-artifact@v4
         with:
-          name: nbm-regional-refresh
+          name: nbm-combined-refresh
           path: ${{ runner.temp }}/nbm-live
       - name: Install browser verification tools
         run: |

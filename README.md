@@ -536,3 +536,174 @@ Run `NODE_PATH=/path/to/test/node_modules CHROMIUM_PATH=/usr/bin/chromium node t
 for the additional phone/tablet/desktop checks in both themes. Set `REDESIGN_ARTIFACTS` to save
 explicitly labeled fixture screenshots; these sample values and controlled map tiles are test-only.
 The existing weather, seasonal and real-cache upgrade suites remain required.
+
+### Optional 24-hour NBM temperature band (dependent review)
+
+The hourly branch depends on the reviewed seven-day work in PR #58. The existing NWS hourly
+line, values, summaries, precipitation, headlines and risk logic remain primary. A checkbox in
+**Plan your day** enables a separate P10–P90 temperature band in the 24-hour view. It plots the
+actual model bounds; the NWS line can be outside them. Slider, keyboard and touch details show
+P10/P50/P90 and the valid Central time with CDT/CST. The range is model guidance, not an NWS
+confidence interval. Longer views remain NWS-only; no interpolation fills missing native hours.
+
+`tools/nbm-hourly-refresh.py` independently extracts instantaneous **TMP at 2 m**, GRIB2 PDT6,
+NOAA centre, Kelvin, native P10/P50/P90. It checks decoded run, forecast step, valid UTC time,
+percentile order and the identical subset grid/cell coordinates across all groups. These fields
+are not the 18-hour TMAX/TMIN extrema. Current inventories were verified to include hourly
+percentiles through f060; later sampled fields are three-hourly. QMD publication is about seven
+hours behind its 00/06/12/18Z cycle, unlike the faster core product. The separate hourly payload
+contains f001–f048, so a source younger than 24 hours can cover the current rolling 24-hour window.
+The browser requires unique exact UTC matches to one-hour NWS periods, with no replacement of
+missing NWS temperatures and no substitution of model values into official forecasts.
+
+The actual download source is NOAA NOMADS' regional GRIB subset service. The region is padded
+by 0.08 degrees before extraction and trimmed to the existing 0.05-degree cell halo. The complete
+rehearsal retained 2,969 cells. Thirty P10/P50/P90 comparisons at corners, edge midpoints and
+interior points in one authentic hour matched the original S3 full-grid native cells and values;
+this is sampled cross-source verification, not proof that all source files are byte-identical.
+The recorded subset GRIB and `nbm-hourly-edge-audit.json` make that check inspectable. All 48
+hours independently passed decoded metadata, coverage and percentile validation.
+
+NOMADS supplies Last-Modified and Content-Length, not S3's ETag. Each original NOMADS object's
+metadata is checked before and after its subset is decoded; the subset SHA256 is recorded.
+S3 listings are used only to discover actually published cycles (NOMADS can return 403 for an
+unpublished path). An access denial is never treated as a retry/fallback signal. The unchanged
+check compares all 48 NOMADS revision indicators and a retained receipt; it is not a cryptographic
+proof against an upstream edit preserving both timestamp and length. No cross-source ETag identity
+is claimed. Source age is based on the actual run; unchanged checks preserve retrieval time.
+
+Hourly bounds are separate from the daily pipeline: **180 requests, 30 MB downloaded, 600 seconds,
+30-second request timeout, two attempts for transient failures, 4 MB output**, and a one-second
+pause between subset requests. The October 8 06Z full rehearsal measured **146 requests,
+6,408,858 bytes, 410.123 seconds, 107.07 MiB peak RSS**, and **3,819,936 bytes of JSON**. The newer
+12Z QMD was not listed. Values are retained to 0.001 K (maximum rounding error 0.0005 K, less than
+0.001°F), avoiding meaningless decimal expansion from subset repacking. The first rehearsal
+rejected oversized output; it did not publish it or relax the size guard. A subsequent unchanged
+check used **50 requests, 1,038 response-body bytes and 23.157 seconds**, without replacing the
+snapshot. Measurements are in `tools/fixtures/weather/nbm-hourly-*-status-recorded.json` and
+`nbm-hourly-status-recorded.json`. Header/transport overhead is not included in body-byte counts.
+
+At 120 changed cycles and 600 unchanged checks per 30 days, these measurements imply roughly
+**0.77 GB of downloaded bodies and 1,052 execution minutes**, before runner setup/retries, in
+addition to the existing daily job. The hourly browser payload adds 3.82 MB uncompressed per
+changed response (1.07 MB with local gzip; actual delivery encoding can differ). If retained as 72 hourly artifacts, one snapshot each is about 275 MB raw before
+compression. These are scenarios, not a new spending commitment. No paid service, credentials or
+browser network permission is added. Reliability and latency of NOAA's subset service remain an
+operational dependency; budget exhaustion or malformed/incomplete groups preserve last-good data,
+which still expires at 24 hours of source age.
+
+`tools/nbm-hourly-publish.py` reuses the existing guarded Git publisher but permits only the hourly
+JSON and receipt. It rejects partial, stale, malformed, oversized, rollback or obsolete-code
+candidates and preserves unrelated files. Real local Git tests cover races and remote rejection.
+The **NBM hourly rehearsal** workflow is manual and read-only: it produces artifacts without a
+schedule or publication job. Production activation is handled by the combined release configuration
+below. Immutable review previews still expire normally rather than silently refreshing themselves. Hourly model graphics are excluded from
+saved NWS chart HTML and cannot pair with restored-only official data.
+
+### Refresh reliability and publication budget (PR #59, release activation)
+
+This section supersedes the earlier prototype's activation and four-cycles/day planning
+assumptions. The daily and hourly products now share **one recurring workflow and one publisher**.
+The release-approved cron checks hourly at minute 17 on `main`, unless the repository variable
+`NBM_REFRESH_ENABLED` is explicitly `false`. Publication and manual verification use the same
+opt-out. An unset variable enables this reviewed release configuration; branch dispatches remain
+read-only rehearsals. Variable administration is not available to the release integration, so
+activation is an ordinary reviewed code change rather than a new credential or permission. The existing
+job-scoped `contents: write` permission is unchanged; there are no new secrets, tokens or services.
+The hourly-only workflow remains manual and read-only, with no second schedule.
+
+Each eligible check starts from committed daily/hourly pairs and the publication budget on a
+freshly fetched `main`. Each producer has independent bounds and a 630-second process deadline.
+The sequential extraction job has a 25-minute limit: up to 1,260 seconds of producer execution,
+plus checkout/setup/reporting. Daily source limits remain 100 requests/150 MB/600 seconds;
+hourly limits remain 180 requests/30 MB/600 seconds, 4 MB output, two request attempts, and
+one-second subset pacing. Failed/timed-out products cannot reuse a previous successful status.
+Known resource use is reported even on producer failure; killed-process totals are explicitly
+marked `resourceUsageIncomplete`, and their unreported work is not claimed as zero.
+
+Hourly readiness now requires every exact CONUS f001–f048 file in the bounded S3 inventory.
+A listing may be truncated after those files because it contains other regions; all 48 required
+keys must still be present. Advertised incomplete cycles and transient failures receive at most
+two selection attempts, 15 seconds apart, within the same total resource budget, before an older
+eligible cycle is considered. Missing/invalid percentiles cannot enter a published snapshot.
+403/access denials are never retried or hidden by fallback. Both products must be individually
+complete for publication (18 native daily windows; 48 instantaneous hourly fields). A failed
+product retains its entire last-good pair, while its healthy sibling may publish. Their source
+cycles may differ; no source age is reset by checking, retaining or publishing data.
+
+`nbm-combined-publish.py` validates each candidate/status/receipt independently, fetches current
+`main`, checks code freshness and per-product rollback, and uses one private Git index for one
+ordinary fast-forward push. Changed pairs and `data/nbm-publication.json` are committed atomically.
+Only those **five allowlisted data files** can change. A failed sibling is omitted completely;
+its remote bytes stay intact. A partially successful publication is explicitly audited as
+`degraded` and returns a failed job status so the failure remains visible. Two failed products
+make no commit. A race/rejection never force-pushes, rebases or automatically retries an ambiguous
+write. Local interrupted pairs are not atomic across two filesystem replacements, but an invalid
+receipt or unsuccessful status prevents them from becoming a Git publication.
+
+**Budget:** the manifest allows at most one changed data commit assigned to each six-hour UTC
+preparation window (00–06, 06–12, 12–18, 18–24). The same cap applies to manual publisher calls.
+It is read from the fetched remote head and advanced only in a changed publication. Unchanged,
+failed and deferred checks do not advance it. An absent manifest can bootstrap only with complete
+history and no previous manifest; a deleted, malformed or future-dated established manifest fails
+closed. `preparedAt` is the commit preparation time, **not a confirmed deployment timestamp**.
+A push/build can complete across a window or billing-month boundary; neighboring windows can
+publish close together. The cap is 120 assigned commits over 30 UTC days or 124 over 31, not a
+promise about all builds in the Cloudflare billing month.
+
+A closed window skips NOAA extraction and decoder installation. The next open window performs
+fresh validation; deferred candidates are not blindly published later. A fixed f001–f048 hourly
+payload is aligned to the rolling view in the browser, so moving the clock or requested horizon
+never rewrites the payload. A no-op preserves the original retrieval timestamp and receipt.
+A late product, revision, or recovering sibling can wait nearly six hours after another product
+uses its window. This can cause an unavailable interval during upstream disruption: old data is
+still withheld at 24 hours of **source-cycle age**. The cap deliberately trades fastest possible
+recovery for a predictable data-commit budget; the approved release retains that tradeoff.
+
+Batching alone is insufficient: staggered daily/hourly arrivals can otherwise cause two commits
+per cycle, and revisions could turn hourly checks into 720 monthly commits. Simulations cover
+hourly revisions, clock/horizon movement, no-ops, fixed-window boundaries and sibling recovery;
+real Git tests cover one transaction, retained bytes, rollback, concurrent writes and rejection.
+Cloudflare documents [500 Free builds/month](https://developers.cloudflare.com/pages/platform/limits/).
+App commits, preview builds, manual rebuilds, other writers and carried-over builds are outside
+this publisher's cap. Existing account usage is unverified. No free-usage or zero-overage guarantee
+is made for Cloudflare headroom or storage charges. All jobs in the refresh and rehearsal
+workflows use standard `ubuntu-latest` GitHub-hosted runners. This repository is public, so
+[that runner execution is free](https://docs.github.com/en/billing/concepts/product-billing/github-actions):
+the runtime estimate below is not billable runner minutes or consumption of a private-repository
+minutes allowance. Larger runners would be charged even for a public repository; none are selected.
+Artifact/cache storage and other service limits remain separate from runner execution and
+Cloudflare builds.
+
+Live normal-TLS rehearsal measurements (October 8): fresh daily extraction **89 requests,
+115,471,105 response-body bytes, 119.696 seconds**; a combined unchanged check **103 requests,
+845,578 bytes, 70.345 seconds**, with unchanged hourly data/receipt bytes and retrieval time.
+Recorded reports are `nbm-daily-reliability-recorded.json` and `nbm-combined-noop-recorded.json`.
+The first rehearsal correctly isolated a too-strict inventory check as an hourly failure while
+daily extraction succeeded; the inventory handling was corrected and the combined check passed.
+The earlier authentic full hourly extraction measured 146 requests, 6,408,858 bytes and 410.123
+seconds; the new full inventory adds roughly 0.34 MB compared with its old discovery query.
+Combining those observations, a planning scenario of 120 paired extractions, 120 eligible no-ops
+and 480 closed-window skips is approximately **14.8 GB of NOAA response bodies, 40,560 requests
+and 1,200 producer minutes of runtime per 30 days**, before setup/retries—not paid runner minutes
+for this public repository on standard runners. This is an estimate assembled
+from separate measured runs, not a measured month or a bound. Failed runs can consume their full
+budgets without publishing. Git checkout/history transfer, package installation, response headers,
+artifact storage, app/preview CI and source revisions are additional. Full history is fetched for
+reliable deleted-budget detection; repository growth therefore remains an operational cost.
+Artifacts can include both current pairs plus daily history: roughly 6.3 MB per changed artifact
+before compression in this rehearsal, about 450 MB if all 72 hourly artifacts were that size.
+Account quotas and remaining usage are not verified here; this existing-service release makes no zero-overage promise.
+
+The interface says **model range** and **middle estimate**, with percentile definitions, valid
+hour/units and source-cycle details in a keyboard/touch-accessible disclosure. The band represents
+the central 80% of the modeled distribution, with about 10% below and above—not guaranteed limits
+or an NWS confidence interval. The middle estimate is P50 (the median), not the midpoint of P10
+and P90. Daily rows also use the shorter “NBM range” label while preserving explicit native
+18-hour windows in their details. A failed browser check retains validated same-location guidance
+with a clear previous-range notice until its original expiry; location reset clears it immediately.
+
+Offline hourly regression and transaction tests use the authentic compressed recording
+`tools/fixtures/weather/nbm-hourly-full-recorded.json.gz` (unchanged October 8 06Z source bytes),
+paired with recorded NWS responses and a fixed clock. Production JSON is allowed to refresh
+without rewriting historical test expectations. Live checks separately validate current data.

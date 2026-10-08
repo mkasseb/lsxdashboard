@@ -1,0 +1,28 @@
+name: NBM hourly rehearsal
+
+# Review-only: manual extraction artifacts. No schedule or production publication.
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Seed reviewed hourly snapshot
+        run: python tools/nbm-hourly-publish.py --seed --expected-head HEAD --directory "$RUNNER_TEMP/nbm-hourly"
+      - name: Install existing decoder
+        run: python -m pip install -r tools/nbm-requirements.txt
+      - name: Extract authentic hourly subset
+        run: python tools/nbm-hourly-refresh.py --output-dir "$RUNNER_TEMP/nbm-hourly"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nbm-hourly-rehearsal
+          path: ${{ runner.temp }}/nbm-hourly
+          retention-days: 3

@@ -7,3 +7,8 @@ __pycache__/
 /data/nbm-receipt.json
 /data/history/
 /data/.refresh.lock
+
+/data/nbm-hourly.json
+/data/nbm-hourly-receipt.json
+/data/nbm-hourly-status.json
+/data/.hourly.lock

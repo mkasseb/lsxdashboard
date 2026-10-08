@@ -16,7 +16,8 @@ const lum=rgb=>rgb.map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4)
    await p.evaluate(({names,theme})=>{
     applyTheme(theme);document.querySelector('.jump-wrap').style.position='static';document.querySelector('.skip').style.display='none';const g=document.createElement('section');g.id='iconReview';g.className='card';g.style.cssText='position:relative;max-width:900px;margin:16px auto';
     g.innerHTML='<h2>Weather icon visual QA — '+theme+'</h2><p>Actual condition artwork; daily / hourly / CDN fallback. No weather data.</p><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">'+names.map(name=>'<div class="icon-case"><p>'+name+'</p><div style="display:flex;align-items:center;gap:14px"><div class="day" style="display:block;padding:0"><span class="di">'+mcImg(name,'cloud',32,name)+'</span></div><svg width="32" height="32" viewBox="0 0 32 32" style="flex:none;width:32px;height:32px"><image class="h24-ic" width="32" height="32" href="'+ICON_BASE+name+'.svg?icon-review=1"/></svg><span class="fallback">'+wxImg(name,name.indexOf('night')<0,32,true)+'</span></div></div>').join('')+'</div>';
-    document.body.appendChild(g);g.querySelectorAll('.fallback img').forEach(wxiFail);
+    // Keep capture coordinates independent of asynchronous dashboard card resizing.
+    document.body.prepend(g);g.querySelectorAll('.fallback img').forEach(wxiFail);
     g.querySelectorAll('img').forEach(e=>{e.loading='eager';e.src+='?icon-review=1';});
    },{names,theme});
    await p.locator('#iconReview').scrollIntoViewIfNeeded();

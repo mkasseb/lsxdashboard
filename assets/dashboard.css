@@ -1822,3 +1822,16 @@ a.cpc-item{display:block;text-decoration:none;min-width:0}
 a.cpc-item .k{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
 a.cpc-item:hover{border-color:var(--accent)}
 .hz-when:has(.source-link){flex-basis:94px;white-space:normal;padding-top:0}
+
+/* Optional hourly model guidance: visually separate from the primary NWS curve. */
+.nbm-hourly-controls{margin:10px 0;font-size:12px;color:var(--muted)}
+.nbm-hourly-controls label{display:inline-flex;align-items:center;gap:8px;min-height:32px;font-weight:600;color:var(--text);cursor:pointer}
+.nbm-hourly-controls input{accent-color:var(--accent);width:16px;height:16px}
+#nbmHourlyStatus{margin:4px 0;line-height:1.5}
+.nbm-hourly-band{fill:#7186d8;fill-opacity:.23;stroke:#7186d8;stroke-opacity:.65;stroke-width:1;pointer-events:none}
+.nbm-hourly-detail{color:var(--muted);flex-basis:100%}
+.nbm-hourly-nws-key{display:block;font-weight:700;color:var(--text)}
+
+.nbm-hourly-controls details{font-size:12px;color:var(--muted);line-height:1.5;margin-top:4px}
+.nbm-hourly-controls summary{cursor:pointer;min-height:44px;display:flex;align-items:center;color:var(--accent)}
+.nbm-hourly-controls details p{margin:8px 0}

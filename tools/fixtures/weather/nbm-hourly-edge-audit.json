@@ -1,0 +1,337 @@
+{
+  "checkedAt": "2026-10-08T14:15:52.390123+00:00",
+  "sourceUrl": "https://noaa-nbm-grib2-pds.s3.amazonaws.com/blend.20261008/06/qmd/blend.t06z.qmd.f012.co.grib2",
+  "subsetSha256": "6485e268a17fd4ad1dfbd6a7a02fc89fab6fd121f1cdca11af8f8850263d7b31",
+  "checks": [
+    {
+      "point": [
+        38.2,
+        -91.1
+      ],
+      "percentile": 10,
+      "nativeIndex": 1617131,
+      "subsetIndex": 196,
+      "coordinateErrorDegrees": 4.5542993376557206e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        38.2,
+        -90.3
+      ],
+      "percentile": 10,
+      "nativeIndex": 1619504,
+      "subsetIndex": 288,
+      "coordinateErrorDegrees": 4.5383469426951706e-07,
+      "roundedValueDifferenceK": 5.684341886080802e-14
+    },
+    {
+      "point": [
+        38.2,
+        -89.5
+      ],
+      "percentile": 10,
+      "nativeIndex": 1621878,
+      "subsetIndex": 381,
+      "coordinateErrorDegrees": 4.5217533539698707e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        38.7,
+        -91.1
+      ],
+      "percentile": 10,
+      "nativeIndex": 1671065,
+      "subsetIndex": 1667,
+      "coordinateErrorDegrees": 4.544173464182677e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        38.7,
+        -90.3
+      ],
+      "percentile": 10,
+      "nativeIndex": 1673438,
+      "subsetIndex": 1759,
+      "coordinateErrorDegrees": 4.528179360363538e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        38.7,
+        -89.5
+      ],
+      "percentile": 10,
+      "nativeIndex": 1675812,
+      "subsetIndex": 1852,
+      "coordinateErrorDegrees": 4.511545341756573e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        39.2,
+        -91.1
+      ],
+      "percentile": 10,
+      "nativeIndex": 1722655,
+      "subsetIndex": 3075,
+      "coordinateErrorDegrees": 4.5335969645066143e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        39.2,
+        -90.3
+      ],
+      "percentile": 10,
+      "nativeIndex": 1725028,
+      "subsetIndex": 3167,
+      "coordinateErrorDegrees": 4.517561649208801e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        39.2,
+        -89.5
+      ],
+      "percentile": 10,
+      "nativeIndex": 1727401,
+      "subsetIndex": 3259,
+      "coordinateErrorDegrees": 4.501446397853215e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        38.8,
+        -90.79
+      ],
+      "percentile": 10,
+      "nativeIndex": 1680456,
+      "subsetIndex": 1934,
+      "coordinateErrorDegrees": 4.536187248049828e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        38.2,
+        -91.1
+      ],
+      "percentile": 50,
+      "nativeIndex": 1617131,
+      "subsetIndex": 196,
+      "coordinateErrorDegrees": 4.5542993376557206e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        38.2,
+        -90.3
+      ],
+      "percentile": 50,
+      "nativeIndex": 1619504,
+      "subsetIndex": 288,
+      "coordinateErrorDegrees": 4.5383469426951706e-07,
+      "roundedValueDifferenceK": 5.684341886080802e-14
+    },
+    {
+      "point": [
+        38.2,
+        -89.5
+      ],
+      "percentile": 50,
+      "nativeIndex": 1621878,
+      "subsetIndex": 381,
+      "coordinateErrorDegrees": 4.5217533539698707e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        38.7,
+        -91.1
+      ],
+      "percentile": 50,
+      "nativeIndex": 1671065,
+      "subsetIndex": 1667,
+      "coordinateErrorDegrees": 4.544173464182677e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        38.7,
+        -90.3
+      ],
+      "percentile": 50,
+      "nativeIndex": 1673438,
+      "subsetIndex": 1759,
+      "coordinateErrorDegrees": 4.528179360363538e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        38.7,
+        -89.5
+      ],
+      "percentile": 50,
+      "nativeIndex": 1675812,
+      "subsetIndex": 1852,
+      "coordinateErrorDegrees": 4.511545341756573e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        39.2,
+        -91.1
+      ],
+      "percentile": 50,
+      "nativeIndex": 1722655,
+      "subsetIndex": 3075,
+      "coordinateErrorDegrees": 4.5335969645066143e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        39.2,
+        -90.3
+      ],
+      "percentile": 50,
+      "nativeIndex": 1725028,
+      "subsetIndex": 3167,
+      "coordinateErrorDegrees": 4.517561649208801e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        39.2,
+        -89.5
+      ],
+      "percentile": 50,
+      "nativeIndex": 1727401,
+      "subsetIndex": 3259,
+      "coordinateErrorDegrees": 4.501446397853215e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        38.8,
+        -90.79
+      ],
+      "percentile": 50,
+      "nativeIndex": 1680456,
+      "subsetIndex": 1934,
+      "coordinateErrorDegrees": 4.536187248049828e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        38.2,
+        -91.1
+      ],
+      "percentile": 90,
+      "nativeIndex": 1617131,
+      "subsetIndex": 196,
+      "coordinateErrorDegrees": 4.5542993376557206e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        38.2,
+        -90.3
+      ],
+      "percentile": 90,
+      "nativeIndex": 1619504,
+      "subsetIndex": 288,
+      "coordinateErrorDegrees": 4.5383469426951706e-07,
+      "roundedValueDifferenceK": 5.684341886080802e-14
+    },
+    {
+      "point": [
+        38.2,
+        -89.5
+      ],
+      "percentile": 90,
+      "nativeIndex": 1621878,
+      "subsetIndex": 381,
+      "coordinateErrorDegrees": 4.5217533539698707e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        38.7,
+        -91.1
+      ],
+      "percentile": 90,
+      "nativeIndex": 1671065,
+      "subsetIndex": 1667,
+      "coordinateErrorDegrees": 4.544173464182677e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        38.7,
+        -90.3
+      ],
+      "percentile": 90,
+      "nativeIndex": 1673438,
+      "subsetIndex": 1759,
+      "coordinateErrorDegrees": 4.528179360363538e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        38.7,
+        -89.5
+      ],
+      "percentile": 90,
+      "nativeIndex": 1675812,
+      "subsetIndex": 1852,
+      "coordinateErrorDegrees": 4.511545341756573e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        39.2,
+        -91.1
+      ],
+      "percentile": 90,
+      "nativeIndex": 1722655,
+      "subsetIndex": 3075,
+      "coordinateErrorDegrees": 4.5335969645066143e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        39.2,
+        -90.3
+      ],
+      "percentile": 90,
+      "nativeIndex": 1725028,
+      "subsetIndex": 3167,
+      "coordinateErrorDegrees": 4.517561649208801e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        39.2,
+        -89.5
+      ],
+      "percentile": 90,
+      "nativeIndex": 1727401,
+      "subsetIndex": 3259,
+      "coordinateErrorDegrees": 4.501446397853215e-07,
+      "roundedValueDifferenceK": 0.0
+    },
+    {
+      "point": [
+        38.8,
+        -90.79
+      ],
+      "percentile": 90,
+      "nativeIndex": 1680456,
+      "subsetIndex": 1934,
+      "coordinateErrorDegrees": 4.536187248049828e-07,
+      "roundedValueDifferenceK": 0.0
+    }
+  ]
+}

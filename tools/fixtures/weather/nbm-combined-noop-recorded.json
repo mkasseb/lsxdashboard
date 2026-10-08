@@ -1,0 +1,58 @@
+{
+  "status": "ready",
+  "products": {
+    "daily": {
+      "status": "unchanged",
+      "changed": false,
+      "dataRun": "2026-10-08T06:00:00Z",
+      "candidateRuns": [
+        "2026100806",
+        "2026100800"
+      ],
+      "publicationNotes": [],
+      "cells": 2969,
+      "periods": 18,
+      "outputBytes": 1244080,
+      "coverage": {
+        "south": 38.2,
+        "north": 39.2,
+        "west": -91.1,
+        "east": -89.5,
+        "maxDistanceKm": 3
+      },
+      "checkedAt": "2026-10-08T16:22:44.193631Z",
+      "downloadBytes": 508553,
+      "requests": 53,
+      "elapsedSeconds": 43.247,
+      "peakRssMiB": 32.0
+    },
+    "hourly": {
+      "status": "unchanged",
+      "changed": false,
+      "dataRun": "2026-10-08T06:00:00Z",
+      "hours": 48,
+      "cells": 2969,
+      "outputBytes": 3819936,
+      "publicationNotes": [
+        "2026100812: QMD not listed yet"
+      ],
+      "checkedAt": "2026-10-08T16:23:11.212638Z",
+      "downloadBytes": 337025,
+      "requests": 50,
+      "elapsedSeconds": 26.92,
+      "peakRssMiB": 84.39,
+      "limits": {
+        "requests": 180,
+        "downloadBytes": 30000000,
+        "elapsedSeconds": 600,
+        "outputBytes": 4000000
+      }
+    }
+  },
+  "checkedAt": "2026-10-08T16:23:11.244639+00:00",
+  "elapsedSeconds": 70.345,
+  "processTimeoutSeconds": 630,
+  "resourceUsageIncomplete": false,
+  "downloadBytes": 845578,
+  "requests": 103
+}

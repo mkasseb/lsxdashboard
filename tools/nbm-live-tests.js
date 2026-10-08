@@ -6,7 +6,8 @@ const {chromium,request}=require('playwright');
 async function main(){
  const directory=process.argv[2],receipt=JSON.parse(fs.readFileSync(path.join(directory,'nbm-receipt.json')));
  const origin='https://lsxdashboard.com',api=await request.newContext(),deadline=Date.now()+300000;
- let data;
+ let data,hourly;
+ const hourlyReceipt=JSON.parse(fs.readFileSync(path.join(directory,'nbm-hourly-receipt.json')));
  try{
   while(Date.now()<deadline){
    const r=await api.get(origin+'/data/nbm-range.json?verify='+Date.now(),{timeout:20000});
@@ -19,6 +20,14 @@ async function main(){
   assert(data,'Pages did not serve the expected authentic dataset within five minutes');
   const publicReceipt=await api.get(origin+'/data/nbm-receipt.json?verify='+Date.now());
   assert(publicReceipt.ok());assert.deepEqual(await publicReceipt.json(),receipt);
+  while(Date.now()<deadline){
+   const r=await api.get(origin+'/data/nbm-hourly.json?verify='+Date.now(),{timeout:20000});
+   if(r.ok()){const bytes=await r.body();if(crypto.createHash('sha256').update(bytes).digest('hex')===hourlyReceipt.sha256){hourly=JSON.parse(bytes);break;}}
+   await new Promise(resolve=>setTimeout(resolve,10000));
+  }
+  assert(hourly,'Pages did not serve the expected hourly dataset within five minutes');
+  const publicHourlyReceipt=await api.get(origin+'/data/nbm-hourly-receipt.json?verify='+Date.now());
+  assert(publicHourlyReceipt.ok());assert.deepEqual(await publicHourlyReceipt.json(),hourlyReceipt);
  }finally{await api.dispose();}
  const browser=await chromium.launch();
  try{
@@ -35,7 +44,7 @@ async function main(){
     for(const point of [{lat:38.8,lon:-90.79},{lat:38.52,lon:-89.98}]){
      const expected=await page.evaluate(async ({data,point})=>{
       locSeq++;current={...current,...point};resetLocationState();clearLocationUI();
-      await loadForecast();await loadNbmRange();
+      await loadForecast();await loadNbmRange();await loadNbmHourly();
       const r=NbmRange.validate(data,point,Date.now());
       const a=r.periods?NbmRange.align(smart.days,r.periods,Date.now()):{matches:[]};
       return {status:r.status,comparisons:a.matches.map(m=>({
@@ -44,6 +53,16 @@ async function main(){
        interval:(m.exact?'Same interval: ':'Different interval (18 hours): ')+NbmRange.local(m.nbm.start)+' – '+NbmRange.local(m.nbm.end)
       })),cell:r.cell};
      },{data,point});
+     const hourlyExpected=await page.evaluate(d=>{
+      const r=NbmHourly.validate(d,current,Date.now());
+      return NbmHourly.align(r,forecastWindowHours(renderHourly24._hrs,24,Date.now()),Date.now());
+     },hourly);
+     assert.equal(hourlyExpected.filter(Boolean).length,24);
+     assert.equal(await page.locator('.nbm-hourly-band').count(),1);
+     for(let i=0;i<24;i++){
+      await page.locator('#hourlyCursor').evaluate((e,i)=>{e.value=i;e.dispatchEvent(new Event('input'));},i);
+      const v=hourlyExpected[i];assert((await page.locator('#hourlyDetail').innerText()).includes('Model range '+Math.round(v.p10)+'–'+Math.round(v.p90)+'°F · middle estimate '+Math.round(v.p50)+'°F'));
+     }
      assert.equal(expected.status,'ready');assert(expected.comparisons.length>0,'Live NWS and NBM must have usable comparisons');
      assert.deepEqual(await page.locator('.nbm-comparison').evaluateAll(rows=>rows.map(row=>({official:row.children[0].textContent,model:row.children[1].textContent,interval:row.children[2].textContent}))),expected.comparisons);
      for(const day of await page.locator('#daily .day-item').all()){
@@ -55,6 +74,7 @@ async function main(){
     }
     assert(await page.locator('#nbmInfo details').evaluate(e=>e.open));
     await page.locator('#forecastCard').screenshot({path:path.join(directory,'live-nbm-'+width+'.png')});
+    await page.locator('#h24Card').screenshot({path:path.join(directory,'live-nbm-hourly-'+width+'.png')});
     await page.evaluate(async()=>{locSeq++;current={...current,lat:39.4,lon:-90.79};resetLocationState();clearLocationUI();await loadNbmRange();});
     assert.equal(await page.locator('.nbm-inline').count(),0);
     assert.match(await page.locator('#nbmStatus').innerText(),/Outside the supported/);
@@ -62,6 +82,6 @@ async function main(){
    }finally{await context.close();}
   }
  }finally{await browser.close();}
- console.log(JSON.stringify({status:'verified',run:data.run,sha256:receipt.sha256,verifiedAt:new Date().toISOString()}));
+ console.log(JSON.stringify({status:'verified',run:data.run,sha256:receipt.sha256,hourlyRun:hourly.run,hourlySha256:hourlyReceipt.sha256,verifiedAt:new Date().toISOString()}));
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
