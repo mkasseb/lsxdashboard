@@ -137,7 +137,7 @@ async function main(){
    const context=await browser.newContext({viewport:{width,height:1000},timezoneId:width===390?'America/Chicago':'Asia/Tokyo'}),page=await context.newPage();
    page.on('pageerror',e=>audit.runtimeErrors.push({phase:'controlled-temperature',message:e.message}));
    try{
-    const synthetic=structuredClone(hourlyData),nws=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-hourly-nws-recorded.json'))).forecast;
+    const synthetic=JSON.parse(require('node:zlib').gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-hourly-full-recorded.json.gz')))),nws=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-hourly-nws-recorded.json'))).forecast;
     synthetic.hours.forEach(h=>h.kelvin=h.kelvin.map(()=>[28,35,40].map(f=>(f-32)/1.8+273.15)));
     nws.properties.updateTime=synthetic.retrievedAt;
     nws.properties.periods.forEach(h=>{h.temperature=36;h.temperatureUnit='F';h.windSpeed='1 mph';h.shortForecast='Clear';h.relativeHumidity={value:20};h.probabilityOfPrecipitation={value:0};});

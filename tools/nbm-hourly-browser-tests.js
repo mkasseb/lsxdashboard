@@ -1,7 +1,7 @@
 'use strict';
 const assert=require('assert/strict'),fs=require('fs'),path=require('path');
 const {chromium}=require('playwright');const {open,config,setBrowser}=require('./weather-stress-tests');
-const data=JSON.parse(fs.readFileSync('data/nbm-hourly.json')),capture=JSON.parse(fs.readFileSync('tools/fixtures/weather/nbm-hourly-nws-recorded.json'));
+const data=JSON.parse(require('zlib').gunzipSync(fs.readFileSync('tools/fixtures/weather/nbm-hourly-full-recorded.json.gz'))),capture=JSON.parse(fs.readFileSync('tools/fixtures/weather/nbm-hourly-nws-recorded.json'));
 const now=Math.max(Date.parse(data.retrievedAt),Date.parse(capture.retrievedAt)),H=3600000,route='**/data/nbm-hourly.json';
 async function model(p,d=data){await p.unroute(route);await p.route(route,r=>r.fulfill({json:d}));await p.evaluate(()=>loadNbmHourly());}
 async function official(p){await p.route('**/forecast/hourly',r=>r.fulfill({json:capture.forecast}));await p.evaluate(()=>loadForecast());}

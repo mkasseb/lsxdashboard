@@ -32,7 +32,7 @@ class PublisherTests(unittest.TestCase):
         p.git(self.repo, 'remote', 'add', 'origin', str(self.remote))
         p.git(self.repo, 'push', 'origin', 'main')
         self.base = self.head()
-        self.data = json.loads((Path(__file__).parent.parent/'data/nbm-hourly.json').read_text())
+        self.data = json.loads(gzip.decompress((Path(__file__).parent/'fixtures/weather/nbm-hourly-full-recorded.json.gz').read_bytes()))
         self.now = p.stamp(self.data['retrievedAt'])+timedelta(minutes=1)
         self.write_candidate()
 

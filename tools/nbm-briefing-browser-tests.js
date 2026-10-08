@@ -2,7 +2,7 @@
 // Synthetic temperature scenarios on the actual app; these are not observed live forecasts.
 const assert=require('assert/strict'),fs=require('fs'),path=require('path');
 const {chromium}=require('playwright'),{open,config,setBrowser}=require('./weather-stress-tests');
-const original=JSON.parse(fs.readFileSync('data/nbm-hourly.json')),now=Date.parse(original.retrievedAt),H=3600000,route='**/data/nbm-hourly.json';
+const original=JSON.parse(require('zlib').gunzipSync(fs.readFileSync('tools/fixtures/weather/nbm-hourly-full-recorded.json.gz'))),now=Date.parse(original.retrievedAt),H=3600000,route='**/data/nbm-hourly.json';
 function payload(bounds){const d=structuredClone(original);d.hours.forEach(h=>h.kelvin=h.kelvin.map(()=>bounds.map(f=>(f-32)/1.8+273.15)));return d;}
 async function model(p,d){await p.unroute(route);await p.route(route,r=>r.fulfill({json:d}));await p.evaluate(()=>loadNbmHourly());}
 async function baseline(p){return p.evaluate(()=>({model:JSON.stringify(renderTheCall._nbmContext.model),hourly:JSON.stringify(smart.hourlyAll),risk:JSON.stringify(callRisk),alerts:JSON.stringify(callLocalAlert)}));}

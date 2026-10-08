@@ -2,7 +2,7 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
 const s={Intl,Date,URLSearchParams};vm.createContext(s);vm.runInContext(fs.readFileSync('assets/hourly-range.js','utf8'),s);
 const N=s.NbmHourly,H=3600000,clone=x=>JSON.parse(JSON.stringify(x));
-const data=JSON.parse(fs.readFileSync('data/nbm-hourly.json')),now=Date.parse(data.retrievedAt),point={lat:38.8,lon:-90.79};
+const data=JSON.parse(require('zlib').gunzipSync(fs.readFileSync('tools/fixtures/weather/nbm-hourly-full-recorded.json.gz'))),now=Date.parse(data.retrievedAt),point={lat:38.8,lon:-90.79};
 const result=N.validate(data,point,now);assert.equal(result.status,'ready');
 for(const lat of [38.2,38.7,39.2])for(const lon of [-91.1,-90.3,-89.5])assert.equal(N.validate(data,{lat,lon},now).status,'ready');
 assert.equal(N.validate(data,{lat:40,lon:-90},now).status,'missing');

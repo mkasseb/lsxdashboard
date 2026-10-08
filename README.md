@@ -596,18 +596,19 @@ which still expires at 24 hours of source age.
 JSON and receipt. It rejects partial, stale, malformed, oversized, rollback or obsolete-code
 candidates and preserves unrelated files. Real local Git tests cover races and remote rejection.
 The **NBM hourly rehearsal** workflow is manual and read-only: it produces artifacts without a
-schedule or publication job. Production activation remains a separate reviewed rollout; neither
-PR #58 nor this dependent feature is merged by this work. An immutable review preview therefore
-expires normally rather than silently refreshing itself. Hourly model graphics are excluded from
+schedule or publication job. Production activation is handled by the combined release configuration
+below. Immutable review previews still expire normally rather than silently refreshing themselves. Hourly model graphics are excluded from
 saved NWS chart HTML and cannot pair with restored-only official data.
 
-### Refresh reliability and publication budget (PR #59, inactive)
+### Refresh reliability and publication budget (PR #59, release activation)
 
 This section supersedes the earlier prototype's activation and four-cycles/day planning
 assumptions. The daily and hourly products now share **one recurring workflow and one publisher**.
-The cron is prepared for hourly checks at minute 17, but scheduled extraction and every production
-write require `NBM_REFRESH_ENABLED == 'true'` on `main`. **That variable has not been enabled by
-this work. Neither draft is merged.** Branch dispatches are read-only rehearsals. The existing
+The release-approved cron checks hourly at minute 17 on `main`, unless the repository variable
+`NBM_REFRESH_ENABLED` is explicitly `false`. Publication and manual verification use the same
+opt-out. An unset variable enables this reviewed release configuration; branch dispatches remain
+read-only rehearsals. Variable administration is not available to the release integration, so
+activation is an ordinary reviewed code change rather than a new credential or permission. The existing
 job-scoped `contents: write` permission is unchanged; there are no new secrets, tokens or services.
 The hourly-only workflow remains manual and read-only, with no second schedule.
 
@@ -657,7 +658,7 @@ never rewrites the payload. A no-op preserves the original retrieval timestamp a
 A late product, revision, or recovering sibling can wait nearly six hours after another product
 uses its window. This can cause an unavailable interval during upstream disruption: old data is
 still withheld at 24 hours of **source-cycle age**. The cap deliberately trades fastest possible
-recovery for a predictable data-commit budget; activation review must accept that tradeoff.
+recovery for a predictable data-commit budget; the approved release retains that tradeoff.
 
 Batching alone is insufficient: staggered daily/hourly arrivals can otherwise cause two commits
 per cycle, and revisions could turn hourly checks into 720 monthly commits. Simulations cover
@@ -692,7 +693,7 @@ artifact storage, app/preview CI and source revisions are additional. Full histo
 reliable deleted-budget detection; repository growth therefore remains an operational cost.
 Artifacts can include both current pairs plus daily history: roughly 6.3 MB per changed artifact
 before compression in this rehearsal, about 450 MB if all 72 hourly artifacts were that size.
-Actual account quotas and remaining usage must be checked before activation.
+Account quotas and remaining usage are not verified here; this existing-service release makes no zero-overage promise.
 
 The interface says **model range** and **middle estimate**, with percentile definitions, valid
 hour/units and source-cycle details in a keyboard/touch-accessible disclosure. The band represents
@@ -702,9 +703,9 @@ and P90. Daily rows also use the shorter “NBM range” label while preserving 
 18-hour windows in their details. A failed browser check retains validated same-location guidance
 with a clear previous-range notice until its original expiry; location reset clears it immediately.
 
-### Optional Bottom Line temperature context (stacked draft)
+### Optional Bottom Line temperature context
 
-This prototype depends on the unmerged hourly-range draft. It adds at most one supplemental
+This feature uses the validated hourly-range feed. It adds at most one supplemental
 sentence below the existing official near-term briefing; it never enters candidate ranking,
 changes NWS temperatures, or creates an alert/action. Precipitation is outside this change.
 The existing “Show model temperature range” checkbox also controls the sentence. It is omitted
@@ -744,3 +745,8 @@ arrival, stale/failed/saved feeds, location races, checkbox control, disclosure 
 forecast checks from labeled synthetic threshold scenarios. Ordinary weather and seasonal
 checks remain applicable. No new data extraction, storage, backend, refresh activation or
 infrastructure commitment is introduced.
+
+Offline hourly regression and transaction tests use the authentic compressed recording
+`tools/fixtures/weather/nbm-hourly-full-recorded.json.gz` (unchanged October 8 06Z source bytes),
+paired with recorded NWS responses and a fixed clock. Production JSON is allowed to refresh
+without rewriting historical test expectations. Live checks separately validate current data.
