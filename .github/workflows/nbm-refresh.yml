@@ -81,3 +81,32 @@ jobs:
           path: ${{ runner.temp }}/nbm-publication.json
           retention-days: 3
           if-no-files-found: warn
+
+  verify:
+    # Real-site browser checks run on manual rollout checks, not every hourly poll.
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: nbm-regional-refresh
+          path: ${{ runner.temp }}/nbm-live
+      - name: Install browser verification tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/nbm-browser" playwright@1.62.1
+          node "$RUNNER_TEMP/nbm-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Verify public data and card under normal TLS
+        run: NODE_PATH="$RUNNER_TEMP/nbm-browser/node_modules" node tools/nbm-live-tests.js "$RUNNER_TEMP/nbm-live"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nbm-live-verification
+          path: ${{ runner.temp }}/nbm-live/live-nbm-*.png
+          retention-days: 3
+          if-no-files-found: warn

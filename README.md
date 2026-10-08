@@ -235,6 +235,10 @@ is available for current-cycle validation, not historical data masquerading as l
 `.github/workflows/nbm-refresh.yml` checks hourly at minute 17 UTC and also accepts manual
 workflow dispatch. Publication is restricted to `main`. Hourly checks accommodate delayed QMD
 publication; only changed validated cycles or revisions make a data commit and trigger Pages.
+Manual main-branch runs additionally verify the public data hash/receipt and rendered mobile/desktop
+card over normal TLS, including nearest-cell values and native interval labels. Verification polls
+Pages for at most five minutes and fails if the expected data is not served; it does not bypass TLS.
+This browser job does not run on hourly polls.
 The extraction job uses read-only access and retains artifacts/status for three days; the separate
 publisher uses only the approved job-scoped built-in token write permission.
 
