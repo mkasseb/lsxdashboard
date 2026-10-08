@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: nbm-refresh-rehearsal
+  group: nbm-data-publication
   cancel-in-progress: false
 
 jobs:
@@ -20,6 +20,10 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+      - name: Load last committed forecast and receipt
+        run: |
+          git fetch --no-tags origin refs/heads/main
+          python tools/nbm-publish.py --seed --expected-head FETCH_HEAD --directory "$RUNNER_TEMP/nbm-data"
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
@@ -42,3 +46,40 @@ jobs:
           path: ${{ runner.temp }}/nbm-data
           retention-days: 3
           if-no-files-found: error
+
+  publish:
+    # ACTIVATION LOCK: keep false until account quotas, classic branch protection and
+    # Actions policy are verified and activation is reviewed. Manual dispatch cannot override it.
+    if: ${{ false && github.ref == 'refs/heads/main' }}
+    needs: extract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: nbm-regional-rehearsal
+          path: ${{ runner.temp }}/nbm-candidate
+      - name: Validate and publish only changed forecast data
+        run: |
+          python tools/nbm-publish.py --directory "$RUNNER_TEMP/nbm-candidate" --expected-head "$GITHUB_SHA" > "$RUNNER_TEMP/nbm-publication.json"
+      - name: Report publication result
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/nbm-publication.json" ]; then
+            cat "$RUNNER_TEMP/nbm-publication.json" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nbm-publication-audit
+          path: ${{ runner.temp }}/nbm-publication.json
+          retention-days: 3
+          if-no-files-found: warn

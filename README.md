@@ -237,9 +237,9 @@ is available for current-cycle validation, not historical data masquerading as l
 (`17 * * * *`, UTC) is a comment, not an active schedule. Hourly polling accommodates delayed QMD
 publication; it does not claim NOAA issues a new QMD cycle every hour. GitHub normally requires a
 workflow to exist on the default branch before dispatch is available; before merge, use the local
-command. This rehearsal needs no secrets, deployment token, repository write permission, or new
-access grant. It produces a three-day-retention downloadable artifact and a resource/status summary.
-It never uploads to Cloudflare, changes production files remotely, commits data, or sends messages.
+refresh command. The extraction job uses read-only access and produces a three-day-retention
+artifact and resource/status summary. The separate approved publisher job below remains hard-disabled.
+No workflow run can currently write production data or upload to Cloudflare.
 
 ### Coverage and matching
 
@@ -277,16 +277,57 @@ An unchanged-source gate reuses retained output only when its validation receipt
 validator version and cycle, the current index ranges match, and six one-byte probes confirm unchanged
 source ETags. A missing receipt or source revision requires extraction. An unchanged result reports
 `changed:false` without rewriting data, receipt, history or retrieval time. `nbm-status.json` still
-records the check; a future publisher must gate on `changed`, not commit status timestamps every hour.
+records the check; the publisher gates on `changed` and never commits status timestamps.
 The receipt is local integrity evidence, not a signature or a replacement for source validation.
 
 **Persistence boundary:** the manual workflow uses a fresh temporary directory each run. Its history
 is not cross-run persistence and its artifacts are not a public serving endpoint. Last-good retention
-across jobs requires a future persistent publication adapter to load/preserve the existing object;
-that adapter is intentionally not configured. Without published runtime data, the existing branch
+across jobs requires a persistent publication adapter to load/preserve the existing object;
+the publisher below implements that adapter but remains activation-locked. Without published runtime data, the existing branch
 preview shows unavailable. The committed compressed regional fixture is recorded test evidence only
 and is never fetched by the dashboard. A retained file becomes stale by source age even if every later
 refresh fails. Job failures/status artifacts provide reporting; no new notification integration exists.
+
+### Data-only publisher — implemented, activation locked
+
+The approved publisher (`tools/nbm-publish.py`) is wired as a separate job with **job-scoped
+`contents: write`**, using the built-in `GITHUB_TOKEN` through checkout. This permission is
+repository-wide; it is not a GitHub-enforced path permission. The publisher's temporary Git index
+and final tree comparison permit only `data/nbm-range.json` and `data/nbm-receipt.json`. Other staged
+files, status timestamps, local history and application code cannot enter its commit.
+
+**The job has a literal `false` activation lock and a main-ref condition.** Manual dispatch cannot
+unlock it. There is still no active schedule. Removing that lock and enabling operation require a
+separate reviewed change after verifying hosting allowance/usage, classic branch protection and
+Actions policy. No new token, service, bypass or production write was created. The readable active
+`protect-main` ruleset prohibits deletion and force-push; it has no PR-review rule. Classic protection
+and Actions settings returned HTTP 403, so their restrictions remain unknown. No Cloudflare account
+connection is available to verify actual plan, current build usage or deployment path filters.
+
+Extraction now loads the last committed dataset/receipt from `main` into its temporary output,
+allowing unchanged-cycle reuse across jobs. It fails closed on an incomplete retained pair.
+The publisher checks the receipt hash, recent successful status, source age, all regional percentile
+rows and consumer provenance validation before fetching the latest `main`. It rejects older cycles
+or older/equal retrieval revisions, and aborts if publishing/validation code changed during the run.
+An unchanged result requires byte-identical remote files and makes no commit.
+
+A candidate commit has the latest remote head as its sole parent, retaining concurrent app changes.
+Exactly one ordinary fast-forward push is attempted. A competing push or branch-rule rejection fails
+closed; there is no force-push, rebase, automatic merge or retry of an ambiguous push. The next run
+reads the actual remote state. Workflow concurrency serializes NBM jobs, while Git also protects
+against other writers. Remote files change together in one commit. Extraction/validation failures
+leave last-good data serving; failed Pages deployment leaves the prior deployed version. A lost
+push response may mean Git accepted the commit: the audit explicitly requires inspecting remote state.
+
+Publication is bounded to two current files (each at most 2 MB), one commit and one push per run,
+a five-minute publish job, and three-day audit artifacts. Local extraction retains at most two cycle
+snapshots; those snapshots are not committed. The commit message records run, data SHA-256, parent,
+workflow run and attempt; result JSON records the published commit or failure. Git history is still
+cumulative and needs an agreed long-term policy before recurring operation. Consumer staleness uses
+source age even if retained files survive every subsequent failure.
+
+Offline tests use temporary bare Git remotes, including rejected writes and concurrent updates;
+recorded data is never published by these tests. Run `python3 tools/nbm-publish-tests.py`.
 
 ### Measured authentic run and operating decision
 
@@ -325,18 +366,17 @@ roughly 380 for ordinary app builds, previews, revisions and other usage within 
 account usage/plan must be checked. Do not equate 720 hourly checks with 720 site builds.
 
 **Simplest infrastructure option:** keep the existing Git-connected Pages deployment and publish
-data-only commits only when `changed:true`. A future job would start with the last committed dataset
-and receipt, retain them on failure, validate a complete replacement, then atomically commit only the
-approved data paths against the current branch head. No-op checks must produce no commit or build;
+data-only commits only when `changed:true`. The implemented, activation-locked job starts with the
+last committed dataset and receipt, retains them on failure, validates a complete replacement, then
+atomically commits only the approved data paths against the current branch head. No-op checks must produce no commit or build;
 failed deployment must leave the prior Pages version serving. The existing same-origin data URL and
 new revalidation header avoid CORS changes. This needs no new storage product, but it is not enabled.
 
-**Actual repository constraint:** `main` is protected and the rehearsal grants only `contents: read`.
-Detailed protection/default-token settings were inaccessible to the current integration (403), so
-an unattended writer cannot be assumed permitted. Enabling requires approval of narrowly scoped
-repository writes and a data-update path that satisfies existing branch protections, not a bypass.
-If each data update requires human PR approval, four approvals/day is a real operational tradeoff.
-Do not create a PAT/App token or relax protection just to make the design work.
+**Actual repository constraint:** the visible `protect-main` ruleset blocks deletion and force-push.
+Classic protection/default-token settings remain inaccessible (403). The user approved job-scoped
+built-in token writes for this publisher; account restrictions and hosting limits still block activation.
+If classic settings require PR review, preserve that review path rather than bypass it. No PAT/App token
+or relaxed protection is needed or authorized.
 
 Automated repository updates add commit noise and long-term Git history; deleting old working-tree
 snapshots does not prune that history. Concurrent app changes require conflict-safe retry rather than
@@ -346,14 +386,14 @@ so required validation must run in the publisher itself. Pages documents
 [deployments on branch pushes](https://developers.cloudflare.com/pages/configuration/git-integration/github-integration/),
 but the eventual approved automation identity must be verified in a non-production test before
 assuming it triggers this specific installation. Other automation identities may also trigger the
-ordinary app CI matrix. No automation identity or publishing permission was added here.
+ordinary app CI matrix. Only the approved built-in token permission is declared on the locked job.
 
-**Decision before enabling:** approve geography/cadence/age policy, verify actual build headroom,
-and choose whether protected-branch-compatible data commits are acceptable. If they are, this is the
-recommended first option using existing hosting. If unattended repository writes are unacceptable,
+**Before enabling:** verify actual build headroom, classic protection and Actions restrictions, then
+review activation and the geography/cadence/age policy. The data-only existing-hosting approach is
+approved in principle; its activation conditions are still unmet. If account policy prevents it,
 an independent object-store/static data destination avoids app commits/builds but adds storage,
-write credentials, retention and serving configuration to approve. No new destination, credentials,
-access grant, active recurring job or remote publisher has been provisioned.
+write credentials, retention and serving configuration to approve. No new destination, credentials or active recurring job has been provisioned. The approved writer
+permission is declared only on the activation-locked publisher job.
 
 Normal-TLS access was verified for the [S3 source](https://noaa-nbm-grib2-pds.s3.amazonaws.com/),
 [NOMADS](https://nomads.ncep.noaa.gov/pub/data/nccf/com/blend/prod/) (HTTP/1.1; malformed HTTP/2 header)

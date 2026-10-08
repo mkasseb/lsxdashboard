@@ -166,7 +166,8 @@ class RefreshTests(unittest.TestCase):
         self.assertIn('workflow_dispatch:', active)
         self.assertNotIn('schedule:', active)
         self.assertIn('contents: read', active)
-        self.assertNotIn('contents: write', active)
+        self.assertIn("if: ${{ false && github.ref == 'refs/heads/main' }}", active)
+        self.assertEqual(active.count('contents: write'), 1)
         self.assertNotIn('secrets.', active)
         self.assertIn('retention-days: 3', active)
 
