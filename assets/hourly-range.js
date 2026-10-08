@@ -41,6 +41,44 @@ function align(result,hrs,now){
  var counts={};hrs.forEach(function(h){var t=time(h.startTime);counts[t]=(counts[t]||0)+1;});
  return hrs.map(function(h){var t=time(h.startTime);return result.values&&counts[t]===1&&time(h.endTime)-t===H&&time(h.endTime)>now&&h.temperatureUnit==='F'&&finite(h.temperature)?result.values[t]||null:null;});
 }
+// Conservative display heuristics, not calibrated hazard or probability thresholds.
+var BRIEFING=Object.freeze({freeze:32,heat:90,margin:2,minWidth:6,maxNwsDistance:8,nwsSourceHours:12});
+function planningNote(result,hrs,now,config){
+ var cfg=config||BRIEFING;
+ if(!result||!['ready','partial'].includes(result.status)||!finite(result.run)||now<result.run||now-result.run>=24*H)return null;
+ var aligned=align(result,hrs,now),samples=[];
+ hrs.forEach(function(h,i){
+  var p=aligned[i],t=time(h.startTime),n=h.temperature;
+  if(!p||t<now||t>=now+24*H||![p.p10,p.p50,p.p90].every(finite)||p.p10>p.p50||p.p50>p.p90||n<p.p10||n>p.p90||p.p90-p.p10<cfg.minWidth)return;
+  var kind=null;
+  if(p.p10<=cfg.freeze-cfg.margin&&p.p90>=cfg.freeze+cfg.margin&&n>=cfg.freeze+cfg.margin&&n<=cfg.freeze+cfg.maxNwsDistance)kind='freeze';
+  else if(p.p10<=cfg.heat-cfg.margin&&p.p90>=cfg.heat+cfg.margin&&n<=cfg.heat-cfg.margin&&n>=cfg.heat-cfg.maxNwsDistance)kind='heat';
+  if(kind)samples.push({kind:kind,time:t,nws:n,p10:p.p10,p50:p.p50,p90:p.p90,run:result.run});
+ });
+ samples.sort(function(a,b){return a.time-b.time;});
+ // Two discrete matching samples filter isolated spikes; never describe their envelope as a range.
+ for(var i=0;i<samples.length-1;i++)if(samples[i].kind===samples[i+1].kind&&samples[i+1].time-samples[i].time===H)return samples[i];
+ return null;
+}
+function briefing(hrs,candidates,model,alert,now){
+ if(!selected()||lastFailed||!raw||generation!==locSeq||officialGeneration!==locSeq||official!==hrs||!point||point.lat!==current.lat||point.lon!==current.lon||alert||!model||!model.lead||model.supports.length>=3)return null;
+ for(var key of ['hourly','nbmHourly','alerts']){
+  var check=feedChecks[key],cfg=FEEDS[key];
+  if(!cfg||feedState(check,now,cfg.age)!=='ready')return null;
+ }
+ var issued=feedChecks.hourly.issuedAt;
+ if(!finite(issued)||issued<=0||issued>now||now-issued>BRIEFING.nwsSourceHours*H)return null;
+ var note=planningNote(validate(raw,point,now),hrs,now);
+ if(!note)return null;
+ // Basic cold clothing guidance can gain context; alerts and every other hazard retain all space.
+ if(candidates.some(function(c){return c.tone==='danger'||c.tone==='warning'&&!(note.kind==='freeze'&&c.topic==='cold');}))return null;
+ if(!['neutral','good'].includes(model.lead.tone)&&!(note.kind==='freeze'&&model.lead.topic==='cold'&&model.lead.tone==='warning'))return null;
+ return note;
+}
+function noteText(n){
+ var date=new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',weekday:'short',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'}).format(new Date(n.time));
+ return date+': NWS '+Math.round(n.nws)+'°F; NOAA NBM’s central 80% model range of '+Math.round(n.p10)+'–'+Math.round(n.p90)+'°F '+(n.kind==='freeze'?'includes freezing':'extends above '+BRIEFING.heat+'°F')+'.';
+}
 function selected(){var e=document.getElementById('nbmHourlyToggle');return !!(e&&e.checked);}
 function presentation(hrs,duration,now){
  var status=document.getElementById('nbmHourlyStatus'),toggle=document.getElementById('nbmHourlyToggle');
@@ -63,9 +101,10 @@ function describe(p){
  return p?'<span class="nbm-hourly-detail">Model range '+Math.round(p.p10)+'–'+Math.round(p.p90)+'°F · middle estimate '+Math.round(p.p50)+'°F · '+new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'}).format(new Date(p.validTime))+'</span>':'<span class="nbm-hourly-detail">Model range unavailable for this hour.</span>';
 }
 function forecast(hrs){official=hrs;officialGeneration=locSeq;}
-function repaint(){if(typeof renderHourly24==='function'&&renderHourly24._hrs)renderHourly24();}
+function repaint(){if(typeof renderHourly24==='function'&&renderHourly24._hrs)renderHourly24();if(typeof renderNbmBriefing==='function')renderNbmBriefing();}
 function reset(){raw=null;point=null;generation=-1;official=null;officialGeneration=-1;seq++;lastFailed=false;failure='Checking model range…';
- if(typeof document!=='undefined'){document.querySelectorAll('.nbm-hourly-band,.nbm-hourly-detail').forEach(function(e){e.remove();});var status=document.getElementById('nbmHourlyStatus');if(status)status.textContent=failure;['nbmHourlySource','nbmHourlyPercentiles'].forEach(function(id){var e=document.getElementById(id);if(e)e.textContent='';});}
+ if(typeof renderNbmBriefing==='function')renderNbmBriefing();
+ if(typeof document!=='undefined'){document.querySelectorAll('.nbm-hourly-band,.nbm-hourly-detail,#nbmBriefNote').forEach(function(e){e.remove();});var status=document.getElementById('nbmHourlyStatus');if(status)status.textContent=failure;['nbmHourlySource','nbmHourlyPercentiles'].forEach(function(id){var e=document.getElementById(id);if(e)e.textContent='';});}
 }
 function load(){
  var fresh=locGuard(),n=++seq,p={lat:current.lat,lon:current.lon};
@@ -84,7 +123,7 @@ function init(){
  FEEDS.nbmHourly={label:'Hourly NBM',load:'loadNbmHourly',every:15*60000,age:30*60000,local:true,failure:'unavailable'};
  feedChecks.nbmHourly={status:'loading',successAt:0,issuedAt:0,saved:false};
 }
-return {validate:validate,align:align,presentation:presentation,describe:describe,forecast:forecast,reset:reset,load:load,init:init};
+return {planningNote:planningNote,briefing:briefing,noteText:noteText,briefingConfig:BRIEFING,validate:validate,align:align,presentation:presentation,describe:describe,forecast:forecast,reset:reset,load:load,init:init};
 })();
 function loadNbmHourly(){return NbmHourly.load();}
 if(typeof document!=='undefined')NbmHourly.init();

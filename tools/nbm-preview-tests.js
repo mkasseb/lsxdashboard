@@ -69,6 +69,8 @@ async function compareHourly(page,data){
  await page.locator('#hourlyCursor').focus();await page.locator('#hourlyCursor').press('Home');
  await page.locator('#nbmHourlyToggle').uncheck();assert.equal(await page.locator('.nbm-hourly-band').count(),0);
  await page.locator('#nbmHourlyToggle').check();assert.equal(await page.locator('.nbm-hourly-band').count(),1);
+ const briefing=await page.evaluate(()=>{const c=renderTheCall._nbmContext;return {unchanged:JSON.stringify(c.model)===JSON.stringify(buildBottomLine(c.candidates,callLocalAlert)),note:document.getElementById('nbmBriefText')?.textContent||null};});
+ assert(briefing.unchanged,'Supplement cannot change official selection');result.briefing=briefing;
  return result;
 }
 async function main(){
@@ -128,6 +130,29 @@ async function main(){
     await page.evaluate(()=>setLocation({name:'Outside NBM coverage',lat:39.4,lon:-90.79,precision:'representative',station:null},{save:true}));
     await settled(page);assert.equal(await page.locator('.nbm-inline').count(),0);assert.match(await page.locator('#nbmStatus').innerText(),/Outside the supported/);
     await shot(page,'live-'+width+'-outside-coverage');audit.live.push({width,test:'Unsupported NBM location',status:await page.locator('#nbmStatus').innerText()});
+   }finally{await context.close();}
+  }
+  // Clearly synthetic threshold scenarios, on exact hosted assets with ordinary TLS.
+  for(const width of [390,1440]){
+   const context=await browser.newContext({viewport:{width,height:1000},timezoneId:width===390?'America/Chicago':'Asia/Tokyo'}),page=await context.newPage();
+   page.on('pageerror',e=>audit.runtimeErrors.push({phase:'controlled-temperature',message:e.message}));
+   try{
+    const synthetic=JSON.parse(require('node:zlib').gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-hourly-full-recorded.json.gz')))),nws=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-hourly-nws-recorded.json'))).forecast;
+    synthetic.hours.forEach(h=>h.kelvin=h.kelvin.map(()=>[28,35,40].map(f=>(f-32)/1.8+273.15)));
+    nws.properties.updateTime=synthetic.retrievedAt;
+    nws.properties.periods.forEach(h=>{h.temperature=36;h.temperatureUnit='F';h.windSpeed='1 mph';h.shortForecast='Clear';h.relativeHumidity={value:20};h.probabilityOfPrecipitation={value:0};});
+    await page.clock.install({time:new Date(synthetic.retrievedAt)});
+    await page.route('**/data/nbm-hourly.json',r=>r.fulfill({json:synthetic}));
+    await page.route('**/forecast/hourly',r=>r.fulfill({json:nws}));
+    await page.goto(origin+'/?controlled-temperature=1',{waitUntil:'domcontentloaded'});await settled(page);
+    await page.evaluate(async()=>{locSeq++;current={...current,lat:38.8,lon:-90.79};NbmHourly.reset();await loadForecast();await loadNbmHourly();callRisk=null;callLocalAlert=null;callAqi=35;uv.peak=null;feedUpdate('alerts','ready',Date.now());renderTheCall();});
+    assert.equal(await page.locator('#nbmBriefNote').count(),1);assert.match(await page.locator('#nbmBriefText').innerText(),/NWS 36°F.*28–40°F includes freezing/);
+    const unchanged=await page.evaluate(()=>JSON.stringify(renderTheCall._nbmContext.model)===JSON.stringify(buildBottomLine(renderTheCall._nbmContext.candidates,null)));assert(unchanged);
+    await page.locator('#nbmBriefNote summary').click();assert.match(await page.locator('#nbmBriefSource').innerText(),/not guaranteed limits/);
+    await page.locator('#callCard').screenshot({path:path.join(out,'controlled-temperature-'+width+'.png')});
+    audit.controlled.push('Synthetic freezing threshold, accessible disclosure and unchanged NWS selection at '+width+'px');
+    await page.evaluate(()=>{callLocalAlert={event:'Winter Storm Warning',level:'warning',family:'winter'};renderTheCall();});assert.equal(await page.locator('#nbmBriefNote').count(),0);
+    audit.controlled.push('Synthetic alert suppresses temperature supplement at '+width+'px');
    }finally{await context.close();}
   }
   // These are controlled browser edge cases on hosted code, never presented as observed live weather.

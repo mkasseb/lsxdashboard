@@ -703,6 +703,49 @@ and P90. Daily rows also use the shorter “NBM range” label while preserving 
 18-hour windows in their details. A failed browser check retains validated same-location guidance
 with a clear previous-range notice until its original expiry; location reset clears it immediately.
 
+### Optional Bottom Line temperature context
+
+This feature uses the validated hourly-range feed. It adds at most one supplemental
+sentence below the existing official near-term briefing; it never enters candidate ranking,
+changes NWS temperatures, or creates an alert/action. Precipitation is outside this change.
+The existing “Show model temperature range” checkbox also controls the sentence. It is omitted
+when the official briefing already has three supporting items.
+
+`NbmHourly.briefingConfig` documents the conservative display heuristics: 32°F freezing and
+90°F warm-weather planning thresholds, at least 2°F on each side in P10–P90, at least 6°F of
+spread, and the NWS temperature 2–8°F on the milder side, inside that same model band. The latter
+prevents distant/outside-band disagreements from becoming an alarming recommendation. These
+are configurable code constants, not calibrated probability cutoffs, heat-health criteria or
+user-adjustable safety thresholds. Two qualifying consecutive future UTC hourly samples of the
+same kind are required to avoid isolated spikes. The earliest pair wins; the sentence describes
+only its first sample, with that hour's own bounds, NWS temperature, Central date/time and CDT/CST.
+There is no combined two-hour range or claimed event duration. Rules operate in every season.
+
+Fresh live NWS hourly data must be bound to the current location generation, checked within the
+existing one-hour limit, with a known issuance no more than 12 hours old. NBM must pass existing
+full native-data validation, have a current successful check (30-minute limit), and a source run
+less than 24 hours old. A failed latest NBM check suppresses the sentence even if the separate
+chart retains previously validated guidance. Missing/partial checks, snapshots, unmatched hours,
+unsupported locations and location-reset races cannot supply the note. Existing regional limits
+and exact UTC/DST matching are unchanged. No hourly percentile extrema are used as daily ranges.
+
+Any local alert or danger candidate suppresses the supplement. Other warning-tone candidates
+also suppress it, except an existing cold-topic clothing/temperature-drop advisory can receive
+freezing context; its headline/action/severity remain unchanged. Heat context requires a neutral
+or good lead. Hidden competing candidates still count. Unverified alerts suppress the note.
+The disclosure explains the central 80% model distribution, non-guaranteed limits, source age,
+and two-sample display rule. No freeze probability, icy-road, heat-index, model-consensus or
+forecast-confidence inference is made.
+
+Validation: `node tools/nbm-briefing-tests.js` checks thresholds/margins/widths, future and missing
+hours, NWS outside the band, source age, seasons and both DST transitions. The explicitly
+synthetic `tools/nbm-briefing-browser-tests.js` covers cold/heat, competing hazards and alert
+arrival, stale/failed/saved feeds, location races, checkbox control, disclosure keyboard/touch,
+320/390/1440px layouts and Chicago/Tokyo browsers. Hosted verification separates untouched live
+forecast checks from labeled synthetic threshold scenarios. Ordinary weather and seasonal
+checks remain applicable. No new data extraction, storage, backend, refresh activation or
+infrastructure commitment is introduced.
+
 Offline hourly regression and transaction tests use the authentic compressed recording
 `tools/fixtures/weather/nbm-hourly-full-recorded.json.gz` (unchanged October 8 06Z source bytes),
 paired with recorded NWS responses and a fixed clock. Production JSON is allowed to refresh

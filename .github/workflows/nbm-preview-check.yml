@@ -3,14 +3,14 @@ name: NBM draft preview verification
 # Review-only browser verification. No publication job, credentials or production writes.
 on:
   pull_request:
-    branches: [main, codex/nbm-inline-forecast]
+    branches: [main, codex/nbm-inline-forecast, codex/nbm-hourly-range]
 
 permissions:
   contents: read
 
 jobs:
   preview:
-    if: (github.head_ref == 'codex/nbm-inline-forecast' || github.head_ref == 'codex/nbm-hourly-range') && github.event.pull_request.head.repo.full_name == github.repository
+    if: (github.head_ref == 'codex/nbm-inline-forecast' || github.head_ref == 'codex/nbm-hourly-range' || github.head_ref == 'codex/nbm-bottom-line') && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
