@@ -666,7 +666,13 @@ real Git tests cover one transaction, retained bytes, rollback, concurrent write
 Cloudflare documents [500 Free builds/month](https://developers.cloudflare.com/pages/platform/limits/).
 App commits, preview builds, manual rebuilds, other writers and carried-over builds are outside
 this publisher's cap. Existing account usage is unverified. No free-usage or zero-overage guarantee
-is made. GitHub runner/storage use is a separate cost from Cloudflare builds.
+is made for Cloudflare headroom or storage charges. All jobs in the refresh and rehearsal
+workflows use standard `ubuntu-latest` GitHub-hosted runners. This repository is public, so
+[that runner execution is free](https://docs.github.com/en/billing/concepts/product-billing/github-actions):
+the runtime estimate below is not billable runner minutes or consumption of a private-repository
+minutes allowance. Larger runners would be charged even for a public repository; none are selected.
+Artifact/cache storage and other service limits remain separate from runner execution and
+Cloudflare builds.
 
 Live normal-TLS rehearsal measurements (October 8): fresh daily extraction **89 requests,
 115,471,105 response-body bytes, 119.696 seconds**; a combined unchanged check **103 requests,
@@ -678,7 +684,8 @@ The earlier authentic full hourly extraction measured 146 requests, 6,408,858 by
 seconds; the new full inventory adds roughly 0.34 MB compared with its old discovery query.
 Combining those observations, a planning scenario of 120 paired extractions, 120 eligible no-ops
 and 480 closed-window skips is approximately **14.8 GB of NOAA response bodies, 40,560 requests
-and 1,200 producer minutes per 30 days**, before setup/retries. This is an estimate assembled
+and 1,200 producer minutes of runtime per 30 days**, before setup/retries—not paid runner minutes
+for this public repository on standard runners. This is an estimate assembled
 from separate measured runs, not a measured month or a bound. Failed runs can consume their full
 budgets without publishing. Git checkout/history transfer, package installation, response headers,
 artifact storage, app/preview CI and source revisions are additional. Full history is fetched for
