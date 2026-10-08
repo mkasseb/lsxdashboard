@@ -26,7 +26,9 @@ async function primary(p){return p.evaluate(()=>({hrs:JSON.stringify(renderHourl
     if(process.env.NBM_ARTIFACTS){fs.mkdirSync(process.env.NBM_ARTIFACTS,{recursive:true});await p.locator('#h24Card').screenshot({style:'.jump-wrap,.skip{visibility:hidden !important}',path:path.join(process.env.NBM_ARTIFACTS,`hourly-${width}-${timezone.replace('/','-')}-${theme}.png`)});}
    }
    // A real pointer/touch selection updates the accessible details.
-   const svg=p.locator('.h24-svg'),box=await svg.boundingBox();if(width<500)await p.touchscreen.tap(box.x+box.width/2,box.y+box.height/2);else await p.mouse.move(box.x+box.width/2,box.y+box.height/2);
+   const beforePointer=await p.evaluate(()=>renderHourly24._selectedTime);
+   const svg=p.locator('.h24-svg');if(width<500)await svg.tap({position:{x:100,y:100}});else await svg.hover({position:{x:100,y:100}});
+   assert.notEqual(await p.evaluate(()=>renderHourly24._selectedTime),beforePointer,'Touch/pointer actually changes the selected forecast hour');
    assert.match(await p.locator('#hourlyDetail').innerText(),/P50/);
    const missing=structuredClone(data),target=Math.floor(now/H)*H+5*H;missing.hours=missing.hours.filter(h=>Date.parse(h.validTime)!==target);await model(p,missing);
    assert.equal(await p.locator('.nbm-hourly-band').count(),2);assert.match(await p.locator('#nbmHourlyStatus').innerText(),/23\/24/);
