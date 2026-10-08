@@ -63,7 +63,8 @@ async function compareHourly(page,data){
  for(let i=0;i<24;i++){
   await page.locator('#hourlyCursor').evaluate((e,i)=>{e.value=i;e.dispatchEvent(new Event('input'));},i);
   const p=result.points[i],text=await page.locator('#hourlyDetail').innerText();
-  assert(text.includes('P10 '+Math.round(p.p10)+'°F · P50 '+Math.round(p.p50)+'°F · P90 '+Math.round(p.p90)+'°F'));
+  assert(text.includes('Model range '+Math.round(p.p10)+'–'+Math.round(p.p90)+'°F · middle estimate '+Math.round(p.p50)+'°F'));
+  assert((await page.locator('#nbmHourlyPercentiles').textContent()).includes('P10 '+Math.round(p.p10)+'°F · P50 '+Math.round(p.p50)+'°F · P90 '+Math.round(p.p90)+'°F'));
  }
  await page.locator('#hourlyCursor').focus();await page.locator('#hourlyCursor').press('Home');
  await page.locator('#nbmHourlyToggle').uncheck();assert.equal(await page.locator('.nbm-hourly-band').count(),0);

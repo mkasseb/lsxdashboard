@@ -600,3 +600,97 @@ schedule or publication job. Production activation remains a separate reviewed r
 PR #58 nor this dependent feature is merged by this work. An immutable review preview therefore
 expires normally rather than silently refreshing itself. Hourly model graphics are excluded from
 saved NWS chart HTML and cannot pair with restored-only official data.
+
+### Refresh reliability and publication budget (PR #59, inactive)
+
+This section supersedes the earlier prototype's activation and four-cycles/day planning
+assumptions. The daily and hourly products now share **one recurring workflow and one publisher**.
+The cron is prepared for hourly checks at minute 17, but scheduled extraction and every production
+write require `NBM_REFRESH_ENABLED == 'true'` on `main`. **That variable has not been enabled by
+this work. Neither draft is merged.** Branch dispatches are read-only rehearsals. The existing
+job-scoped `contents: write` permission is unchanged; there are no new secrets, tokens or services.
+The hourly-only workflow remains manual and read-only, with no second schedule.
+
+Each eligible check starts from committed daily/hourly pairs and the publication budget on a
+freshly fetched `main`. Each producer has independent bounds and a 630-second process deadline.
+The sequential extraction job has a 25-minute limit: up to 1,260 seconds of producer execution,
+plus checkout/setup/reporting. Daily source limits remain 100 requests/150 MB/600 seconds;
+hourly limits remain 180 requests/30 MB/600 seconds, 4 MB output, two request attempts, and
+one-second subset pacing. Failed/timed-out products cannot reuse a previous successful status.
+Known resource use is reported even on producer failure; killed-process totals are explicitly
+marked `resourceUsageIncomplete`, and their unreported work is not claimed as zero.
+
+Hourly readiness now requires every exact CONUS f001–f048 file in the bounded S3 inventory.
+A listing may be truncated after those files because it contains other regions; all 48 required
+keys must still be present. Advertised incomplete cycles and transient failures receive at most
+two selection attempts, 15 seconds apart, within the same total resource budget, before an older
+eligible cycle is considered. Missing/invalid percentiles cannot enter a published snapshot.
+403/access denials are never retried or hidden by fallback. Both products must be individually
+complete for publication (18 native daily windows; 48 instantaneous hourly fields). A failed
+product retains its entire last-good pair, while its healthy sibling may publish. Their source
+cycles may differ; no source age is reset by checking, retaining or publishing data.
+
+`nbm-combined-publish.py` validates each candidate/status/receipt independently, fetches current
+`main`, checks code freshness and per-product rollback, and uses one private Git index for one
+ordinary fast-forward push. Changed pairs and `data/nbm-publication.json` are committed atomically.
+Only those **five allowlisted data files** can change. A failed sibling is omitted completely;
+its remote bytes stay intact. A partially successful publication is explicitly audited as
+`degraded` and returns a failed job status so the failure remains visible. Two failed products
+make no commit. A race/rejection never force-pushes, rebases or automatically retries an ambiguous
+write. Local interrupted pairs are not atomic across two filesystem replacements, but an invalid
+receipt or unsuccessful status prevents them from becoming a Git publication.
+
+**Budget:** the manifest allows at most one changed data commit assigned to each six-hour UTC
+preparation window (00–06, 06–12, 12–18, 18–24). The same cap applies to manual publisher calls.
+It is read from the fetched remote head and advanced only in a changed publication. Unchanged,
+failed and deferred checks do not advance it. An absent manifest can bootstrap only with complete
+history and no previous manifest; a deleted, malformed or future-dated established manifest fails
+closed. `preparedAt` is the commit preparation time, **not a confirmed deployment timestamp**.
+A push/build can complete across a window or billing-month boundary; neighboring windows can
+publish close together. The cap is 120 assigned commits over 30 UTC days or 124 over 31, not a
+promise about all builds in the Cloudflare billing month.
+
+A closed window skips NOAA extraction and decoder installation. The next open window performs
+fresh validation; deferred candidates are not blindly published later. A fixed f001–f048 hourly
+payload is aligned to the rolling view in the browser, so moving the clock or requested horizon
+never rewrites the payload. A no-op preserves the original retrieval timestamp and receipt.
+A late product, revision, or recovering sibling can wait nearly six hours after another product
+uses its window. This can cause an unavailable interval during upstream disruption: old data is
+still withheld at 24 hours of **source-cycle age**. The cap deliberately trades fastest possible
+recovery for a predictable data-commit budget; activation review must accept that tradeoff.
+
+Batching alone is insufficient: staggered daily/hourly arrivals can otherwise cause two commits
+per cycle, and revisions could turn hourly checks into 720 monthly commits. Simulations cover
+hourly revisions, clock/horizon movement, no-ops, fixed-window boundaries and sibling recovery;
+real Git tests cover one transaction, retained bytes, rollback, concurrent writes and rejection.
+Cloudflare documents [500 Free builds/month](https://developers.cloudflare.com/pages/platform/limits/).
+App commits, preview builds, manual rebuilds, other writers and carried-over builds are outside
+this publisher's cap. Existing account usage is unverified. No free-usage or zero-overage guarantee
+is made. GitHub runner/storage use is a separate cost from Cloudflare builds.
+
+Live normal-TLS rehearsal measurements (October 8): fresh daily extraction **89 requests,
+115,471,105 response-body bytes, 119.696 seconds**; a combined unchanged check **103 requests,
+845,578 bytes, 70.345 seconds**, with unchanged hourly data/receipt bytes and retrieval time.
+Recorded reports are `nbm-daily-reliability-recorded.json` and `nbm-combined-noop-recorded.json`.
+The first rehearsal correctly isolated a too-strict inventory check as an hourly failure while
+daily extraction succeeded; the inventory handling was corrected and the combined check passed.
+The earlier authentic full hourly extraction measured 146 requests, 6,408,858 bytes and 410.123
+seconds; the new full inventory adds roughly 0.34 MB compared with its old discovery query.
+Combining those observations, a planning scenario of 120 paired extractions, 120 eligible no-ops
+and 480 closed-window skips is approximately **14.8 GB of NOAA response bodies, 40,560 requests
+and 1,200 producer minutes per 30 days**, before setup/retries. This is an estimate assembled
+from separate measured runs, not a measured month or a bound. Failed runs can consume their full
+budgets without publishing. Git checkout/history transfer, package installation, response headers,
+artifact storage, app/preview CI and source revisions are additional. Full history is fetched for
+reliable deleted-budget detection; repository growth therefore remains an operational cost.
+Artifacts can include both current pairs plus daily history: roughly 6.3 MB per changed artifact
+before compression in this rehearsal, about 450 MB if all 72 hourly artifacts were that size.
+Actual account quotas and remaining usage must be checked before activation.
+
+The interface says **model range** and **middle estimate**, with percentile definitions, valid
+hour/units and source-cycle details in a keyboard/touch-accessible disclosure. The band represents
+the central 80% of the modeled distribution, with about 10% below and above—not guaranteed limits
+or an NWS confidence interval. The middle estimate is P50 (the median), not the midpoint of P10
+and P90. Daily rows also use the shorter “NBM range” label while preserving explicit native
+18-hour windows in their details. A failed browser check retains validated same-location guidance
+with a clear previous-range notice until its original expiry; location reset clears it immediately.

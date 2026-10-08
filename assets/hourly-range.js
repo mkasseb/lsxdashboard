@@ -1,26 +1,26 @@
 /* Optional instant-temperature guidance, isolated from official NWS/risk state. */
 var NbmHourly=(function(){
 'use strict';
-var H=3600000,raw=null,seq=0,point=null,generation=-1,officialGeneration=-1,official=null,failure='Checking hourly NBM guidance…';
+var H=3600000,raw=null,seq=0,point=null,generation=-1,officialGeneration=-1,official=null,failure='Checking model range…',lastFailed=false;
 function finite(v){return typeof v==='number'&&Number.isFinite(v);}
 function time(s){return typeof s==='string'?Date.parse(s):NaN;}
 function distance(a,b){var r=Math.PI/180,x=(b.lat-a.lat)*r,y=(b.lon-a.lon)*r;return 12742*Math.asin(Math.sqrt(Math.min(1,Math.sin(x/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(y/2)**2)));}
 function validate(d,p,now){
- var bad={status:'unavailable',reason:'Hourly NBM data failed validation.'};
+ var bad={status:'unavailable',reason:'Model range unavailable.'};
  try{
   if(!d||d.schema!==1||d.source!=='NOAA NBM QMD NOMADS subset'||d.units!=='K'||d.timezone!=='America/Chicago'||
      !finite(p.lat)||!finite(p.lon)||!d.coverage||d.coverage.south!==38.2||d.coverage.north!==39.2||d.coverage.west!==-91.1||d.coverage.east!==-89.5||d.coverage.maxDistanceKm!==3||
      !Array.isArray(d.cells)||d.cells.length<2500||d.cells.length>4000||!Array.isArray(d.hours)||!d.hours.length||d.hours.length>48||!/^[a-f0-9]{32}$/.test(d.gridHash))return bad;
   var run=time(d.run),retrieved=time(d.retrievedAt);
   if(!finite(run)||run%H||new Date(run).getUTCHours()%6||run>now||!finite(retrieved)||retrieved<run||retrieved>now+300000)return bad;
-  if(now-run>=24*H)return {status:'stale',reason:'Hourly NBM source is 24 hours old or older; range withheld.'};
-  if(p.lat<38.2||p.lat>39.2||p.lon<-91.1||p.lon>-89.5)return {status:'missing',reason:'Hourly NBM is outside the supported St. Louis metro coverage.'};
+  if(now-run>=24*H)return {status:'stale',reason:'Range expired: model run is 24 hours old or older.'};
+  if(p.lat<38.2||p.lat>39.2||p.lon<-91.1||p.lon>-89.5)return {status:'missing',reason:'Model range is not available for this location.'};
   var seen={},chosen=-1,km=Infinity;
   d.cells.forEach(function(c,i){
    if(!Array.isArray(c)||c.length!==3||!Number.isInteger(c[0])||c[0]<0||seen[c[0]]||!finite(c[1])||!finite(c[2])||c[1]<38.15||c[1]>39.25||c[2]<-91.15||c[2]>-89.45)throw Error();
    seen[c[0]]=true;var k=distance(p,{lat:c[1],lon:c[2]});if(k<km){km=k;chosen=i;}
   });
-  if(km>3)return {status:'missing',reason:'No hourly NBM native cell within 3 km.'};
+  if(km>3)return {status:'missing',reason:'No model range close enough to this location.'};
   var last=0,values={};
   d.hours.forEach(function(h){
    var f=h.forecastHour,t=time(h.validTime),published=h.publication&&time(h.publication.publishedAt);
@@ -45,33 +45,40 @@ function selected(){var e=document.getElementById('nbmHourlyToggle');return !!(e
 function presentation(hrs,duration,now){
  var status=document.getElementById('nbmHourlyStatus'),toggle=document.getElementById('nbmHourlyToggle');
  if(!status||!toggle)return [];
+ ['nbmHourlySource','nbmHourlyPercentiles'].forEach(function(id){var e=document.getElementById(id);if(e)e.textContent='';});
  toggle.disabled=duration!==24;
- if(duration!==24){status.textContent='NBM range is available in the 24-hour view; longer views remain NWS only.';return [];}
- if(!selected()){status.textContent='NWS forecast shown. Enable NBM range for separate temperature guidance.';return [];}
+ if(duration!==24){status.textContent='Model range is available in the 24-hour view.';return [];}
+ if(!selected()){status.textContent='NWS forecast shown. Model range is off.';return [];}
  var r=raw&&generation===locSeq&&point&&point.lat===current.lat&&point.lon===current.lon?validate(raw,point,now):{status:'unavailable',reason:failure};
  if(!r.values){status.textContent=r.reason;return [];}
- if(officialGeneration!==locSeq||!official){status.textContent='Waiting for current NWS hourly data before comparing NBM.';return [];}
+ if(officialGeneration!==locSeq||!official){status.textContent='Waiting for the current NWS hourly forecast.';return [];}
  var points=align(r,hrs,now),count=points.filter(Boolean).length;
- status.textContent='NBM P10–P90: central 80% modeled range, not an NWS confidence interval. QMD '+new Date(r.run).toISOString().slice(0,16).replace('T',' ')+' UTC · '+((now-r.run)/H).toFixed(1)+' hours old. '+count+'/'+hrs.length+' hours matched; gaps are not filled.';
+ status.textContent=(lastFailed?'Latest check failed; previous range shown. ':'')+'Model run '+((now-r.run)/H).toFixed(1)+' hours old · '+count+'/'+hrs.length+' hours matched.';
+ var source=document.getElementById('nbmHourlySource');if(source)source.textContent='NOAA NBM QMD · run '+new Date(r.run).toISOString().slice(0,16).replace('T',' ')+' UTC. Native 2 m temperature at each valid hour, shown in °F. Missing hours stay blank. Range expires at 24 hours of source age.';
  return points;
 }
-function describe(p){return p?'<span class="nbm-hourly-detail">NBM guidance · P10 '+Math.round(p.p10)+'°F · P50 '+Math.round(p.p50)+'°F · P90 '+Math.round(p.p90)+'°F · '+new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'}).format(new Date(p.validTime))+'</span>':'<span class="nbm-hourly-detail">NBM range unavailable for this hour.</span>';}
+function describe(p){
+ var detail=document.getElementById('nbmHourlyPercentiles');
+ if(detail)detail.textContent=p?'Selected hour: P10 '+Math.round(p.p10)+'°F · P50 '+Math.round(p.p50)+'°F · P90 '+Math.round(p.p90)+'°F.':'No model percentiles for the selected hour.';
+ return p?'<span class="nbm-hourly-detail">Model range '+Math.round(p.p10)+'–'+Math.round(p.p90)+'°F · middle estimate '+Math.round(p.p50)+'°F · '+new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'}).format(new Date(p.validTime))+'</span>':'<span class="nbm-hourly-detail">Model range unavailable for this hour.</span>';
+}
 function forecast(hrs){official=hrs;officialGeneration=locSeq;}
 function repaint(){if(typeof renderHourly24==='function'&&renderHourly24._hrs)renderHourly24();}
-function reset(){raw=null;point=null;generation=-1;official=null;officialGeneration=-1;seq++;failure='Checking hourly NBM guidance…';
- if(typeof document!=='undefined'){document.querySelectorAll('.nbm-hourly-band,.nbm-hourly-detail').forEach(function(e){e.remove();});var status=document.getElementById('nbmHourlyStatus');if(status)status.textContent=failure;}
+function reset(){raw=null;point=null;generation=-1;official=null;officialGeneration=-1;seq++;lastFailed=false;failure='Checking model range…';
+ if(typeof document!=='undefined'){document.querySelectorAll('.nbm-hourly-band,.nbm-hourly-detail').forEach(function(e){e.remove();});var status=document.getElementById('nbmHourlyStatus');if(status)status.textContent=failure;['nbmHourlySource','nbmHourlyPercentiles'].forEach(function(id){var e=document.getElementById(id);if(e)e.textContent='';});}
 }
 function load(){
  var fresh=locGuard(),n=++seq,p={lat:current.lat,lon:current.lon};
  return getJSON('/data/nbm-hourly.json',null,locSignal()).then(function(d){
-  if(!fresh()||n!==seq)return;raw=d;point=p;generation=locSeq;
-  var r=validate(d,p,Date.now());feedUpdate('nbmHourly',['ready','partial'].includes(r.status)?r.status:'unavailable',d.run);repaint();
- }).catch(function(){if(!fresh()||n!==seq)return;raw=null;failure='Hourly NBM guidance unavailable. NWS forecast remains available.';feedUpdate('nbmHourly','unavailable');repaint();});
+  if(!fresh()||n!==seq)return;
+  var r=validate(d,p,Date.now());if(r.status==='unavailable'||r.status==='stale')throw Error('Invalid or expired model range');
+  raw=d;point=p;generation=locSeq;lastFailed=false;feedUpdate('nbmHourly',['ready','partial'].includes(r.status)?r.status:'unavailable',d.run);repaint();
+ }).catch(function(){if(!fresh()||n!==seq)return;lastFailed=true;failure='Model range unavailable. NWS forecast shown.';feedUpdate('nbmHourly','unavailable');repaint();});
 }
 function init(){
  if(new URLSearchParams(location.search).get('nbm')==='0')return;
  var box=document.createElement('div');box.className='nbm-hourly-controls';
- box.innerHTML='<span class="nbm-hourly-nws-key">NWS temperature line</span><label><input id="nbmHourlyToggle" type="checkbox" checked> Show NBM temperature range</label><p id="nbmHourlyStatus" role="status">Checking hourly NBM guidance…</p>';
+ box.innerHTML='<span class="nbm-hourly-nws-key">NWS temperature line</span><label><input id="nbmHourlyToggle" type="checkbox" checked> Show model temperature range</label><p id="nbmHourlyStatus" role="status">Checking model range…</p><details id="nbmHourlyInfo"><summary>About this range</summary><p id="nbmHourlyMeaning">The shaded band covers the central 80% of temperatures in NOAA’s National Blend of Models (NBM) guidance. About 10% of the modeled distribution is below it and 10% above it. These are not guaranteed limits or an NWS confidence interval. The NWS forecast line can fall outside the band.</p><p>The bounds are the 10th and 90th percentiles (P10 and P90). The middle estimate is the median (P50), not the midpoint of the bounds.</p><p id="nbmHourlyPercentiles"></p><p id="nbmHourlySource"></p></details>';
  document.getElementById('hourly24').before(box);
  box.querySelector('input').addEventListener('change',repaint);
  FEEDS.nbmHourly={label:'Hourly NBM',load:'loadNbmHourly',every:15*60000,age:30*60000,local:true,failure:'unavailable'};

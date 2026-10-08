@@ -1831,3 +1831,7 @@ a.cpc-item:hover{border-color:var(--accent)}
 .nbm-hourly-band{fill:#7186d8;fill-opacity:.23;stroke:#7186d8;stroke-opacity:.65;stroke-width:1;pointer-events:none}
 .nbm-hourly-detail{color:var(--muted);flex-basis:100%}
 .nbm-hourly-nws-key{display:block;font-weight:700;color:var(--text)}
+
+.nbm-hourly-controls details{font-size:12px;color:var(--muted);line-height:1.5;margin-top:4px}
+.nbm-hourly-controls summary{cursor:pointer;min-height:44px;display:flex;align-items:center;color:var(--accent)}
+.nbm-hourly-controls details p{margin:8px 0}

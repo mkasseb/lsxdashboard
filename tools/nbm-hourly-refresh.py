@@ -27,6 +27,11 @@ BASE = 'https://nomads.ncep.noaa.gov/pub/data/nccf/com/blend/prod/'
 FILTER = 'https://nomads.ncep.noaa.gov/cgi-bin/filter_blend.pl?'
 
 
+class Pending(Exception):
+    """An advertised QMD cycle has not finished publishing."""
+
+
+
 def iso(t):
     return t.isoformat().replace('+00:00', 'Z')
 
@@ -172,6 +177,43 @@ def extract(client, directory, run):
     return data, True
 
 
+def available(client, run):
+    prefix = f'blend.{run[:8]}/{run[8:]}/qmd/'
+    raw, _ = client.request(regional.nbm.BASE+'?list-type=2&max-keys=1000&prefix='+prefix)
+    root = ET.fromstring(raw)
+    ns = '{http://s3.amazonaws.com/doc/2006-03-01/}'
+    if root.findtext(ns+'IsTruncated') not in ('true', 'false'):
+        raise ValueError('Malformed QMD inventory')
+    keys = [e.text for e in root.findall(ns+'Contents/'+ns+'Key')]
+    if not keys:
+        return False
+    needed = {prefix+f'blend.t{run[8:]}z.qmd.f{h:03}.co.grib2' for h in range(1, HOURS+1)}
+    # The listing spans other regions and can be truncated after our 48 files.
+    # We require every exact CONUS key, not completeness of unrelated regions.
+    if not needed.issubset(keys):
+        raise Pending(f'{run}: hourly QMD inventory is incomplete')
+    return True
+
+
+def choose(client, directory, cycles, attempts=2, delay=15, sleep=time.sleep):
+    notes = []
+    for run in cycles:
+        for attempt in range(attempts):
+            try:
+                if not available(client, run):
+                    notes.append(run+': QMD not listed yet')
+                    break
+                data, changed = extract(client, directory, run)
+                return data, changed, notes
+            except (Pending, urllib.error.URLError, TimeoutError) as error:
+                if isinstance(error, urllib.error.HTTPError) and error.code not in (404, 429, 500, 502, 503, 504):
+                    raise  # Never conceal an access denial with retries or older cycles.
+                notes.append(f'{run}: {type(error).__name__}: {error}')
+                if attempt+1 < attempts:
+                    sleep(delay)
+    raise Pending('No complete hourly source cycle; '+ '; '.join(notes))
+
+
 def refresh(directory, run=None):
     directory.mkdir(parents=True, exist_ok=True)
     client = Client()
@@ -180,24 +222,11 @@ def refresh(directory, run=None):
         try:
             now = datetime.now(UTC)
             cycles = [run] if run else [(now.replace(hour=(now.hour//6)*6, minute=0, second=0, microsecond=0)-timedelta(hours=6*i)).strftime('%Y%m%d%H') for i in range(4)]
-            notes = []
             for candidate in cycles:
                 cycle = datetime.strptime(candidate, '%Y%m%d%H').replace(tzinfo=UTC)
                 if not timedelta(0) <= now-cycle < timedelta(hours=24):
                     raise ValueError('Source cycle must be younger than 24h')
-                try:
-                    listing, _ = client.request(regional.nbm.BASE+'?list-type=2&max-keys=1&prefix='+f'blend.{candidate[:8]}/{candidate[8:]}/qmd/')
-                    if ET.fromstring(listing).findtext('{http://s3.amazonaws.com/doc/2006-03-01/}KeyCount') == '0':
-                        notes.append(candidate+': QMD not listed yet')
-                        continue
-                    data, changed = extract(client, directory, candidate)
-                    break
-                except urllib.error.HTTPError as error:
-                    if error.code != 404:
-                        raise
-                    notes.append(f'{candidate}: source not yet complete (404)')
-            else:
-                raise ValueError('No complete hourly source cycle')
+            data, changed, notes = choose(client, directory, cycles)
             if datetime.now(UTC)-datetime.fromisoformat(data['run'].replace('Z', '+00:00')) >= timedelta(hours=24):
                 raise ValueError('Source became stale during extraction')
             raw = (json.dumps(data, separators=(',', ':'), allow_nan=False)+'\n').encode()

@@ -115,7 +115,7 @@ var NbmRange=(function(){
     var currentData=raw&&storedSeq===locSeq&&storedPoint.lat===current.lat&&storedPoint.lon===current.lon;
     var result=currentData?validate(raw,storedPoint,Date.now()):{status:'unavailable',reason:failure};
     status.textContent=result.periods?'NBM model guidance · QMD cycle '+new Date(result.run).toISOString().slice(0,16).replace('T',' ')+' UTC · '+age(result.run,Date.now())+' old':result.reason;
-    add('p','NWS temperatures are the official forecast. NBM is separate model guidance: P10–P90 is the central 80% modeled range, with outcomes outside it possible; P50 is the median. No values are averaged or substituted.',body);
+    add('p','NWS temperatures are the official forecast. The NBM range covers the central 80% of the modeled temperature distribution, with about 10% below and 10% above it. It is not a guarantee or an NWS confidence interval. The bounds are P10 and P90; P50 is the median (middle estimate). Model values never replace the NWS forecast.',body);
     add('p','NBM maximum/minimum temperatures cover native 18-hour windows, not calendar-day highs/lows. A range appears alongside a day or night only when there is one unambiguous overlapping window. Expand the NWS row to compare both intervals. Rows without a range have no unique, currently usable NBM window. All times are Central, with daylight-saving offsets at each endpoint.',body);
     if(!result.periods)return;
     var pairing=align(forecastSeq===locSeq&&forecastPoint&&forecastPoint.lat===current.lat&&forecastPoint.lon===current.lon?days:[],result.periods,Date.now()),items=daily.querySelectorAll('.day-item');
@@ -123,7 +123,7 @@ var NbmRange=(function(){
     Object.keys(groups).forEach(function(index){
       var item=items[index];if(!item)return;
       var matches=groups[index],line=document.createElement('div');line.className='nbm-inline';
-      add('span','NBM P10–P90',line,'nbm-label');
+      add('span','NBM range',line,'nbm-label');
       matches.forEach(function(m){add('span',(m.part==='day'?'High ':'Low ')+bounds(m.nbm),line,'nbm-band');});
       item.querySelector('.day').after(line);
       var detail=document.createElement('div');detail.className='nbm-period-detail';
@@ -163,7 +163,7 @@ var NbmRange=(function(){
   function init(){
     if(new URLSearchParams(location.search).get('nbm')==='0')return;
     var section=document.getElementById('forecastCard'),info=document.createElement('div');info.id='nbmInfo';
-    info.innerHTML='<p id="nbmWindowHelp">NBM uses 18-hour windows; expand a day to compare timing and percentiles.</p><p id="nbmStatus" role="status">Checking NBM model guidance…</p><details><summary>About NBM ranges &amp; unmatched windows</summary><div id="nbmInfoBody"></div></details>';
+    info.innerHTML='<p id="nbmWindowHelp">NBM uses 18-hour windows; expand a day for timing and model details.</p><p id="nbmStatus" role="status">Checking NBM model guidance…</p><details><summary>About NBM ranges &amp; unmatched windows</summary><div id="nbmInfoBody"></div></details>';
     section.appendChild(info);
     info.querySelector('details').addEventListener('toggle',function(){if(typeof scheduleMasonry==='function')scheduleMasonry();});
     FEEDS.nbmRange={label:'NBM range',load:'loadNbmRange',every:15*60000,age:30*60000,local:true,failure:'unavailable'};

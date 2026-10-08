@@ -44,7 +44,7 @@ class Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory()as t:
             d=Path(t);original=b'{"run":"2026-10-08T06:00:00Z","retrievedAt":"2026-10-08T14:00:00Z"}'
             (d/'nbm-hourly.json').write_bytes(original)
-            with patch.object(m.Client,'request',side_effect=TimeoutError('test')):result=m.refresh(d)
+            with patch.object(m,'choose',side_effect=TimeoutError('test')):result=m.refresh(d)
             self.assertEqual(result['status'],'failed');self.assertEqual((d/'nbm-hourly.json').read_bytes(),original)
     def test_source_revision_cannot_publish(self):
         with tempfile.TemporaryDirectory()as t:
@@ -56,5 +56,28 @@ class Tests(unittest.TestCase):
         c=m.Client()
         with tempfile.TemporaryDirectory()as t,patch.object(m,'retained',return_value=d),patch.object(c,'version',side_effect=[h['publication']for h in d['hours']]),patch.object(c,'request')as request:
             found,changed=m.extract(c,Path(t),'2026100806');self.assertIs(found,d);self.assertFalse(changed);request.assert_not_called()
+
+    def test_inventory_requires_every_fixed_native_hour(self):
+        c=m.Client();prefix='blend.20261008/06/qmd/'
+        def listing(hours):
+            return ('<ListBucketResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><IsTruncated>false</IsTruncated>'+''.join('<Contents><Key>'+prefix+f'blend.t06z.qmd.f{h:03}.co.grib2'+'</Key></Contents>'for h in hours)+'</ListBucketResult>').encode()
+        with patch.object(c,'request',return_value=(listing(range(1,49)),{})):
+            self.assertTrue(m.available(c,'2026100806'))
+        with patch.object(c,'request',return_value=(listing(range(1,49)).replace(b'<IsTruncated>false',b'<IsTruncated>true'),{})):
+            self.assertTrue(m.available(c,'2026100806'))
+        with patch.object(c,'request',return_value=(listing(range(1,48)),{})):
+            with self.assertRaises(m.Pending):m.available(c,'2026100806')
+        with patch.object(c,'request',return_value=(listing([]),{})):
+            self.assertFalse(m.available(c,'2026100806'))
+    def test_partial_publication_retry_then_independent_older_cycle(self):
+        with tempfile.TemporaryDirectory()as t,patch.object(m,'available',side_effect=[m.Pending('late'),m.Pending('late'),True]),patch.object(m,'extract',return_value=({'run':'older'},False))as extract:
+            wait=unittest.mock.Mock();d,changed,notes=m.choose(m.Client(),Path(t),['2026100806','2026100800'],sleep=wait)
+            self.assertFalse(changed);self.assertEqual(len(notes),2);wait.assert_called_once_with(15)
+            self.assertEqual(extract.call_args.args[2],'2026100800')
+    def test_access_denial_never_falls_back(self):
+        with tempfile.TemporaryDirectory()as t,patch.object(m,'available',side_effect=urllib.error.HTTPError('u',403,'Forbidden',{},None))as available:
+            wait=unittest.mock.Mock()
+            with self.assertRaises(urllib.error.HTTPError):m.choose(m.Client(),Path(t),['2026100806','2026100800'],sleep=wait)
+            self.assertEqual(available.call_count,1);wait.assert_not_called()
 
 if __name__=='__main__':unittest.main()

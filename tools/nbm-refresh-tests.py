@@ -194,7 +194,7 @@ class RefreshTests(unittest.TestCase):
         self.assertIn('schedule:', active)
         self.assertIn("cron: '17 * * * *'", active)
         self.assertIn('contents: read', active)
-        self.assertIn("if: ${{ github.ref == 'refs/heads/main' }}", active)
+        self.assertIn("if: ${{ github.ref == 'refs/heads/main' && vars.NBM_REFRESH_ENABLED == 'true' && needs.extract.outputs.publishable == 'true' }}", active)
         self.assertEqual(active.count('contents: write'), 1)
         self.assertNotIn('secrets.', active)
         self.assertIn('retention-days: 3', active)

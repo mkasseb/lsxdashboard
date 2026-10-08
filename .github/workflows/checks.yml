@@ -30,6 +30,7 @@ jobs:
       - run: python3 -m pip install -r tools/nbm-requirements.txt
       - run: python3 tools/nbm-hourly-refresh-tests.py
       - run: python3 tools/nbm-hourly-publish-tests.py
+      - run: python3 tools/nbm-combined-tests.py
 
   browser:
     strategy:
