@@ -2,3 +2,8 @@
 .claude/
 
 __pycache__/
+/data/nbm-range.json
+/data/nbm-status.json
+/data/nbm-receipt.json
+/data/history/
+/data/.refresh.lock

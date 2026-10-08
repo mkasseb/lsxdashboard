@@ -4250,6 +4250,7 @@ function layoutMasonry(){
       droughtCard:6,    // drought outlook
       climateCard:7,    // climate vs normal
       cpcCard:8,        // week-ahead leanings
+      nbmRangeCard:9,   // opt-in supplemental model temperature range
       linksCard:10      // deep-dive links — reference, lowest
     };
     return (RANK[id]!=null) ? RANK[id] : 50;

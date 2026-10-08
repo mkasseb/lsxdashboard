@@ -205,6 +205,214 @@ location changes. Refresh, scheduling, reset markup and snapshot lists are gener
 the reasons are
 in [`DESIGN.md`](DESIGN.md#adding-a-card-adding-a-loader).
 
+## Supplemental NBM temperature range
+
+The **Forecast range** card is visible but collapsed by default. `/?nbm=0` disables it.
+NWS forecasts, headlines, warnings and risk decisions receive no NBM values.
+
+### Regional refresh
+
+The smallest supported pipeline is one Python/ecCodes extraction producing static JSON, with
+no database or request-time backend. It downloads each selected GRIB message once for the entire
+region. To run it locally (normal TLS only):
+
+```bash
+python3 -m venv /tmp/nbm-venv
+/tmp/nbm-venv/bin/pip install -r tools/nbm-requirements.txt
+/tmp/nbm-venv/bin/python tools/nbm-refresh.py --output-dir data
+python3 -m http.server 8787
+# Open http://localhost:8787/
+```
+
+Default discovery examines actual QMD publication within the last 24 hours and considers the two
+newest published cycles. It does not infer readiness from core. Six native maximum/minimum windows
+are required before replacing the current dataset. The newest cycle receives up to three attempts,
+15 seconds apart, including index-before-GRIB and incomplete-index publication races; a prior
+published cycle may then be used within the same source-age limit. Transient network failures are
+bounded; access denials and invalid GRIB metadata/order fail closed. An explicit `--run YYYYMMDDHH`
+is available for current-cycle validation, not historical data masquerading as live data.
+
+`.github/workflows/nbm-refresh.yml` checks hourly at minute 17 UTC and also accepts manual
+workflow dispatch. Publication is restricted to `main`. Hourly checks accommodate delayed QMD
+publication; only changed validated cycles or revisions make a data commit and trigger Pages.
+Manual main-branch runs additionally verify the public data hash/receipt and rendered mobile/desktop
+card over normal TLS, including nearest-cell values and native interval labels. Verification polls
+Pages for at most five minutes and fails if the expected data is not served; it does not bypass TLS.
+This browser job does not run on hourly polls.
+The extraction job uses read-only access and retains artifacts/status for three days; the separate
+publisher uses only the approved job-scoped built-in token write permission.
+
+### Coverage and matching
+
+Supported geography is **38.2–39.2°N, 91.1–89.5°W**, a metro rectangle, not the full LSX county-warning
+area. It includes Lake St. Louis, St. Louis, Belleville, Edwardsville, Washington, Arnold and Alton.
+Existing dashboard LSX location checks still apply. Requests outside the rectangle show unsupported
+coverage. Inside it, the card selects the nearest stored native GRIB cell by spherical distance,
+requiring at most **3 km**; it neither interpolates values nor substitutes a station. A small grid
+padding permits correct selection at the rectangle's edges. All three percentiles use that same
+cell, run and native interval. The original single-point extractor and schema remain compatible.
+
+### Data correctness and freshness
+
+Actual QMD extrema are TMP records with GRIB2 template 4.10 and maximum/minimum statistical
+processing (2/3), in kelvin at 2 m. Validated native windows are **18 hours**, not local calendar
+highs/lows. For example, the October 8 maximum spans Oct 8 07:00 CDT to Oct 9 01:00 CDT; the following
+minimum spans Oct 8 19:00 CDT to Oct 9 13:00 CDT. Both endpoints use America/Chicago independently
+across DST. Hourly percentiles are never used to derive extrema; crossed percentiles are rejected,
+not reordered. P50 is the model median, not the official NWS forecast.
+
+Regional schema 2 stores a shared cell table and shared per-interval provenance, plus three Kelvin
+values per cell. Each message preserves its NOAA URL, byte range, SHA-256, ETag, upload time, decoded
+cycle, native interval and grid identity. The browser converts the selected cell to Fahrenheit and
+revalidates the percentile group. Cycle age never resets on extraction or page refresh. Data older
+than 24 hours is withheld on the next 15-minute card refresh; expired native intervals are removed.
+The 24-hour limit is dashboard policy, not a NOAA SLA.
+
+Local writes use a flushed temporary file and atomic replacement, with a writer lock and rejection
+of cycle rollback. A failed extraction leaves previous data bytes and retrieval/source timestamps
+unchanged and emits `nbm-status.json` with a nonzero process/job result. Status includes fallback
+notes, bytes, requests, elapsed time and peak RSS. Two distinct cycle snapshots are retained under
+`history/`; GRIB downloads are not stored. Runtime JSON, receipt, status, lock and history are Git-ignored.
+
+An unchanged-source gate reuses retained output only when its validation receipt matches the bytes,
+validator version and cycle, the current index ranges match, and six one-byte probes confirm unchanged
+source ETags. A missing receipt or source revision requires extraction. An unchanged result reports
+`changed:false` without rewriting data, receipt, history or retrieval time. `nbm-status.json` still
+records the check; the publisher gates on `changed` and never commits status timestamps.
+The receipt is local integrity evidence, not a signature or a replacement for source validation.
+
+**Persistence boundary:** the manual workflow uses a fresh temporary directory each run. Its history
+is not cross-run persistence and its artifacts are not a public serving endpoint. Last-good retention
+across jobs requires a persistent publication adapter to load/preserve the existing object;
+the publisher below implements that adapter. If runtime data is absent, the card shows unavailable. The committed compressed regional fixture is recorded test evidence only
+and is never fetched by the dashboard. A retained file becomes stale by source age even if every later
+refresh fails. Job failures/status artifacts provide reporting; no new notification integration exists.
+
+### Data-only publisher
+
+The approved publisher (`tools/nbm-publish.py`) is wired as a separate job with **job-scoped
+`contents: write`**, using the built-in `GITHUB_TOKEN` through checkout. This permission is
+repository-wide; it is not a GitHub-enforced path permission. The publisher's temporary Git index
+and final tree comparison permit only `data/nbm-range.json` and `data/nbm-receipt.json`. Other staged
+files, status timestamps, local history and application code cannot enter its commit.
+
+The user authorized rollout using the existing Cloudflare Free plan (500 builds/month), accepting
+that current consumption is unverified. Supplied settings confirm `main` automatic deployments,
+include paths `*`, no build command and root output. Existing branch/Actions rules remain authoritative:
+the readable `protect-main` ruleset blocks deletion and force-push; classic protection and Actions
+settings returned 403. Normal operations must fail on policy rejection; never bypass restrictions,
+create credentials or change security settings. The hourly schedule and main-only publisher implement
+the approved rollout, subject to successful normal merge, workflow and deployment verification.
+
+Extraction now loads the last committed dataset/receipt from `main` into its temporary output,
+allowing unchanged-cycle reuse across jobs. It fails closed on an incomplete retained pair.
+The publisher checks the receipt hash, recent successful status, source age, all regional percentile
+rows and consumer provenance validation before fetching the latest `main`. It rejects older cycles
+or older/equal retrieval revisions, and aborts if publishing/validation code changed during the run.
+An unchanged result requires byte-identical remote files and makes no commit.
+
+A candidate commit has the latest remote head as its sole parent, retaining concurrent app changes.
+Exactly one ordinary fast-forward push is attempted. A competing push or branch-rule rejection fails
+closed; there is no force-push, rebase, automatic merge or retry of an ambiguous push. The next run
+reads the actual remote state. Workflow concurrency serializes NBM jobs, while Git also protects
+against other writers. Remote files change together in one commit. Extraction/validation failures
+leave last-good data serving; failed Pages deployment leaves the prior deployed version. A lost
+push response may mean Git accepted the commit: the audit explicitly requires inspecting remote state.
+
+Publication is bounded to two current files (each at most 2 MB), one commit and one push per run,
+a five-minute publish job, and three-day audit artifacts. Local extraction retains at most two cycle
+snapshots; those snapshots are not committed. The commit message records run, data SHA-256, parent,
+workflow run and attempt; result JSON records the published commit or failure. Git history is still
+cumulative and needs an agreed long-term policy before recurring operation. Consumer staleness uses
+source age even if retained files survive every subsequent failure.
+
+Offline tests use temporary bare Git remotes, including rejected writes and concurrent updates;
+recorded data is never published by these tests. Run `python3 tools/nbm-publish-tests.py`.
+
+### Measured authentic run and operating decision
+
+On 2026-10-07, automatic discovery selected **12Z QMD**, with 06Z also published. The run extracted
+**2,969 cells and six windows** using **38,480,036 downloaded bytes**, **42 requests**, **55.089 seconds**
+and **185.23 MiB peak RSS** on this Linux environment. Output was **508,060 bytes** (about 100 KB gzip).
+These are extraction measurements; runner startup and dependency installation add time. The recorded
+source and measurements are in `tools/fixtures/weather/nbm-regional-*`. A 2,665-point offline sweep
+of the authentic grid found complete supported coverage, with maximum nearest-cell distance about
+1.711 km. Regional values at the original default point match the independent earlier point capture.
+
+Bounds per invocation: 100 HTTP requests, 150 MB response budget, a 10-minute work budget checked
+between requests, 20-second network timeouts, and a 15-minute workflow timeout. These fail closed
+rather than widening the region or dropping checks. Bounded retries may repeat a partially downloaded
+cycle, but the extractor never repeats a full download for each location. Cross-run reuse requires
+supplying the previously validated JSON and receipt from persistent storage or repository checkout.
+
+The retained-data gate was tested against the original authentic capture without repeating extraction:
+**174,884 bytes**, **30 requests**, **22.767 seconds**, **23.75 MiB RSS**, `changed:false` and identical
+output bytes. Hourly checks therefore do not require hourly GRIB extraction or deployment. Using the
+typical four QMD cycles/day as a planning scenario gives about 120 extractions and 600 unchanged checks
+per 30 days: approximately **4.72 GB downloaded and 338 minutes** of measured work, before startup,
+installation, source revisions and retries. Publication timing and cycle availability are discovered,
+not assumed. A fresh-run rehearsal without retained data would still re-extract each time.
+
+These are planning scenarios, not a dollar quote or a guarantee. Artifacts include current plus history copies; with the
+fresh-run rehearsal and three-day retention, 72 hourly artifacts would hold roughly 73 MB of raw
+JSON before archive compression, plus small status files. Existing repository artifacts share quotas.
+
+This repository is public and uses standard Ubuntu runners, which GitHub currently documents as
+[free runner usage](https://docs.github.com/en/billing/concepts/product-billing/github-actions).
+Storage remains plan-dependent; no account billing entitlement was assumed. Cloudflare Pages Free
+currently allows [500 builds/month](https://developers.cloudflare.com/pages/platform/limits/).
+Publishing only newly validated cycles at four/day would use about **120 builds/month**, leaving
+roughly 380 for ordinary app builds, previews, revisions and other usage within that quota. Actual
+current consumption is unverified and was explicitly accepted by the user. Do not equate 720 hourly checks with 720 site builds.
+
+**Simplest infrastructure option:** keep the existing Git-connected Pages deployment and publish
+data-only commits only when `changed:true`. The job starts with the
+last committed dataset and receipt, retains them on failure, validates a complete replacement, then
+atomically commits only the approved data paths against the current branch head. No-op checks must produce no commit or build;
+failed deployment must leave the prior Pages version serving. The existing same-origin data URL and
+new revalidation header avoid CORS changes. This uses existing hosting and needs no new storage product.
+
+**Actual repository constraint:** the visible `protect-main` ruleset blocks deletion and force-push.
+Classic protection/default-token settings remain inaccessible (403). The user approved job-scoped
+built-in token writes and rollout despite unverified consumption; existing account restrictions remain authoritative.
+If classic settings require PR review, preserve that review path rather than bypass it. No PAT/App token
+or relaxed protection is needed or authorized.
+
+Automated repository updates add commit noise and long-term Git history; deleting old working-tree
+snapshots does not prune that history. Concurrent app changes require conflict-safe retry rather than
+force-push. GitHub notes that ordinary pushes made with
+[`GITHUB_TOKEN` do not start another Actions run](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow),
+so required validation must run in the publisher itself. Pages documents
+[deployments on branch pushes](https://developers.cloudflare.com/pages/configuration/git-integration/github-integration/),
+but the eventual approved automation identity must be verified in a non-production test before
+assuming it triggers this specific installation. Other automation identities may also trigger the
+ordinary app CI matrix. Only the approved built-in token permission is declared on the publisher job.
+
+**Operating limits:** four new cycles/day is roughly 120 monthly data builds, not a guarantee.
+Same-cycle NOAA revisions, validation-version changes requiring refreshed output, ordinary app
+commits, previews and retries can add builds. Unchanged checks never commit status timestamps.
+Check usage periodically; if quota is exhausted, preserve last-good data and let source-age expiry
+withhold stale values. Pause the NBM workflow if needed rather than buying services or bypassing policy.
+
+Normal-TLS access was verified for the [S3 source](https://noaa-nbm-grib2-pds.s3.amazonaws.com/),
+[NOMADS](https://nomads.ncep.noaa.gov/pub/data/nccf/com/blend/prod/) (HTTP/1.1; malformed HTTP/2 header)
+and [NBM docs](https://blend.mdl.nws.noaa.gov/nbm-documentation). The
+[VLab textcard docs](https://vlab.noaa.gov/web/mdl/nbm-textcard-v5.0) returned 403; no station fallback
+is implemented. Source cycle, upload time and retrieval time remain separate.
+
+```bash
+node tools/nbm-tests.js
+python3 tools/nbm-extract-tests.py
+python3 tools/nbm-refresh-tests.py
+NODE_PATH=/path/to/playwright/node_modules CHROMIUM_PATH=/usr/bin/chromium \
+  NBM_ARTIFACTS=/tmp/nbm-visual node tools/nbm-browser-tests.js
+```
+
+Tests distinguish authentic captures from deliberate malformed-data/outage mutations and cover
+regional matching, boundaries, native-period provenance, unit/order failures, DST, retries,
+publication races, retention, atomic interruptions, source-age preservation, and bounded main-only scheduling.
+Existing dashboard checks remain required.
+
 ## Known gaps
 
 - The satellite follows a *scrub* but does not *animate*. A real satellite loop needs a preloaded

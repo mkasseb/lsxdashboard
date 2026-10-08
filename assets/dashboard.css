@@ -1643,6 +1643,12 @@
 .context-toggle{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:7px 10px;cursor:pointer}
 .context-toggle{margin:0 0 10px}
 .context-body[hidden]{display:none}
+.nbm-table{width:100%;border-collapse:collapse;font-size:.85rem;margin:12px 0}
+.nbm-table caption{text-align:left;font-weight:700;margin-bottom:8px}
+.nbm-table th,.nbm-table td{padding:8px 4px;border-bottom:1px solid var(--border);text-align:right}
+.nbm-table th:first-child{text-align:left;max-width:15em;font-weight:500}
+#nbmRangeCard summary{cursor:pointer;min-height:44px;padding:10px 0}
+#nbmRangeCard p{font-size:.85rem;color:var(--muted);line-height:1.5;overflow-wrap:anywhere}
 
 .map-diagnostics{max-width:100%;text-align:left;margin-top:12px}
 .map-diagnostics pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}

@@ -22,6 +22,10 @@ jobs:
       - run: python3 tools/check.py
       - run: node tools/logic-tests.js
       - run: node tools/seasonal-tests.js
+      - run: node tools/nbm-tests.js
+      - run: python3 tools/nbm-extract-tests.py
+      - run: python3 tools/nbm-refresh-tests.py
+      - run: python3 tools/nbm-publish-tests.py
 
   browser:
     strategy:
@@ -76,6 +80,10 @@ jobs:
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: |
           NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" REDESIGN_ARTIFACTS="$RUNNER_TEMP/redesign" xvfb-run -a node tools/redesign-tests.js
+      - name: Verify optional NBM range prototype
+        if: matrix.browser == 'chromium'
+        run: |
+          NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" NBM_ARTIFACTS="$RUNNER_TEMP/redesign/nbm" node tools/nbm-browser-tests.js
       - uses: actions/upload-artifact@v4
         if: always()
         with:
