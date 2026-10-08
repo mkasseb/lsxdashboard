@@ -30,6 +30,8 @@ async function main(){
     assert(response.ok());
     await page.waitForFunction(()=>typeof NbmRange!=='undefined'&&typeof current!=='undefined',null,{timeout:60000});
     assert.equal(await page.locator('#nbmRangeCard details').getAttribute('open'),null);
+    await page.locator('#nbmRangeCard summary').click();
+    assert(await page.locator('#nbmRangeCard details').evaluate(e=>e.open));
     for(const point of [{lat:38.8,lon:-90.79},{lat:38.52,lon:-89.98}]){
      const expected=await page.evaluate(async ({data,point})=>{
       current={...current,...point};await loadNbmRange();
@@ -41,7 +43,6 @@ async function main(){
      assert.match(await page.locator('#nbmStatus').innerText(),/QMD cycle/);
      assert((await page.locator('#nbmRange').innerText()).includes(expected.cell.lat.toFixed(3)+', '+expected.cell.lon.toFixed(3)));
     }
-    await page.locator('#nbmRangeCard summary').click();
     assert(await page.locator('#nbmRangeCard details').evaluate(e=>e.open));
     await page.locator('#nbmRangeCard').screenshot({path:path.join(directory,'live-nbm-'+width+'.png')});
     await page.evaluate(async()=>{current={...current,lat:39.4,lon:-90.79};await loadNbmRange();});
