@@ -14,7 +14,7 @@ async function preview(){
  assert(/^[a-f0-9]{40}$/.test(audit.commit),'Expected full commit SHA');
  for(let i=0;i<24;i++){
   const r=await fetch('https://api.github.com/repos/mkasseb/lsxdashboard/commits/'+audit.commit+'/check-runs',{headers:{Accept:'application/vnd.github+json'}});
-  assert(r.ok(),'Public deployment metadata HTTP '+r.status);
+  assert(r.ok,'Public deployment metadata HTTP '+r.status);
   const checks=(await r.json()).check_runs;
   const check=checks.find(c=>c.name==='Cloudflare Pages'&&c.conclusion==='success');
   const url=check?.output?.summary?.match(/https:\/\/[a-f0-9]+\.lsxdashboard2\.pages\.dev/);
@@ -113,6 +113,7 @@ async function main(){
   const recorded=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-nws-pairing-recorded.json')));
   const pointData=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-qmd-recorded.json')));
   const context=await browser.newContext({viewport:{width:390,height:1000},timezoneId:'America/Chicago'}),page=await context.newPage();
+  page.on('pageerror',e=>audit.runtimeErrors.push({phase:'controlled',message:e.message}));
   try{
    await page.clock.install({time:new Date(recorded.retrievedAt)});
    await page.route('**/forecast',r=>r.fulfill({json:recorded.forecast}));
