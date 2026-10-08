@@ -51,28 +51,33 @@ async function compare(page,data){
 }
 async function main(){
  const origin=await preview();assert(/^https:\/\/[a-z0-9-]+\.lsxdashboard2\.pages\.dev$/.test(origin));audit.origin=origin;
- const original='https://b832c786.lsxdashboard2.pages.dev';audit.originalPreview=original;
- const api=await request.newContext();let data;
+ const original='https://52fc902b.lsxdashboard2.pages.dev';audit.originalPreview=original;
+ const api=await request.newContext(),datasets={},receipts={};let data;
  try{
   const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
   const files=['index.html',...Array.from(html.matchAll(/(?:src|href)="\/?(assets\/[^"?]+)\?v=[a-f0-9]+/g),m=>m[1]),'data/nbm-range.json','data/nbm-receipt.json'];
   for(const verifiedOrigin of [origin,original])for(const file of [...new Set(files)]){
    const r=await api.get(verifiedOrigin+'/'+file);assert(r.ok(),file+' HTTP '+r.status());const bytes=await r.body();
-   assert.equal(hash(bytes),hash(fs.readFileSync(path.join(root,file))),file+' differs from checkout');
-   audit.assets.push({origin:verifiedOrigin,file,sha256:hash(bytes)});if(file==='data/nbm-range.json')data=JSON.parse(bytes);
+   // Old immutable previews keep their original data; only the current preview must match new data.
+   if(verifiedOrigin===origin||!file.startsWith('data/'))assert.equal(hash(bytes),hash(fs.readFileSync(path.join(root,file))),file+' differs from checkout');
+   audit.assets.push({origin:verifiedOrigin,file,sha256:hash(bytes)});
+   if(file==='data/nbm-range.json')datasets[verifiedOrigin]=JSON.parse(bytes);
+   if(file==='data/nbm-receipt.json')receipts[verifiedOrigin]=JSON.parse(bytes);
   }
-  assert.equal(hash(Buffer.from(JSON.stringify(data))),hash(Buffer.from(JSON.stringify(JSON.parse(fs.readFileSync(path.join(root,'data/nbm-range.json')))))));
-  const receipt=JSON.parse(fs.readFileSync(path.join(root,'data/nbm-receipt.json')));
-  assert.equal(receipt.sha256,audit.assets.find(x=>x.file==='data/nbm-range.json').sha256);audit.receipt=receipt;
+  for(const verifiedOrigin of [origin,original]){
+   assert.equal(receipts[verifiedOrigin].sha256,audit.assets.find(x=>x.origin===verifiedOrigin&&x.file==='data/nbm-range.json').sha256);
+   assert.equal(receipts[verifiedOrigin].run,datasets[verifiedOrigin].run);
+  }
+  data=datasets[origin];audit.receipt=receipts[origin];audit.originalReceipt=receipts[original];
  }finally{await api.dispose();}
  const browser=await chromium.launch(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']}:{});
  try{
-  // Also open the user's exact original immutable URL, whose app/data bytes match this checkout.
+  // Diagnose the user's previous immutable URL with its own authentic snapshot and real current time.
   const originalContext=await browser.newContext({viewport:{width:390,height:1000},timezoneId:'America/Chicago'});
   try{
    const p=await originalContext.newPage();p.on('pageerror',e=>audit.runtimeErrors.push({phase:'original-preview',message:e.message}));
    assert((await p.goto(original,{waitUntil:'domcontentloaded',timeout:60000})).ok());await settled(p);
-   audit.live.push({origin:original,width:390,test:'Original requested preview real feeds',...await compare(p,data)});
+   audit.live.push({origin:original,width:390,test:'Original requested preview real feeds',...await compare(p,datasets[original])});
    await shot(p,'original-preview-live-390');
   }finally{await originalContext.close();}
   for(const width of [390,1440]){
@@ -84,7 +89,7 @@ async function main(){
    try{
     const response=await page.goto(origin+'/?live-verification=1',{waitUntil:'domcontentloaded',timeout:60000});assert(response.ok());await settled(page);
     assert.equal(await page.locator('#nbmRangeCard').count(),0);assert.equal(await page.locator('#nbmInfo details').getAttribute('open'),null);
-    const first=await compare(page,data);audit.live.push({width,test:'Initial real feeds',...first});
+    const first=await compare(page,data);assert(['ready','partial'].includes(first.status),'Refreshed review snapshot must be usable now');audit.live.push({width,test:'Initial real feeds',...first});
     const day=page.locator('#daily .day').first();await day.focus();await day.press('Enter');assert.equal(await day.getAttribute('aria-expanded'),'true');
     await day.press('Enter');assert.equal(await day.getAttribute('aria-expanded'),'false');await day.press('Enter');
     const summary=page.locator('#nbmInfo summary');await summary.focus();await summary.press('Enter');assert(await page.locator('#nbmInfo details').evaluate(e=>e.open));
