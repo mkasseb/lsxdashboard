@@ -49,6 +49,10 @@ const server=http.createServer((req,res)=>{
       priming=true;unversioned=baseline;
       await page.goto(base+'/old',{waitUntil:'domcontentloaded'});
       await page.waitForFunction(()=>document.querySelectorAll('.context-toggle').length===6);
+      // Controls appear before asynchronous map bootstrap. Prime a fully rendered legacy
+      // page before testing cache reuse, rather than navigating during its WebGL startup.
+      await page.waitForFunction(()=>typeof rvMap!=='undefined'&&rvMap&&radarFrames.length>1&&radarFrames.some(f=>f.layer._ok>0),{},{timeout:30000});
+      await page.waitForLoadState('networkidle');
       assert.deepEqual(errors,[],'old page loads before upgrade');
       priming=false;requests=[];
       await page.goto(base+'/',{waitUntil:'domcontentloaded'});
