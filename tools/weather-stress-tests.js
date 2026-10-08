@@ -968,12 +968,18 @@ async function main() {
       assert.deepEqual(overlaps,[],'Feed growth must not leave overlapping hit targets until the next frame');
     },1280);
     await run('individual context repack preserves a pressed disclosure',config('pressed disclosure'),async({page})=>{
-      const summary=page.locator('#riskHelp summary');await summary.scrollIntoViewIfNeeded();
-      const box=await summary.boundingBox();await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();
-      // A resize or feed update can request a column-count change between down and up.
-      // The existing target must receive its native click before cards move or reparent.
-      await page.evaluate(()=>{const m=document.querySelector('.masonry');m.style.width='900px';layoutMasonry();});
-      await page.mouse.up();await page.waitForFunction(()=>document.getElementById('riskHelp').open);
+      const summary=page.locator('#riskHelp summary');
+      // Resize inside the real pointerdown, after the masonry capture guard runs.
+      // Locator click resolves a stable hit target; split raw coordinates can miss
+      // the disclosure when unrelated startup layout finishes before pointerdown.
+      await summary.evaluate(el=>el.addEventListener('pointerdown',()=>{
+        window.pressedDisclosureGuard=masonryPointerActive;
+        const m=document.querySelector('.masonry');m.style.width='900px';layoutMasonry();
+      },{once:true}));
+      await summary.click();
+      assert.equal(await page.evaluate(()=>window.pressedDisclosureGuard),true,
+        'The real disclosure pointerdown must activate the repack guard before resize');
+      await page.waitForFunction(()=>document.getElementById('riskHelp').open);
       await page.evaluate(()=>{document.querySelector('.masonry').style.width='';layoutMasonry();});
       await noCardOverlap(page);await expectText(page,'#riskHelp',/category rank, not a probability/);
     },1280);
