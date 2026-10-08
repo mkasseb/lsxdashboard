@@ -36,6 +36,33 @@ class RefreshTests(unittest.TestCase):
             self.assertEqual((p/'nbm-range.json').read_bytes(), before)
             self.assertTrue(all(call.args[1] == {'Range': 'bytes=0-0'} for call in client.get.call_args_list))
 
+    def test_full_horizon_unchanged_gate_preserves_source_age(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            data = json.loads(gzip.decompress((Path(__file__).parent/'fixtures/weather/nbm-regional-full-recorded.json.gz').read_bytes()))
+            r.publish_local(target, data)
+            planned = [(p['members'][0]['url'], [dict(offset=int(m['byteRange'].split('-')[0]), stop=int(m['byteRange'].split('-')[1]), percentile=m['percentile']) for m in p['members']]) for p in data['periods']]
+            client = Mock()
+            client.get.side_effect = [(b'G', 206, {'content-range': 'bytes 0-0/1000', 'etag': p['members'][0]['etag']}) for p in data['periods']]
+            before = (target/'nbm-range.json').read_bytes()
+            self.assertEqual(r.retained_unchanged(client, target, '2026100800', planned), data)
+            self.assertEqual(client.get.call_count, 18)
+            self.assertEqual((target/'nbm-range.json').read_bytes(), before)
+
+    def test_missing_final_horizon_index_cannot_publish_shorter_plan(self):
+        client = Mock()
+        client.get.side_effect = [(b'index', 200, {})]*17+[urllib.error.HTTPError('url', 404, 'not published', {}, None)]
+        with patch.object(r.nbm, 'select_rows', return_value=[{'percentile': 10}, {'percentile': 50}, {'percentile': 90}]):
+            with self.assertRaises(r.Pending): r.plan(client, '2026100800')
+        self.assertEqual(client.get.call_count, 18)
+
+    def test_short_cached_horizon_cannot_skip_full_extraction(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory)
+            _, planned, client = self.retained_setup(target)
+            self.assertIsNone(r.retained_unchanged(client, target, '2026100712', planned*3))
+            client.get.assert_not_called()
+
     def test_source_revision_requires_reextraction(self):
         with tempfile.TemporaryDirectory() as directory:
             p = Path(directory)
@@ -77,10 +104,10 @@ class RefreshTests(unittest.TestCase):
         for hour in range(24):
             run = f'20261007{hour:02}'
             hours = r.hours_for(run)
-            self.assertEqual(len(hours), 6)
+            self.assertEqual(len(hours), 18)
             self.assertGreaterEqual(hours[0], 18)
             self.assertTrue(all((hour+h) % 24 in (6, 18) for h in hours))
-            self.assertEqual([b-a for a, b in zip(hours, hours[1:])], [12]*5)
+            self.assertEqual([b-a for a, b in zip(hours, hours[1:])], [12]*17)
 
     def test_delayed_indexes_retry_then_ready(self):
         sleep = Mock()

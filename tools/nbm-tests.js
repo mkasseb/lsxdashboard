@@ -78,3 +78,34 @@ for(const [start,end,nbmStart,nbmEnd] of [
 console.log('PASS native/NWS overlap, ambiguity, zero/missing, expired, timezone/DST and authentic different-window pairing');
 
 }
+// Longer horizon is authentic GRIB data; edge cases below mutate only test inputs.
+{
+vm.runInContext(fs.readFileSync(path.join(__dirname,'../assets/weather-core.js'),'utf8'),sandbox);
+const full=JSON.parse(require('node:zlib').gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-regional-full-recorded.json.gz'))));
+const capture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-nws-full-pairing-recorded.json')));
+const at=Math.max(Date.parse(full.retrievedAt),Date.parse(capture.retrievedAt));
+const model=validate(full,point,at);assert.equal(model.status,'ready');assert.equal(full.periods.length,18);
+const ps=capture.forecast.properties.periods;
+for(const periods of [ps,ps.slice(1),ps.slice(0,-1)]){
+ const days=sandbox.pairForecastPeriods(periods).slice(0,7),paired=sandbox.NbmRange.align(days,model.periods,at);
+ assert.equal(days.length,7);assert.equal(new Set(paired.matches.map(m=>m.row)).size,7,'Every issued row has authentic guidance');
+ assert.equal(paired.matches.length,periods.length,'Only issued first/last day/night parts are paired');
+ assert.equal(new Set(paired.matches.map(m=>m.nbm.kind+m.nbm.start)).size,paired.matches.length,'No duplicate use');
+}
+const clipped=structuredClone(ps);clipped[0].startTime=new Date(Date.parse(clipped[0].endTime)-2*H).toISOString();
+assert.equal(sandbox.NbmRange.align(sandbox.pairForecastPeriods(clipped),model.periods,at).matches.length,ps.length,'Partial first NWS interval keeps its exact timing');
+for(const mutate of [d=>d.periods.pop(),d=>d.periods.push(d.periods[0]),d=>d.periods.reverse(),d=>d.periods[10]=d.periods[11]]){
+ const d=structuredClone(full);mutate(d);assert.equal(validate(d,point,at).status,'unavailable','Incomplete, duplicate or reordered native horizon is rejected');
+}
+// A <=24h-old cycle still covers seven days through either DST transition.
+for(const [cycle,date,before,after,transition] of [
+ ['2026-03-07T00:00:00Z','2026-03-07','-06:00','-05:00','2026-03-08'],
+ ['2026-10-31T00:00:00Z','2026-10-31','-05:00','-06:00','2026-11-01']
+]){
+ const run=Date.parse(cycle),periods=Array.from({length:18},(_,i)=>{const end=run+(18+12*i)*H;return {kind:new Date(end).getUTCHours()===6?'TMAX':'TMIN',start:new Date(end-18*H).toISOString(),end:new Date(end).toISOString()};});
+ const days=Array.from({length:7},(_,i)=>{const d=new Date(Date.parse(date+'T00:00Z')+i*24*H).toISOString().slice(0,10),next=new Date(Date.parse(d+'T00:00Z')+24*H).toISOString().slice(0,10),offset=d<transition?before:after,nextOffset=next<transition?before:after;
+  return {day:{temperature:50,temperatureUnit:'F',isDaytime:true,startTime:d+'T06:00:00'+offset,endTime:d+'T18:00:00'+offset},night:{temperature:40,temperatureUnit:'F',isDaytime:false,startTime:d+'T18:00:00'+offset,endTime:next+'T06:00:00'+nextOffset}};});
+ const a=sandbox.NbmRange.align(days,periods,run+12*H);assert.equal(a.matches.length,14,'Full horizon and changing DST offsets');
+}
+console.log('PASS authentic full seven-day coverage, partial endpoints, bounded native horizon and full-week DST transitions');
+}

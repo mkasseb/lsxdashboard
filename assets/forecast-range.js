@@ -13,7 +13,7 @@ var NbmRange=(function(){
   function regionalPoint(d,point){
     var c=d.coverage;
     if(d.units!=='K'||!c||c.south!==38.2||c.north!==39.2||c.west!==-91.1||c.east!==-89.5||c.maxDistanceKm!==3||
-       !Array.isArray(d.cells)||d.cells.length<100||d.cells.length>5000||!Array.isArray(d.periods)||d.periods.length!==6||
+       !Array.isArray(d.cells)||d.cells.length<100||d.cells.length>5000||!Array.isArray(d.periods)||![6,18].includes(d.periods.length)||
        typeof d.gridHash!=='string'||!/^[a-f0-9]{32}$/.test(d.gridHash)||!finite(point.lat)||!finite(point.lon))throw new Error('Invalid regional coverage');
     if(point.lat<c.south||point.lat>c.north||point.lon<c.west||point.lon>c.east)return null;
     var chosen=-1,km=Infinity,seen={};
@@ -25,7 +25,9 @@ var NbmRange=(function(){
     });
     if(km>c.maxDistanceKm)return null;
     var cell={index:d.cells[chosen][0],lat:d.cells[chosen][1],lon:d.cells[chosen][2],distance:km,gridHash:d.gridHash};
-    var periods=d.periods.map(function(p){
+    var firstEnd=Math.ceil((time(d.run)+12*H)/(12*H))*12*H+6*H;
+    var periods=d.periods.map(function(p,i){
+      if(time(p.end)!==firstEnd+i*12*H||p.kind!==(new Date(time(p.end)).getUTCHours()===6?'TMAX':'TMIN'))throw new Error('Incomplete native horizon');
       if(!Array.isArray(p.kelvin)||p.kelvin.length!==d.cells.length||!Array.isArray(p.kelvin[chosen])||p.kelvin[chosen].length!==3||
          !Array.isArray(p.members)||p.members.length!==3)throw new Error('Missing native interval values');
       var values=p.kelvin[chosen],f=values.map(function(k){if(!finite(k))throw new Error('Invalid Kelvin');return (k-273.15)*9/5+32;});
@@ -123,7 +125,6 @@ var NbmRange=(function(){
       var matches=groups[index],line=document.createElement('div');line.className='nbm-inline';
       add('span','NBM P10–P90',line,'nbm-label');
       matches.forEach(function(m){add('span',(m.part==='day'?'High ':'Low ')+bounds(m.nbm),line,'nbm-band');});
-      add('span',matches.some(function(m){return !m.exact;})?'Different windows · expand for times':'Same windows · expand for percentiles',line,'nbm-window-note');
       item.querySelector('.day').after(line);
       var detail=document.createElement('div');detail.className='nbm-period-detail';
       add('h3','Temperature guidance',detail);
@@ -162,7 +163,7 @@ var NbmRange=(function(){
   function init(){
     if(new URLSearchParams(location.search).get('nbm')==='0')return;
     var section=document.getElementById('forecastCard'),info=document.createElement('div');info.id='nbmInfo';
-    info.innerHTML='<p id="nbmStatus" role="status">Checking NBM model guidance…</p><details><summary>About NBM ranges &amp; unmatched windows</summary><div id="nbmInfoBody"></div></details>';
+    info.innerHTML='<p id="nbmWindowHelp">NBM uses 18-hour windows; expand a day to compare timing and percentiles.</p><p id="nbmStatus" role="status">Checking NBM model guidance…</p><details><summary>About NBM ranges &amp; unmatched windows</summary><div id="nbmInfoBody"></div></details>';
     section.appendChild(info);
     info.querySelector('details').addEventListener('toggle',function(){if(typeof scheduleMasonry==='function')scheduleMasonry();});
     FEEDS.nbmRange={label:'NBM range',load:'loadNbmRange',every:15*60000,age:30*60000,local:true,failure:'unavailable'};

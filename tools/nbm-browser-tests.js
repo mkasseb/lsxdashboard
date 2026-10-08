@@ -6,6 +6,8 @@ const {open,config,setBrowser}=require('./weather-stress-tests');
 const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-qmd-recorded.json')));
 const regional=JSON.parse(require('node:zlib').gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-regional-recorded.json.gz'))));
 const capture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-nws-pairing-recorded.json'))),now=Date.parse(capture.retrievedAt);
+const full=JSON.parse(require('node:zlib').gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-regional-full-recorded.json.gz'))));
+const fullCapture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-nws-full-pairing-recorded.json')));
 const modelRoute='**/data/nbm-range.json';
 async function nws(page,f=capture.forecast){await page.evaluate(f=>{renderDailyForecast(f,null);feedUpdate('daily','ready',f.properties.updateTime);},f);}
 async function model(page,data=regional){await page.unroute(modelRoute);await page.route(modelRoute,r=>r.fulfill({json:data}));await page.evaluate(()=>loadNbmRange());}
@@ -21,7 +23,9 @@ async function main(){
     await nws(p);const before=await primary(p);await model(p);
     assert.deepEqual(await primary(p),before,'NBM never changes official values/text or risk decisions');
     assert.equal(await p.locator('.nbm-inline').count(),3);assert.equal(await p.locator('.nbm-comparison').count(),5);
-    assert.match(await p.locator('.nbm-inline').first().innerText(),/Different windows/);
+    assert.equal(await p.locator('.nbm-inline .nbm-window-note').count(),0);
+    assert.equal(await p.locator('#nbmWindowHelp').count(),1);
+    assert.match(await p.locator('#nbmWindowHelp').innerText(),/18-hour windows/);
     const day=p.locator('#daily .day').first();await day.focus();await day.press('Enter');
     assert.equal(await day.getAttribute('aria-expanded'),'true');
     assert.match(await p.locator('.nbm-period-detail').first().innerText(),/NWS low.*Oct 7, 7:00 PM CDT.*Oct 8, 6:00 AM CDT/);
@@ -87,6 +91,20 @@ async function main(){
     await p.evaluate(()=>{locSeq++;current={...current,lat:38.8};resetLocationState();clearLocationUI();});await nws(p);await model(p);
     await p.clock.setFixedTime(new Date(Date.parse(regional.run)+25*3600000));await p.evaluate(()=>loadForecast._paint());
     assert.equal(await p.locator('.nbm-inline').count(),0);assert.match(await p.locator('#nbmStatus').innerText(),/over 24 hours/);
+    // Authentic full horizon: seven rows, including the final issued night, without repeated prompts.
+    await p.clock.setFixedTime(new Date(Math.max(Date.parse(full.retrievedAt),Date.parse(fullCapture.retrievedAt))));
+    await nws(p,fullCapture.forecast);const officialFull=await primary(p);await model(p,full);
+    assert.deepEqual(await primary(p),officialFull);
+    assert.equal(await p.locator('.nbm-inline').count(),7);assert.equal(await p.locator('.nbm-comparison').count(),14);
+    assert.equal(await p.locator('.nbm-inline .nbm-window-note').count(),0);
+    const last=p.locator('#daily .day').last();await last.focus();await last.press('Enter');
+    assert.match(await p.locator('.nbm-period-detail').last().innerText(),/Different interval \(18 hours\)/);
+    await last.press('Enter');assert.equal(await last.getAttribute('aria-expanded'),'false');
+    for(const theme of ['dark','light']){
+     await p.evaluate(t=>{applyTheme(t);layoutMasonry();},theme);await p.clock.runFor(500);
+     assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+     if(process.env.NBM_ARTIFACTS)await p.locator('#forecastCard').screenshot({style:'.jump-wrap,.skip{visibility:hidden !important}',path:path.join(process.env.NBM_ARTIFACTS,`recorded-full-${width}-${timezone.replace('/','-')}-${theme}.png`)});
+    }
     assert.deepEqual(s.errors,[]);console.log('PASS inline NBM '+width+' '+timezone);
    }finally{await s.context.close();}
   }

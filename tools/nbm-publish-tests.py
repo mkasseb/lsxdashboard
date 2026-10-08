@@ -31,7 +31,7 @@ class PublisherTests(unittest.TestCase):
         p.git(self.repo, 'remote', 'add', 'origin', str(self.remote))
         p.git(self.repo, 'push', 'origin', 'main')
         self.base = self.head()
-        self.data = json.loads(gzip.decompress((Path(__file__).parent/'fixtures/weather/nbm-regional-recorded.json.gz').read_bytes()))
+        self.data = json.loads(gzip.decompress((Path(__file__).parent/'fixtures/weather/nbm-regional-full-recorded.json.gz').read_bytes()))
         self.now = p.stamp(self.data['retrievedAt'])+timedelta(minutes=1)
         self.write_candidate()
 
@@ -101,6 +101,12 @@ class PublisherTests(unittest.TestCase):
                 else: self.now += timedelta(days=2)
                 with self.assertRaises(Exception): self.publish()
                 self.assertEqual(self.base, self.head())
+
+    def test_short_horizon_cannot_replace_complete_output(self):
+        self.data['periods'] = self.data['periods'][:6]
+        self.write_candidate()
+        with self.assertRaises(ValueError): self.publish()
+        self.assertEqual(self.base, self.head())
 
     def test_obsolete_publisher_fails_closed(self):
         self.app_update('tools/changed.py')

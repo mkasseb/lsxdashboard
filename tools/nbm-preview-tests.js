@@ -45,41 +45,31 @@ async function compare(page,data){
  assert.deepEqual(result.actual,result.matches,'Rendered comparison matches selected live NWS and native NBM windows');
  if(result.status==='ready'||result.status==='partial'){
   assert(result.matches.length>0,'Fresh model and NWS should have overlapping periods');
+  assert.equal(await page.locator('.nbm-inline').count(),await page.locator('#daily .day-item').count(),'Authentic full horizon covers every displayed NWS row');
+  assert.equal(await page.locator('.nbm-inline .nbm-window-note').count(),0,'No repetitive row prompts');
+  assert.equal(await page.locator('#nbmWindowHelp').count(),1,'One shared explanation');
   assert((await page.locator('#nbmInfoBody').textContent()).includes(result.cell.lat.toFixed(3)+', '+result.cell.lon.toFixed(3)));
  }else{assert.equal(result.status,'stale');assert.equal(result.actual.length,0);assert.match(await page.locator('#nbmStatus').innerText(),/over 24 hours/);}
  delete result.actual;return result;
 }
 async function main(){
  const origin=await preview();assert(/^https:\/\/[a-z0-9-]+\.lsxdashboard2\.pages\.dev$/.test(origin));audit.origin=origin;
- const original='https://52fc902b.lsxdashboard2.pages.dev';audit.originalPreview=original;
- const api=await request.newContext(),datasets={},receipts={};let data;
+ const api=await request.newContext();let data,receipt;
  try{
   const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
   const files=['index.html',...Array.from(html.matchAll(/(?:src|href)="\/?(assets\/[^"?]+)\?v=[a-f0-9]+/g),m=>m[1]),'data/nbm-range.json','data/nbm-receipt.json'];
-  for(const verifiedOrigin of [origin,original])for(const file of [...new Set(files)]){
-   const r=await api.get(verifiedOrigin+'/'+file);assert(r.ok(),file+' HTTP '+r.status());const bytes=await r.body();
-   // Old immutable previews keep their original data; only the current preview must match new data.
-   if(verifiedOrigin===origin||!file.startsWith('data/'))assert.equal(hash(bytes),hash(fs.readFileSync(path.join(root,file))),file+' differs from checkout');
-   audit.assets.push({origin:verifiedOrigin,file,sha256:hash(bytes)});
-   if(file==='data/nbm-range.json')datasets[verifiedOrigin]=JSON.parse(bytes);
-   if(file==='data/nbm-receipt.json')receipts[verifiedOrigin]=JSON.parse(bytes);
+  for(const file of [...new Set(files)]){
+   const r=await api.get(origin+'/'+file);assert(r.ok(),file+' HTTP '+r.status());const bytes=await r.body();
+   assert.equal(hash(bytes),hash(fs.readFileSync(path.join(root,file))),file+' differs from checkout');
+   audit.assets.push({origin,file,sha256:hash(bytes)});
+   if(file==='data/nbm-range.json')data=JSON.parse(bytes);
+   if(file==='data/nbm-receipt.json')receipt=JSON.parse(bytes);
   }
-  for(const verifiedOrigin of [origin,original]){
-   assert.equal(receipts[verifiedOrigin].sha256,audit.assets.find(x=>x.origin===verifiedOrigin&&x.file==='data/nbm-range.json').sha256);
-   assert.equal(receipts[verifiedOrigin].run,datasets[verifiedOrigin].run);
-  }
-  data=datasets[origin];audit.receipt=receipts[origin];audit.originalReceipt=receipts[original];
+  assert.equal(receipt.sha256,audit.assets.find(x=>x.file==='data/nbm-range.json').sha256);
+  assert.equal(receipt.run,data.run);audit.receipt=receipt;
  }finally{await api.dispose();}
  const browser=await chromium.launch(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']}:{});
  try{
-  // Diagnose the user's previous immutable URL with its own authentic snapshot and real current time.
-  const originalContext=await browser.newContext({viewport:{width:390,height:1000},timezoneId:'America/Chicago'});
-  try{
-   const p=await originalContext.newPage();p.on('pageerror',e=>audit.runtimeErrors.push({phase:'original-preview',message:e.message}));
-   assert((await p.goto(original,{waitUntil:'domcontentloaded',timeout:60000})).ok());await settled(p);
-   audit.live.push({origin:original,width:390,test:'Original requested preview real feeds',...await compare(p,datasets[original])});
-   await shot(p,'original-preview-live-390');
-  }finally{await originalContext.close();}
   for(const width of [390,1440]){
    const context=await browser.newContext({viewport:{width,height:1000},timezoneId:width===390?'America/Chicago':'Asia/Tokyo'});
    const page=await context.newPage();

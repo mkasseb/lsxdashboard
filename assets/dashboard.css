@@ -1645,7 +1645,6 @@
 .context-body[hidden]{display:none}
 .nbm-inline{display:flex;flex-wrap:wrap;gap:3px 10px;padding:0 12px 9px;font-size:.76rem;line-height:1.4;color:var(--muted)}
 .nbm-label{font-weight:700}.nbm-band{white-space:nowrap}.nbm-window-note{color:var(--muted);font-size:.75rem}
-.nbm-inline .nbm-window-note{flex-basis:100%}
 .nbm-period-detail{padding:10px 0;border-top:1px solid var(--border)}
 .nbm-period-detail h3,#nbmInfo h3{font-size:.85rem;margin:0 0 8px}
 .nbm-comparison{margin-bottom:12px}.nbm-comparison p{margin:4px 0;font-size:.8rem;line-height:1.45;overflow-wrap:anywhere}
