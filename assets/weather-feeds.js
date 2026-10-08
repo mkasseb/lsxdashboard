@@ -128,6 +128,7 @@ function loadForecast(){
     climate.fcHi=null; climate.fcLo=null; climate.fcHiLabel="";
     climate.fcHiDate=null; climate.fcLoDate=null;
     daily.innerHTML='<div class="empty">Forecast unavailable. <a href="https://forecast.weather.gov/MapClick.php?lat='+current.lat+'&lon='+current.lon+'" target="_blank" rel="noopener">Open NWS forecast ↗</a></div>';
+    if(typeof NbmRange!=="undefined") NbmRange.forecast([]);
     renderHeroToday(); renderVsNormal(); renderContext();
   }
   return pointsFor(current.lat,current.lon).then(function(pt){

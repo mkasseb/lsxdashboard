@@ -207,7 +207,20 @@ in [`DESIGN.md`](DESIGN.md#adding-a-card-adding-a-loader).
 
 ## Supplemental NBM temperature range
 
-The **Forecast range** card is visible but collapsed by default. `/?nbm=0` disables it.
+Supplemental NBM ranges appear alongside official NWS day/night entries in the forecast card.
+Expand an entry to compare the NWS temperature and exact interval with the NBM P10/P50/P90
+values and native 18-hour interval. The compact range is P10–P90, not a replacement high/low.
+The collapsed **About NBM ranges & unmatched windows** section explains the percentiles,
+source age, nearest cell, coverage, and windows that cannot be paired. `/?nbm=0` disables guidance.
+
+Placement requires a unique same-kind match in both directions covering at least 75% of the
+NWS interval. This overlap rule does not make the windows equivalent: differing endpoints
+are explicitly labeled. Missing official values, ambiguous overlaps, expired periods, and
+invalid or stale model data never produce paired comparisons. Zero temperatures are valid.
+All displayed endpoints use America/Chicago, including each endpoint's DST offset. Model
+annotations are excluded from saved NWS HTML and require both current-location sources after
+reload. The existing static dataset and publisher are reused; no new storage, backend, credentials,
+or infrastructure costs are introduced.
 NWS forecasts, headlines, warnings and risk decisions receive no NBM values.
 
 ### Regional refresh

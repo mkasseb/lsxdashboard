@@ -44,3 +44,37 @@ for(const mutate of [d=>d.coverage.maxDistanceKm=99,d=>d.cells[0][1]=0,d=>d.cell
  const d=structuredClone(region);mutate(d);assert.equal(validate(d,point,at).status,'unavailable');
 }
 console.log('PASS authentic regional parity, towns/boundaries, unsupported geography, stale and malformed coverage');
+{
+// Authentic current NWS periods are recorded separately; matching does not rewrite either source.
+const nwsCapture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-nws-pairing-recorded.json')));
+const nwsPeriods=nwsCapture.forecast.properties.periods;
+const days=nwsPeriods.map(p=>({[p.isDaytime?'day':'night']:p}));
+const at=Date.parse(nwsCapture.retrievedAt);
+const model=validate(region,{lat:38.8,lon:-90.79},at);
+const pairing=sandbox.NbmRange.align(days,model.periods,at);
+assert.equal(pairing.matches.length,5);assert.equal(pairing.unmatched.length,1);
+assert(pairing.matches.every(m=>!m.exact));
+const high=pairing.matches.find(m=>m.part==='day');
+assert.equal(high.nws.startTime,'2026-10-08T06:00:00-05:00');
+assert.equal(high.nbm.start,'2026-10-08T12:00:00Z'); // 07:00 CDT, one hour after NWS start
+assert.equal(high.nbm.end,'2026-10-09T06:00:00Z');   // 01:00 CDT next day
+const align=sandbox.NbmRange.align,interval=high.nbm;
+function day(n){return [{day:n}];}
+const zero={...high.nws,temperature:0};
+assert.equal(align(day(zero),[interval],at).matches[0].nws.temperature,0);
+for(const temperature of [null,undefined,NaN])assert.equal(align(day({...zero,temperature}),[interval],at).matches.length,0);
+assert.equal(align(day({...zero,temperatureUnit:'C'}),[interval],at).matches.length,0);
+assert.equal(align(day(zero),[interval,interval],at).matches.length,0,'ambiguous overlapping model windows');
+assert.equal(align([{day:zero},{day:zero}],[interval],at).matches.length,0,'model window cannot attach twice');
+assert.equal(align(day({...zero,startTime:'2026-10-08T00:00:00Z',endTime:'2026-10-08T14:00:00Z'}),[interval],at).matches.length,0,'weak overlap');
+assert.equal(align(day(zero),[{...interval,kind:'TMIN'}],at).matches.length,0,'same kind required');
+assert.equal(align(day({...zero,startTime:interval.start,endTime:interval.end}),[interval],at).matches[0].exact,true);
+assert.equal(align(day(zero),[interval],Date.parse(interval.end)).matches.length,0,'expired windows');
+// Local midnight and DST use instants, never browser date names or assumed 24-hour days.
+for(const [start,end,nbmStart,nbmEnd] of [
+ ['2026-11-01T00:00:00-05:00','2026-11-01T12:00:00-06:00','2026-11-01T04:00:00Z','2026-11-01T22:00:00Z'],
+ ['2026-03-08T00:00:00-06:00','2026-03-08T12:00:00-05:00','2026-03-08T05:00:00Z','2026-03-08T23:00:00Z']
+])assert.equal(align(day({...zero,startTime:start,endTime:end}),[{...interval,start:nbmStart,end:nbmEnd}],Date.parse(start)-H).matches.length,1);
+console.log('PASS native/NWS overlap, ambiguity, zero/missing, expired, timezone/DST and authentic different-window pairing');
+
+}

@@ -29,25 +29,36 @@ async function main(){
     const response=await page.goto(origin+'/?verify='+Date.now(),{waitUntil:'domcontentloaded',timeout:45000});
     assert(response.ok());
     await page.waitForFunction(()=>typeof NbmRange!=='undefined'&&typeof current!=='undefined',null,{timeout:60000});
-    assert.equal(await page.locator('#nbmRangeCard details').getAttribute('open'),null);
-    await page.locator('#nbmRangeCard summary').click();
-    assert(await page.locator('#nbmRangeCard details').evaluate(e=>e.open));
+    assert.equal(await page.locator('#nbmRangeCard').count(),0);
+    assert.equal(await page.locator('#nbmInfo details').getAttribute('open'),null);
+    await page.locator('#nbmInfo summary').click();
     for(const point of [{lat:38.8,lon:-90.79},{lat:38.52,lon:-89.98}]){
      const expected=await page.evaluate(async ({data,point})=>{
-      current={...current,...point};await loadNbmRange();
+      locSeq++;current={...current,...point};resetLocationState();clearLocationUI();
+      await loadForecast();await loadNbmRange();
       const r=NbmRange.validate(data,point,Date.now());
-      return {status:r.status,rows:r.periods?.map(p=>[(p.kind==='TMAX'?'Maximum':'Minimum')+' · '+NbmRange.local(p.start)+' – '+NbmRange.local(p.end),...['p10','p50','p90'].map(k=>Math.round(p[k])+'°')]),cell:r.cell};
+      const a=r.periods?NbmRange.align(smart.days,r.periods,Date.now()):{matches:[]};
+      return {status:r.status,comparisons:a.matches.map(m=>({
+       official:'NWS '+(m.part==='day'?'high ':'low ')+m.nws.temperature+'°F · '+NbmRange.local(m.nws.startTime)+' – '+NbmRange.local(m.nws.endTime),
+       model:'NBM '+(m.part==='day'?'maximum':'minimum')+' · P10 '+Math.round(m.nbm.p10)+'°F · P50 '+Math.round(m.nbm.p50)+'°F · P90 '+Math.round(m.nbm.p90)+'°F',
+       interval:(m.exact?'Same interval: ':'Different interval (18 hours): ')+NbmRange.local(m.nbm.start)+' – '+NbmRange.local(m.nbm.end)
+      })),cell:r.cell};
      },{data,point});
-     assert.equal(expected.status,'ready');
-     assert.deepEqual(await page.locator('.nbm-table tbody tr').evaluateAll(rows=>rows.map(row=>Array.from(row.children,c=>c.textContent))),expected.rows);
+     assert.equal(expected.status,'ready');assert(expected.comparisons.length>0,'Live NWS and NBM must have usable comparisons');
+     assert.deepEqual(await page.locator('.nbm-comparison').evaluateAll(rows=>rows.map(row=>({official:row.children[0].textContent,model:row.children[1].textContent,interval:row.children[2].textContent}))),expected.comparisons);
+     for(const day of await page.locator('#daily .day-item').all()){
+      if(await day.locator('.nbm-inline').count()&&await day.locator('.day').getAttribute('aria-expanded')!=='true')await day.locator('.day').click();
+     }
      assert.match(await page.locator('#nbmStatus').innerText(),/QMD cycle/);
-     assert((await page.locator('#nbmRange').innerText()).includes(expected.cell.lat.toFixed(3)+', '+expected.cell.lon.toFixed(3)));
+     assert((await page.locator('#nbmInfoBody').innerText()).includes(expected.cell.lat.toFixed(3)+', '+expected.cell.lon.toFixed(3)));
+     assert(await page.locator('.nbm-comparison').first().isVisible());
     }
-    assert(await page.locator('#nbmRangeCard details').evaluate(e=>e.open));
-    await page.locator('#nbmRangeCard').screenshot({path:path.join(directory,'live-nbm-'+width+'.png')});
-    await page.evaluate(async()=>{current={...current,lat:39.4,lon:-90.79};await loadNbmRange();});
-    assert.match(await page.locator('#nbmRange').innerText(),/Outside the supported/);
-    console.log('PASS normal-TLS live card, native intervals and nearest-cell values at '+width+'px');
+    assert(await page.locator('#nbmInfo details').evaluate(e=>e.open));
+    await page.locator('#forecastCard').screenshot({path:path.join(directory,'live-nbm-'+width+'.png')});
+    await page.evaluate(async()=>{locSeq++;current={...current,lat:39.4,lon:-90.79};resetLocationState();clearLocationUI();await loadNbmRange();});
+    assert.equal(await page.locator('.nbm-inline').count(),0);
+    assert.match(await page.locator('#nbmStatus').innerText(),/Outside the supported/);
+    console.log('PASS normal-TLS live inline guidance, native intervals and nearest-cell values at '+width+'px');
    }finally{await context.close();}
   }
  }finally{await browser.close();}

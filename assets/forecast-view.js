@@ -73,6 +73,7 @@ loadForecast._paint=function(){
   });
   daily.innerHTML=paintDays();
   var items=daily.querySelectorAll(".day-item");
+  if(typeof NbmRange!=="undefined") NbmRange.forecast(days);
   open.forEach(function(i){ if(items[i]) setOpen(items[i],items[i].querySelector(".day"),true); });   // keep expanded rows expanded
   // …and keep the keyboard where it was. This repaint fires on its own schedule (whenever
   // the climate normals land), and restoring the open rows but not the focus dumped a
