@@ -1,0 +1,2572 @@
+{
+  "status": "passed",
+  "run": "2026-10-09T00:00:00Z",
+  "checkedAt": "2026-10-09T13:00:35.854459+00:00",
+  "normalTls": true,
+  "method": "Independent ecCodes metadata and native nearest-cell lookup against JSON; no new downloads",
+  "checks": [
+    {
+      "product": "daily",
+      "forecastHour": 18,
+      "percentile": 25,
+      "template": 10,
+      "startStep": 0,
+      "endStep": 18,
+      "rawFile": "blend.t00z.qmd.f018.co.grib2.373052773-375115552",
+      "sha256": "5e4416b664122ca2557fbd2b419f896fe9204165103eb0de3796bd7f8e001e2a",
+      "points": [
+        {
+          "point": [
+            38.8,
+            -90.79
+          ],
+          "index": 1680456,
+          "kelvin": 287.40000000000003,
+          "jsonKelvin": 287.4,
+          "distanceKm": 1.24792830399133
+        },
+        {
+          "point": [
+            38.52,
+            -89.98
+          ],
+          "index": 1654690,
+          "kelvin": 287.3,
+          "jsonKelvin": 287.3,
+          "distanceKm": 0.3908605109122362
+        },
+        {
+          "point": [
+            38.2,
+            -91.1
+          ],
+          "index": 1617131,
+          "kelvin": 287.0,
+          "jsonKelvin": 287.0,
+          "distanceKm": 0.34525244385603077
+        },
+        {
+          "point": [
+            38.2,
+            -90.3
+          ],
+          "index": 1619504,
+          "kelvin": 285.1,
+          "jsonKelvin": 285.1,
+          "distanceKm": 0.6369218117934985
+        },
+        {
+          "point": [
+            38.2,
+            -89.5
+          ],
+          "index": 1621878,
+          "kelvin": 285.1,
+          "jsonKelvin": 285.1,
+          "distanceKm": 1.1634369776541635
+        },
+        {
+          "point": [
+            38.7,
+            -91.1
+          ],
+          "index": 1671065,
+          "kelvin": 287.2,
+          "jsonKelvin": 287.2,
+          "distanceKm": 1.1453681541380387
+        },
+        {
+          "point": [
+            38.7,
+            -90.3
+          ],
+          "index": 1673438,
+          "kelvin": 288.2,
+          "jsonKelvin": 288.2,
+          "distanceKm": 1.6040012862272817
+        },
+        {
+          "point": [
+            38.7,
+            -89.5
+          ],
+          "index": 1675812,
+          "kelvin": 285.3,
+          "jsonKelvin": 285.3,
+          "distanceKm": 1.3256199614125181
+        },
+        {
+          "point": [
+            39.2,
+            -91.1
+          ],
+          "index": 1722655,
+          "kelvin": 287.3,
+          "jsonKelvin": 287.3,
+          "distanceKm": 1.003221353357206
+        },
+        {
+          "point": [
+            39.2,
+            -90.3
+          ],
+          "index": 1725028,
+          "kelvin": 284.8,
+          "jsonKelvin": 284.8,
+          "distanceKm": 0.8197759695550477
+        },
+        {
+          "point": [
+            39.2,
+            -89.5
+          ],
+          "index": 1727401,
+          "kelvin": 284.1,
+          "jsonKelvin": 284.1,
+          "distanceKm": 0.8429364804043165
+        }
+      ]
+    },
+    {
+      "product": "daily",
+      "forecastHour": 18,
+      "percentile": 50,
+      "template": 10,
+      "startStep": 0,
+      "endStep": 18,
+      "rawFile": "blend.t00z.qmd.f018.co.grib2.383368011-385442351",
+      "sha256": "6ca141d015d1222d40b42ef8db06b97333c236e5ee8fd62a0f39f2a51c47b77b",
+      "points": [
+        {
+          "point": [
+            38.8,
+            -90.79
+          ],
+          "index": 1680456,
+          "kelvin": 288.0,
+          "jsonKelvin": 288.0,
+          "distanceKm": 1.24792830399133
+        },
+        {
+          "point": [
+            38.52,
+            -89.98
+          ],
+          "index": 1654690,
+          "kelvin": 288.1,
+          "jsonKelvin": 288.1,
+          "distanceKm": 0.3908605109122362
+        },
+        {
+          "point": [
+            38.2,
+            -91.1
+          ],
+          "index": 1617131,
+          "kelvin": 287.7,
+          "jsonKelvin": 287.7,
+          "distanceKm": 0.34525244385603077
+        },
+        {
+          "point": [
+            38.2,
+            -90.3
+          ],
+          "index": 1619504,
+          "kelvin": 285.90000000000003,
+          "jsonKelvin": 285.9,
+          "distanceKm": 0.6369218117934985
+        },
+        {
+          "point": [
+            38.2,
+            -89.5
+          ],
+          "index": 1621878,
+          "kelvin": 285.90000000000003,
+          "jsonKelvin": 285.9,
+          "distanceKm": 1.1634369776541635
+        },
+        {
+          "point": [
+            38.7,
+            -91.1
+          ],
+          "index": 1671065,
+          "kelvin": 287.8,
+          "jsonKelvin": 287.8,
+          "distanceKm": 1.1453681541380387
+        },
+        {
+          "point": [
+            38.7,
+            -90.3
+          ],
+          "index": 1673438,
+          "kelvin": 289.40000000000003,
+          "jsonKelvin": 289.4,
+          "distanceKm": 1.6040012862272817
+        },
+        {
+          "point": [
+            38.7,
+            -89.5
+          ],
+          "index": 1675812,
+          "kelvin": 286.1,
+          "jsonKelvin": 286.1,
+          "distanceKm": 1.3256199614125181
+        },
+        {
+          "point": [
+            39.2,
+            -91.1
+          ],
+          "index": 1722655,
+          "kelvin": 288.3,
+          "jsonKelvin": 288.3,
+          "distanceKm": 1.003221353357206
+        },
+        {
+          "point": [
+            39.2,
+            -90.3
+          ],
+          "index": 1725028,
+          "kelvin": 286.1,
+          "jsonKelvin": 286.1,
+          "distanceKm": 0.8197759695550477
+        },
+        {
+          "point": [
+            39.2,
+            -89.5
+          ],
+          "index": 1727401,
+          "kelvin": 285.0,
+          "jsonKelvin": 285.0,
+          "distanceKm": 0.8429364804043165
+        }
+      ]
+    },
+    {
+      "product": "daily",
+      "forecastHour": 18,
+      "percentile": 75,
+      "template": 10,
+      "startStep": 0,
+      "endStep": 18,
+      "rawFile": "blend.t00z.qmd.f018.co.grib2.393641626-395678233",
+      "sha256": "943748e9f4c5d8fdee9dfaae0db5c0342caa4be19478a64301ec5a6740424298",
+      "points": [
+        {
+          "point": [
+            38.8,
+            -90.79
+          ],
+          "index": 1680456,
+          "kelvin": 288.6,
+          "jsonKelvin": 288.6,
+          "distanceKm": 1.24792830399133
+        },
+        {
+          "point": [
+            38.52,
+            -89.98
+          ],
+          "index": 1654690,
+          "kelvin": 289.0,
+          "jsonKelvin": 289.0,
+          "distanceKm": 0.3908605109122362
+        },
+        {
+          "point": [
+            38.2,
+            -91.1
+          ],
+          "index": 1617131,
+          "kelvin": 288.7,
+          "jsonKelvin": 288.7,
+          "distanceKm": 0.34525244385603077
+        },
+        {
+          "point": [
+            38.2,
+            -90.3
+          ],
+          "index": 1619504,
+          "kelvin": 286.6,
+          "jsonKelvin": 286.6,
+          "distanceKm": 0.6369218117934985
+        },
+        {
+          "point": [
+            38.2,
+            -89.5
+          ],
+          "index": 1621878,
+          "kelvin": 287.1,
+          "jsonKelvin": 287.1,
+          "distanceKm": 1.1634369776541635
+        },
+        {
+          "point": [
+            38.7,
+            -91.1
+          ],
+          "index": 1671065,
+          "kelvin": 288.3,
+          "jsonKelvin": 288.3,
+          "distanceKm": 1.1453681541380387
+        },
+        {
+          "point": [
+            38.7,
+            -90.3
+          ],
+          "index": 1673438,
+          "kelvin": 290.1,
+          "jsonKelvin": 290.1,
+          "distanceKm": 1.6040012862272817
+        },
+        {
+          "point": [
+            38.7,
+            -89.5
+          ],
+          "index": 1675812,
+          "kelvin": 287.1,
+          "jsonKelvin": 287.1,
+          "distanceKm": 1.3256199614125181
+        },
+        {
+          "point": [
+            39.2,
+            -91.1
+          ],
+          "index": 1722655,
+          "kelvin": 288.90000000000003,
+          "jsonKelvin": 288.9,
+          "distanceKm": 1.003221353357206
+        },
+        {
+          "point": [
+            39.2,
+            -90.3
+          ],
+          "index": 1725028,
+          "kelvin": 286.7,
+          "jsonKelvin": 286.7,
+          "distanceKm": 0.8197759695550477
+        },
+        {
+          "point": [
+            39.2,
+            -89.5
+          ],
+          "index": 1727401,
+          "kelvin": 286.1,
+          "jsonKelvin": 286.1,
+          "distanceKm": 0.8429364804043165
+        }
+      ]
+    },
+    {
+      "product": "daily",
+      "forecastHour": 30,
+      "percentile": 25,
+      "template": 10,
+      "startStep": 12,
+      "endStep": 30,
+      "rawFile": "blend.t00z.qmd.f030.co.grib2.439997650-442218064",
+      "sha256": "8f20b841d5de284517bd40159d5b0503a6f6b165e6ffb771187754a9d91196c6",
+      "points": [
+        {
+          "point": [
+            38.8,
+            -90.79
+          ],
+          "index": 1680456,
+          "kelvin": 304.8,
+          "jsonKelvin": 304.8,
+          "distanceKm": 1.24792830399133
+        },
+        {
+          "point": [
+            38.52,
+            -89.98
+          ],
+          "index": 1654690,
+          "kelvin": 304.5,
+          "jsonKelvin": 304.5,
+          "distanceKm": 0.3908605109122362
+        },
+        {
+          "point": [
+            38.2,
+            -91.1
+          ],
+          "index": 1617131,
+          "kelvin": 304.6,
+          "jsonKelvin": 304.6,
+          "distanceKm": 0.34525244385603077
+        },
+        {
+          "point": [
+            38.2,
+            -90.3
+          ],
+          "index": 1619504,
+          "kelvin": 305.0,
+          "jsonKelvin": 305.0,
+          "distanceKm": 0.6369218117934985
+        },
+        {
+          "point": [
+            38.2,
+            -89.5
+          ],
+          "index": 1621878,
+          "kelvin": 303.5,
+          "jsonKelvin": 303.5,
+          "distanceKm": 1.1634369776541635
+        },
+        {
+          "point": [
+            38.7,
+            -91.1
+          ],
+          "index": 1671065,
+          "kelvin": 304.2,
+          "jsonKelvin": 304.2,
+          "distanceKm": 1.1453681541380387
+        },
+        {
+          "point": [
+            38.7,
+            -90.3
+          ],
+          "index": 1673438,
+          "kelvin": 304.6,
+          "jsonKelvin": 304.6,
+          "distanceKm": 1.6040012862272817
+        },
+        {
+          "point": [
+            38.7,
+            -89.5
+          ],
+          "index": 1675812,
+          "kelvin": 304.0,
+          "jsonKelvin": 304.0,
+          "distanceKm": 1.3256199614125181
+        },
+        {
+          "point": [
+            39.2,
+            -91.1
+          ],
+          "index": 1722655,
+          "kelvin": 304.40000000000003,
+          "jsonKelvin": 304.4,
+          "distanceKm": 1.003221353357206
+        },
+        {
+          "point": [
+            39.2,
+            -90.3
+          ],
+          "index": 1725028,
+          "kelvin": 304.3,
+          "jsonKelvin": 304.3,
+          "distanceKm": 0.8197759695550477
+        },
+        {
+          "point": [
+            39.2,
+            -89.5
+          ],
+          "index": 1727401,
+          "kelvin": 303.2,
+          "jsonKelvin": 303.2,
+          "distanceKm": 0.8429364804043165
+        }
+      ]
+    },
+    {
+      "product": "daily",
+      "forecastHour": 30,
+      "percentile": 50,
+      "template": 10,
+      "startStep": 12,
+      "endStep": 30,
+      "rawFile": "blend.t00z.qmd.f030.co.grib2.450970868-453159850",
+      "sha256": "d3dce098b4ed3f554fa818a6f4b98b0290d8802269de0b707db6e516ced18f91",
+      "points": [
+        {
+          "point": [
+            38.8,
+            -90.79
+          ],
+          "index": 1680456,
+          "kelvin": 305.5,
+          "jsonKelvin": 305.5,
+          "distanceKm": 1.24792830399133
+        },
+        {
+          "point": [
+            38.52,
+            -89.98
+          ],
+          "index": 1654690,
+          "kelvin": 305.3,
+          "jsonKelvin": 305.3,
+          "distanceKm": 0.3908605109122362
+        },
+        {
+          "point": [
+            38.2,
+            -91.1
+          ],
+          "index": 1617131,
+          "kelvin": 305.3,
+          "jsonKelvin": 305.3,
+          "distanceKm": 0.34525244385603077
+        },
+        {
+          "point": [
+            38.2,
+            -90.3
+          ],
+          "index": 1619504,
+          "kelvin": 305.7,
+          "jsonKelvin": 305.7,
+          "distanceKm": 0.6369218117934985
+        },
+        {
+          "point": [
+            38.2,
+            -89.5
+          ],
+          "index": 1621878,
+          "kelvin": 304.5,
+          "jsonKelvin": 304.5,
+          "distanceKm": 1.1634369776541635
+        },
+        {
+          "point": [
+            38.7,
+            -91.1
+          ],
+          "index": 1671065,
+          "kelvin": 304.8,
+          "jsonKelvin": 304.8,
+          "distanceKm": 1.1453681541380387
+        },
+        {
+          "point": [
+            38.7,
+            -90.3
+          ],
+          "index": 1673438,
+          "kelvin": 305.3,
+          "jsonKelvin": 305.3,
+          "distanceKm": 1.6040012862272817
+        },
+        {
+          "point": [
+            38.7,
+            -89.5
+          ],
+          "index": 1675812,
+          "kelvin": 304.7,
+          "jsonKelvin": 304.7,
+          "distanceKm": 1.3256199614125181
+        },
+        {
+          "point": [
+            39.2,
+            -91.1
+          ],
+          "index": 1722655,
+          "kelvin": 305.40000000000003,
+          "jsonKelvin": 305.4,
+          "distanceKm": 1.003221353357206
+        },
+        {
+          "point": [
+            39.2,
+            -90.3
+          ],
+          "index": 1725028,
+          "kelvin": 305.0,
+          "jsonKelvin": 305.0,
+          "distanceKm": 0.8197759695550477
+        },
+        {
+          "point": [
+            39.2,
+            -89.5
+          ],
+          "index": 1727401,
+          "kelvin": 304.0,
+          "jsonKelvin": 304.0,
+          "distanceKm": 0.8429364804043165
+        }
+      ]
+    },
+    {
+      "product": "daily",
+      "forecastHour": 30,
+      "percentile": 75,
+      "template": 10,
+      "startStep": 12,
+      "endStep": 30,
+      "rawFile": "blend.t00z.qmd.f030.co.grib2.461903023-464089194",
+      "sha256": "77f8e7de8a4434a5463d8f03b51aaac57dd46c38e5cda7c25ebc5a7572404b5c",
+      "points": [
+        {
+          "point": [
+            38.8,
+            -90.79
+          ],
+          "index": 1680456,
+          "kelvin": 306.3,
+          "jsonKelvin": 306.3,
+          "distanceKm": 1.24792830399133
+        },
+        {
+          "point": [
+            38.52,
+            -89.98
+          ],
+          "index": 1654690,
+          "kelvin": 306.40000000000003,
+          "jsonKelvin": 306.4,
+          "distanceKm": 0.3908605109122362
+        },
+        {
+          "point": [
+            38.2,
+            -91.1
+          ],
+          "index": 1617131,
+          "kelvin": 305.8,
+          "jsonKelvin": 305.8,
+          "distanceKm": 0.34525244385603077
+        },
+        {
+          "point": [
+            38.2,
+            -90.3
+          ],
+          "index": 1619504,
+          "kelvin": 306.5,
+          "jsonKelvin": 306.5,
+          "distanceKm": 0.6369218117934985
+        },
+        {
+          "point": [
+            38.2,
+            -89.5
+          ],
+          "index": 1621878,
+          "kelvin": 305.7,
+          "jsonKelvin": 305.7,
+          "distanceKm": 1.1634369776541635
+        },
+        {
+          "point": [
+            38.7,
+            -91.1
+          ],
+          "index": 1671065,
+          "kelvin": 305.5,
+          "jsonKelvin": 305.5,
+          "distanceKm": 1.1453681541380387
+        },
+        {
+          "point": [
+            38.7,
+            -90.3
+          ],
+          "index": 1673438,
+          "kelvin": 306.1,
+          "jsonKelvin": 306.1,
+          "distanceKm": 1.6040012862272817
+        },
+        {
+          "point": [
+            38.7,
+            -89.5
+          ],
+          "index": 1675812,
+          "kelvin": 305.7,
+          "jsonKelvin": 305.7,
+          "distanceKm": 1.3256199614125181
+        },
+        {
+          "point": [
+            39.2,
+            -91.1
+          ],
+          "index": 1722655,
+          "kelvin": 306.1,
+          "jsonKelvin": 306.1,
+          "distanceKm": 1.003221353357206
+        },
+        {
+          "point": [
+            39.2,
+            -90.3
+          ],
+          "index": 1725028,
+          "kelvin": 305.90000000000003,
+          "jsonKelvin": 305.9,
+          "distanceKm": 0.8197759695550477
+        },
+        {
+          "point": [
+            39.2,
+            -89.5
+          ],
+          "index": 1727401,
+          "kelvin": 304.90000000000003,
+          "jsonKelvin": 304.9,
+          "distanceKm": 0.8429364804043165
+        }
+      ]
+    },
+    {
+      "product": "daily",
+      "forecastHour": 222,
+      "percentile": 25,
+      "template": 10,
+      "startStep": 204,
+      "endStep": 222,
+      "rawFile": "blend.t00z.qmd.f222.co.grib2.365977009-368220265",
+      "sha256": "270c5243de00073519ecd42e5e92f521d768fe4edaa08211b55efa14367dc650",
+      "points": [
+        {
+          "point": [
+            38.8,
+            -90.79
+          ],
+          "index": 1680456,
+          "kelvin": 289.2,
+          "jsonKelvin": 289.2,
+          "distanceKm": 1.24792830399133
+        },
+        {
+          "point": [
+            38.52,
+            -89.98
+          ],
+          "index": 1654690,
+          "kelvin": 289.6,
+          "jsonKelvin": 289.6,
+          "distanceKm": 0.3908605109122362
+        },
+        {
+          "point": [
+            38.2,
+            -91.1
+          ],
+          "index": 1617131,
+          "kelvin": 288.8,
+          "jsonKelvin": 288.8,
+          "distanceKm": 0.34525244385603077
+        },
+        {
+          "point": [
+            38.2,
+            -90.3
+          ],
+          "index": 1619504,
+          "kelvin": 290.2,
+          "jsonKelvin": 290.2,
+          "distanceKm": 0.6369218117934985
+        },
+        {
+          "point": [
+            38.2,
+            -89.5
+          ],
+          "index": 1621878,
+          "kelvin": 289.0,
+          "jsonKelvin": 289.0,
+          "distanceKm": 1.1634369776541635
+        },
+        {
+          "point": [
+            38.7,
+            -91.1
+          ],
+          "index": 1671065,
+          "kelvin": 288.40000000000003,
+          "jsonKelvin": 288.4,
+          "distanceKm": 1.1453681541380387
+        },
+        {
+          "point": [
+            38.7,
+            -90.3
+          ],
+          "index": 1673438,
+          "kelvin": 289.7,
+          "jsonKelvin": 289.7,
+          "distanceKm": 1.6040012862272817
+        },
+        {
+          "point": [
+            38.7,
+            -89.5
+          ],
+          "index": 1675812,
+          "kelvin": 289.2,
+          "jsonKelvin": 289.2,
+          "distanceKm": 1.3256199614125181
+        },
+        {
+          "point": [
+            39.2,
+            -91.1
+          ],
+          "index": 1722655,
+          "kelvin": 288.6,
+          "jsonKelvin": 288.6,
+          "distanceKm": 1.003221353357206
+        },
+        {
+          "point": [
+            39.2,
+            -90.3
+          ],
+          "index": 1725028,
+          "kelvin": 288.90000000000003,
+          "jsonKelvin": 288.9,
+          "distanceKm": 0.8197759695550477
+        },
+        {
+          "point": [
+            39.2,
+            -89.5
+          ],
+          "index": 1727401,
+          "kelvin": 288.6,
+          "jsonKelvin": 288.6,
+          "distanceKm": 0.8429364804043165
+        }
+      ]
+    },
+    {
+      "product": "daily",
+      "forecastHour": 222,
+      "percentile": 50,
+      "template": 10,
+      "startStep": 204,
+      "endStep": 222,
+      "rawFile": "blend.t00z.qmd.f222.co.grib2.377141512-379363981",
+      "sha256": "92f84ed8a180d2e43c9e2767b136bb02c76981bdb2fb63808b0ea704716e2301",
+      "points": [
+        {
+          "point": [
+            38.8,
+            -90.79
+          ],
+          "index": 1680456,
+          "kelvin": 291.90000000000003,
+          "jsonKelvin": 291.9,
+          "distanceKm": 1.24792830399133
+        },
+        {
+          "point": [
+            38.52,
+            -89.98
+          ],
+          "index": 1654690,
+          "kelvin": 292.40000000000003,
+          "jsonKelvin": 292.4,
+          "distanceKm": 0.3908605109122362
+        },
+        {
+          "point": [
+            38.2,
+            -91.1
+          ],
+          "index": 1617131,
+          "kelvin": 291.90000000000003,
+          "jsonKelvin": 291.9,
+          "distanceKm": 0.34525244385603077
+        },
+        {
+          "point": [
+            38.2,
+            -90.3
+          ],
+          "index": 1619504,
+          "kelvin": 293.1,
+          "jsonKelvin": 293.1,
+          "distanceKm": 0.6369218117934985
+        },
+        {
+          "point": [
+            38.2,
+            -89.5
+          ],
+          "index": 1621878,
+          "kelvin": 292.6,
+          "jsonKelvin": 292.6,
+          "distanceKm": 1.1634369776541635
+        },
+        {
+          "point": [
+            38.7,
+            -91.1
+          ],
+          "index": 1671065,
+          "kelvin": 291.3,
+          "jsonKelvin": 291.3,
+          "distanceKm": 1.1453681541380387
+        },
+        {
+          "point": [
+            38.7,
+            -90.3
+          ],
+          "index": 1673438,
+          "kelvin": 292.2,
+          "jsonKelvin": 292.2,
+          "distanceKm": 1.6040012862272817
+        },
+        {
+          "point": [
+            38.7,
+            -89.5
+          ],
+          "index": 1675812,
+          "kelvin": 292.1,
+          "jsonKelvin": 292.1,
+          "distanceKm": 1.3256199614125181
+        },
+        {
+          "point": [
+            39.2,
+            -91.1
+          ],
+          "index": 1722655,
+          "kelvin": 291.6,
+          "jsonKelvin": 291.6,
+          "distanceKm": 1.003221353357206
+        },
+        {
+          "point": [
+            39.2,
+            -90.3
+          ],
+          "index": 1725028,
+          "kelvin": 292.0,
+          "jsonKelvin": 292.0,
+          "distanceKm": 0.8197759695550477
+        },
+        {
+          "point": [
+            39.2,
+            -89.5
+          ],
+          "index": 1727401,
+          "kelvin": 290.7,
+          "jsonKelvin": 290.7,
+          "distanceKm": 0.8429364804043165
+        }
+      ]
+    },
+    {
+      "product": "daily",
+      "forecastHour": 222,
+      "percentile": 75,
+      "template": 10,
+      "startStep": 204,
+      "endStep": 222,
+      "rawFile": "blend.t00z.qmd.f222.co.grib2.388156096-390354557",
+      "sha256": "8b248f8a491436e42e6ddda093c1682e0dea49463d3349df884537b4955e490f",
+      "points": [
+        {
+          "point": [
+            38.8,
+            -90.79
+          ],
+          "index": 1680456,
+          "kelvin": 294.3,
+          "jsonKelvin": 294.3,
+          "distanceKm": 1.24792830399133
+        },
+        {
+          "point": [
+            38.52,
+            -89.98
+          ],
+          "index": 1654690,
+          "kelvin": 294.90000000000003,
+          "jsonKelvin": 294.9,
+          "distanceKm": 0.3908605109122362
+        },
+        {
+          "point": [
+            38.2,
+            -91.1
+          ],
+          "index": 1617131,
+          "kelvin": 294.40000000000003,
+          "jsonKelvin": 294.4,
+          "distanceKm": 0.34525244385603077
+        },
+        {
+          "point": [
+            38.2,
+            -90.3
+          ],
+          "index": 1619504,
+          "kelvin": 295.8,
+          "jsonKelvin": 295.8,
+          "distanceKm": 0.6369218117934985
+        },
+        {
+          "point": [
+            38.2,
+            -89.5
+          ],
+          "index": 1621878,
+          "kelvin": 295.3,
+          "jsonKelvin": 295.3,
+          "distanceKm": 1.1634369776541635
+        },
+        {
+          "point": [
+            38.7,
+            -91.1
+          ],
+          "index": 1671065,
+          "kelvin": 294.1,
+          "jsonKelvin": 294.1,
+          "distanceKm": 1.1453681541380387
+        },
+        {
+          "point": [
+            38.7,
+            -90.3
+          ],
+          "index": 1673438,
+          "kelvin": 294.7,
+          "jsonKelvin": 294.7,
+          "distanceKm": 1.6040012862272817
+        },
+        {
+          "point": [
+            38.7,
+            -89.5
+          ],
+          "index": 1675812,
+          "kelvin": 294.90000000000003,
+          "jsonKelvin": 294.9,
+          "distanceKm": 1.3256199614125181
+        },
+        {
+          "point": [
+            39.2,
+            -91.1
+          ],
+          "index": 1722655,
+          "kelvin": 293.90000000000003,
+          "jsonKelvin": 293.9,
+          "distanceKm": 1.003221353357206
+        },
+        {
+          "point": [
+            39.2,
+            -90.3
+          ],
+          "index": 1725028,
+          "kelvin": 294.1,
+          "jsonKelvin": 294.1,
+          "distanceKm": 0.8197759695550477
+        },
+        {
+          "point": [
+            39.2,
+            -89.5
+          ],
+          "index": 1727401,
+          "kelvin": 293.5,
+          "jsonKelvin": 293.5,
+          "distanceKm": 0.8429364804043165
+        }
+      ]
+    },
+    {
+      "product": "hourly",
+      "forecastHour": 1,
+      "percentile": 25,
+      "template": 6,
+      "startStep": 1,
+      "endStep": 1,
+      "rawFile": "blend.t00z.qmd.f001.co.grib2.subset",
+      "sha256": "5a31db5077847076ac4099292406390dcd412dd3e51ff1ffd21e48d0900f0475",
+      "points": [
+        {
+          "point": [
+            38.8,
+            -90.79
+          ],
+          "index": 1934,
+          "kelvin": 293.23703125000003,
+          "jsonKelvin": 293.237,
+          "distanceKm": 1.2479838986532865
+        },
+        {
+          "point": [
+            38.52,
+            -89.98
+          ],
+          "index": 1259,
+          "kelvin": 293.33203125,
+          "jsonKelvin": 293.332,
+          "distanceKm": 0.39081697104636776
+        },
+        {
+          "point": [
+            38.2,
+            -91.1
+          ],
+          "index": 196,
+          "kelvin": 293.18403125000003,
+          "jsonKelvin": 293.184,
+          "distanceKm": 0.34529554272844515
+        },
+        {
+          "point": [
+            38.2,
+            -90.3
+          ],
+          "index": 288,
+          "kelvin": 292.28303125,
+          "jsonKelvin": 292.283,
+          "distanceKm": 0.63695686361872
+        },
+        {
+          "point": [
+            38.2,
+            -89.5
+          ],
+          "index": 381,
+          "kelvin": 292.79003125,
+          "jsonKelvin": 292.79,
+          "distanceKm": 1.1634196278671929
+        },
+        {
+          "point": [
+            38.7,
+            -91.1
+          ],
+          "index": 1667,
+          "kelvin": 293.22203125,
+          "jsonKelvin": 293.222,
+          "distanceKm": 1.1453503024302731
+        },
+        {
+          "point": [
+            38.7,
+            -90.3
+          ],
+          "index": 1759,
+          "kelvin": 294.26103125000003,
+          "jsonKelvin": 294.261,
+          "distanceKm": 1.6039869879937712
+        },
+        {
+          "point": [
+            38.7,
+            -89.5
+          ],
+          "index": 1852,
+          "kelvin": 292.50803125,
+          "jsonKelvin": 292.508,
+          "distanceKm": 1.3255631929110172
+        },
+        {
+          "point": [
+            39.2,
+            -91.1
+          ],
+          "index": 3075,
+          "kelvin": 293.56703125,
+          "jsonKelvin": 293.567,
+          "distanceKm": 1.0032280915858172
+        },
+        {
+          "point": [
+            39.2,
+            -90.3
+          ],
+          "index": 3167,
+          "kelvin": 292.37803125,
+          "jsonKelvin": 292.378,
+          "distanceKm": 0.8197691472503364
+        },
+        {
+          "point": [
+            39.2,
+            -89.5
+          ],
+          "index": 3259,
+          "kelvin": 291.51803125,
+          "jsonKelvin": 291.518,
+          "distanceKm": 0.8429394369338927
+        }
+      ]
+    },
+    {
+      "product": "hourly",
+      "forecastHour": 1,
+      "percentile": 50,
+      "template": 6,
+      "startStep": 1,
+      "endStep": 1,
+      "rawFile": "blend.t00z.qmd.f001.co.grib2.subset",
+      "sha256": "5a31db5077847076ac4099292406390dcd412dd3e51ff1ffd21e48d0900f0475",
+      "points": [
+        {
+          "point": [
+            38.8,
+            -90.79
+          ],
+          "index": 1934,
+          "kelvin": 293.69303125,
+          "jsonKelvin": 293.693,
+          "distanceKm": 1.2479838986532865
+        },
+        {
+          "point": [
+            38.52,
+            -89.98
+          ],
+          "index": 1259,
+          "kelvin": 293.98403125,
+          "jsonKelvin": 293.984,
+          "distanceKm": 0.39081697104636776
+        },
+        {
+          "point": [
+            38.2,
+            -91.1
+          ],
+          "index": 196,
+          "kelvin": 293.60203125,
+          "jsonKelvin": 293.602,
+          "distanceKm": 0.34529554272844515
+        },
+        {
+          "point": [
+            38.2,
+            -90.3
+          ],
+          "index": 288,
+          "kelvin": 292.92803125,
+          "jsonKelvin": 292.928,
+          "distanceKm": 0.63695686361872
+        },
+        {
+          "point": [
+            38.2,
+            -89.5
+          ],
+          "index": 381,
+          "kelvin": 293.20003125,
+          "jsonKelvin": 293.2,
+          "distanceKm": 1.1634196278671929
+        },
+        {
+          "point": [
+            38.7,
+            -91.1
+          ],
+          "index": 1667,
+          "kelvin": 293.53303125,
+          "jsonKelvin": 293.533,
+          "distanceKm": 1.1453503024302731
+        },
+        {
+          "point": [
+            38.7,
+            -90.3
+          ],
+          "index": 1759,
+          "kelvin": 295.02903125,
+          "jsonKelvin": 295.029,
+          "distanceKm": 1.6039869879937712
+        },
+        {
+          "point": [
+            38.7,
+            -89.5
+          ],
+          "index": 1852,
+          "kelvin": 293.07203125,
+          "jsonKelvin": 293.072,
+          "distanceKm": 1.3255631929110172
+        },
+        {
+          "point": [
+            39.2,
+            -91.1
+          ],
+          "index": 3075,
+          "kelvin": 294.01903125,
+          "jsonKelvin": 294.019,
+          "distanceKm": 1.0032280915858172
+        },
+        {
+          "point": [
+            39.2,
+            -90.3
+          ],
+          "index": 3167,
+          "kelvin": 293.04703125000003,
+          "jsonKelvin": 293.047,
+          "distanceKm": 0.8197691472503364
+        },
+        {
+          "point": [
+            39.2,
+            -89.5
+          ],
+          "index": 3259,
+          "kelvin": 291.98303125,
+          "jsonKelvin": 291.983,
+          "distanceKm": 0.8429394369338927
+        }
+      ]
+    },
+    {
+      "product": "hourly",
+      "forecastHour": 1,
+      "percentile": 75,
+      "template": 6,
+      "startStep": 1,
+      "endStep": 1,
+      "rawFile": "blend.t00z.qmd.f001.co.grib2.subset",
+      "sha256": "5a31db5077847076ac4099292406390dcd412dd3e51ff1ffd21e48d0900f0475",
+      "points": [
+        {
+          "point": [
+            38.8,
+            -90.79
+          ],
+          "index": 1934,
+          "kelvin": 294.08303125000003,
+          "jsonKelvin": 294.083,
+          "distanceKm": 1.2479838986532865
+        },
+        {
+          "point": [
+            38.52,
+            -89.98
+          ],
+          "index": 1259,
+          "kelvin": 294.48203125000003,
+          "jsonKelvin": 294.482,
+          "distanceKm": 0.39081697104636776
+        },
+        {
+          "point": [
+            38.2,
+            -91.1
+          ],
+          "index": 196,
+          "kelvin": 293.93403125000003,
+          "jsonKelvin": 293.934,
+          "distanceKm": 0.34529554272844515
+        },
+        {
+          "point": [
+            38.2,
+            -90.3
+          ],
+          "index": 288,
+          "kelvin": 293.40303125,
+          "jsonKelvin": 293.403,
+          "distanceKm": 0.63695686361872
+        },
+        {
+          "point": [
+            38.2,
+            -89.5
+          ],
+          "index": 381,
+          "kelvin": 293.88503125,
+          "jsonKelvin": 293.885,
+          "distanceKm": 1.1634196278671929
+        },
+        {
+          "point": [
+            38.7,
+            -91.1
+          ],
+          "index": 1667,
+          "kelvin": 293.96503125,
+          "jsonKelvin": 293.965,
+          "distanceKm": 1.1453503024302731
+        },
+        {
+          "point": [
+            38.7,
+            -90.3
+          ],
+          "index": 1759,
+          "kelvin": 295.60403125,
+          "jsonKelvin": 295.604,
+          "distanceKm": 1.6039869879937712
+        },
+        {
+          "point": [
+            38.7,
+            -89.5
+          ],
+          "index": 1852,
+          "kelvin": 293.51403125,
+          "jsonKelvin": 293.514,
+          "distanceKm": 1.3255631929110172
+        },
+        {
+          "point": [
+            39.2,
+            -91.1
+          ],
+          "index": 3075,
+          "kelvin": 294.67603125,
+          "jsonKelvin": 294.676,
+          "distanceKm": 1.0032280915858172
+        },
+        {
+          "point": [
+            39.2,
+            -90.3
+          ],
+          "index": 3167,
+          "kelvin": 293.58003125,
+          "jsonKelvin": 293.58,
+          "distanceKm": 0.8197691472503364
+        },
+        {
+          "point": [
+            39.2,
+            -89.5
+          ],
+          "index": 3259,
+          "kelvin": 292.59703125,
+          "jsonKelvin": 292.597,
+          "distanceKm": 0.8429394369338927
+        }
+      ]
+    },
+    {
+      "product": "hourly",
+      "forecastHour": 18,
+      "percentile": 25,
+      "template": 6,
+      "startStep": 18,
+      "endStep": 18,
+      "rawFile": "blend.t00z.qmd.f018.co.grib2.subset",
+      "sha256": "33c1e2ca2385f218c6c08afb497b32acb3e38eebaf99823470ef24ee9846b549",
+      "points": [
+        {
+          "point": [
+            38.8,
+            -90.79
+          ],
+          "index": 1934,
+          "kelvin": 302.52503125,
+          "jsonKelvin": 302.525,
+          "distanceKm": 1.2479838986532865
+        },
+        {
+          "point": [
+            38.52,
+            -89.98
+          ],
+          "index": 1259,
+          "kelvin": 302.47403125,
+          "jsonKelvin": 302.474,
+          "distanceKm": 0.39081697104636776
+        },
+        {
+          "point": [
+            38.2,
+            -91.1
+          ],
+          "index": 196,
+          "kelvin": 302.87503125,
+          "jsonKelvin": 302.875,
+          "distanceKm": 0.34529554272844515
+        },
+        {
+          "point": [
+            38.2,
+            -90.3
+          ],
+          "index": 288,
+          "kelvin": 303.17903125,
+          "jsonKelvin": 303.179,
+          "distanceKm": 0.63695686361872
+        },
+        {
+          "point": [
+            38.2,
+            -89.5
+          ],
+          "index": 381,
+          "kelvin": 301.57103125000003,
+          "jsonKelvin": 301.571,
+          "distanceKm": 1.1634196278671929
+        },
+        {
+          "point": [
+            38.7,
+            -91.1
+          ],
+          "index": 1667,
+          "kelvin": 301.62203125,
+          "jsonKelvin": 301.622,
+          "distanceKm": 1.1453503024302731
+        },
+        {
+          "point": [
+            38.7,
+            -90.3
+          ],
+          "index": 1759,
+          "kelvin": 301.90203125,
+          "jsonKelvin": 301.902,
+          "distanceKm": 1.6039869879937712
+        },
+        {
+          "point": [
+            38.7,
+            -89.5
+          ],
+          "index": 1852,
+          "kelvin": 301.91703125,
+          "jsonKelvin": 301.917,
+          "distanceKm": 1.3255631929110172
+        },
+        {
+          "point": [
+            39.2,
+            -91.1
+          ],
+          "index": 3075,
+          "kelvin": 302.39903125,
+          "jsonKelvin": 302.399,
+          "distanceKm": 1.0032280915858172
+        },
+        {
+          "point": [
+            39.2,
+            -90.3
+          ],
+          "index": 3167,
+          "kelvin": 301.84003125,
+          "jsonKelvin": 301.84,
+          "distanceKm": 0.8197691472503364
+        },
+        {
+          "point": [
+            39.2,
+            -89.5
+          ],
+          "index": 3259,
+          "kelvin": 301.30903125000003,
+          "jsonKelvin": 301.309,
+          "distanceKm": 0.8429394369338927
+        }
+      ]
+    },
+    {
+      "product": "hourly",
+      "forecastHour": 18,
+      "percentile": 50,
+      "template": 6,
+      "startStep": 18,
+      "endStep": 18,
+      "rawFile": "blend.t00z.qmd.f018.co.grib2.subset",
+      "sha256": "33c1e2ca2385f218c6c08afb497b32acb3e38eebaf99823470ef24ee9846b549",
+      "points": [
+        {
+          "point": [
+            38.8,
+            -90.79
+          ],
+          "index": 1934,
+          "kelvin": 303.08003125,
+          "jsonKelvin": 303.08,
+          "distanceKm": 1.2479838986532865
+        },
+        {
+          "point": [
+            38.52,
+            -89.98
+          ],
+          "index": 1259,
+          "kelvin": 303.16903125,
+          "jsonKelvin": 303.169,
+          "distanceKm": 0.39081697104636776
+        },
+        {
+          "point": [
+            38.2,
+            -91.1
+          ],
+          "index": 196,
+          "kelvin": 303.57303125,
+          "jsonKelvin": 303.573,
+          "distanceKm": 0.34529554272844515
+        },
+        {
+          "point": [
+            38.2,
+            -90.3
+          ],
+          "index": 288,
+          "kelvin": 303.91303125,
+          "jsonKelvin": 303.913,
+          "distanceKm": 0.63695686361872
+        },
+        {
+          "point": [
+            38.2,
+            -89.5
+          ],
+          "index": 381,
+          "kelvin": 302.64203125,
+          "jsonKelvin": 302.642,
+          "distanceKm": 1.1634196278671929
+        },
+        {
+          "point": [
+            38.7,
+            -91.1
+          ],
+          "index": 1667,
+          "kelvin": 302.27703125,
+          "jsonKelvin": 302.277,
+          "distanceKm": 1.1453503024302731
+        },
+        {
+          "point": [
+            38.7,
+            -90.3
+          ],
+          "index": 1759,
+          "kelvin": 302.35403125,
+          "jsonKelvin": 302.354,
+          "distanceKm": 1.6039869879937712
+        },
+        {
+          "point": [
+            38.7,
+            -89.5
+          ],
+          "index": 1852,
+          "kelvin": 302.49903125000003,
+          "jsonKelvin": 302.499,
+          "distanceKm": 1.3255631929110172
+        },
+        {
+          "point": [
+            39.2,
+            -91.1
+          ],
+          "index": 3075,
+          "kelvin": 303.20103125,
+          "jsonKelvin": 303.201,
+          "distanceKm": 1.0032280915858172
+        },
+        {
+          "point": [
+            39.2,
+            -90.3
+          ],
+          "index": 3167,
+          "kelvin": 302.33503125,
+          "jsonKelvin": 302.335,
+          "distanceKm": 0.8197691472503364
+        },
+        {
+          "point": [
+            39.2,
+            -89.5
+          ],
+          "index": 3259,
+          "kelvin": 302.06403125,
+          "jsonKelvin": 302.064,
+          "distanceKm": 0.8429394369338927
+        }
+      ]
+    },
+    {
+      "product": "hourly",
+      "forecastHour": 18,
+      "percentile": 75,
+      "template": 6,
+      "startStep": 18,
+      "endStep": 18,
+      "rawFile": "blend.t00z.qmd.f018.co.grib2.subset",
+      "sha256": "33c1e2ca2385f218c6c08afb497b32acb3e38eebaf99823470ef24ee9846b549",
+      "points": [
+        {
+          "point": [
+            38.8,
+            -90.79
+          ],
+          "index": 1934,
+          "kelvin": 303.93,
+          "jsonKelvin": 303.93,
+          "distanceKm": 1.2479838986532865
+        },
+        {
+          "point": [
+            38.52,
+            -89.98
+          ],
+          "index": 1259,
+          "kelvin": 304.091,
+          "jsonKelvin": 304.091,
+          "distanceKm": 0.39081697104636776
+        },
+        {
+          "point": [
+            38.2,
+            -91.1
+          ],
+          "index": 196,
+          "kelvin": 304.159,
+          "jsonKelvin": 304.159,
+          "distanceKm": 0.34529554272844515
+        },
+        {
+          "point": [
+            38.2,
+            -90.3
+          ],
+          "index": 288,
+          "kelvin": 304.66700000000003,
+          "jsonKelvin": 304.667,
+          "distanceKm": 0.63695686361872
+        },
+        {
+          "point": [
+            38.2,
+            -89.5
+          ],
+          "index": 381,
+          "kelvin": 303.615,
+          "jsonKelvin": 303.615,
+          "distanceKm": 1.1634196278671929
+        },
+        {
+          "point": [
+            38.7,
+            -91.1
+          ],
+          "index": 1667,
+          "kelvin": 302.939,
+          "jsonKelvin": 302.939,
+          "distanceKm": 1.1453503024302731
+        },
+        {
+          "point": [
+            38.7,
+            -90.3
+          ],
+          "index": 1759,
+          "kelvin": 303.061,
+          "jsonKelvin": 303.061,
+          "distanceKm": 1.6039869879937712
+        },
+        {
+          "point": [
+            38.7,
+            -89.5
+          ],
+          "index": 1852,
+          "kelvin": 303.472,
+          "jsonKelvin": 303.472,
+          "distanceKm": 1.3255631929110172
+        },
+        {
+          "point": [
+            39.2,
+            -91.1
+          ],
+          "index": 3075,
+          "kelvin": 304.086,
+          "jsonKelvin": 304.086,
+          "distanceKm": 1.0032280915858172
+        },
+        {
+          "point": [
+            39.2,
+            -90.3
+          ],
+          "index": 3167,
+          "kelvin": 303.035,
+          "jsonKelvin": 303.035,
+          "distanceKm": 0.8197691472503364
+        },
+        {
+          "point": [
+            39.2,
+            -89.5
+          ],
+          "index": 3259,
+          "kelvin": 302.693,
+          "jsonKelvin": 302.693,
+          "distanceKm": 0.8429394369338927
+        }
+      ]
+    },
+    {
+      "product": "hourly",
+      "forecastHour": 30,
+      "percentile": 25,
+      "template": 6,
+      "startStep": 30,
+      "endStep": 30,
+      "rawFile": "blend.t00z.qmd.f030.co.grib2.subset",
+      "sha256": "a2f87d7c411daf467394f8e58641ce995ff0e6d4be135a785ee5aa0cd4e9709b",
+      "points": [
+        {
+          "point": [
+            38.8,
+            -90.79
+          ],
+          "index": 1934,
+          "kelvin": 290.93003125,
+          "jsonKelvin": 290.93,
+          "distanceKm": 1.2479838986532865
+        },
+        {
+          "point": [
+            38.52,
+            -89.98
+          ],
+          "index": 1259,
+          "kelvin": 290.20503125,
+          "jsonKelvin": 290.205,
+          "distanceKm": 0.39081697104636776
+        },
+        {
+          "point": [
+            38.2,
+            -91.1
+          ],
+          "index": 196,
+          "kelvin": 290.12103125,
+          "jsonKelvin": 290.121,
+          "distanceKm": 0.34529554272844515
+        },
+        {
+          "point": [
+            38.2,
+            -90.3
+          ],
+          "index": 288,
+          "kelvin": 288.59803125,
+          "jsonKelvin": 288.598,
+          "distanceKm": 0.63695686361872
+        },
+        {
+          "point": [
+            38.2,
+            -89.5
+          ],
+          "index": 381,
+          "kelvin": 289.45103125,
+          "jsonKelvin": 289.451,
+          "distanceKm": 1.1634196278671929
+        },
+        {
+          "point": [
+            38.7,
+            -91.1
+          ],
+          "index": 1667,
+          "kelvin": 290.71603125,
+          "jsonKelvin": 290.716,
+          "distanceKm": 1.1453503024302731
+        },
+        {
+          "point": [
+            38.7,
+            -90.3
+          ],
+          "index": 1759,
+          "kelvin": 291.79003125,
+          "jsonKelvin": 291.79,
+          "distanceKm": 1.6039869879937712
+        },
+        {
+          "point": [
+            38.7,
+            -89.5
+          ],
+          "index": 1852,
+          "kelvin": 289.55303125,
+          "jsonKelvin": 289.553,
+          "distanceKm": 1.3255631929110172
+        },
+        {
+          "point": [
+            39.2,
+            -91.1
+          ],
+          "index": 3075,
+          "kelvin": 292.16803125,
+          "jsonKelvin": 292.168,
+          "distanceKm": 1.0032280915858172
+        },
+        {
+          "point": [
+            39.2,
+            -90.3
+          ],
+          "index": 3167,
+          "kelvin": 290.11403125,
+          "jsonKelvin": 290.114,
+          "distanceKm": 0.8197691472503364
+        },
+        {
+          "point": [
+            39.2,
+            -89.5
+          ],
+          "index": 3259,
+          "kelvin": 289.62203125,
+          "jsonKelvin": 289.622,
+          "distanceKm": 0.8429394369338927
+        }
+      ]
+    },
+    {
+      "product": "hourly",
+      "forecastHour": 30,
+      "percentile": 50,
+      "template": 6,
+      "startStep": 30,
+      "endStep": 30,
+      "rawFile": "blend.t00z.qmd.f030.co.grib2.subset",
+      "sha256": "a2f87d7c411daf467394f8e58641ce995ff0e6d4be135a785ee5aa0cd4e9709b",
+      "points": [
+        {
+          "point": [
+            38.8,
+            -90.79
+          ],
+          "index": 1934,
+          "kelvin": 291.75703125,
+          "jsonKelvin": 291.757,
+          "distanceKm": 1.2479838986532865
+        },
+        {
+          "point": [
+            38.52,
+            -89.98
+          ],
+          "index": 1259,
+          "kelvin": 291.03603125,
+          "jsonKelvin": 291.036,
+          "distanceKm": 0.39081697104636776
+        },
+        {
+          "point": [
+            38.2,
+            -91.1
+          ],
+          "index": 196,
+          "kelvin": 290.69003125,
+          "jsonKelvin": 290.69,
+          "distanceKm": 0.34529554272844515
+        },
+        {
+          "point": [
+            38.2,
+            -90.3
+          ],
+          "index": 288,
+          "kelvin": 289.16603125,
+          "jsonKelvin": 289.166,
+          "distanceKm": 0.63695686361872
+        },
+        {
+          "point": [
+            38.2,
+            -89.5
+          ],
+          "index": 381,
+          "kelvin": 290.41003125000003,
+          "jsonKelvin": 290.41,
+          "distanceKm": 1.1634196278671929
+        },
+        {
+          "point": [
+            38.7,
+            -91.1
+          ],
+          "index": 1667,
+          "kelvin": 291.29603125,
+          "jsonKelvin": 291.296,
+          "distanceKm": 1.1453503024302731
+        },
+        {
+          "point": [
+            38.7,
+            -90.3
+          ],
+          "index": 1759,
+          "kelvin": 292.60103125,
+          "jsonKelvin": 292.601,
+          "distanceKm": 1.6039869879937712
+        },
+        {
+          "point": [
+            38.7,
+            -89.5
+          ],
+          "index": 1852,
+          "kelvin": 290.44003125,
+          "jsonKelvin": 290.44,
+          "distanceKm": 1.3255631929110172
+        },
+        {
+          "point": [
+            39.2,
+            -91.1
+          ],
+          "index": 3075,
+          "kelvin": 292.94403125,
+          "jsonKelvin": 292.944,
+          "distanceKm": 1.0032280915858172
+        },
+        {
+          "point": [
+            39.2,
+            -90.3
+          ],
+          "index": 3167,
+          "kelvin": 290.98703125000003,
+          "jsonKelvin": 290.987,
+          "distanceKm": 0.8197691472503364
+        },
+        {
+          "point": [
+            39.2,
+            -89.5
+          ],
+          "index": 3259,
+          "kelvin": 290.38103125,
+          "jsonKelvin": 290.381,
+          "distanceKm": 0.8429394369338927
+        }
+      ]
+    },
+    {
+      "product": "hourly",
+      "forecastHour": 30,
+      "percentile": 75,
+      "template": 6,
+      "startStep": 30,
+      "endStep": 30,
+      "rawFile": "blend.t00z.qmd.f030.co.grib2.subset",
+      "sha256": "a2f87d7c411daf467394f8e58641ce995ff0e6d4be135a785ee5aa0cd4e9709b",
+      "points": [
+        {
+          "point": [
+            38.8,
+            -90.79
+          ],
+          "index": 1934,
+          "kelvin": 292.597,
+          "jsonKelvin": 292.597,
+          "distanceKm": 1.2479838986532865
+        },
+        {
+          "point": [
+            38.52,
+            -89.98
+          ],
+          "index": 1259,
+          "kelvin": 291.906,
+          "jsonKelvin": 291.906,
+          "distanceKm": 0.39081697104636776
+        },
+        {
+          "point": [
+            38.2,
+            -91.1
+          ],
+          "index": 196,
+          "kelvin": 291.555,
+          "jsonKelvin": 291.555,
+          "distanceKm": 0.34529554272844515
+        },
+        {
+          "point": [
+            38.2,
+            -90.3
+          ],
+          "index": 288,
+          "kelvin": 290.068,
+          "jsonKelvin": 290.068,
+          "distanceKm": 0.63695686361872
+        },
+        {
+          "point": [
+            38.2,
+            -89.5
+          ],
+          "index": 381,
+          "kelvin": 291.266,
+          "jsonKelvin": 291.266,
+          "distanceKm": 1.1634196278671929
+        },
+        {
+          "point": [
+            38.7,
+            -91.1
+          ],
+          "index": 1667,
+          "kelvin": 292.228,
+          "jsonKelvin": 292.228,
+          "distanceKm": 1.1453503024302731
+        },
+        {
+          "point": [
+            38.7,
+            -90.3
+          ],
+          "index": 1759,
+          "kelvin": 293.724,
+          "jsonKelvin": 293.724,
+          "distanceKm": 1.6039869879937712
+        },
+        {
+          "point": [
+            38.7,
+            -89.5
+          ],
+          "index": 1852,
+          "kelvin": 291.32,
+          "jsonKelvin": 291.32,
+          "distanceKm": 1.3255631929110172
+        },
+        {
+          "point": [
+            39.2,
+            -91.1
+          ],
+          "index": 3075,
+          "kelvin": 293.63800000000003,
+          "jsonKelvin": 293.638,
+          "distanceKm": 1.0032280915858172
+        },
+        {
+          "point": [
+            39.2,
+            -90.3
+          ],
+          "index": 3167,
+          "kelvin": 291.875,
+          "jsonKelvin": 291.875,
+          "distanceKm": 0.8197691472503364
+        },
+        {
+          "point": [
+            39.2,
+            -89.5
+          ],
+          "index": 3259,
+          "kelvin": 291.387,
+          "jsonKelvin": 291.387,
+          "distanceKm": 0.8429394369338927
+        }
+      ]
+    },
+    {
+      "product": "hourly",
+      "forecastHour": 48,
+      "percentile": 25,
+      "template": 6,
+      "startStep": 48,
+      "endStep": 48,
+      "rawFile": "blend.t00z.qmd.f048.co.grib2.subset",
+      "sha256": "769e96c704a8056ebfa170afe896878c4efce2b7eee62b63787d428e8e85eaeb",
+      "points": [
+        {
+          "point": [
+            38.8,
+            -90.79
+          ],
+          "index": 1934,
+          "kelvin": 295.13803125,
+          "jsonKelvin": 295.138,
+          "distanceKm": 1.2479838986532865
+        },
+        {
+          "point": [
+            38.52,
+            -89.98
+          ],
+          "index": 1259,
+          "kelvin": 293.88503125,
+          "jsonKelvin": 293.885,
+          "distanceKm": 0.39081697104636776
+        },
+        {
+          "point": [
+            38.2,
+            -91.1
+          ],
+          "index": 196,
+          "kelvin": 293.73803125,
+          "jsonKelvin": 293.738,
+          "distanceKm": 0.34529554272844515
+        },
+        {
+          "point": [
+            38.2,
+            -90.3
+          ],
+          "index": 288,
+          "kelvin": 293.42503125,
+          "jsonKelvin": 293.425,
+          "distanceKm": 0.63695686361872
+        },
+        {
+          "point": [
+            38.2,
+            -89.5
+          ],
+          "index": 381,
+          "kelvin": 291.62003125,
+          "jsonKelvin": 291.62,
+          "distanceKm": 1.1634196278671929
+        },
+        {
+          "point": [
+            38.7,
+            -91.1
+          ],
+          "index": 1667,
+          "kelvin": 294.37303125,
+          "jsonKelvin": 294.373,
+          "distanceKm": 1.1453503024302731
+        },
+        {
+          "point": [
+            38.7,
+            -90.3
+          ],
+          "index": 1759,
+          "kelvin": 294.72603125,
+          "jsonKelvin": 294.726,
+          "distanceKm": 1.6039869879937712
+        },
+        {
+          "point": [
+            38.7,
+            -89.5
+          ],
+          "index": 1852,
+          "kelvin": 293.14703125,
+          "jsonKelvin": 293.147,
+          "distanceKm": 1.3255631929110172
+        },
+        {
+          "point": [
+            39.2,
+            -91.1
+          ],
+          "index": 3075,
+          "kelvin": 296.03803125,
+          "jsonKelvin": 296.038,
+          "distanceKm": 1.0032280915858172
+        },
+        {
+          "point": [
+            39.2,
+            -90.3
+          ],
+          "index": 3167,
+          "kelvin": 295.04603125,
+          "jsonKelvin": 295.046,
+          "distanceKm": 0.8197691472503364
+        },
+        {
+          "point": [
+            39.2,
+            -89.5
+          ],
+          "index": 3259,
+          "kelvin": 293.53003125,
+          "jsonKelvin": 293.53,
+          "distanceKm": 0.8429394369338927
+        }
+      ]
+    },
+    {
+      "product": "hourly",
+      "forecastHour": 48,
+      "percentile": 50,
+      "template": 6,
+      "startStep": 48,
+      "endStep": 48,
+      "rawFile": "blend.t00z.qmd.f048.co.grib2.subset",
+      "sha256": "769e96c704a8056ebfa170afe896878c4efce2b7eee62b63787d428e8e85eaeb",
+      "points": [
+        {
+          "point": [
+            38.8,
+            -90.79
+          ],
+          "index": 1934,
+          "kelvin": 296.41903125,
+          "jsonKelvin": 296.419,
+          "distanceKm": 1.2479838986532865
+        },
+        {
+          "point": [
+            38.52,
+            -89.98
+          ],
+          "index": 1259,
+          "kelvin": 295.38203125,
+          "jsonKelvin": 295.382,
+          "distanceKm": 0.39081697104636776
+        },
+        {
+          "point": [
+            38.2,
+            -91.1
+          ],
+          "index": 196,
+          "kelvin": 295.08303125000003,
+          "jsonKelvin": 295.083,
+          "distanceKm": 0.34529554272844515
+        },
+        {
+          "point": [
+            38.2,
+            -90.3
+          ],
+          "index": 288,
+          "kelvin": 295.08603125,
+          "jsonKelvin": 295.086,
+          "distanceKm": 0.63695686361872
+        },
+        {
+          "point": [
+            38.2,
+            -89.5
+          ],
+          "index": 381,
+          "kelvin": 293.35903125,
+          "jsonKelvin": 293.359,
+          "distanceKm": 1.1634196278671929
+        },
+        {
+          "point": [
+            38.7,
+            -91.1
+          ],
+          "index": 1667,
+          "kelvin": 295.56403125,
+          "jsonKelvin": 295.564,
+          "distanceKm": 1.1453503024302731
+        },
+        {
+          "point": [
+            38.7,
+            -90.3
+          ],
+          "index": 1759,
+          "kelvin": 296.33703125,
+          "jsonKelvin": 296.337,
+          "distanceKm": 1.6039869879937712
+        },
+        {
+          "point": [
+            38.7,
+            -89.5
+          ],
+          "index": 1852,
+          "kelvin": 294.24503125,
+          "jsonKelvin": 294.245,
+          "distanceKm": 1.3255631929110172
+        },
+        {
+          "point": [
+            39.2,
+            -91.1
+          ],
+          "index": 3075,
+          "kelvin": 297.10603125,
+          "jsonKelvin": 297.106,
+          "distanceKm": 1.0032280915858172
+        },
+        {
+          "point": [
+            39.2,
+            -90.3
+          ],
+          "index": 3167,
+          "kelvin": 296.01503125,
+          "jsonKelvin": 296.015,
+          "distanceKm": 0.8197691472503364
+        },
+        {
+          "point": [
+            39.2,
+            -89.5
+          ],
+          "index": 3259,
+          "kelvin": 294.75803125,
+          "jsonKelvin": 294.758,
+          "distanceKm": 0.8429394369338927
+        }
+      ]
+    },
+    {
+      "product": "hourly",
+      "forecastHour": 48,
+      "percentile": 75,
+      "template": 6,
+      "startStep": 48,
+      "endStep": 48,
+      "rawFile": "blend.t00z.qmd.f048.co.grib2.subset",
+      "sha256": "769e96c704a8056ebfa170afe896878c4efce2b7eee62b63787d428e8e85eaeb",
+      "points": [
+        {
+          "point": [
+            38.8,
+            -90.79
+          ],
+          "index": 1934,
+          "kelvin": 297.62503125,
+          "jsonKelvin": 297.625,
+          "distanceKm": 1.2479838986532865
+        },
+        {
+          "point": [
+            38.52,
+            -89.98
+          ],
+          "index": 1259,
+          "kelvin": 296.82803125,
+          "jsonKelvin": 296.828,
+          "distanceKm": 0.39081697104636776
+        },
+        {
+          "point": [
+            38.2,
+            -91.1
+          ],
+          "index": 196,
+          "kelvin": 296.26903125,
+          "jsonKelvin": 296.269,
+          "distanceKm": 0.34529554272844515
+        },
+        {
+          "point": [
+            38.2,
+            -90.3
+          ],
+          "index": 288,
+          "kelvin": 296.36803125,
+          "jsonKelvin": 296.368,
+          "distanceKm": 0.63695686361872
+        },
+        {
+          "point": [
+            38.2,
+            -89.5
+          ],
+          "index": 381,
+          "kelvin": 294.99103125,
+          "jsonKelvin": 294.991,
+          "distanceKm": 1.1634196278671929
+        },
+        {
+          "point": [
+            38.7,
+            -91.1
+          ],
+          "index": 1667,
+          "kelvin": 296.71103125,
+          "jsonKelvin": 296.711,
+          "distanceKm": 1.1453503024302731
+        },
+        {
+          "point": [
+            38.7,
+            -90.3
+          ],
+          "index": 1759,
+          "kelvin": 297.75103125,
+          "jsonKelvin": 297.751,
+          "distanceKm": 1.6039869879937712
+        },
+        {
+          "point": [
+            38.7,
+            -89.5
+          ],
+          "index": 1852,
+          "kelvin": 295.76003125,
+          "jsonKelvin": 295.76,
+          "distanceKm": 1.3255631929110172
+        },
+        {
+          "point": [
+            39.2,
+            -91.1
+          ],
+          "index": 3075,
+          "kelvin": 298.25903125,
+          "jsonKelvin": 298.259,
+          "distanceKm": 1.0032280915858172
+        },
+        {
+          "point": [
+            39.2,
+            -90.3
+          ],
+          "index": 3167,
+          "kelvin": 297.16403125,
+          "jsonKelvin": 297.164,
+          "distanceKm": 0.8197691472503364
+        },
+        {
+          "point": [
+            39.2,
+            -89.5
+          ],
+          "index": 3259,
+          "kelvin": 296.03503125000003,
+          "jsonKelvin": 296.035,
+          "distanceKm": 0.8429394369338927
+        }
+      ]
+    }
+  ],
+  "cellComparisons": 231
+}

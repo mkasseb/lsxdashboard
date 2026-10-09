@@ -74,7 +74,7 @@ async function main(){
      assert(['ready','partial','stale'].includes(result.status),key+' model validation '+result.status);
      if(result.status==='stale'){
       assert.equal(await p.locator(key==='daily'?'.nbm-inline':'.nbm-hourly-band').count(),0);
-      assert.match(await p.locator(key==='daily'?'#nbmStatus':'#nbmHourlyStatus').textContent(),/over 24 hours|older than 24|stale/i);
+      assert.match(await p.locator(key==='daily'?'#nbmStatus':'#nbmHourlyStatus').textContent(),/24 hours old|over 24 hours|older than 24|stale/i);
      }else assert((await p.locator(key==='daily'?'.nbm-inline':'.nbm-hourly-band').count())>0,'Valid '+key+' guidance still renders');
     }
     audit.live.push({width,test:'Untouched daily/hourly NBM integration',daily:{status:models.daily.status,run:dailyModel.run,ageHours:(Date.now()-Date.parse(dailyModel.run))/3600000},hourly:{status:models.hourly.status,run:hourlyModel.run,ageHours:(Date.now()-Date.parse(hourlyModel.run))/3600000}});

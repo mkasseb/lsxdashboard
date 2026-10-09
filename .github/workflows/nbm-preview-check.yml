@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   preview:
-    if: (github.head_ref == 'codex/nbm-inline-forecast' || github.head_ref == 'codex/nbm-hourly-range' || github.head_ref == 'codex/nbm-bottom-line') && github.event.pull_request.head.repo.full_name == github.repository
+    if: (github.head_ref == 'codex/nbm-inline-forecast' || github.head_ref == 'codex/nbm-hourly-range' || github.head_ref == 'codex/nbm-bottom-line' || github.head_ref == 'codex/nbm-middle-50') && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

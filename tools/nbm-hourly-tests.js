@@ -2,7 +2,7 @@
 const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
 const s={Intl,Date,URLSearchParams};vm.createContext(s);vm.runInContext(fs.readFileSync('assets/hourly-range.js','utf8'),s);
 const N=s.NbmHourly,H=3600000,clone=x=>JSON.parse(JSON.stringify(x));
-const data=JSON.parse(require('zlib').gunzipSync(fs.readFileSync('tools/fixtures/weather/nbm-hourly-full-recorded.json.gz'))),now=Date.parse(data.retrievedAt),point={lat:38.8,lon:-90.79};
+const data=JSON.parse(require('zlib').gunzipSync(fs.readFileSync('tools/fixtures/weather/nbm-quartile-hourly-recorded.json.gz'))),now=Date.parse(data.retrievedAt),point={lat:38.8,lon:-90.79};
 const result=N.validate(data,point,now);assert.equal(result.status,'ready');
 for(const lat of [38.2,38.7,39.2])for(const lon of [-91.1,-90.3,-89.5])assert.equal(N.validate(data,{lat,lon},now).status,'ready');
 assert.equal(N.validate(data,{lat:40,lon:-90},now).status,'missing');
@@ -22,7 +22,15 @@ const celsius=clone(hours);celsius[0].temperatureUnit='C';assert.equal(N.align(r
 // Exact UTC keys keep repeated fall-back local hours distinct; spring missing wall hour is not synthesized.
 for(const times of [['2026-11-01T01:00:00-05:00','2026-11-01T01:00:00-06:00'],['2026-03-08T01:00:00-06:00','2026-03-08T03:00:00-05:00']]){
  const hs=times.map(t=>({startTime:t,endTime:new Date(Date.parse(t)+H).toISOString(),temperature:0,temperatureUnit:'F'}));
- const r={values:{}};times.forEach((t,i)=>r.values[Date.parse(t)]={p10:i,p50:i+1,p90:i+2});
- const a=N.align(r,hs,Date.parse(times[0]));assert.equal(a[0].p10,0);assert.equal(a[1].p10,1);
+ const r={values:{}};times.forEach((t,i)=>r.values[Date.parse(t)]={p25:i,p50:i+1,p75:i+2});
+ const a=N.align(r,hs,Date.parse(times[0]));assert.equal(a[0].p25,0);assert.equal(a[1].p25,1);
 }
 console.log('PASS authentic hourly provenance, all region edges, exact UTC/DST, partial gaps, zero, malformed data and freshness boundary');
+
+const old=JSON.parse(require('zlib').gunzipSync(fs.readFileSync('tools/fixtures/weather/nbm-hourly-full-recorded.json.gz')));
+assert.equal(N.validate(old,point,Date.parse(old.retrievedAt)).status,'unavailable');
+const relabeled=clone(old);relabeled.schema=2;relabeled.percentiles=[25,50,75];assert.equal(N.validate(relabeled,point,Date.parse(old.retrievedAt)).status,'unavailable');
+for(const mutate of [d=>d.schema=1,d=>delete d.percentiles,d=>d.percentiles=[10,50,90],d=>d.hours[30].percentiles=[10,50,90],d=>d.hours[0].kelvin[0].push(310),d=>d.hours.push(d.hours[0]),d=>d.hours[0]=null]){
+ const d=clone(data);mutate(d);assert.equal(N.validate(d,point,now).status,'unavailable');
+}
+console.log('PASS old hourly data cannot gain quartile labels; missing/mixed identity, five-value and malformed rows rejected');

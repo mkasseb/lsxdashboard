@@ -33,8 +33,8 @@ class PublishTests(unittest.TestCase):
         (self.repo/'app.txt').write_text('original'); git(self.repo, 'add', '.'); git(self.repo, 'commit', '-m', 'base')
         git(self.repo, 'remote', 'add', 'origin', str(self.remote)); git(self.repo, 'push', 'origin', 'main')
         self.base = self.head()
-        self.now = datetime(2026, 10, 8, 14, 20, tzinfo=timezone.utc)
-        self.data = {name: json.loads(gzip.decompress((ROOT/'tools/fixtures/weather'/file).read_bytes())) for name,file in [('daily','nbm-regional-full-recorded.json.gz'),('hourly','nbm-hourly-full-recorded.json.gz')]}
+        self.now = datetime(2026, 10, 9, 14, 20, tzinfo=timezone.utc)
+        self.data = {name: json.loads(gzip.decompress((ROOT/'tools/fixtures/weather'/file).read_bytes())) for name,file in [('daily','nbm-quartile-daily-recorded.json.gz'),('hourly','nbm-quartile-hourly-recorded.json.gz')]}
         self.write()
 
     def head(self): return git(self.remote, 'rev-parse', 'main').stdout.decode().strip()
@@ -42,7 +42,7 @@ class PublishTests(unittest.TestCase):
         for name,p in m.PRODUCTS.items():
             data = self.data[name]; raw = (json.dumps(data,separators=(',',':'))+'\n').encode()
             (self.directory/Path(p.PATHS[0]).name).write_bytes(raw)
-            receipt = dict(validator='regional-v1' if name=='daily' else 'hourly-v1',run=data['run'],sha256=hashlib.sha256(raw).hexdigest())
+            receipt = dict(validator='regional-quartiles-v2' if name=='daily' else 'hourly-quartiles-v2',run=data['run'],sha256=hashlib.sha256(raw).hexdigest())
             (self.directory/Path(p.PATHS[1]).name).write_text(json.dumps(receipt))
             status = 'nbm-status.json' if name=='daily' else 'nbm-hourly-status.json'
             (self.directory/status).write_text(json.dumps(dict(status='ready' if changed else 'unchanged',changed=changed,dataRun=data['run'],checkedAt=self.now.isoformat())))
@@ -63,7 +63,7 @@ class PublishTests(unittest.TestCase):
         self.assertEqual(set(git(self.remote,'diff','--name-only',parent,'main').stdout.decode().splitlines()),set(m.PATHS))
         self.assertEqual(git(self.remote,'rev-list','--count',parent+'..main').stdout.strip(),b'1')
         self.assertIn(b'dirty',git(self.repo,'diff','--cached','--name-only').stdout)
-        self.assertNotEqual(result['products']['daily']['run'],result['products']['hourly']['run'])
+        self.assertEqual(result['products']['daily']['run'],self.data['daily']['run']);self.assertEqual(result['products']['hourly']['run'],self.data['hourly']['run'])
     def test_daily_failure_does_not_block_hourly(self):
         self.fail('daily');result=self.publish();self.assertTrue(result['degraded'])
         self.assertIsNone(m.daily.read_at(self.remote,'main',m.daily.PATHS[0]))
@@ -78,7 +78,7 @@ class PublishTests(unittest.TestCase):
         self.publish();head=self.head();self.now+=timedelta(hours=1);self.write(False)
         self.assertEqual(self.publish()['status'],'unchanged');self.assertEqual(self.head(),head)
         out=Path(self.tmp.name)/'seed';result=m.seed(self.repo,out,head,now=self.now)
-        self.assertEqual(result['nextPublicationWindow'],'2026-10-08T18:00:00+00:00')
+        self.assertEqual(result['nextPublicationWindow'],'2026-10-09T18:00:00+00:00')
         for p in m.PRODUCTS.values():
             self.assertEqual((out/Path(p.PATHS[0]).name).read_bytes(),(self.directory/Path(p.PATHS[0]).name).read_bytes())
         self.assertEqual([h['forecastHour'] for h in self.data['hourly']['hours']],list(range(1,49)))
@@ -97,8 +97,8 @@ class PublishTests(unittest.TestCase):
         self.assertEqual(result['products']['hourly']['status'],'failed');self.assertEqual(result['status'],'published')
     def test_old_status_and_stale_product_cannot_contribute(self):
         self.now+=timedelta(hours=4);result=self.publish();self.assertEqual(result['status'],'failed')
-        self.now=self.now.replace(day=9,hour=1);self.write();result=self.publish()
-        self.assertEqual(result['products']['daily']['status'],'failed');self.assertEqual(result['products']['hourly']['status'],'changed')
+        self.now=self.now.replace(day=10,hour=1);self.write();result=self.publish()
+        self.assertEqual(result['products']['daily']['status'],'failed');self.assertEqual(result['products']['hourly']['status'],'failed')
     def test_rollback_is_product_local(self):
         self.publish();self.now=self.now.replace(hour=18,minute=0)
         self.data['daily']['retrievedAt']='2026-10-08T13:00:00Z';self.data['hourly']['retrievedAt']=self.now.isoformat();self.write()

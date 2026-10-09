@@ -52,10 +52,27 @@ class Tests(unittest.TestCase):
             with patch.object(c,'version',side_effect=[v]*48+[dict(v,contentLength=10001)]),patch.object(c,'request',return_value=(b'test',{})),patch.object(m,'decode',return_value=('a',[],[])):
                 with self.assertRaisesRegex(ValueError,'revised'):m.extract(c,Path(t),'2026100806')
     def test_unchanged_preserves_retrieval(self):
-        d=json.loads(gzip.decompress((Path(__file__).parent/'fixtures/weather/nbm-hourly-full-recorded.json.gz').read_bytes()))
+        d=json.loads(gzip.decompress((Path(__file__).parent/'fixtures/weather/nbm-quartile-hourly-recorded.json.gz').read_bytes()))
         c=m.Client()
         with tempfile.TemporaryDirectory()as t,patch.object(m,'retained',return_value=d),patch.object(c,'version',side_effect=[h['publication']for h in d['hours']]),patch.object(c,'request')as request:
-            found,changed=m.extract(c,Path(t),'2026100806');self.assertIs(found,d);self.assertFalse(changed);request.assert_not_called()
+            found,changed=m.extract(c,Path(t),'2026100900');self.assertIs(found,d);self.assertFalse(changed);request.assert_not_called()
+
+    def test_receipt_and_schema_migration_cannot_be_noop(self):
+        import hashlib
+        for validator in ['hourly-v1', m.VALIDATOR]:
+            with tempfile.TemporaryDirectory() as t:
+                p=Path(t);raw=gzip.decompress((FIX/'nbm-hourly-full-recorded.json.gz').read_bytes());d=json.loads(raw)
+                (p/'nbm-hourly.json').write_bytes(raw)
+                (p/'nbm-hourly-receipt.json').write_text(json.dumps(dict(validator=validator,run=d['run'],sha256=hashlib.sha256(raw).hexdigest())))
+                self.assertIsNone(m.retained(p,d['run']))
+        d=json.loads(gzip.decompress((FIX/'nbm-quartile-hourly-recorded.json.gz').read_bytes()))
+        with tempfile.TemporaryDirectory() as t:
+            p=Path(t)
+            def write():
+                raw=(json.dumps(d,separators=(',',':'))+'\n').encode();(p/'nbm-hourly.json').write_bytes(raw)
+                (p/'nbm-hourly-receipt.json').write_text(json.dumps(dict(validator=m.VALIDATOR,run=d['run'],sha256=hashlib.sha256(raw).hexdigest())))
+            write();self.assertEqual(m.retained(p,d['run']),d)
+            d['hours'][30]['percentiles']=[10,50,90];write();self.assertIsNone(m.retained(p,d['run']))
 
     def test_inventory_requires_every_fixed_native_hour(self):
         c=m.Client();prefix='blend.20261008/06/qmd/'

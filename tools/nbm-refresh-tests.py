@@ -18,7 +18,7 @@ spec.loader.exec_module(r)
 
 class RefreshTests(unittest.TestCase):
     def retained_setup(self, directory):
-        data = json.loads(gzip.decompress((Path(__file__).parent/'fixtures/weather/nbm-regional-recorded.json.gz').read_bytes()))
+        data = json.loads(gzip.decompress((Path(__file__).parent/'fixtures/weather/nbm-quartile-daily-short-recorded.json.gz').read_bytes()))
         r.publish_local(directory, data)
         planned = [(p['members'][0]['url'], [dict(offset=int(m['byteRange'].split('-')[0]),
                    stop=int(m['byteRange'].split('-')[1]), percentile=m['percentile']) for m in p['members']]) for p in data['periods']]
@@ -31,7 +31,7 @@ class RefreshTests(unittest.TestCase):
             p = Path(directory)
             data, planned, client = self.retained_setup(p)
             before = (p/'nbm-range.json').read_bytes()
-            self.assertEqual(r.retained_unchanged(client, p, '2026100712', planned), data)
+            self.assertEqual(r.retained_unchanged(client, p, '2026100900', planned), data)
             self.assertEqual(client.get.call_count, 6)
             self.assertEqual((p/'nbm-range.json').read_bytes(), before)
             self.assertTrue(all(call.args[1] == {'Range': 'bytes=0-0'} for call in client.get.call_args_list))
@@ -39,20 +39,20 @@ class RefreshTests(unittest.TestCase):
     def test_full_horizon_unchanged_gate_preserves_source_age(self):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
-            data = json.loads(gzip.decompress((Path(__file__).parent/'fixtures/weather/nbm-regional-full-recorded.json.gz').read_bytes()))
+            data = json.loads(gzip.decompress((Path(__file__).parent/'fixtures/weather/nbm-quartile-daily-recorded.json.gz').read_bytes()))
             r.publish_local(target, data)
             planned = [(p['members'][0]['url'], [dict(offset=int(m['byteRange'].split('-')[0]), stop=int(m['byteRange'].split('-')[1]), percentile=m['percentile']) for m in p['members']]) for p in data['periods']]
             client = Mock()
             client.get.side_effect = [(b'G', 206, {'content-range': 'bytes 0-0/1000', 'etag': p['members'][0]['etag']}) for p in data['periods']]
             before = (target/'nbm-range.json').read_bytes()
-            self.assertEqual(r.retained_unchanged(client, target, '2026100800', planned), data)
+            self.assertEqual(r.retained_unchanged(client, target, '2026100900', planned), data)
             self.assertEqual(client.get.call_count, 18)
             self.assertEqual((target/'nbm-range.json').read_bytes(), before)
 
     def test_missing_final_horizon_index_cannot_publish_shorter_plan(self):
         client = Mock()
         client.get.side_effect = [(b'index', 200, {})]*17+[urllib.error.HTTPError('url', 404, 'not published', {}, None)]
-        with patch.object(r.nbm, 'select_rows', return_value=[{'percentile': 10}, {'percentile': 50}, {'percentile': 90}]):
+        with patch.object(r.nbm, 'select_rows', return_value=[{'percentile': 25}, {'percentile': 50}, {'percentile': 75}]):
             with self.assertRaises(r.Pending): r.plan(client, '2026100800')
         self.assertEqual(client.get.call_count, 18)
 
@@ -60,7 +60,7 @@ class RefreshTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory)
             _, planned, client = self.retained_setup(target)
-            self.assertIsNone(r.retained_unchanged(client, target, '2026100712', planned*3))
+            self.assertIsNone(r.retained_unchanged(client, target, '2026100900', planned*3))
             client.get.assert_not_called()
 
     def test_source_revision_requires_reextraction(self):
@@ -68,7 +68,7 @@ class RefreshTests(unittest.TestCase):
             p = Path(directory)
             _, planned, client = self.retained_setup(p)
             client.get.side_effect = [(b'G', 206, {'content-range': 'bytes 0-0/1000', 'etag': 'new version'})]
-            self.assertIsNone(r.retained_unchanged(client, p, '2026100712', planned))
+            self.assertIsNone(r.retained_unchanged(client, p, '2026100900', planned))
 
     def test_unchanged_refresh_never_extracts_or_republishes(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -82,7 +82,7 @@ class RefreshTests(unittest.TestCase):
                 clock.now.return_value = datetime.fromisoformat(data['retrievedAt'].replace('Z', '+00:00'))
                 clock.strptime.side_effect = datetime.strptime
                 clock.fromisoformat.side_effect = datetime.fromisoformat
-                report = r.refresh(p, run='2026100712')
+                report = r.refresh(p, run='2026100900')
             self.assertEqual(report['status'], 'unchanged')
             self.assertIs(report['changed'], False)
             extract.assert_not_called()
@@ -96,9 +96,28 @@ class RefreshTests(unittest.TestCase):
                 _, planned, client = self.retained_setup(p)
                 if kind == 'missing': (p/'nbm-receipt.json').unlink()
                 if kind == 'changed-data': (p/'nbm-range.json').write_text('{}')
-                run = '2026100718' if kind == 'new-cycle' else '2026100712'
+                run = '2026100718' if kind == 'new-cycle' else '2026100900'
                 self.assertIsNone(r.retained_unchanged(client, p, run, planned))
                 client.get.assert_not_called()
+
+    def test_legacy_and_mixed_receipts_force_native_extraction(self):
+        import hashlib
+        for filename in ['nbm-regional-recorded.json.gz', 'nbm-regional-full-recorded.json.gz']:
+            for validator in ['regional-v1', r.VALIDATOR]:
+                with tempfile.TemporaryDirectory() as directory:
+                    p = Path(directory)
+                    raw = gzip.decompress((Path(__file__).parent/'fixtures/weather'/filename).read_bytes())
+                    data = json.loads(raw)
+                    (p/'nbm-range.json').write_bytes(raw)
+                    r.atomic(p/'nbm-receipt.json', dict(validator=validator,run=data['run'],sha256=hashlib.sha256(raw).hexdigest()))
+                    client = Mock()
+                    run = datetime.fromisoformat(data['run'].replace('Z','+00:00')).strftime('%Y%m%d%H')
+                    self.assertIsNone(r.retained_unchanged(client,p,run,[None]*len(data['periods'])))
+                    client.get.assert_not_called()
+        with tempfile.TemporaryDirectory() as directory:
+            p=Path(directory);data,planned,client=self.retained_setup(p)
+            data['periods'][0]['kelvin'][0]=[300,290,310];r.publish_local(p,data)
+            self.assertIsNone(r.retained_unchanged(client,p,'2026100900',planned));client.get.assert_not_called()
 
     def test_native_schedule(self):
         for hour in range(24):
@@ -140,13 +159,13 @@ class RefreshTests(unittest.TestCase):
                 self.assertEqual(plan.call_count, 1)
 
     def test_partial_index_is_retryable(self):
-        text = '1:0:d=2026100712:TMP:2 m above ground:0-18 hour max fcst:10% level\n2:100:other'
+        text = '1:0:d=2026100712:TMP:2 m above ground:0-18 hour max fcst:25% level\n2:100:other'
         client = Mock()
         client.get.return_value = (text.encode(), 200, {})
         with self.assertRaises(r.Pending): r.plan(client, '2026100712')
 
     def test_mixed_partial_index_is_invalid_not_pending(self):
-        text = ('1:0:d=2026100712:TMP:2 m above ground:0-18 hour max fcst:10% level\n'
+        text = ('1:0:d=2026100712:TMP:2 m above ground:0-18 hour max fcst:25% level\n'
                 '2:100:d=2026100712:TMP:2 m above ground:0-18 hour min fcst:50% level\n3:200:other')
         client = Mock()
         client.get.return_value = (text.encode(), 200, {})

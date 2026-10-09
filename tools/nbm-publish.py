@@ -55,13 +55,13 @@ def candidate(directory, now):
         files[path] = file.read_bytes()
     data, receipt, status = [json.loads(files[p]) for p in (*PATHS, 'nbm-status.json')]
     digest = hashlib.sha256(files[PATHS[0]]).hexdigest()
-    if receipt != dict(validator='regional-v1', run=data['run'], sha256=digest):
+    if receipt != dict(validator='regional-quartiles-v2', run=data['run'], sha256=digest):
         raise ValueError('Receipt mismatch')
     if (status.get('status') not in ('ready', 'fallback', 'unchanged') or
             type(status.get('changed')) is not bool or status.get('dataRun') != data['run'] or
             not 0 <= (now-stamp(status['checkedAt'])).total_seconds() <= 1800 or
             not 0 <= (now-stamp(data['run'])).total_seconds() < 86400 or
-            data.get('schema') != 2 or data.get('missingHours') != [] or len(data.get('periods', [])) != 18):
+            data.get('schema') != 3 or data.get('percentiles') != [25, 50, 75] or data.get('missingHours') != [] or len(data.get('periods', [])) != 18):
         raise ValueError('Incomplete, failed or stale candidate')
     for period in data['periods']:
         if len(period['kelvin']) != len(data['cells']):

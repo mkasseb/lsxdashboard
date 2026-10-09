@@ -60,7 +60,6 @@ function freshnessCheck(){
   if(typeof resolveSnapBar==="function") resolveSnapBar();
   renderBriefingStatus();
   if(renderTheCall._comfortAllowed!=null&&renderTheCall._comfortAllowed!==briefingComfortAllowed()) renderTheCall();
-  if(typeof NbmHourly!=="undefined") renderNbmBriefing();
   renderNwsMessages();
 }
 
@@ -255,7 +254,7 @@ function renderHourly24(hrs){
   var step = slot>=48?1 : slot>=30?2 : slot>=20?3 : slot>=12?6 : 12;
   var scLo=lo, scHi=hi;
   if(showFeels){ for(i=0;i<n;i++){ if(feels[i]!=null){ if(feels[i]<scLo)scLo=feels[i]; if(feels[i]>scHi)scHi=feels[i]; } } }
-  nbmPoints.forEach(function(p){if(p){scLo=Math.min(scLo,p.p10);scHi=Math.max(scHi,p.p90);}});
+  nbmPoints.forEach(function(p){if(p){scLo=Math.min(scLo,p.p25);scHi=Math.max(scHi,p.p75);}});
   var tMin=scLo-2, tMax=scHi+2, rng=Math.max(4,tMax-tMin);
   function X(i){ return padL+slot*(Date.parse(hrs[i].startTime)-windowStart)/3600000; }
   function Y(t){ return curveTop+(baseY-curveTop)*(1-(t-tMin)/rng); }
@@ -264,8 +263,8 @@ function renderHourly24(hrs){
   var nbmBand="", nbmSegment=[];
   function flushNbm(){
     if(nbmSegment.length>1){
-      var upper=nbmSegment.map(function(i){return X(i).toFixed(2)+","+Y(nbmPoints[i].p90).toFixed(2);});
-      var lower=nbmSegment.slice().reverse().map(function(i){return X(i).toFixed(2)+","+Y(nbmPoints[i].p10).toFixed(2);});
+      var upper=nbmSegment.map(function(i){return X(i).toFixed(2)+","+Y(nbmPoints[i].p75).toFixed(2);});
+      var lower=nbmSegment.slice().reverse().map(function(i){return X(i).toFixed(2)+","+Y(nbmPoints[i].p25).toFixed(2);});
       nbmBand+='<path class="nbm-hourly-band" d="M'+upper.join(' L')+' L'+lower.join(' L')+' Z"/>';
     }
     nbmSegment=[];
@@ -359,7 +358,7 @@ function renderHourly24(hrs){
   var tracker='<line class="h24-track" x1="-99" y1="'+(curveTop-14)+'" x2="-99" y2="'+(barBase+2)+'" stroke="var(--accent)" stroke-width="1" opacity="0"/>'
     +'<circle class="h24-trackdot" cx="-99" cy="-99" r="4" fill="var(--accent)" opacity="0"/>';
 
-  var svg='<svg class="h24-svg" viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" role="img" aria-label="'+hourlyHours+' hour NWS forecast: temperature curve, precipitation chance bars and shaded nights. '+(nbmBand?'Shaded NBM P10–P90 temperature guidance. ':'')+'Hourly details follow the chart.">'
+  var svg='<svg class="h24-svg" viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" role="img" aria-label="'+hourlyHours+' hour NWS forecast: temperature curve, precipitation chance bars and shaded nights. '+(nbmBand?'Shaded Middle 50% model range from native NBM P25–P75. ':'')+'Hourly details follow the chart.">'
     +'<defs><linearGradient id="h24g" x1="0" y1="0" x2="1" y2="0">'+grad+'</linearGradient>'
     +'<linearGradient id="h24a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+tCol(hi)+'" stop-opacity=".16"/><stop offset="1" stop-color="'+tCol(lo)+'" stop-opacity="0"/></linearGradient></defs>'
     +bands
@@ -3018,7 +3017,7 @@ function clearLocationUI(){
     });
   });
   syncHourlyControls();
-  renderNwsMessages(); renderAFD(null); renderNbmBriefing();
+  renderNwsMessages(); renderAFD(null);
   var aq=document.getElementById("aqiCard"); if(aq) aq.classList.remove("show");
   var cs=document.getElementById("cnStation"); if(cs) cs.textContent="\u2026";
   drawMcdPolygons();   // lastMcds was just reset; take the old place's outline off the map with it
@@ -3636,21 +3635,6 @@ function renderBriefingStatus(){
   if(feedState(feedChecks.alerts,Date.now(),FEEDS.alerts.age)!=="ready") notes.push("Alert status is unverified. Check official NWS warnings.");
   el.textContent=notes.join(" "); el.hidden=!notes.length;
 }
-// Supplemental temperature context never enters the official candidate selector.
-function renderNbmBriefing(){
-  var context=renderTheCall._nbmContext,host=document.getElementById('forecastTempBody'),container=document.getElementById('forecastTempContext'),el=document.getElementById('nbmBriefNote');
-  var note=host&&context&&typeof NbmHourly!=="undefined"?NbmHourly.briefing(smart.hourlyAll,context.candidates,context.model,callLocalAlert,Date.now()):null;
-  if(!note){if(container){if(container.contains(document.activeElement)){var fallback=document.getElementById('nbmHourlyToggle')||document.getElementById('h24Title');if(fallback)fallback.focus({preventScroll:true});}container.hidden=true;}if(el)el.remove();return;}
-  container.hidden=false;
-  if(!el){
-    el=document.createElement('div');el.id='nbmBriefNote';el.className='nbm-brief-note';
-    el.innerHTML='<p id="nbmBriefText"></p><details><summary>About this model range</summary><p id="nbmBriefSource"></p></details>';
-    host.appendChild(el);
-  }
-  var text=NbmHourly.noteText(note),source='Supplemental temperature guidance; the NWS forecast remains primary. These are not guaranteed limits or an NWS confidence interval. Two consecutive hourly samples qualify; the range above describes only the named hour, not a continuous interval. NBM run '+new Date(note.run).toISOString().slice(0,16).replace('T',' ')+' UTC ('+((Date.now()-note.run)/3600000).toFixed(1)+' hours old). No threshold-crossing probability is calculated.';
-  if(document.getElementById('nbmBriefText').textContent!==text)document.getElementById('nbmBriefText').textContent=text;
-  if(document.getElementById('nbmBriefSource').textContent!==source)document.getElementById('nbmBriefSource').textContent=source;
-}
 function renderTheCall(){
   var card=document.getElementById("callCard"), row=document.getElementById("callRow");
   if(!card||!row) return;
@@ -3693,7 +3677,7 @@ function renderTheCall(){
 
   var model=buildBottomLine(candidates,callLocalAlert);
   renderTheCall._nbmContext={model:model,candidates:candidates};
-  renderNwsMessages(); renderNbmBriefing();
+  renderNwsMessages();
 }
 
 /* ============ INSTANT PAINT (snapshot → localStorage → restore before any fetch) ============
@@ -3755,8 +3739,9 @@ function renderTheCall(){
 // v18: the feed registry owns cached fragments; river rows include persistent pin controls.
 // v19: time-scaled hourly gaps, dated climate comparisons and verified gauge timestamps.
 // v21: CPC tiles and hazards periods now contain official source anchors.
-var SNAP_KEY="lsxSnap_v21", snapRestored=false;
-try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13","lsxSnap_v14","lsxSnap_v15","lsxSnap_v16","lsxSnap_v17","lsxSnap_v18","lsxSnap_v19","lsxSnap_v20"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
+// v22: native P25/P50/P75 labels and removal of tail-based threshold commentary.
+var SNAP_KEY="lsxSnap_v22", snapRestored=false;
+try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13","lsxSnap_v14","lsxSnap_v15","lsxSnap_v16","lsxSnap_v17","lsxSnap_v18","lsxSnap_v19","lsxSnap_v20","lsxSnap_v21"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
 var SNAP_PARTS=Object.keys(FEEDS).reduce(function(parts,k){return parts.concat((FEEDS[k].snapshot||[]).map(function(p){return Object.assign({feed:k},p);}));},[]);
 function saveSnapshot(){
   // Mid-transition the DOM still shows the OLD place while `current` is already the new one --

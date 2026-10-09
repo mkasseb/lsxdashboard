@@ -16,9 +16,9 @@ class ExtractionTests(unittest.TestCase):
     def test_native_selection(self):
         # Synthetic compact index based on authentic QMD interval syntax.
         text = '\n'.join(f'{i+1}:{i*100}:d=2026100712:TMP:2 m above ground:24-42 hour max fcst:{p}% level'
-                         for i, p in enumerate([10, 50, 90])) + '\n4:300:d=2026100712:TMP:2 m above ground:42 hour fcst:ens mean'
+                         for i, p in enumerate([25, 50, 75])) + '\n4:300:d=2026100712:TMP:2 m above ground:42 hour fcst:ens mean'
         rows = nbm.select_rows(text, '2026100712', 42)
-        self.assertEqual([r['percentile'] for r in rows], [10, 50, 90])
+        self.assertEqual([r['percentile'] for r in rows], [25, 50, 75])
         self.assertEqual(rows[0]['stop'], 99)
         for changed in [text.replace('2026100712', '2026100700'), text.replace('24-42', '18-42'),
                         text.replace('50% level', '40% level')]:

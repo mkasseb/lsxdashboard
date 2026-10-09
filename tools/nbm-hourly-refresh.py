@@ -22,6 +22,9 @@ spec.loader.exec_module(regional)
 UTC = timezone.utc
 COVERAGE = regional.COVERAGE
 HOURS = 48  # Covers a rolling 24h window for a source cycle younger than 24h.
+PERCENTILES = regional.nbm.PERCENTILES
+SCHEMA = 2
+VALIDATOR = 'hourly-quartiles-v2'
 LIMITS = dict(requests=180, downloadBytes=30_000_000, elapsedSeconds=600, outputBytes=4_000_000)
 BASE = 'https://nomads.ncep.noaa.gov/pub/data/nccf/com/blend/prod/'
 FILTER = 'https://nomads.ncep.noaa.gov/cgi-bin/filter_blend.pl?'
@@ -98,7 +101,7 @@ def decode(raw, cycle, hour, expected_grid=None):
             if get('productDefinitionTemplateNumber') != 6:
                 continue  # Probability thresholds / ensemble summaries are not percentiles.
             q = get('percentileValue')
-            if q not in (10, 50, 90):
+            if q not in PERCENTILES:
                 continue
             expected = dict(edition=2, centre='kwbc', stepUnits=1, discipline=0, parameterCategory=0, parameterNumber=0, typeOfLevel='heightAboveGround',
                             level=2, units='K', stepType='instant', startStep=hour, endStep=hour,
@@ -130,11 +133,11 @@ def decode(raw, cycle, hour, expected_grid=None):
             members[q] = values
         finally:
             e.codes_release(g)
-    if set(members) != {10, 50, 90}:
+    if set(members) != set(PERCENTILES):
         raise ValueError('Incomplete hourly percentile group')
-    if not np.all((members[10] <= members[50]) & (members[50] <= members[90])):
+    if not np.all((members[25] <= members[50]) & (members[50] <= members[75])):
         raise ValueError('Crossed hourly percentiles')
-    return grid, cells, np.stack([members[q] for q in (10, 50, 90)], axis=1).round(3).tolist()
+    return grid, cells, np.stack([members[q] for q in PERCENTILES], axis=1).round(3).tolist()
 
 
 def retained(directory, run):
@@ -142,8 +145,9 @@ def retained(directory, run):
         raw = (directory/'nbm-hourly.json').read_bytes()
         d = json.loads(raw)
         receipt = json.loads((directory/'nbm-hourly-receipt.json').read_text())
-        if (len(raw) <= LIMITS['outputBytes'] and d['run'] == run and len(d['hours']) == HOURS and
-                receipt == dict(validator='hourly-v1', run=run, sha256=hashlib.sha256(raw).hexdigest())):
+        if (len(raw) <= LIMITS['outputBytes'] and d.get('schema') == SCHEMA and d.get('percentiles') == list(PERCENTILES) and d['run'] == run and len(d['hours']) == HOURS and
+                receipt == dict(validator=VALIDATOR, run=run, sha256=hashlib.sha256(raw).hexdigest()) and
+                regional.consumer_valid(raw, 'hourly-range.js')):
             return d
     except (OSError, ValueError, KeyError, TypeError):
         pass
@@ -156,7 +160,7 @@ def extract(client, directory, run):
     versions = [client.version(urls(run, h)[0], cycle) for h in range(1, HOURS+1)]
     if old and all(p['publication'] == v for p, v in zip(old['hours'], versions)):
         return old, False
-    data = dict(schema=1, source='NOAA NBM QMD NOMADS subset', run=iso(cycle), units='K',
+    data = dict(schema=SCHEMA, percentiles=list(PERCENTILES), source='NOAA NBM QMD NOMADS subset', run=iso(cycle), units='K',
                 timezone='America/Chicago', coverage=COVERAGE, hours=[], cells=[], gridHash=None)
     for h, version in enumerate(versions, 1):
         original, subset = urls(run, h)
@@ -168,7 +172,7 @@ def extract(client, directory, run):
             raise ValueError('NOMADS object revised during extraction')
         data['gridHash'], data['cells'] = grid, cells
         data['hours'].append(dict(validTime=iso(cycle+timedelta(hours=h)), forecastHour=h,
-                                 template=6, stepType='instant', level=2, percentiles=[10, 50, 90],
+                                 template=6, stepType='instant', level=2, percentiles=list(PERCENTILES),
                                  sourceUrl=original, subsetUrl=subset, publication=version,
                                  sha256=hashlib.sha256(raw).hexdigest(), kelvin=kelvin))
         print(f'hour {h}/{HOURS}: {len(raw)} bytes', flush=True)
@@ -237,7 +241,7 @@ def refresh(directory, run=None):
                 raise ValueError('Refusing source rollback')
             if changed:
                 regional.atomic(target, data)
-                regional.atomic(directory/'nbm-hourly-receipt.json', dict(validator='hourly-v1', run=data['run'], sha256=hashlib.sha256(raw).hexdigest()))
+                regional.atomic(directory/'nbm-hourly-receipt.json', dict(validator=VALIDATOR, run=data['run'], sha256=hashlib.sha256(raw).hexdigest()))
             report = dict(status='ready' if changed else 'unchanged', changed=changed, dataRun=data['run'],
                           hours=len(data['hours']), cells=len(data['cells']), outputBytes=len(raw), publicationNotes=notes)
         except Exception as error:
