@@ -22,6 +22,7 @@ jobs:
       - run: python3 tools/check.py
       - run: node tools/logic-tests.js
       - run: node tools/nws-message-tests.js
+      - run: node tools/hosted-html-tests.js
       - run: node tools/seasonal-tests.js
       - run: node tools/nbm-tests.js
       - run: python3 tools/nbm-extract-tests.py
@@ -112,7 +113,7 @@ jobs:
 
   nws-hosted-preview:
     # Read-only hosted verification. Existing push trigger; no extraction or publication.
-    name: ${{ github.head_ref == 'codex/nws-production-verifier' && 'nws-hosted-html-diagnostic' || (github.event_name == 'push' && 'nws-hosted-production' || 'nws-hosted-preview') }}
+    name: ${{ (github.head_ref == 'codex/nws-production-verifier' || github.event_name == 'push') && 'nws-hosted-production' || 'nws-hosted-preview' }}
     if: ((github.head_ref == 'codex/nws-key-messages' || github.head_ref == 'codex/nws-production-verifier') && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -134,11 +135,16 @@ jobs:
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           NWS_VERIFY_TARGET: ${{ github.event_name == 'push' && 'production' || 'preview' }}
         run: NODE_PATH="$RUNNER_TEMP/nws-browser/node_modules" node tools/nws-preview-tests.js "$RUNNER_TEMP/nws-hosted"
-      - name: Capture exact production HTML with normal TLS
+      - name: Verify existing reviewed production release with normal TLS
         if: github.head_ref == 'codex/nws-production-verifier'
         env:
-          NWS_DIAGNOSTIC_SHA: c7ff2a86ec11fc1b3abbad18779ff7da958ffcdd
-        run: NODE_PATH="$RUNNER_TEMP/nws-browser/node_modules" node tools/nws-html-diagnostic.js "$RUNNER_TEMP/nws-hosted"
+          EXPECTED_SHA: ${{ github.event.pull_request.base.sha }}
+          NWS_VERIFY_TARGET: production
+          NWS_VERIFIER_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          git worktree add --detach "$RUNNER_TEMP/nws-release" "$EXPECTED_SHA"
+          cp tools/nws-preview-tests.js tools/hosted-html.js "$RUNNER_TEMP/nws-release/tools/"
+          NODE_PATH="$RUNNER_TEMP/nws-browser/node_modules" node "$RUNNER_TEMP/nws-release/tools/nws-preview-tests.js" "$RUNNER_TEMP/nws-hosted"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
