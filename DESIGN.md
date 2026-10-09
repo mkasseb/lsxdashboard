@@ -163,7 +163,7 @@ stay on explicit pixels: those values are tuned to SVG geometry.
 
 ## The page is ordered by what a visitor came for
 
-Local alerts and active mesoscale discussions come first. The hero pairs Now with NWS Key Messages,
+Local alerts and active mesoscale discussions come first. The hero stacks a compact observations strip above NWS Key Messages,
 then hourly planning and the compact seven-day forecast stack beside the radar on wide screens.
 Phones read hourly, radar and seven-day in that order. Context cards keep individual disclosures.
 
@@ -194,6 +194,11 @@ Existing pure weather candidates remain internal safety guards for optional NBM 
 commentary, which now lives inside hourly Temperature uncertainty details. Daily/hourly NWS and
 NBM data integration is unchanged. Chart gaps still represent missing hours and do not interpolate
 across unknown conditions. The grid uses DOM order throughout.
+
+Each hero card uses its own natural height. On desktop, observations, the daily range and exposure
+readings share a horizontal strip; the complete regional message list uses the row below. A short
+list no longer inherits the observations' height, and long bullets or larger text grow normally.
+No measured offsets, fixed message heights or clipping connect this band to the planning grid.
 
 ## The 24-hour chart is never nested inside `#current`
 
@@ -629,6 +634,11 @@ a bare basemap with nothing on screen explaining why is a broken first impressio
 
 ## October 2026 visual composition
 
-The current composition supersedes the historical hero/masonry placement notes above. Alerts and short-fused discussions remain first. Now and dashboard-generated Bottom Line advice share a bordered hero without suppressing any recommendations, observations or source states. The desktop planning grid stacks the complete hourly widget and compact seven-day card in the left column. A successfully rendered radar fills the right column to the same bottom edge without setting either forecast row height. On map startup failure, the compact retry/official-link panel sits above seven-day on the right; mobile DOM order is hourly, radar, seven-day. Rivers, AQI and official discussion join the retained lower context cards.
+The current composition supersedes the historical hero/masonry placement notes above. Alerts and short-fused discussions remain first. Compact Now observations and official LSX Key Messages use consecutive rows of a bordered hero, retaining all observations and source states. The desktop planning grid stacks the complete hourly widget and compact seven-day card in the left column. A successfully rendered radar fills the right column to the same bottom edge without setting either forecast row height. On map startup failure, the compact retry/official-link panel sits above seven-day on the right; mobile DOM order is hourly, radar, seven-day. Rivers, AQI and official discussion join the retained lower context cards.
+
+A failed radar retains its compact panel and official link while map dependencies retry. Approaching
+the station context can start that retry automatically, so reverting to the tall initial-loading
+layout would move a risk disclosure between pointerdown and pointerup. Retry exposes its busy state
+and restores the same button after failure; successful recovery restores the full rendered map.
 
 The forecast now observes its own size and content to fit row dates because it no longer lives in masonry. Navigation resolves active sections from current geometry after scroll, resize, disclosure and masonry layout, with a clicked target breaking ties for side-by-side sections. River display labels separate observed Now from forecast peak-in-window or falling trend; arithmetic and freshness gates are unchanged. Snapshot v20 retires older unlabeled river markup. Every local asset remains content-versioned through `tools/version_assets.py --write`.

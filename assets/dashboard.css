@@ -1655,11 +1655,11 @@ header .top{grid-column:1/-1;gap:16px;margin-bottom:10px;flex-wrap:nowrap}
 .card{background:var(--panel);border:1px solid var(--border);box-shadow:none;padding:20px;border-radius:12px}
 .card.hero::before{display:none}.card h2{font-size:20px;align-items:baseline;flex-wrap:wrap}
 #alertsCard{padding:0;border:0;background:none}#mcd:empty{display:none}
-.weather-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);border:1px solid var(--border);border-radius:12px;background:var(--panel)}
+.weather-hero{display:grid;grid-template-columns:minmax(0,1fr);border:1px solid var(--border);border-radius:12px;background:var(--panel)}
 .weather-hero>.card{border:0;background:none;margin:0;border-radius:0}
-.weather-hero #callCard{border-left:1px solid var(--border)}
+.weather-hero #callCard{border-top:1px solid var(--border)}
 .weather-hero #current{justify-content:flex-start;gap:0}
-.cc-main{margin-bottom:12px}.cc-temp{font-size:72px}.cc-desc{font-size:18px}
+.cc-main{margin-bottom:12px;flex-wrap:wrap}.cc-temp{font-size:72px}.cc-desc{font-size:18px}
 .cc-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .cc-item{border:0;border-radius:0;padding:6px 0;background:none}
 .cc-item .k{text-transform:none;letter-spacing:0}.cc-item .v{font-size:16px}
@@ -1688,7 +1688,6 @@ body:not(.radar-full) #radarCard .imgwrap{aspect-ratio:1/1;max-height:600px}
   .planning-grid{grid-template-columns:1fr}#h24Card,#radarCard,#forecastCard{grid-column:auto;grid-row:auto}
   body:not(.radar-full) #radarCard .imgwrap{aspect-ratio:16/10}
   .brand-word{display:none}.clock{display:none}
-  .weather-hero{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
 }
 @media(max-width:680px){
   :root{--jump-h:94px}
@@ -1718,8 +1717,8 @@ body:not(.radar-full) #radarCard .imgwrap{aspect-ratio:1/1;max-height:600px}
 }
 /* Keep complete observations and source ages compact without hiding any values. */
 body{transition:none}
-.weather-hero #currentCard{border-radius:12px 0 0 12px}
-.weather-hero #callCard{border-radius:0 12px 12px 0}
+.weather-hero #currentCard{border-radius:12px 12px 0 0}
+.weather-hero #callCard{border-radius:0 0 12px 12px}
 #currentCard .feed-status{font-size:12px;line-height:1.4;margin-top:4px;padding-top:0}
 #currentCard .cc-grid{gap:4px 12px}
 #currentCard .cc-item{display:flex;align-items:baseline;justify-content:space-between;gap:6px;flex-wrap:wrap}
@@ -1730,6 +1729,22 @@ body{transition:none}
 #callCard .brief-section-title{margin:4px 0}
 #h24Card .precip-events{margin-bottom:12px;padding-bottom:10px}
 #h24Card .feed-status{margin-top:4px}
+/* Each hero card owns its height. A horizontal observations strip keeps desktop compact
+   without stretching a short regional message list to the height of the observations. */
+@media(min-width:681px){
+  .weather-hero #currentCard{display:block}
+  .weather-hero #current{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:8px 24px;align-items:start}
+  #currentCard .cc-main{grid-column:1;grid-row:1/3;margin:0}
+  #currentCard .cc-today{grid-column:2;grid-row:1;margin:0}
+  #currentCard .cc-grid{grid-column:2;grid-row:2}
+  #currentCard .cc-expo{grid-column:1/-1;grid-row:3;margin:0}
+  #currentCard .cc-ctx,#currentCard .stn{grid-column:1/-1;margin:0}
+  #currentCard > .feed-status:not([hidden]){display:inline-block;margin:4px 16px 0 0}
+}
+@media(min-width:1101px){
+  .weather-hero #current{grid-template-columns:minmax(0,.85fr) minmax(0,1.2fr) minmax(0,1fr)}
+  #currentCard .cc-expo{grid-column:3;grid-row:1/3}
+}
 @media(max-width:680px){
   #currentCard .cc-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 16px}
   #currentCard .cc-item .k{font-size:12px}#currentCard .cc-item .v{font-size:14px}

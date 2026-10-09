@@ -4158,7 +4158,15 @@ function ensureMaps(){
   if(mapsInFlight) return mapsInFlight;
   var theme=effectiveLight()?"light":"dark";
   mapBoot.phase="loading";mapStage("Starting maps");
-  if(!rvMap){document.getElementById("radar").closest(".maplock-wrap").classList.add("map-unavailable");document.getElementById("radar").innerHTML='<div class="imgfail" role="status">Loading map…</div>';}
+  if(!rvMap){
+    var radarEl=document.getElementById("radar"), retry=radarEl.querySelector('[data-retry-maps]');
+    radarEl.closest(".maplock-wrap").classList.add("map-unavailable");
+    // Approaching the station context can retry dependencies after a radar failure. Keep the
+    // compact error layout and official link until recovery succeeds; replacing Retry with the
+    // initial loading panel expands the planning grid underneath a pressed context disclosure.
+    if(retry){retry.textContent="Retrying maps…";retry.disabled=true;radarEl.setAttribute("aria-busy","true");}
+    else radarEl.innerHTML='<div class="imgfail" role="status">Loading map…</div>';
+  }
   syncRadarBadge();syncSkyMeta();
   mapsInFlight=ensureMapLibraries().then(function(){mapStage("Requesting basemap style (tiles.openfreemap.org)");return loadMapStyle(theme);}).then(function(style){
     if(!rvMap){
@@ -4180,7 +4188,13 @@ function ensureMaps(){
     mapBoot.phase="error";mapStage("Startup failed: "+error.message);
     if(!rvMap)mapFallback("radar");
     if(!stnMap&&feedRequested("stations"))mapFallback("stnmap");
-  }).finally(function(){mapsInFlight=null;if(rvMap)mapBoot.phase="ready";syncRadarBadge();syncSkyMeta();});
+  }).finally(function(){
+    mapsInFlight=null;if(rvMap)mapBoot.phase="ready";
+    var radarEl=document.getElementById("radar"), retry=radarEl.querySelector('[data-retry-maps]');
+    radarEl.removeAttribute("aria-busy");
+    if(retry){retry.textContent="Retry maps";retry.disabled=false;}
+    syncRadarBadge();syncSkyMeta();
+  });
   return mapsInFlight;
 }
 queueMicrotask(function(){initMapDiagnostics();initContextView();ensureMaps();});

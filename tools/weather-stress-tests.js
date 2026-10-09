@@ -332,6 +332,26 @@ async function main() {
       await page.locator('#riskHelp summary').click();await noCardOverlap(page);
       assert.equal(await page.evaluate(()=>document.activeElement.parentElement.id),'riskHelp');
     },width);
+    await run('risk explanations keep their pressed target during a failed radar retry',config('risk retry',{maps:true,mapLibrariesDown:true}),async({page})=>{
+      await page.locator('#radar [data-retry-maps]').waitFor();
+      // Keep the lazy station observer from starting this retry before pointerdown.
+      await page.evaluate(()=>{deferredFeeds.stations=true;});
+      const summary=page.locator('#riskHelp summary');await summary.scrollIntoViewIfNeeded();
+      let release;
+      await page.route('**/leaflet/1.9.4/leaflet.min.js',async route=>{await new Promise(resolve=>release=resolve);await route.fulfill({status:503,body:''});});
+      const before=await summary.boundingBox(),beforeDocument=await summary.evaluate(e=>e.getBoundingClientRect().top+scrollY);await page.mouse.move(before.x+before.width/2,before.y+before.height/2);await page.mouse.down();
+      const pending=page.waitForRequest('**/leaflet/1.9.4/leaflet.min.js');
+      await page.evaluate(()=>{window.pressedMapRetry=ensureMaps();});await pending;
+      const during=await summary.boundingBox(),duringDocument=await summary.evaluate(e=>e.getBoundingClientRect().top+scrollY);
+      assert(Math.abs(during.y-before.y)<2&&Math.abs(duringDocument-beforeDocument)<2,'A pending retry must not move the pressed summary or rely on scroll anchoring: '+JSON.stringify({before,during,beforeDocument,duringDocument}));
+      assert(await page.locator('#radar a[href="https://radar.weather.gov/station/KLSX/standard"]').isVisible());
+      assert(await page.locator('#radar [data-retry-maps]').isDisabled());
+      await page.mouse.up();assert(await page.locator('#riskHelp').evaluate(e=>e.open));
+      assert.equal(await page.evaluate(()=>document.activeElement.parentElement.id),'riskHelp');
+      release();await page.evaluate(()=>window.pressedMapRetry);
+      assert(await page.locator('#radar [data-retry-maps]').isEnabled());
+      assert(await page.locator('#riskHelp').evaluate(e=>e.open));await noCardOverlap(page);
+    },1280);
     await run('official messages remain independent of modeled later storms',config('message horizons',{weekRain:true}),async({page})=>{
       await expectText(page,'#keyMessagesTitle',/NWS Key Messages/);
       await expectText(page,'#callRow',/southeast Missouri and southwest Illinois/);

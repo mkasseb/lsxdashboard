@@ -55,6 +55,35 @@ async function main(){
     assert.deepEqual(s.errors,[]);results.push({width,timezone,test:'Recorded text, office, issuance, accessible controls and layout',status:'passed'});
    }finally{await s.context.close();}
   }
+  // Controlled long official-shaped sections exercise natural card growth, not truncation.
+  const longMessages=Array.from({length:5},(_,i)=>'Controlled message '+(i+1)+': '+expected.join(' ')+' Confidence in timing varies across the region; consult local warnings and the full discussion for location-specific instructions. '+expected.join(' '));
+  const longProduct={...prod,productText:prod.productText.replace(/\.KEY MESSAGES[\s\S]*?&&/,'.KEY MESSAGES...\n'+longMessages.map(text=>'- '+text).join('\n')+'\n&&')};
+  for(const width of [320,768,1280,1920]){
+   const s=await open(config('Long messages and large text',{now,afdProduct:longProduct,aqi:35,touch:width<500}),width),p=s.page;
+   try{
+    const source=p.locator('#briefWhy > summary');
+    for(const scale of [1,2]){
+     if(scale===2)await p.evaluate(()=>{
+      const nodes=[...document.querySelectorAll('#callCard, #callCard *, #currentCard, #currentCard *')];
+      const sizes=nodes.map(e=>{const c=getComputedStyle(e);return {e,size:parseFloat(c.fontSize),line:parseFloat(c.lineHeight)};});
+      sizes.forEach(({e,size,line})=>{e.style.fontSize=size*2+'px';if(Number.isFinite(line))e.style.lineHeight=line*2+'px';});
+     });
+     assert.deepEqual(await currentMessages(p),longMessages,'Every long message and qualifier remains in original order');
+     assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No horizontal overflow at '+width+'px with text scale '+scale);
+     const geometry=await p.evaluate(()=>{
+      const card=document.getElementById('callCard'),source=document.getElementById('briefWhy'),r=card.getBoundingClientRect();
+      return {gap:r.bottom-source.getBoundingClientRect().bottom,clipped:[card,...card.querySelectorAll('#callRow,li')].some(e=>e.scrollHeight>e.clientHeight+1||['hidden','clip'].includes(getComputedStyle(e).overflowY))};
+     });
+     assert(geometry.gap>=12&&geometry.gap<=22&&!geometry.clipped,'Natural message height: '+JSON.stringify(geometry));
+     await sourceTarget(source);await source.focus();await source.press('Enter');
+     assert(await p.locator('#briefWhy').evaluate(e=>e.open));await p.evaluate(()=>loadAFD());
+     assert(await source.evaluate(e=>e===document.activeElement));assert(await p.locator('#briefWhy').evaluate(e=>e.open));
+     await source.press('Enter');
+     if(out){await p.evaluate(()=>window.scrollTo(0,0));await p.screenshot({path:path.join(out,engine+'-'+width+'-long-text-'+scale+'.png'),fullPage:true});}
+    }
+    assert.deepEqual(s.errors,[]);results.push({width,test:'Five long messages and 200% text retain wording, natural height, source focus and no clipping',status:'passed'});
+   }finally{await s.context.close();}
+  }
   const s=await open(config('NWS failure and race fixtures',{now,afdProduct:prod,aqi:35}),390),p=s.page;
   try{
    // A product update carrying unchanged messages changes only the explicitly labeled AFD clock.

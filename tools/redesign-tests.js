@@ -20,7 +20,10 @@ async function main(){
    assert.equal(await p.locator('#hourlyOptions button').count(),3);
    assert.equal(await p.locator('#rsTabs button').count(),2);
    const boxes=await p.evaluate(()=>Object.fromEntries(['currentCard','callCard','h24Card','radarCard','forecastCard'].map(id=>{const r=document.getElementById(id).getBoundingClientRect();return[id,{x:r.x,y:r.y,right:r.right,bottom:r.bottom}];})));
-   if(width>1000){assert(Math.abs(boxes.h24Card.y-boxes.radarCard.y)<2);assert(boxes.h24Card.right<=boxes.radarCard.x);assert(Math.abs(boxes.forecastCard.y-boxes.h24Card.bottom-16)<2,'No dead band above Week');assert(Math.abs(boxes.forecastCard.x-boxes.h24Card.x)<2);assert(Math.abs(boxes.forecastCard.right-boxes.h24Card.right)<2);assert(Math.abs(boxes.forecastCard.bottom-boxes.radarCard.bottom)<2,'Radar must fill the full forecast column');assert(Math.abs(boxes.currentCard.y-boxes.callCard.y)<2);}
+   assert(Math.abs(boxes.currentCard.bottom-boxes.callCard.y)<2,'Messages follow the compact observations at their natural height');
+   const messageGap=await p.evaluate(()=>document.getElementById('callCard').getBoundingClientRect().bottom-document.getElementById('briefWhy').getBoundingClientRect().bottom);
+   assert(messageGap>=12&&messageGap<=22,'Messages have only normal bottom padding: '+messageGap);
+   if(width>1000){assert(Math.abs(boxes.h24Card.y-boxes.radarCard.y)<2);assert(boxes.h24Card.right<=boxes.radarCard.x);assert(Math.abs(boxes.forecastCard.y-boxes.h24Card.bottom-16)<2,'No dead band above Week');assert(Math.abs(boxes.forecastCard.x-boxes.h24Card.x)<2);assert(Math.abs(boxes.forecastCard.right-boxes.h24Card.right)<2);assert(Math.abs(boxes.forecastCard.bottom-boxes.radarCard.bottom)<2,'Radar must fill the full forecast column');}
    else {assert(boxes.radarCard.y>=boxes.h24Card.bottom);assert(boxes.forecastCard.y>=boxes.radarCard.bottom);}
    const radarSize=await p.locator('#radar').boundingBox(),loadedTiles=await p.locator('#radar .leaflet-tile-loaded').count();if(width>1000)assert(radarSize.height>600,'Successful map must render at full column height, not fallback height');
    const rowHeights=await p.locator('#daily .day').evaluateAll(rows=>rows.map(r=>r.getBoundingClientRect().height));assert(rowHeights.every(h=>h>=44&&h<=56),'Compact rows keep 44px touch targets');
