@@ -44,6 +44,7 @@ ship silently are checked mechanically. CI runs static and logic checks on every
 ```bash
 python3 tools/check.py        # HTML/CSS comments, JS syntax, CSP, icons, root files
 node tools/logic-tests.js     # the functions that decide something
+node tools/spc-discovery-tests.js # bounded SPC retries, cancellation and concurrency
 ```
 
 The browser suite runs in CI alongside the static and logic checks, against intercepted NWS/ArcGIS-shaped

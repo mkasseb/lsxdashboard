@@ -1483,9 +1483,10 @@ function riskHarness(getJSON, nowMs=Date.now()) {
     var RISK_LAYERS={spc:[1,9,17],ero:[0,1,2],fireCat:[1,4],fireD3:{dry:7,wind:8},wssi:[1,2]};
     var RISK_READY={spc:false,threats:false,ero:false,fire:false,wssi:false};
     var SPC_THREAT_LAYERS=[{tornado:3,wind:7,hail:5},{tornado:11,wind:15,hail:13}];
-    var smart={},callRisk=null;
+    var smart={},callRisk=null,locSeq=0,_spcLoad=null,_spcDisposed=false;
+    var riskSignal=new AbortController().signal;
     var document={getElementById:function(id){return els[id];}};
-    function locSignal(){return null;}
+    function locSignal(){return riskSignal;}
     function locGuard(){return function(){return true;};}
     function resolveRiskLayers(){return Promise.resolve();}
     function renderTheCall(){}
@@ -1493,12 +1494,12 @@ function riskHarness(getJSON, nowMs=Date.now()) {
     function esc(s){return String(s);}
     function forecastClock(t){return new Date(t).toISOString();}
     function timeAgo(){return 'recently';}
-    ${lift(/^function pointQuery\(base,layer,fields\)\{[\s\S]*?^\}/m, 'pointQuery()')}
-    ${lift(/^function spcQuery\(layer\)\{[\s\S]*?^\}/m, 'spcQuery()')}
-    ${lift(/^function eroQuery\(layer\)\{[\s\S]*?^\}/m, 'eroQuery()')}
-    ${lift(/^function fireQuery\(layer\)\{[\s\S]*?^\}/m, 'fireQuery()')}
-    ${lift(/^function fireDay3Query\(\)\{[\s\S]*?^\}/m, 'fireDay3Query()')}
-    ${lift(/^function wssiQuery\(layer\)\{[\s\S]*?^\}/m, 'wssiQuery()')}
+    ${lift(/^function pointQuery\(base,layer,fields,signal\)\{[\s\S]*?^\}/m, 'pointQuery()')}
+    ${lift(/^function spcQuery\(layer,signal\)\{[\s\S]*?^\}/m, 'spcQuery()')}
+    ${lift(/^function eroQuery\(layer,signal\)\{[\s\S]*?^\}/m, 'eroQuery()')}
+    ${lift(/^function fireQuery\(layer,signal\)\{[\s\S]*?^\}/m, 'fireQuery()')}
+    ${lift(/^function fireDay3Query\(signal\)\{[\s\S]*?^\}/m, 'fireDay3Query()')}
+    ${lift(/^function wssiQuery\(layer,signal\)\{[\s\S]*?^\}/m, 'wssiQuery()')}
     ${lift(/^function spcRisk\(dn\)\{[\s\S]*?^\}/m, 'spcRisk()')}
     ${lift(/^function eroRisk\(rank\)\{[\s\S]*?^\}/m, 'eroRisk()')}
     ${lift(/^function fireRisk\(dn\)\{[\s\S]*?^\}/m, 'fireRisk()')}
@@ -1509,7 +1510,7 @@ function riskHarness(getJSON, nowMs=Date.now()) {
     ${lift(/^function spcThreatProductCurrent\(data,period\)\{[\s\S]*?^\}/m, 'spcThreatProductCurrent()')}
     ${lift(/^function spcThreatProbability\(data,period,product\)\{[\s\S]*?^\}/m, 'spcThreatProbability()')}
     ${lift(/^function spcThreatText\(prob,kind\)\{[\s\S]*?^\}/m, 'spcThreatText()')}
-    ${lift(/^function fetchSpcThreats\(\)\{[\s\S]*?^\}/m, 'fetchSpcThreats()')}
+    ${lift(/^function fetchSpcThreats\(signal\)\{[\s\S]*?^\}/m, 'fetchSpcThreats()')}
     ${lift(/^function renderSpcThreats\(days\)\{[\s\S]*?^\}/m, 'renderSpcThreats()')}
     ${lift(/^function loadSpc\(\)\{[\s\S]*?^\}/m, 'loadSpc()')}
     return {spcQuery,eroQuery,fireQuery,fireDay3Query,wssiQuery,spcRisk,eroRisk,fireRisk,
@@ -1525,6 +1526,13 @@ function riskMetadataHarness(getJSON) {
     var RISK_LAYERS={spc:[1,9,17],ero:[0,1,2],fireCat:[1,4],fireD3:{dry:7,wind:8},wssi:[1,2],mcd:0,wwa:1};
     var RISK_READY={spc:false,threats:false,ero:false,fire:false,wssi:false}, _riskLayersP=null;
     var SPC_THREAT_LAYERS=[{},{}];
+    var document={hidden:false};
+    ${lift(/^var SPC_DISCOVERY_DELAYS=.*$/m, 'SPC_DISCOVERY_DELAYS')}
+    ${lift(/^var _spcDiscovery=.*$/m, '_spcDiscovery')}
+    ${lift(/^var _spcDisposed=.*$/m, '_spcDisposed')}
+    ${lift(/^function isAbort\(e\)\{.*\}$/m, 'isAbort()')}
+    ${['spcDiscoveryAbort','spcDiscoveryRetryable','readSpcLayers','waitSpcDiscovery','discoverSpcLayers'].map(name=>
+      lift(new RegExp('^function '+name+'\\([^\\n]*\\)\\{[\\s\\S]*?^\\}', 'm'), name)).join('\n')}
     ${lift(/^function resolveRiskLayers\(\)\{[\s\S]*?^\}/m, 'resolveRiskLayers()')}
     return {resolveRiskLayers,RISK_READY,getThreatLayers:function(){return SPC_THREAT_LAYERS;}};
   `)(getJSON);
@@ -1604,10 +1612,12 @@ async function checkLiveFeedFailures() {
     }
     return Promise.resolve({layers: names.map((name, id) => ({name, id}))});
   });
-  await metadata.resolveRiskLayers();
+  const discovery=metadata.resolveRiskLayers();
   check('failed layer metadata cannot certify a zero-risk storm layer', metadata.RISK_READY.spc, false);
+  await discovery;
+  check('transient metadata failure is automatically retried', spcMetadataCalls, 2);
   await metadata.resolveRiskLayers();
-  check('failed metadata is retried on the next refresh', spcMetadataCalls, 2);
+  check('successful discovery is reused on the next refresh', spcMetadataCalls, 2);
   check('verified NOAA layer names allow risk queries', metadata.RISK_READY.spc, true);
   check('separate probability layers are resolved by name', metadata.getThreatLayers(),
     [{tornado:3,wind:4,hail:5},{tornado:6,wind:7,hail:8}]);
