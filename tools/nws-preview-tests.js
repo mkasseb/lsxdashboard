@@ -100,9 +100,9 @@ async function main(){
    }finally{await context.close();}
   }
   {
-   for(const saved of [{name:'Saved Wentzville, MO',lat:38.81,lon:-90.86,cwa:'LSX'},{name:'Saved Chicago',lat:41.88,lon:-87.63,cwa:'LOT'}]){
-    const context=await browser.newContext({viewport:{width:390,height:1000},timezoneId:'America/Chicago'}),p=await context.newPage(),lookup=[];
-    p.on('pageerror',e=>audit.runtimeErrors.push({test:'Live saved startup',message:e.message}));
+   for(const width of [390,1440])for(const saved of [{name:'Saved Wentzville, MO',lat:38.81,lon:-90.86,cwa:'LSX'},{name:'Saved Chicago',lat:41.88,lon:-87.63,cwa:'LOT'}]){
+    const context=await browser.newContext({viewport:{width,height:1000},timezoneId:'America/Chicago'}),p=await context.newPage(),lookup=[];
+    p.on('pageerror',e=>audit.runtimeErrors.push({width,test:'Live saved startup',message:e.message}));
     await p.addInitScript(saved=>localStorage.setItem('lsxLoc',JSON.stringify({name:saved.name,lat:saved.lat,lon:saved.lon,precision:'representative'})),saved);
     const endpoint='/points/'+saved.lat.toFixed(4)+','+saved.lon.toFixed(4);
     p.on('response',r=>{if(new URL(r.url()).pathname===endpoint&&r.ok())lookup.push(r.json());});
@@ -114,7 +114,7 @@ async function main(){
      assert.equal(active.cwa,'LSX');assert.equal(active.alerts,'ready');assert.equal(active.office,'LSX');
      if(saved.cwa==='LSX'){assert.equal(active.location.lat,saved.lat);assert.equal(active.location.lon,saved.lon);assert.equal(active.location.name,saved.name);}
      else{assert.equal(active.location.name,'Lake St. Louis, MO');assert.match(active.feedback,/outside.*LSX/);}
-     audit.live.push({test:'Saved startup with unmodified live '+saved.cwa+' membership',saved,active});
+     audit.live.push({width,test:'Saved startup with unmodified live '+saved.cwa+' membership',saved,active});
     }finally{await context.close();}
    }
   }
