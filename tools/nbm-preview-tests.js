@@ -34,7 +34,7 @@ async function settled(page){
 async function currentFeeds(page,width,scenario,modelExpected=true){
  await page.waitForFunction(()=>refreshInFlight===null&&snapSafeSeq===locSeq,null,{timeout:90000});
  const check=await page.evaluate(()=>({generation:locSeq,safeGeneration:snapSafeSeq,checkedAt:Date.now(),location:{lat:current.lat,lon:current.lon},
-  feeds:Object.fromEntries(Object.entries(feedChecks).map(([key,c])=>[key,{status:c.status,saved:!!c.saved,successAt:c.successAt,issuedAt:c.issuedAt}])),
+  feeds:Object.fromEntries(Object.entries(feedChecks).map(([key,c])=>[key,{status:c.status,requested:feedRequested(key),state:feedRequested(key)?feedState(c,Date.now(),FEEDS[key].age):'deferred',saved:!!c.saved,successAt:c.successAt,issuedAt:c.issuedAt}])),
   notices:{daily:document.getElementById('nbmStatus').textContent,hourly:document.getElementById('nbmHourlyStatus').textContent},
   map:{radarInitialized:!!rvMap,stationInitialized:!!stnMap,radarOn:skyOn.radar,satelliteOn:skyOn.sat,radarDown:radarDown(),satelliteDown:satDown(),frames:radarFrames.length,
    latestRadar:radarFrames.length?{loaded:radarFrames.at(-1).layer._ok,errors:radarFrames.at(-1).layer._err}:null,
@@ -93,7 +93,7 @@ async function compareHourly(page,data){
  return result;
 }
 async function main(){
- require('./preview-network-audit-tests');
+ await require('./preview-network-audit-tests');
  assert.equal(require('node:child_process').execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),audit.commit,'Exact checkout head required');
  const origin=await preview();assert(/^https:\/\/[a-f0-9]+\.lsxdashboard2\.pages\.dev$/.test(origin));audit.origin=origin;
  const api=await request.newContext();let data,receipt,hourlyData,hourlyReceipt;
@@ -165,7 +165,11 @@ async function main(){
     await settled(page);assert.equal(await page.locator('.nbm-inline').count(),0);assert.match(await page.locator('#nbmStatus').innerText(),/Outside the supported/);
     await shot(page,'live-'+width+'-outside-coverage');audit.live.push({width,test:'Unsupported NBM location',status:await page.locator('#nbmStatus').innerText()});
     await currentFeeds(page,width,'outside-model-coverage',false);
-   }finally{await network.flush();network.mark('context-close','context-close');await context.close();network.finish();}
+   }finally{
+    await network.flush();network.mark('context-close','context-close');await context.close();const c=network.finish();
+    assert.equal(c.unloggedFailures,0,'Every failed transport must retain diagnostic details');
+    assert.equal(c.droppedAborts+c.droppedImageResets+c.droppedHttpRows,0,'Diagnostic event limits cannot silently lose evidence');
+   }
   }
   // Clearly synthetic threshold scenarios, on exact hosted assets with ordinary TLS.
   for(const width of [390,1440]){

@@ -7,10 +7,26 @@ function endpoint(raw){
 }
 function errorLabel(raw){return String(raw||'').match(/(?:net::)?ERR_[A-Z_]+|NS_ERROR_[A-Z_]+/)?.[0]||'other transport error';}
 function browserObserver(sites){
- const fetchOriginal=window.fetch,abortOriginal=AbortController.prototype.abort,calls=new WeakMap(),pending=new Set();
+ const fetchOriginal=window.fetch,abortOriginal=AbortController.prototype.abort,calls=new WeakMap(),pending=new Set(),loadedImages=new WeakMap();
  const generation=()=>typeof locSeq==='number'?locSeq:null;
  const emit=value=>{const p=window.__previewNetworkAbort(value).catch(()=>{});pending.add(p);p.finally(()=>pending.delete(p));};
  window.__previewNetworkFlush=()=>Promise.allSettled(Array.from(pending));
+ document.addEventListener('load',event=>{const img=event.target;if(img.matches?.('img.leaflet-tile'))loadedImages.set(img,new URL(img.currentSrc||img.getAttribute('src'),location.href).href);},true);
+ new MutationObserver(mutations=>{
+  const nextValues=new Map();
+  for(let i=mutations.length-1;i>=0;i--){
+   const m=mutations[i];
+   if(m.type!=='attributes'||m.attributeName!=='src')continue;
+   const newValue=nextValues.has(m.target)?nextValues.get(m.target):m.target.getAttribute('src');nextValues.set(m.target,m.oldValue);
+   if(m.type!=='attributes'||!m.oldValue||!m.target.matches('img.leaflet-tile'))continue;
+   // Leaflet cancels removed/superseded tiles by replacing src with its transparent image.
+   // Observe that exact DOM change without altering image properties or layer methods.
+   const empty=window.L?.Util?.emptyImageUrl;if(!empty||newValue!==empty)continue;
+   const rawUrl=new URL(m.oldValue,location.href).href;
+   if(loadedImages.get(m.target)===rawUrl)continue; // A completed tile does not have a pending image fetch.
+   if(/^https?:/.test(rawUrl))emit({kind:'image-source-reset',rawUrl,at:Date.now(),replacement:'Leaflet transparent image',connected:m.target.isConnected});
+  }
+ }).observe(document,{subtree:true,attributes:true,attributeFilter:['src'],attributeOldValue:true});
  AbortController.prototype.abort=function(){
   const frames=Array.from(String(new Error().stack).matchAll(/assets\/(weather-feeds\.js|dashboard\.js)(?:\?[^():\s]*)?:(\d+):(\d+)/g),m=>({file:m[1],line:Number(m[2])}));
   calls.set(this.signal,{at:Date.now(),generation:generation(),frames});
@@ -35,7 +51,7 @@ function browserObserver(sites){
   return fetchOriginal.apply(this,arguments);
  };
 }
-function classifyFailure(r,aborts){
+function classifyFailure(r,aborts,imageResets=[]){
  const matches=aborts.filter(a=>a.rawUrl===r.rawUrl&&a.method===r.method&&Math.abs(a.startedAt-r.wallStarted)<500&&Math.abs(a.abortedAt-r.wallFailed)<1000);
  // Similar concurrent requests cannot be assigned a cause unless every matching observation agrees.
  if(matches.some(a=>a.cause!==matches[0].cause))return {classification:'unclassified',evidence:'Conflicting observed abort causes; lifecycle timing cannot resolve them'};
@@ -46,6 +62,8 @@ function classifyFailure(r,aborts){
   if(a.cause==='observed-location-abort')return {classification:'location-cancellation',evidence:'Abort initiator and superseded generation observed; endpoint/start-time correlation',abort:a};
   return {classification:'unclassified',evidence:'Signal abort observed but its initiator is not a recognized weather timer/location cancellation',abort:a};
  }
+ const reset=imageResets.find(a=>a.rawUrl===r.rawUrl&&Math.abs(a.at-r.wallFailed)<1000&&a.at>=r.wallStarted);
+ if(reset&&r.resourceType==='image'&&r.error==='net::ERR_ABORTED')return {classification:'tile-source-reset-correlated',evidence:'Leaflet transparent src reset observed; transport attribution uses exact URL/time correlation',imageReset:{replacement:reset.replacement,connected:reset.connected}};
  if(r.error==='net::ERR_ABORTED'&&r.elapsedMs<19000){
   const boundary=r.boundaries.find(b=>b.kind==='context-close'||b.kind==='reload');
   if(boundary)return {classification:boundary.kind+'-interruption-correlated',evidence:'Short request pending across explicit lifecycle boundary; interruption is correlated, not directly observed'};
@@ -54,23 +72,23 @@ function classifyFailure(r,aborts){
  }
  return {classification:'unclassified',evidence:'Transport error alone does not identify a cancellation or timeout cause'};
 }
-async function watchNetwork(page,audit,width,sites){
- const records=[],byRequest=new WeakMap(),pending=new Set(),aborts=[],boundaries=[];
- let phase='initial-load',epoch=0,serial=0,droppedRecords=0,droppedAborts=0,totalFailures=0,totalHttpErrors=0,finished=0;
- await page.exposeBinding('__previewNetworkAbort',(_,a)=>{if(aborts.length<LIMIT)aborts.push(a);else droppedAborts++;});
+async function watchNetwork(page,audit,width,sites,{log=true}={}){
+ const records=[],httpRows=[],byRequest=new WeakMap(),pending=new Set(),aborts=[],imageResets=[],boundaries=[];
+ let phase='initial-load',epoch=0,serial=0,droppedRecords=0,droppedAborts=0,droppedImageResets=0,droppedHttpRows=0,totalFailures=0,totalHttpErrors=0,finished=0;
+ await page.exposeBinding('__previewNetworkAbort',(_,a)=>{const list=a.kind==='image-source-reset'?imageResets:aborts;if(list.length<LIMIT)list.push(a);else if(a.kind==='image-source-reset')droppedImageResets++;else droppedAborts++;});
  await page.addInitScript(browserObserver,sites);
  page.on('request',request=>{
   const r={id:width+'-'+(++serial),rawUrl:request.url(),url:endpoint(request.url()),method:request.method(),resourceType:request.resourceType(),startPhase:phase,epoch,
    wallStarted:Date.now(),started:performance.now(),boundaries:[]};
-  byRequest.set(request,r);pending.add(r);if(records.length<LIMIT)records.push(r);else droppedRecords++;
+  byRequest.set(request,r);pending.add(r);
  });
- page.on('response',response=>{const r=byRequest.get(response.request());if(r){r.status=response.status();if(r.status>=400)totalHttpErrors++;}});
+ page.on('response',response=>{const r=byRequest.get(response.request());if(r){r.status=response.status();if(r.status>=400){totalHttpErrors++;if(httpRows.length<LIMIT)httpRows.push(r);else droppedHttpRows++;}}});
  function terminal(request,failed){
   const r=byRequest.get(request);if(!r)return;
   r.elapsedMs=Math.round(performance.now()-r.started);r.wallFailed=Date.now();r.endPhase=phase;r.outcome=failed?'failed':'finished';pending.delete(r);
   // Browser timing ties an observed fetch abort to the actual transport request more closely.
   if(request.timing().startTime>0)r.wallStarted=request.timing().startTime;
-  if(failed){totalFailures++;r.error=errorLabel(request.failure()?.errorText);}else finished++;
+  if(failed){totalFailures++;r.error=errorLabel(request.failure()?.errorText);if(records.length<LIMIT)records.push(r);else droppedRecords++;}else finished++;
  }
  page.on('requestfailed',r=>terminal(r,true));page.on('requestfinished',r=>terminal(r,false));
  return {
@@ -79,21 +97,21 @@ async function watchNetwork(page,audit,width,sites){
   finish(){
    const groups=new Map(),failures=records.filter(r=>r.outcome==='failed');
    for(const r of failures){
-    const result=classifyFailure(r,aborts),a=result.abort;
+    const result=classifyFailure(r,aborts,imageResets),a=result.abort;
     const row={phase:'live',width,id:r.id,documentEpoch:r.epoch,startPhase:r.startPhase,failurePhase:r.endPhase,url:r.url,method:r.method,resourceType:r.resourceType,
      error:r.error,elapsedMs:r.elapsedMs,boundaries:r.boundaries,...result,abort:a?{startGeneration:a.startGeneration,abortGeneration:a.abortGeneration,signalAborted:true,frames:a.frames}:undefined};
     audit.networkFailures.push(row);
     const key=JSON.stringify([r.startPhase,r.endPhase,r.url,r.error,result.classification,r.resourceType]);
     let g=groups.get(key);if(!g){g={url:r.url,startPhase:r.startPhase,failurePhase:r.endPhase,error:r.error,classification:result.classification,evidence:result.evidence,resourceType:r.resourceType,count:0,minMs:r.elapsedMs,maxMs:r.elapsedMs,samples:[]};groups.set(key,g);}
-    g.count++;g.minMs=Math.min(g.minMs,r.elapsedMs);g.maxMs=Math.max(g.maxMs,r.elapsedMs);if(g.samples.length<2)g.samples.push({id:r.id,epoch:r.epoch,boundaries:r.boundaries,abort:row.abort});
+    g.count++;g.minMs=Math.min(g.minMs,r.elapsedMs);g.maxMs=Math.max(g.maxMs,r.elapsedMs);if(g.samples.length<2)g.samples.push({id:r.id,epoch:r.epoch,boundaries:r.boundaries,abort:row.abort,imageReset:row.imageReset});
    }
    const httpGroups=new Map();
-   records.filter(r=>r.status>=400).forEach(r=>{audit.httpErrors.push({phase:'live',width,scenario:r.endPhase||phase,url:r.url,status:r.status});const key=JSON.stringify([r.url,r.status,r.endPhase||phase]);const g=httpGroups.get(key)||{url:r.url,status:r.status,phase:r.endPhase||phase,count:0};g.count++;httpGroups.set(key,g);});
+   httpRows.forEach(r=>{audit.httpErrors.push({phase:'live',width,scenario:r.endPhase||phase,url:r.url,status:r.status});const key=JSON.stringify([r.url,r.status,r.endPhase||phase]);const g=httpGroups.get(key)||{url:r.url,status:r.status,phase:r.endPhase||phase,count:0};g.count++;httpGroups.set(key,g);});
    const allGroups=Array.from(groups.values());
-   const classifications=failures.reduce((counts,r)=>{const k=classifyFailure(r,aborts).classification;counts[k]=(counts[k]||0)+1;return counts;},{});
-   const context={width,requests:serial,finished,failed:totalFailures,httpErrors:totalHttpErrors,abortObservations:aborts.length+droppedAborts,droppedRecords,droppedAborts,classifications,unloggedFailures:totalFailures-failures.length,
-    unclassified:failures.filter(r=>classifyFailure(r,aborts).classification==='unclassified').length,groups:allGroups.slice(0,GROUP_LIMIT),omittedGroups:Math.max(0,allGroups.length-GROUP_LIMIT),httpGroups:Array.from(httpGroups.values()).slice(0,GROUP_LIMIT),omittedHttpGroups:Math.max(0,httpGroups.size-GROUP_LIMIT),boundaries};
-   (audit.networkContexts||=[]).push(context);console.log('LIVE_NETWORK_AUDIT '+JSON.stringify(context));return context;
+   const classifications=failures.reduce((counts,r)=>{const k=classifyFailure(r,aborts,imageResets).classification;counts[k]=(counts[k]||0)+1;return counts;},{});
+   const context={width,requests:serial,finished,failed:totalFailures,httpErrors:totalHttpErrors,abortObservations:aborts.length+droppedAborts,imageResetObservations:imageResets.length+droppedImageResets,droppedRecords,droppedAborts,droppedImageResets,droppedHttpRows,classifications,unloggedFailures:totalFailures-failures.length,
+    unclassified:failures.filter(r=>classifyFailure(r,aborts,imageResets).classification==='unclassified').length,groups:allGroups.slice(0,GROUP_LIMIT),omittedGroups:Math.max(0,allGroups.length-GROUP_LIMIT),httpGroups:Array.from(httpGroups.values()).slice(0,GROUP_LIMIT),omittedHttpGroups:Math.max(0,httpGroups.size-GROUP_LIMIT),boundaries};
+   (audit.networkContexts||=[]).push(context);if(log)console.log('LIVE_NETWORK_AUDIT '+JSON.stringify(context));return context;
   }
  };
 }
