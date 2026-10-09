@@ -1,34 +1,41 @@
 #!/usr/bin/env node
 'use strict';
-// Verify only an immutable branch preview, with default TLS and unmodified live responses first.
+// Verify an immutable preview or the exact main deployment, with default TLS and live responses first.
 // Static model data may expire in a preview; retain its real timestamps and verify withholding.
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict'),cp=require('node:child_process');
 const {chromium,request}=require('playwright');
-const root=path.join(__dirname,'..'),out=process.argv[2]||'/tmp/nws-hosted',sha=process.env.EXPECTED_SHA;
-let origin=process.env.PREVIEW_URL;
-const audit={startedAt:new Date().toISOString(),commit:sha,origin,tls:'Default certificate validation; no bypass',assets:[],live:[],controlled:[],runtimeErrors:[],networkFailures:[]};
+const root=path.join(__dirname,'..'),out=process.argv[2]||'/tmp/nws-hosted',sha=process.env.EXPECTED_SHA,target=process.env.NWS_VERIFY_TARGET||'preview';
+let origin=process.env.PREVIEW_URL||(target==='production'?'https://lsxdashboard.com':undefined);
+const audit={startedAt:new Date().toISOString(),commit:sha,target,origin,tls:'Default certificate validation; no bypass',assets:[],live:[],controlled:[],runtimeErrors:[],networkFailures:[]};
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 async function main(){
  assert(/^[a-f0-9]{40}$/.test(sha||''));
- if(origin)assert(/^https:\/\/[a-f0-9]+\.lsxdashboard2\.pages\.dev$/.test(origin),'Immutable preview URL required');
+ assert(['preview','production'].includes(target));
+ if(target==='production')assert.equal(origin,'https://lsxdashboard.com');
+ else if(origin)assert(/^https:\/\/[a-f0-9]+\.lsxdashboard2\.pages\.dev$/.test(origin),'Immutable preview URL required');
  assert.equal(cp.execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),sha);
  let deploy;
  for(let i=0;i<24;i++){
   const meta=await fetch('https://api.github.com/repos/mkasseb/lsxdashboard/commits/'+sha+'/check-runs',{headers:{Accept:'application/vnd.github+json'}});assert(meta.ok);
   const checks=(await meta.json()).check_runs;
-  deploy=checks.find(c=>c.name==='Cloudflare Pages'&&c.conclusion==='success');
+  deploy=checks.find(c=>c.name==='Cloudflare Pages'&&c.conclusion==='success'&&c.head_sha===sha);
   const url=deploy?.output?.summary?.match(/https:\/\/[a-f0-9]+\.lsxdashboard2\.pages\.dev/);
-  if(url){if(!origin)origin=url[0];assert.equal(origin,url[0]);break;}
+  if(url){if(!origin)origin=url[0];if(target==='preview')assert.equal(origin,url[0]);audit.immutableDeployment=url[0];break;}
   await new Promise(resolve=>setTimeout(resolve,10000));
  }
- assert(deploy?.output?.summary?.includes(origin),'Cloudflare check must confirm this preview for the expected commit');
+ assert(deploy?.output?.summary?.includes(audit.immutableDeployment),'Cloudflare check must confirm deployment of the expected commit');
  audit.origin=origin;
  audit.deployment={check:deploy.html_url,summary:deploy.output.summary};
  const api=await request.newContext();let dailyModel,hourlyModel;
  try{
-  const html=fs.readFileSync(path.join(root,'index.html'),'utf8'),files=['index.html',...Array.from(html.matchAll(/(?:src|href)="\/?(assets\/[^"?]+)\?v=[a-f0-9]+/g),m=>m[1]),'data/nbm-range.json','data/nbm-hourly.json'];
+  const html=fs.readFileSync(path.join(root,'index.html'),'utf8'),files=['index.html',...Array.from(html.matchAll(/(?:src|href)="\/?(assets\/[^"?]+)\?v=[a-f0-9]+/g),m=>m[1]),'data/nbm-range.json','data/nbm-hourly.json','data/nbm-receipt.json','data/nbm-hourly-receipt.json','data/nbm-publication.json'],deadline=Date.now()+180000;
   for(const file of [...new Set(files)]){
-   const r=await api.get(origin+'/'+file);assert(r.ok(),file+' HTTP '+r.status());const bytes=await r.body(),expected=cp.execFileSync('git',['show',sha+':'+file],{cwd:root,maxBuffer:40*1024*1024});
+   const expected=cp.execFileSync('git',['show',sha+':'+file],{cwd:root,maxBuffer:40*1024*1024});let r,bytes;
+   do{
+    r=await api.get(origin+'/'+file+(target==='production'?'?verify='+sha:''));assert(r.ok(),file+' HTTP '+r.status());bytes=await r.body();
+    if(hash(bytes)===hash(expected)||target==='preview'||Date.now()>=deadline)break;
+    await new Promise(resolve=>setTimeout(resolve,10000));
+   }while(Date.now()<deadline);
    assert.equal(hash(bytes),hash(expected),file+' differs from exact commit');audit.assets.push({file,sha256:hash(bytes),cacheControl:r.headers()['cache-control']});
    if(file==='data/nbm-range.json')dailyModel=JSON.parse(bytes);if(file==='data/nbm-hourly.json')hourlyModel=JSON.parse(bytes);
   }
@@ -44,7 +51,10 @@ async function main(){
     const response=await p.goto(origin+'/?preview-verification='+sha,{waitUntil:'domcontentloaded',timeout:60000});assert(response.ok());
     await p.waitForFunction(()=>typeof refreshInFlight!=='undefined'&&refreshInFlight===null&&nwsMessages&&feedChecks.daily.status!=='loading'&&feedChecks.nbmHourly.status!=='loading',null,{timeout:90000});
     await Promise.all(pending);
-    const live=await p.evaluate(()=>({location:current,messages:nwsMessages,checks:{afd:feedChecks.afd,daily:feedChecks.daily,hourly:feedChecks.hourly},local:nwsLocalForecast,title:document.getElementById('keyMessagesTitle').textContent,status:document.getElementById('keyMessagesStatus').textContent}));
+    const live=await p.evaluate(async()=>({location:current,coverage:(await pointsFor(current.lat,current.lon)).properties,messages:nwsMessages,checks:{afd:feedChecks.afd,daily:feedChecks.daily,hourly:feedChecks.hourly,alerts:feedChecks.alerts},alerts:{received:lastAlertData?.features?.length,localEvent:callLocalAlert?.event||null,zones:userZones},local:nwsLocalForecast,title:document.getElementById('keyMessagesTitle').textContent,status:document.getElementById('keyMessagesStatus').textContent}));
+    assert.equal(live.coverage.cwa||live.coverage.gridId,'LSX');assert.equal(live.checks.alerts.status,'ready','Live alert/zone lookup must succeed');
+    assert.equal(live.alerts.zones.county,live.coverage.county);
+    audit.live.push({width,test:'Actual point coverage and alert check',point:live.location,cwa:live.coverage.cwa||live.coverage.gridId,alerts:live.alerts});
     assert.equal(live.messages.status,'ready','Live NWS messages must load for this verification');assert.equal(live.title,'NWS Key Messages');
     const product=products.find(d=>Date.parse(d.issuanceTime)===live.messages.issuedAt&&d.issuingOffice==='K'+live.messages.office);assert(product,'Capture actual live AFD response');
     const section=product.productText.split(/\.KEY MESSAGES(?:\.{3}|…)/i)[1].split(/\n\s*&&|\n\.[A-Z]|\$\$/)[0];
@@ -82,8 +92,27 @@ async function main(){
     audit.controlled.push({width,test:'Missing section gives current official local forecast; recovery preserves focus',status:'passed'});
    }finally{await context.close();}
   }
+  {
+   for(const saved of [{name:'Saved Wentzville, MO',lat:38.81,lon:-90.86,cwa:'LSX'},{name:'Saved Chicago',lat:41.88,lon:-87.63,cwa:'LOT'}]){
+    const context=await browser.newContext({viewport:{width:390,height:1000},timezoneId:'America/Chicago'}),p=await context.newPage(),lookup=[];
+    p.on('pageerror',e=>audit.runtimeErrors.push({test:'Live saved startup',message:e.message}));
+    await p.addInitScript(saved=>localStorage.setItem('lsxLoc',JSON.stringify({name:saved.name,lat:saved.lat,lon:saved.lon,precision:'representative'})),saved);
+    const endpoint='/points/'+saved.lat.toFixed(4)+','+saved.lon.toFixed(4);
+    p.on('response',r=>{if(new URL(r.url()).pathname===endpoint&&r.ok())lookup.push(r.json());});
+    try{
+     await p.goto(origin+'/?startup-verification='+sha,{waitUntil:'domcontentloaded',timeout:60000});
+     await p.waitForFunction(()=>!document.getElementById('locFeedback').textContent.startsWith('Checking ')&&refreshInFlight===null&&snapSafeSeq===locSeq&&feedChecks.alerts.status!=='loading',null,{timeout:90000});
+     const membership=(await Promise.all(lookup)).at(-1)?.properties;assert(membership,'Actual saved-coordinate coverage response required');assert.equal(membership.cwa||membership.gridId,saved.cwa);
+     const active=await p.evaluate(async()=>({location:current,cwa:(await pointsFor(current.lat,current.lon)).properties.cwa,feedback:document.getElementById('locFeedback').textContent,alerts:feedChecks.alerts.status,localEvent:callLocalAlert?.event||null,office:nwsMessages?.office}));
+     assert.equal(active.cwa,'LSX');assert.equal(active.alerts,'ready');assert.equal(active.office,'LSX');
+     if(saved.cwa==='LSX'){assert.equal(active.location.lat,saved.lat);assert.equal(active.location.lon,saved.lon);assert.equal(active.location.name,saved.name);}
+     else{assert.equal(active.location.name,'Lake St. Louis, MO');assert.match(active.feedback,/outside.*LSX/);}
+     audit.live.push({test:'Saved startup with unmodified live '+saved.cwa+' membership',saved,active});
+    }finally{await context.close();}
+   }
+  }
  }finally{await browser.close();}
  assert.deepEqual(audit.runtimeErrors,[]);audit.result='passed';
 }
 fs.mkdirSync(out,{recursive:true});
-main().catch(e=>{audit.result='failed';audit.error=e.stack;console.error(e);process.exitCode=1;}).finally(()=>{audit.finishedAt=new Date().toISOString();fs.writeFileSync(path.join(out,'verification.json'),JSON.stringify(audit,null,2));console.log(audit.result+' hosted preview '+origin+' at '+sha);});
+main().catch(e=>{audit.result='failed';audit.error=e.stack;console.error(e);process.exitCode=1;}).finally(()=>{audit.finishedAt=new Date().toISOString();fs.writeFileSync(path.join(out,'verification.json'),JSON.stringify(audit,null,2));console.log(JSON.stringify({result:audit.result,target,origin,commit:sha,assets:audit.assets,live:audit.live,controlled:audit.controlled}));console.log(audit.result+' hosted '+target+' '+origin+' at '+sha);});

@@ -2930,7 +2930,9 @@ function chooseVerifiedLocation(loc,opts){
   locationFeedback("Checking "+loc.name+"…");
   return pointsFor(loc.lat,loc.lon).then(function(pt){
     if(sequence!==locSeq||geo!==geoSeq) return false;
-    if(!pt||!pt.properties||(pt.properties.cwa||pt.properties.gridId)!=="LSX"){
+    var cwa=pt&&pt.properties&&(pt.properties.cwa||pt.properties.gridId);
+    if(typeof cwa!=="string"||!/^[A-Z]{3}$/.test(cwa)) throw new Error("Unverified forecast area");
+    if(cwa!=="LSX"){
       locationFeedback("This point is outside the St. Louis (LSX) forecast area. The current location was kept.");return false;
     }
     setLocation(loc,opts||{save:true});locationFeedback("Forecast location: "+loc.name+".");return true;
@@ -3503,11 +3505,13 @@ function initLocationUI(){
 }
 function initLocation(){
   var saved=readLoc(), shared=sharedLocation(location.search);
-  if(saved) current=saved;
   if(shared){updateLocNow();chooseVerifiedLocation(shared,{save:true});return;}
   if(new URLSearchParams(location.search).has("lat")||new URLSearchParams(location.search).has("lon")) locationFeedback("The shared location link is invalid. Showing your saved or default location.");
-  if(saved){updateLocNow();return;}
   updateLocNow();                 // shows the default preset while we ask
+  // Stored coordinates need the same LSX check as a shared link or favorite. Keep the
+  // known local default (including snapshot/alert scope) until verification succeeds;
+  // chooseVerifiedLocation also discards replies superseded by another selection.
+  if(saved){chooseVerifiedLocation(saved,{save:false});return;}
   useMyLocation(false);           // silent attempt; falls back to default if denied
 }
 

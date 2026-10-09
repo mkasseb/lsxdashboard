@@ -707,6 +707,11 @@ with a clear previous-range notice until its original expiry; location reset cle
 
 The hero replaces generated Bottom Line advice with NWS St. Louis (LSX) `.KEY MESSAGES…`
 text. This remains an LSX-only dashboard, with its existing location controls and boundaries.
+Saved startup coordinates now pass the same live `/points` LSX membership check as shared links
+and favorites. The known Lake St. Louis default stays active until that check succeeds, so outside,
+unavailable or malformed membership cannot pair another office's local forecasts with LSX messages
+and alerts. Unverified saved HTML is not restored; a newer selection supersedes a pending lookup.
+The stored choice is retained for a later retry when verification is unavailable.
 The LSX product list is sorted by issuance rather than assuming array order. Requests revalidate their HTTP cache, use location cancellation and generation
 guards, and reject older overlapping refreshes. Product identity, timestamps, section termination and
 bullet formatting must validate before official text is shown. Wrapped decimals, negative temperatures,
@@ -740,8 +745,12 @@ October 9 01:04 UTC. Tests never refresh or publish NBM data.
 Run `node tools/nws-message-tests.js` and
 `NODE_PATH=<test dependencies>/node_modules CHROMIUM_PATH=<chromium> node tools/nws-message-browser-tests.js`.
 The aggregate check workflow includes the parser suite and Chromium/Firefox/WebKit browser coverage.
-Hosted branch verification uses `tools/nws-preview-tests.js`, default TLS and exact checkout-byte hashes;
-it accepts expired static NBM guidance only when correctly withheld, without rewriting its timestamps.
+Hosted verification uses `tools/nws-preview-tests.js`, default TLS and exact checkout-byte hashes,
+including both NBM datasets, receipts and the publication manifest. It checks an immutable PR preview
+or the main deployment through the existing push event, without extraction, publication, credentials
+or schedule changes. Saved LSX and outside points also exercise actual live membership/alert lookups.
+Controlled missing-section checks are reported separately from live weather; expired static NBM
+guidance is accepted only when correctly withheld, without rewriting its timestamps.
 
 ### Optional forecast temperature context
 

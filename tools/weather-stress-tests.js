@@ -90,7 +90,7 @@ async function open(c, width=390) {
   if(c.storage)await page.addInitScript(storage=>Object.entries(storage).forEach(([key,value])=>localStorage.setItem(key,typeof value==='string'?value:JSON.stringify(value))),c.storage);
   if(c.geo)await page.addInitScript(geo=>Object.defineProperty(navigator,'geolocation',{value:{getCurrentPosition:success=>queueMicrotask(()=>success({coords:{latitude:geo.lat,longitude:geo.lon,accuracy:25}}))}}),c.geo);
   if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v21',snapshot),c.snapshot);
-  const errors=[],requests=[],delayedMapScripts=[];
+  const errors=[],requests=[],delayedMapScripts=[],heldPoints=[];
   page.on('pageerror',e=>errors.push(e.message));
   let active=c;
   await context.route('**/*',async route=>{
@@ -165,7 +165,11 @@ async function open(c, width=390) {
         return reply({'@graph':[{id:'11111111-1111-1111-1111-111111111111','@id':'https://api.weather.gov/products/11111111-1111-1111-1111-111111111111',productCode:'AFD',issuingOffice:'K'+office,issuanceTime:c.afdProduct?.issuanceTime||new Date(c.now-H).toISOString()}]},c.afdDown?503:200);
       }
       if(u.pathname.startsWith('/products/'))return reply(c.afdProduct||{productCode:'AFD',issuingOffice:'KLSX',issuanceTime:new Date(c.now-H).toISOString(),productText:c.afdText||'AFDLSX\nNational Weather Service St Louis MO\n.KEY MESSAGES...\n- Dry weather is expected across the region into Thursday.\n- Light rain is possible in southeast Missouri and southwest Illinois.\n&&\n.SHORT TERM...\nIssued at 1200 PM CDT Wed Sep 30 2026\nSynthetic discussion details for browser testing.\n&&'},c.afdDown?503:200);
-      if(u.pathname.startsWith('/points/')) return reply(f.points);
+      if(u.pathname.startsWith('/points/')) {
+        const body=chosen.pointsMalformed?{}:f.points,status=chosen.pointsDown?503:200;
+        if(chosen.holdPoints){heldPoints.push({route,id,body,status});return;}
+        return reply(body,status);
+      }
       if(u.pathname.endsWith('/forecast/hourly')&&chosen.hourlyHang)return;
       if(u.pathname.endsWith('/forecast/hourly')) return reply(chosen.hourlyDown||chosen.hourlyMalformed?{}:chosen.hourlyEmpty?{properties:{periods:[]}}:f.hourly,chosen.hourlyDown?503:200);
       if(u.pathname.endsWith('/forecast')) return reply(chosen.dailyDown?{}:chosen.dailyMalformed?{properties:{periods:[null,{temperature:'hot'},{}]}}:f.daily,chosen.dailyDown?503:200);
@@ -208,7 +212,9 @@ async function open(c, width=390) {
   });
   await page.goto('https://lsx-weather-test.invalid/'+(c.search||''),{waitUntil:'domcontentloaded'});
   if(!c.skipWait)await page.waitForFunction(()=>typeof refreshInFlight!=='undefined'&&refreshInFlight===null&&snapSafeSeq===locSeq);
-  return {page,context,errors,requests,change:c=>{active=c;},releaseMapScripts:()=>Promise.all(delayedMapScripts.map(({route,asset})=>route.fulfill({contentType:asset[2],body:fs.readFileSync(require.resolve(asset[1]))}).catch(()=>{})))};
+  return {page,context,errors,requests,change:c=>{active=c;},
+    releaseMapScripts:()=>Promise.all(delayedMapScripts.map(({route,asset})=>route.fulfill({contentType:asset[2],body:fs.readFileSync(require.resolve(asset[1]))}).catch(()=>{}))),
+    releasePoints:id=>Promise.all(heldPoints.filter(p=>p.id===id&&!p.released).map(p=>{p.released=true;return p.route.fulfill({status:p.status,json:p.body}).catch(()=>{});}))};
 }
 async function expectText(page,selector,pattern) {
   assert.match(await page.locator(selector).innerText(),pattern);

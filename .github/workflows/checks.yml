@@ -111,14 +111,15 @@ jobs:
           if-no-files-found: ignore
 
   nws-hosted-preview:
-    # Branch-preview verification only. No credentials, publication or production writes.
-    if: github.head_ref == 'codex/nws-key-messages' && github.event.pull_request.head.repo.full_name == github.repository
+    # Read-only hosted verification. Existing push trigger; no extraction or publication.
+    name: ${{ github.event_name == 'push' && 'nws-hosted-production' || 'nws-hosted-preview' }}
+    if: (github.head_ref == 'codex/nws-key-messages' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v7
         with:
           node-version: '22'
@@ -126,9 +127,10 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/nws-browser" playwright@1.62.1
           node "$RUNNER_TEMP/nws-browser/node_modules/playwright/cli.js" install --with-deps chromium
-      - name: Verify immutable preview with live feeds and normal TLS
+      - name: Verify exact deployment with live feeds and normal TLS
         env:
-          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          NWS_VERIFY_TARGET: ${{ github.event_name == 'push' && 'production' || 'preview' }}
         run: NODE_PATH="$RUNNER_TEMP/nws-browser/node_modules" node tools/nws-preview-tests.js "$RUNNER_TEMP/nws-hosted"
       - uses: actions/upload-artifact@v4
         if: always()

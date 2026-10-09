@@ -51,9 +51,66 @@ async function fallback(p,reason){
  const u=new URL(await p.locator('#callRow a').getAttribute('href'));
  const location=await p.evaluate(()=>current);assert.equal(+u.searchParams.get('lat'),location.lat);assert.equal(+u.searchParams.get('lon'),location.lon);
 }
+async function savedStartupCases(){
+ const savedPoint={name:'Saved Wentzville, MO',lat:38.81,lon:-90.86,precision:'representative'},savedId='38.8100,-90.8600';
+ const warning={id:'urn:saved-startup-warning',type:'Feature',geometry:{type:'Polygon',coordinates:[[[-91.2,38.2],[-90,38.2],[-90,39.4],[-91.2,39.4],[-91.2,38.2]]]},properties:{event:'Tornado Warning',severity:'Extreme',urgency:'Immediate',certainty:'Observed',senderName:'NWS St Louis MO',sent:new Date(now-60000).toISOString(),expires:new Date(now+H).toISOString(),ends:new Date(now+H).toISOString(),areaDesc:'St. Charles',affectedZones:['https://api.weather.gov/zones/county/MOC183'],headline:'Synthetic startup warning',description:'Synthetic hazard.',instruction:'Take shelter immediately.',parameters:{}}};
+ for(const width of [390,1280]){
+  for(const [test,point,lookup,adopt]of [
+   ['in-area saved point',savedPoint,{},true],
+   ['out-of-area saved point',{name:'Saved Chicago',lat:41.88,lon:-87.63},{cwa:'LOT'},false],
+   ['unavailable saved membership lookup',savedPoint,{pointsDown:true},false],
+   ['malformed saved membership lookup',savedPoint,{pointsMalformed:true},false]
+  ]){
+   const id=point.lat.toFixed(4)+','+point.lon.toFixed(4),snapshot=JSON.stringify({t:now,loc:point.name,lat:point.lat,lon:point.lon,parts:{daily:'<p>Unverified saved snapshot</p>'},feeds:{daily:{status:'ready',successAt:now-H,issuedAt:now-H}}});
+   const s=await open(config(test,{now,afdProduct:prod,alerts:[warning],storage:{lsxLoc:point},snapshot,skipWait:true,byId:{[id]:config('verified saved',{now,holdPoints:true,...lookup})}}),width),p=s.page;
+   try{
+    assert.equal(await p.evaluate(()=>current.name),'Lake St. Louis, MO','Known LSX default stays active during membership lookup');
+    await p.waitForFunction(()=>refreshInFlight===null&&snapSafeSeq===locSeq);
+    assert.equal(await p.evaluate(()=>snapRestored),false,'Unverified saved-location HTML cannot restore');
+    assert.equal(await p.evaluate(()=>callLocalAlert?.event),'Tornado Warning','Local warnings stay scoped to the active default');
+    assert.deepEqual(await currentMessages(p),expected);assert.match(await p.locator('#locFeedback').textContent(),/^Checking /);
+    assert(s.requests.some(u=>new URL(u).pathname==='/points/'+id));
+    assert(!s.requests.some(u=>new URL(u).pathname.startsWith('/gridpoints/LSX/'+id)),'Saved forecasts must wait for membership verification');
+    await s.releasePoints(id);
+    await p.waitForFunction(()=>!document.getElementById('locFeedback').textContent.startsWith('Checking '));
+    if(adopt){
+     await p.waitForFunction(()=>snapSafeSeq===locSeq&&nwsMessages?.status==='ready');
+     assert.equal(await p.evaluate(()=>current.name),point.name);assert.match(await p.locator('#daily').textContent(),/Scenario verified saved/);
+     assert.equal(new URL(await p.locator('#locationLink').inputValue()).searchParams.get('lat'),point.lat.toFixed(5));
+    }else{
+     assert.equal(await p.evaluate(()=>current.name),'Lake St. Louis, MO');
+     assert.match(await p.locator('#locFeedback').textContent(),lookup.cwa?/outside.*LSX/:/Couldn't verify/);
+     assert(!s.requests.some(u=>new URL(u).pathname.startsWith('/gridpoints/LSX/'+id)),'Unverified/outside coordinates never fetch local forecasts');
+    }
+    assert.equal(await p.evaluate(()=>callLocalAlert?.event),'Tornado Warning');assert.deepEqual(await currentMessages(p),expected);
+    assert.equal(await p.evaluate(()=>JSON.parse(localStorage.getItem('lsxLoc')).name),point.name,'Startup validation preserves the stored choice for a later retry');
+    assert.deepEqual(s.errors,[]);results.push({width,test:'Saved startup: '+test,status:'passed'});
+   }finally{await s.context.close();}
+  }
+  const next={name:'New Belleville, IL',lat:38.52,lon:-89.98,precision:'representative'},nextId='38.5200,-89.9800';
+  const s=await open(config('saved startup race',{now,afdProduct:prod,alerts:[warning],storage:{lsxLoc:savedPoint,lsxFavorites_v1:[next]},byId:{[savedId]:config('old saved',{now,holdPoints:true}),[nextId]:config('new selection',{now,holdPoints:true})}}),width),p=s.page;
+  try{
+   await p.locator('#locationTools summary').click();const requested=p.waitForRequest('**/points/'+nextId);
+   await p.locator('#favoriteSelect').selectOption(next.lat.toFixed(5)+','+next.lon.toFixed(5));await requested;
+   await s.releasePoints(savedId);await p.evaluate(id=>_pointsCache[id],savedId);
+   assert.equal(await p.evaluate(()=>current.name),'Lake St. Louis, MO','Old successful validation cannot commit while newer choice is pending');
+   assert.equal(await p.locator('#locFeedback').textContent(),'Checking '+next.name+'…','Old validation cannot replace newer feedback');
+   await s.releasePoints(nextId);await p.waitForFunction(name=>current.name===name&&snapSafeSeq===locSeq&&nwsMessages?.status==='ready',next.name);
+   assert.equal(await p.evaluate(()=>current.name),next.name);assert.equal(await p.evaluate(()=>callLocalAlert),null,'Old local warning no longer applies at the new point');
+   assert.equal(await p.evaluate(()=>JSON.parse(localStorage.getItem('lsxLoc')).name),next.name);assert.deepEqual(await currentMessages(p),expected);
+   assert.deepEqual(s.errors,[]);results.push({width,test:'Saved startup: a newer favorite supersedes pending successful validation before either selection commits',status:'passed'});
+  }finally{await s.context.close();}
+  const normal=await open(config('normal startup',{now,afdProduct:prod,alerts:[warning]}),width);
+  try{
+   assert.equal(await normal.page.evaluate(()=>current.name),'Lake St. Louis, MO');assert.equal(await normal.page.evaluate(()=>callLocalAlert?.event),'Tornado Warning');
+   assert.deepEqual(await currentMessages(normal.page),expected);assert.deepEqual(normal.errors,[]);results.push({width,test:'Saved startup: normal first visit keeps the LSX default and local warnings',status:'passed'});
+  }finally{await normal.context.close();}
+ }
+}
 async function main(){
  const browser=await playwright[engine].launch(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']}:{});setBrowser(browser);
  try{
+  await savedStartupCases();
   for(const width of [320,390,1440])for(const timezone of ['America/Chicago','Asia/Tokyo']){
    const s=await open(config('NWS Key Messages fixture',{now,afdProduct:prod,timezone,touch:width<500,aqi:35}),width),p=s.page;
    try{
