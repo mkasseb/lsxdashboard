@@ -27,7 +27,7 @@ async function main(){
     assert.match(await p.locator('#keyMessagesMeta').innerText(),/Regional outlook.*NWS St Louis MO \(LSX\)/);
     assert.match(await p.locator('#keyMessagesStatus').innerText(),/AFD issued Oct 8, 6:02 PM CDT/);
     assert.equal(new URL(await p.locator('#keyDiscussionLink').getAttribute('href')).searchParams.get('issuedby'),'LSX');
-    const source=p.locator('#briefWhy > summary');if(width<500)await source.tap();else{await source.focus();await source.press('Enter');}
+    const source=p.locator('#briefWhy > summary');assert((await source.boundingBox()).height>=44);if(width<500)await source.tap();else{await source.focus();await source.press('Enter');}
     assert(await p.locator('#briefWhy').evaluate(e=>e.open));assert.match(await p.locator('#briefEvidence').textContent(),/revision time is not supplied/);
     await source.focus();await p.evaluate(()=>loadAFD());assert(await source.evaluate(e=>e===document.activeElement));assert(await p.locator('#briefWhy').evaluate(e=>e.open));
     assert((await source.boundingBox()).height>=44);

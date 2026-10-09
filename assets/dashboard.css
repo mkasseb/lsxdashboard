@@ -616,6 +616,9 @@
   #briefEvidence p{line-height:1.5;margin:8px 0;font-size:var(--fs-sm);color:var(--muted)}
   #callCard #briefStatus{margin:0 0 8px}
   #callCard #briefWhy{border-top:1px solid var(--border);margin-top:12px;padding-top:4px}
+  #briefWhy > summary{display:flex;align-items:center;gap:8px}
+  .nws-source-arrow{display:inline-block;flex:none}
+  #briefWhy[open] .nws-source-arrow{transform:rotate(90deg)}
   @media(max-width:480px){#callCard{padding:14px}}
 
   /* ===== Banner mode: the section sheds its card =====
