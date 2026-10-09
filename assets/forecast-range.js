@@ -119,7 +119,7 @@ var NbmRange=(function(){
     var currentData=raw&&storedSeq===locSeq&&storedPoint.lat===current.lat&&storedPoint.lon===current.lon;
     var result=currentData?validate(raw,storedPoint,Date.now()):{status:'unavailable',reason:failure};
     status.textContent=result.periods?'NBM model guidance · QMD cycle '+new Date(result.run).toISOString().slice(0,16).replace('T',' ')+' UTC · '+age(result.run,Date.now())+' old':result.reason;
-    add('p','NWS temperatures are the official forecast. The Middle 50% model range spans native NOAA NBM P25 to P75. Roughly 25% of modeled outcomes lie below it and 25% above it; outcomes outside remain possible. This applies to each native temperature interval, not to the whole forecast staying inside. The bounds are P25 and P75; P50 is the median (middle estimate). Model values never replace the NWS forecast.',body);
+    add('p','NWS temperatures are the official forecast. The NBM model range spans native NOAA NBM P25 to P75, the middle 50% of modeled outcomes. Roughly 25% of modeled outcomes lie below it and 25% above it; outcomes outside remain possible. This applies to each native temperature interval, not to the whole forecast staying inside. The bounds are P25 and P75; P50 is the median (middle estimate). Model values never replace the NWS forecast.',body);
     add('p','NBM maximum/minimum temperatures cover native 18-hour windows, not calendar-day highs/lows. A range appears alongside a day or night only when there is one unambiguous overlapping window. Expand the NWS row to compare both intervals. Rows without a range have no unique, currently usable NBM window. All times are Central, with daylight-saving offsets at each endpoint.',body);
     if(!result.periods)return;
     var pairing=align(forecastSeq===locSeq&&forecastPoint&&forecastPoint.lat===current.lat&&forecastPoint.lon===current.lon?days:[],result.periods,Date.now()),items=daily.querySelectorAll('.day-item');
@@ -127,7 +127,7 @@ var NbmRange=(function(){
     Object.keys(groups).forEach(function(index){
       var item=items[index];if(!item)return;
       var matches=groups[index],line=document.createElement('div');line.className='nbm-inline';
-      add('span','Middle 50% model range',line,'nbm-label');
+      add('span','NBM model range',line,'nbm-label');
       matches.forEach(function(m){add('span',(m.part==='day'?'High ':'Low ')+bounds(m.nbm),line,'nbm-band');});
       item.querySelector('.day').after(line);
       var detail=document.createElement('div');detail.className='nbm-period-detail';
@@ -146,7 +146,7 @@ var NbmRange=(function(){
       add('h3','Unpaired model windows',body);
       add('p','These windows have no unique matching NWS day/night entry with sufficient overlap. They are not paired comparisons or replacements for missing official temperatures.',body);
       var list=add('ul','',body);
-      pairing.unmatched.forEach(function(p){add('li',(p.kind==='TMAX'?'Maximum':'Minimum')+' · '+windowText(p.start,p.end)+' · Middle 50% model range '+bounds(p)+' · P50 '+Math.round(p.p50)+'°F',list);});
+      pairing.unmatched.forEach(function(p){add('li',(p.kind==='TMAX'?'Maximum':'Minimum')+' · '+windowText(p.start,p.end)+' · NBM model range '+bounds(p)+' · P50 '+Math.round(p.p50)+'°F',list);});
     }
   }
   function forecast(value){days=value;forecastPoint={lat:current.lat,lon:current.lon};forecastSeq=locSeq;render();}

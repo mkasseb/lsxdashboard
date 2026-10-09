@@ -358,7 +358,7 @@ function renderHourly24(hrs){
   var tracker='<line class="h24-track" x1="-99" y1="'+(curveTop-14)+'" x2="-99" y2="'+(barBase+2)+'" stroke="var(--accent)" stroke-width="1" opacity="0"/>'
     +'<circle class="h24-trackdot" cx="-99" cy="-99" r="4" fill="var(--accent)" opacity="0"/>';
 
-  var svg='<svg class="h24-svg" viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" role="img" aria-label="'+hourlyHours+' hour NWS forecast: temperature curve, precipitation chance bars and shaded nights. '+(nbmBand?'Shaded Middle 50% model range from native NBM P25–P75. ':'')+'Hourly details follow the chart.">'
+  var svg='<svg class="h24-svg" viewBox="0 0 '+W+' '+H+'" width="'+W+'" height="'+H+'" role="img" aria-label="'+hourlyHours+' hour NWS forecast: temperature curve, precipitation chance bars and shaded nights. '+(nbmBand?'Shaded NBM model range: the middle 50% of modeled outcomes, from native NBM P25–P75. ':'')+'Hourly details follow the chart.">'
     +'<defs><linearGradient id="h24g" x1="0" y1="0" x2="1" y2="0">'+grad+'</linearGradient>'
     +'<linearGradient id="h24a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="'+tCol(hi)+'" stop-opacity=".16"/><stop offset="1" stop-color="'+tCol(lo)+'" stop-opacity="0"/></linearGradient></defs>'
     +bands

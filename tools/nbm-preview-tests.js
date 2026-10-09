@@ -4,6 +4,7 @@
 // Controlled edge cases run afterwards in a separate context and are labeled in the audit.
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict');
 const {chromium,request}=require('playwright');
+const {watchNetwork}=require('./preview-network-audit');
 const root=path.join(__dirname,'..'),out=process.argv[2];
 fs.mkdirSync(out,{recursive:true});
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
@@ -29,6 +30,24 @@ async function shot(page,name){
 }
 async function settled(page){
  await page.waitForFunction(()=>typeof feedChecks!=='undefined'&&['ready','partial','unavailable'].includes(feedChecks.daily?.status)&&feedChecks.nbmRange?.status!=='loading',null,{timeout:90000});
+}
+async function currentFeeds(page,width,scenario,modelExpected=true){
+ await page.waitForFunction(()=>refreshInFlight===null&&snapSafeSeq===locSeq,null,{timeout:90000});
+ const check=await page.evaluate(()=>({generation:locSeq,safeGeneration:snapSafeSeq,checkedAt:Date.now(),location:{lat:current.lat,lon:current.lon},
+  feeds:Object.fromEntries(Object.entries(feedChecks).map(([key,c])=>[key,{status:c.status,saved:!!c.saved,successAt:c.successAt,issuedAt:c.issuedAt}])),
+  notices:{daily:document.getElementById('nbmStatus').textContent,hourly:document.getElementById('nbmHourlyStatus').textContent},
+  map:{radarInitialized:!!rvMap,stationInitialized:!!stnMap,radarOn:skyOn.radar,satelliteOn:skyOn.sat,radarDown:radarDown(),satelliteDown:satDown(),frames:radarFrames.length,
+   latestRadar:radarFrames.length?{loaded:radarFrames.at(-1).layer._ok,errors:radarFrames.at(-1).layer._err}:null,
+   satellite:satLayer?{loaded:satLayer._ok,errors:satLayer._err}:null,radarFallback,visibleFailure:!!document.querySelector('#radar .imgfail')}
+ }));
+ for(const key of ['daily','hourly','alerts','afd',...(modelExpected?['nbmRange','nbmHourly']:[])]){
+  assert.equal(check.feeds[key].status,'ready',scenario+' current '+key+' must pass its loader validation');
+  assert.equal(check.feeds[key].saved,false,scenario+' '+key+' cannot be a restored snapshot');
+  assert(check.feeds[key].successAt>0,scenario+' '+key+' must have a successful live check');
+ }
+ if(modelExpected)assert(!/failed|unavailable|retained|stale/i.test(check.notices.hourly),'A retained hourly band is not a successful live fetch');
+ const row={width,scenario,...check};(audit.currentFeedChecks||=[]).push(row);console.log('LIVE_FEED_CHECK '+JSON.stringify(row));
+ return row;
 }
 async function compare(page,data){
  const result=await page.evaluate(data=>{
@@ -63,7 +82,7 @@ async function compareHourly(page,data){
  for(let i=0;i<24;i++){
   await page.locator('#hourlyCursor').evaluate((e,i)=>{e.value=i;e.dispatchEvent(new Event('input'));},i);
   const p=result.points[i],text=await page.locator('#hourlyDetail').innerText();
-  assert(text.includes('Middle 50% model range '+Math.round(p.p25)+'–'+Math.round(p.p75)+'°F · middle estimate '+Math.round(p.p50)+'°F'));
+  assert(text.includes('NBM model range '+Math.round(p.p25)+'–'+Math.round(p.p75)+'°F · middle estimate '+Math.round(p.p50)+'°F'));
   assert((await page.locator('#nbmHourlyPercentiles').textContent()).includes('P25 '+Math.round(p.p25)+'°F · P50 '+Math.round(p.p50)+'°F · P75 '+Math.round(p.p75)+'°F'));
  }
  await page.locator('#hourlyCursor').focus();await page.locator('#hourlyCursor').press('Home');
@@ -74,6 +93,7 @@ async function compareHourly(page,data){
  return result;
 }
 async function main(){
+ require('./preview-network-audit-tests');
  assert.equal(require('node:child_process').execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),audit.commit,'Exact checkout head required');
  const origin=await preview();assert(/^https:\/\/[a-f0-9]+\.lsxdashboard2\.pages\.dev$/.test(origin));audit.origin=origin;
  const api=await request.newContext();let data,receipt,hourlyData,hourlyReceipt;
@@ -98,44 +118,54 @@ async function main(){
   for(const width of [390,1440]){
    const context=await browser.newContext({viewport:{width,height:1000},timezoneId:width===390?'America/Chicago':'Asia/Tokyo'});
    const page=await context.newPage();
+   const lines=file=>fs.readFileSync(path.join(root,'assets',file),'utf8').split('\n');
+   const sites={timeoutLine:lines('weather-feeds.js').findIndex(l=>l.includes('timedOut=true; ctl.abort();'))+1,locationLine:lines('dashboard.js').findIndex(l=>l.includes('if(locAbort) locAbort.abort();'))+1};
+   assert(sites.timeoutLine>0&&sites.locationLine>0,'Observe known native timeout/location abort call sites');
+   const network=await watchNetwork(page,audit,width,sites);
    page.on('pageerror',e=>audit.runtimeErrors.push({phase:'live',width,message:e.message}));
-   page.on('requestfailed',r=>audit.networkFailures.push({phase:'live',width,url:r.url().split('?')[0],error:r.failure()?.errorText}));
-   page.on('response',r=>{if(r.status()>=400)audit.httpErrors.push({phase:'live',width,url:r.url().split('?')[0],status:r.status()});});
    try{
     const response=await page.goto(origin+'/?live-verification=1',{waitUntil:'domcontentloaded',timeout:60000});assert(response.ok());await settled(page);
     assert.equal(await page.locator('#nbmRangeCard').count(),0);assert.equal(await page.locator('#nbmInfo details').getAttribute('open'),null);
     const first=await compare(page,data);assert(['ready','partial'].includes(first.status),'Refreshed review snapshot must be usable now');audit.live.push({width,test:'Initial real feeds',...first});
     audit.live.push({width,test:'Authentic hourly band',...await compareHourly(page,hourlyData)});
+    await currentFeeds(page,width,'initial-load');network.mark('forecast-details');
     const day=page.locator('#daily .day').first();await day.focus();await day.press('Enter');assert.equal(await day.getAttribute('aria-expanded'),'true');
     await day.press('Enter');assert.equal(await day.getAttribute('aria-expanded'),'false');await day.press('Enter');
     const summary=page.locator('#nbmInfo summary');await summary.focus();await summary.press('Enter');assert(await page.locator('#nbmInfo details').evaluate(e=>e.open));
     for(const theme of ['light','dark']){
+     network.mark('theme-'+theme,'theme');
      await page.evaluate(t=>applyTheme(t),theme);await pause(500);
      assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
      await shot(page,'live-'+width+'-'+theme);
      await page.locator('#h24Card').screenshot({path:path.join(out,'live-hourly-'+width+'-'+theme+'.png'),style:'.jump-wrap,.skip{visibility:hidden !important}'});
     }
-    await page.evaluate(()=>{document.documentElement.style.fontSize='200%';layoutMasonry();});await pause(500);
+    network.mark('text-200-percent','resize');await page.evaluate(()=>{document.documentElement.style.fontSize='200%';layoutMasonry();});await pause(500);
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
     await shot(page,'live-'+width+'-200-percent');audit.live.push({width,test:'200% text without horizontal page overflow'});
     await page.evaluate(()=>{document.documentElement.style.fontSize='';layoutMasonry();});
     // Real location changes exercise the app's normal generation and cancellation paths.
     const town={name:'Belleville, IL',lat:38.52,lon:-89.98,precision:'representative',station:null};
-    await page.evaluate(town=>{setLocation({...town,name:'Intermediate point',lat:38.7,lon:-90.3},{save:true});setLocation(town,{save:true});},town);
+    network.mark('rapid-location-switch','location');
+    const transition=await page.evaluate(town=>{const before=locSeq,old=locAbort?.signal;setLocation({...town,name:'Intermediate point',lat:38.7,lon:-90.3},{save:true});setLocation(town,{save:true});return {before,after:locSeq,oldSignalAborted:!!old?.aborted};},town);
+    (audit.locationTransitions||=[]).push({width,scenario:'rapid-location-switch',...transition});
     await settled(page);const changed=await compare(page,data);assert.equal(changed.location.lat,town.lat);assert.equal(changed.location.lon,town.lon);
     audit.live.push({width,test:'Rapid real location changes',...changed});
     audit.live.push({width,test:'Hourly real location change',...await compareHourly(page,hourlyData)});
+    await currentFeeds(page,width,'location-recovery');network.mark('save-snapshot');
     // Save and reload real browser storage. Delayed-source isolation is tested below with controlled responses.
     await page.waitForFunction(()=>snapSafeSeq===locSeq,null,{timeout:90000});
     const snapshot=await page.evaluate(()=>{saveSnapshot();return JSON.parse(localStorage.getItem(SNAP_KEY));});
     assert(snapshot.parts.daily);assert(!snapshot.parts.daily.includes('nbm-'));
-    await page.reload({waitUntil:'domcontentloaded'});await settled(page);
+    await network.flush();network.mark('saved-reload','reload');await page.reload({waitUntil:'domcontentloaded'});await settled(page);
     const reloaded=await compare(page,data);assert.equal(reloaded.location.lat,town.lat);audit.live.push({width,test:'Real saved reload',...reloaded});
     audit.live.push({width,test:'Hourly real saved reload',...await compareHourly(page,hourlyData)});
-    await page.evaluate(()=>setLocation({name:'Outside NBM coverage',lat:39.4,lon:-90.79,precision:'representative',station:null},{save:true}));
+    await currentFeeds(page,width,'reload-recovery');network.mark('outside-model-coverage','location');
+    const outside=await page.evaluate(()=>{const before=locSeq,old=locAbort?.signal;setLocation({name:'Outside NBM coverage',lat:39.4,lon:-90.79,precision:'representative',station:null},{save:true});return {before,after:locSeq,oldSignalAborted:!!old?.aborted};});
+    audit.locationTransitions.push({width,scenario:'outside-model-coverage',...outside});
     await settled(page);assert.equal(await page.locator('.nbm-inline').count(),0);assert.match(await page.locator('#nbmStatus').innerText(),/Outside the supported/);
     await shot(page,'live-'+width+'-outside-coverage');audit.live.push({width,test:'Unsupported NBM location',status:await page.locator('#nbmStatus').innerText()});
-   }finally{await context.close();}
+    await currentFeeds(page,width,'outside-model-coverage',false);
+   }finally{await network.flush();network.mark('context-close','context-close');await context.close();network.finish();}
   }
   // Clearly synthetic threshold scenarios, on exact hosted assets with ordinary TLS.
   for(const width of [390,1440]){
@@ -195,4 +225,4 @@ async function main(){
  }finally{await browser.close();}
  assert.deepEqual(audit.runtimeErrors,[],'Live page JavaScript errors');audit.status='passed';
 }
-main().catch(e=>{audit.status='failed';audit.error=e.stack;console.error(e);process.exitCode=1;}).finally(()=>{audit.finishedAt=new Date().toISOString();fs.writeFileSync(path.join(out,'live-preview-audit.json'),JSON.stringify(audit,null,2));console.log(JSON.stringify({status:audit.status,origin:audit.origin,commit:audit.commit,liveChecks:audit.live.length,controlledChecks:audit.controlled.length,runtimeErrors:audit.runtimeErrors.length,httpErrors:audit.httpErrors.length,networkFailures:audit.networkFailures.length}));});
+main().catch(e=>{audit.status='failed';audit.error=e.stack;console.error(e);process.exitCode=1;}).finally(()=>{audit.finishedAt=new Date().toISOString();fs.writeFileSync(path.join(out,'live-preview-audit.json'),JSON.stringify(audit,null,2));console.log(JSON.stringify({status:audit.status,origin:audit.origin,commit:audit.commit,liveChecks:audit.live.length,controlledChecks:audit.controlled.length,currentFeedChecks:audit.currentFeedChecks?.length||0,runtimeErrors:audit.runtimeErrors.length,httpErrors:audit.httpErrors.length,networkFailures:(audit.networkContexts||[]).reduce((n,c)=>n+c.failed,0)}));});

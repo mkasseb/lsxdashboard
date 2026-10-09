@@ -1,0 +1,36 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {endpoint,errorLabel,classifyFailure,browserObserver}=require('./preview-network-audit');
+assert.equal(endpoint('https://user:secret@api.weather.gov/points/38.80,-90.79?token=private#fragment'),'https://api.weather.gov/points/:point');
+assert.equal(endpoint('https://api.weather.gov/products/01234567-89ab-cdef-0123-456789abcdef?key=private'),'https://api.weather.gov/products/:product');
+assert.equal(endpoint('https://tiles.example.org/base/5/10/12.pbf?key=private'),'https://tiles.example.org/base/:z/:x/:y.pbf');
+assert.equal(errorLabel('net::ERR_ABORTED\nhttps://example.org/?key=private'),'net::ERR_ABORTED');
+assert.equal(errorLabel('arbitrary secret or newline'),'other transport error');
+const r={rawUrl:'https://example.org/data',method:'GET',wallStarted:1000,wallFailed:1200,elapsedMs:200,error:'net::ERR_ABORTED',resourceType:'fetch',boundaries:[]};
+assert.equal(classifyFailure(r,[]).classification,'unclassified','ERR_ABORTED alone is insufficient');
+const abort={rawUrl:r.rawUrl,method:r.method,startedAt:1000,abortedAt:1200,startGeneration:0,abortGeneration:1,cause:'observed-location-abort'};
+assert.equal(classifyFailure(r,[abort]).classification,'location-cancellation');
+assert.equal(classifyFailure({...r,boundaries:[{kind:'context-close'}]},[{...abort,cause:'weather-timeout'}]).classification,'weather-timeout','Observed timeout cannot be hidden by teardown');
+assert.equal(classifyFailure({...r,boundaries:[{kind:'reload'}]},[]).classification,'reload-interruption-correlated');
+assert.equal(classifyFailure({...r,elapsedMs:20001,boundaries:[{kind:'reload'}]},[]).classification,'unclassified','Late aborts may be weather timeouts');
+assert.equal(classifyFailure({...r,resourceType:'image',boundaries:[{kind:'theme'}]},[]).classification,'asset-cancellation-correlated');
+assert.equal(classifyFailure({...r,boundaries:[{kind:'theme'}]},[]).classification,'unclassified','Location-scoped fetches are not theme tiles');
+assert.equal(classifyFailure(r,[{...abort,abortedAt:20000}]).classification,'unclassified','Unrelated later aborts cannot explain this request');
+assert.equal(classifyFailure(r,[abort,{...abort,cause:'weather-timeout'}]).classification,'unclassified','Ambiguous concurrent observations must remain unclassified');
+assert.equal(classifyFailure({...r,boundaries:[{kind:'reload'}]},[abort,{...abort,cause:'weather-timeout'}]).classification,'unclassified','Lifecycle timing cannot override conflicting observed causes');
+assert.equal(classifyFailure({...r,error:'net::ERR_CONNECTION_RESET',boundaries:[{kind:'reload'}]},[abort]).classification,'unclassified','Connection failures are not observed location cancellations');
+assert.equal(classifyFailure({...r,resourceType:'image',boundaries:[{kind:'reload'}]},[abort]).classification,'unclassified','A fetch observation cannot explain a different resource type');
+assert.equal(classifyFailure({...r,boundaries:[{kind:'reload'}]},[{...abort,cause:'unclassified-signal-abort'}]).classification,'unclassified','An unknown observed initiator cannot be replaced by lifecycle timing');
+// Exercise actual signals and promise identity, including an abort after response headers resolve.
+const vm=require('node:vm'),observations=[],fetchPromise=Promise.resolve({status:200});
+class ObservedController extends AbortController{}
+const context=vm.createContext({AbortController:ObservedController,Request,URL,locSeq:0,location:{href:'https://preview.example.org/'},window:{fetch:()=>fetchPromise,__previewNetworkAbort:a=>{observations.push(a);return Promise.resolve();}}});
+vm.runInContext('('+browserObserver.toString()+')({timeoutLine:69,locationLine:3030})',context);
+vm.runInContext('var ctl=new AbortController(); var result=window.fetch("/data/nbm-hourly.json",{signal:ctl.signal});',context);
+assert.equal(context.result,fetchPromise,'Observer returns the identical original fetch promise');
+vm.runInContext('ctl.abort();',context,{filename:'assets/weather-feeds.js',lineOffset:68});
+assert(context.ctl.signal.aborted);assert.equal(observations[0].cause,'weather-timeout');
+vm.runInContext('ctl=new AbortController();window.fetch("/data/nbm-range.json",{signal:ctl.signal});locSeq++;',context);
+vm.runInContext('ctl.abort();',context,{filename:'assets/dashboard.js',lineOffset:3029});
+assert.equal(observations[1].cause,'observed-location-abort');assert.equal(observations[1].startGeneration,0);assert.equal(observations[1].abortGeneration,1);
+console.log('preview network audit redaction, timeout and lifecycle controls passed');

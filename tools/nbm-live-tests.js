@@ -61,7 +61,7 @@ async function main(){
      assert.equal(await page.locator('.nbm-hourly-band').count(),1);
      for(let i=0;i<24;i++){
       await page.locator('#hourlyCursor').evaluate((e,i)=>{e.value=i;e.dispatchEvent(new Event('input'));},i);
-      const v=hourlyExpected[i];assert((await page.locator('#hourlyDetail').innerText()).includes('Middle 50% model range '+Math.round(v.p25)+'–'+Math.round(v.p75)+'°F · middle estimate '+Math.round(v.p50)+'°F'));
+      const v=hourlyExpected[i];assert((await page.locator('#hourlyDetail').innerText()).includes('NBM model range '+Math.round(v.p25)+'–'+Math.round(v.p75)+'°F · middle estimate '+Math.round(v.p50)+'°F'));
      }
      assert.equal(expected.status,'ready');assert(expected.comparisons.length>0,'Live NWS and NBM must have usable comparisons');
      assert.deepEqual(await page.locator('.nbm-comparison').evaluateAll(rows=>rows.map(row=>({official:row.children[0].textContent,model:row.children[1].textContent,interval:row.children[2].textContent}))),expected.comparisons);

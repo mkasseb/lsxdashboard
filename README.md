@@ -209,7 +209,7 @@ in [`DESIGN.md`](DESIGN.md#adding-a-card-adding-a-loader).
 
 Supplemental NBM ranges appear alongside official NWS day/night entries in the forecast card.
 Expand an entry to compare the NWS temperature and exact interval with native NOAA NBM P25/P50/P75
-values and the native 18-hour interval. **Middle 50% model range** spans P25–P75 alongside the official NWS high/low. A single shared note explains the
+values and the native 18-hour interval. **NBM model range** spans P25–P75 alongside the official NWS high/low. A single shared note explains the
 18-hour windows; individual rows keep only the ranges. Exact interval differences remain in expanded details.
 The collapsed **About NBM ranges & unmatched windows** section explains the percentiles,
 source age, nearest cell, coverage, and windows that cannot be paired. `/?nbm=0` disables guidance.
@@ -541,7 +541,7 @@ The existing weather, seasonal and real-cache upgrade suites remain required.
 
 The hourly branch depends on the reviewed seven-day work in PR #58. The existing NWS hourly
 line, values, summaries, precipitation, headlines and risk logic remain primary. A checkbox in
-**Plan your day** enables a separate **Middle 50% model range** (native P25–P75) in the 24-hour view. It plots the
+**Plan your day** enables a separate **NBM model range** (native P25–P75) in the 24-hour view. It plots the
 actual model bounds; the NWS line can be outside them. Slider, keyboard and touch details show
 P25/P50/P75 and the valid Central time with CDT/CST. The range is model guidance, not an NWS
 confidence interval. Longer views remain NWS-only; no interpolation fills missing native hours.
@@ -695,7 +695,7 @@ Artifacts can include both current pairs plus daily history: roughly 6.3 MB per 
 before compression in this rehearsal, about 450 MB if all 72 hourly artifacts were that size.
 Account quotas and remaining usage are not verified here; this existing-service release makes no zero-overage promise.
 
-The daily and hourly interfaces say **Middle 50% model range** and use native NOAA P25/P50/P75.
+The daily and hourly interfaces say **NBM model range** and use native NOAA P25/P50/P75.
 Roughly 25% of modeled outcomes lie below the range and 25% above it; outcomes outside remain possible.
 This applies to each hour or native extrema window, not the chance that the whole time series stays inside.
 No accuracy improvement or confidence probability is claimed. P50 is the median, not the midpoint of P25

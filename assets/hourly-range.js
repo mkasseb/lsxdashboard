@@ -60,7 +60,7 @@ function presentation(hrs,duration,now){
 function describe(p){
  var detail=document.getElementById('nbmHourlyPercentiles');
  if(detail)detail.textContent=p?'Selected hour: P25 '+Math.round(p.p25)+'°F · P50 '+Math.round(p.p50)+'°F · P75 '+Math.round(p.p75)+'°F.':'No model percentiles for the selected hour.';
- return p?'<span class="nbm-hourly-detail">Middle 50% model range '+Math.round(p.p25)+'–'+Math.round(p.p75)+'°F · middle estimate '+Math.round(p.p50)+'°F · '+new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'}).format(new Date(p.validTime))+'</span>':'<span class="nbm-hourly-detail">Model range unavailable for this hour.</span>';
+ return p?'<span class="nbm-hourly-detail">NBM model range '+Math.round(p.p25)+'–'+Math.round(p.p75)+'°F · middle estimate '+Math.round(p.p50)+'°F · '+new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'}).format(new Date(p.validTime))+'</span>':'<span class="nbm-hourly-detail">Model range unavailable for this hour.</span>';
 }
 function forecast(hrs){official=hrs;officialGeneration=locSeq;}
 function repaint(){if(typeof renderHourly24==='function'&&renderHourly24._hrs)renderHourly24();}
@@ -79,7 +79,7 @@ function load(){
 function init(){
  if(new URLSearchParams(location.search).get('nbm')==='0')return;
  var box=document.createElement('div');box.className='nbm-hourly-controls';
- box.innerHTML='<span class="nbm-hourly-nws-key">NWS temperature line</span><label><input id="nbmHourlyToggle" type="checkbox" checked> Show Middle 50% model range</label><p id="nbmHourlyStatus" role="status">Checking model range…</p><details id="nbmHourlyInfo"><summary>About this range</summary><p id="nbmHourlyMeaning">The shaded Middle 50% model range uses native NOAA NBM quartiles. Roughly 25% of modeled outcomes lie below it and 25% above it; outcomes outside remain possible. This describes each hour separately, not the chance that the whole forecast stays inside. The NWS forecast line can fall outside the band.</p><p>The bounds are the 25th and 75th percentiles (P25 and P75). The middle estimate is the median (P50), not the midpoint of the bounds.</p><p id="nbmHourlyPercentiles"></p><p id="nbmHourlySource"></p></details>';
+ box.innerHTML='<span class="nbm-hourly-nws-key">NWS temperature line</span><label><input id="nbmHourlyToggle" type="checkbox" checked> Show NBM model range</label><p id="nbmHourlyStatus" role="status">Checking model range…</p><details id="nbmHourlyInfo"><summary>About this range</summary><p id="nbmHourlyMeaning">The shaded NBM model range shows the middle 50% of modeled outcomes using native NOAA NBM quartiles. Roughly 25% of modeled outcomes lie below it and 25% above it; outcomes outside remain possible. This describes each hour separately, not the chance that the whole forecast stays inside. The NWS forecast line can fall outside the band.</p><p>The bounds are the 25th and 75th percentiles (P25 and P75). The middle estimate is the median (P50), not the midpoint of the bounds.</p><p id="nbmHourlyPercentiles"></p><p id="nbmHourlySource"></p></details>';
  document.getElementById('hourly24').before(box);
  box.querySelector('input').addEventListener('change',repaint);
  FEEDS.nbmHourly={label:'Hourly NBM',load:'loadNbmHourly',every:15*60000,age:30*60000,local:true,failure:'unavailable'};

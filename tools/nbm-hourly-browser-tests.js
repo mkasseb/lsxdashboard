@@ -13,13 +13,16 @@ async function primary(p){return p.evaluate(()=>({hrs:JSON.stringify(renderHourl
   try{
    await official(p);const before=await primary(p);await model(p);assert.deepEqual(await primary(p),before);
    assert.equal(await p.locator('.nbm-hourly-band').count(),1);assert.match(await p.locator('#nbmHourlyStatus').innerText(),/24\/24 hours matched/);
+   assert.equal(await p.locator('#nbmHourlyToggle').locator('..').innerText(),'Show NBM model range');
+   assert.match(await p.locator('.h24-svg').getAttribute('aria-label'),/NBM model range: the middle 50%.*P25–P75/);
    const input=p.locator('#hourlyCursor');await input.focus();await input.press('ArrowRight');
-   assert.match(await p.locator('#hourlyDetail').innerText(),/Middle 50% model range .*°F · middle estimate .*°F/);
+   assert.match(await p.locator('#hourlyDetail').innerText(),/NBM model range .*°F · middle estimate .*°F/);
    const info=p.locator('#nbmHourlyInfo'),help=info.locator('summary');
    assert.equal(await info.evaluate(e=>e.open),false);
    if(width<500)await help.tap();else{await help.focus();await help.press('Enter');}
    assert.equal(await info.evaluate(e=>e.open),true);
    assert.match(await info.innerText(),/outcomes outside remain possible/);
+   assert.match(await info.innerText(),/NBM model range shows the middle 50%.*25%.*25% above/);
    assert.match(await p.locator('#nbmHourlyPercentiles').innerText(),/P25 .* P50 .* P75/);
    assert.match(await p.locator('#nbmHourlySource').innerText(),/Native 2 m temperature/);
    if(process.env.NBM_ARTIFACTS){fs.mkdirSync(process.env.NBM_ARTIFACTS,{recursive:true});await info.screenshot({path:path.join(process.env.NBM_ARTIFACTS,`hourly-about-${width}-${timezone.replace('/','-')}.png`)});}

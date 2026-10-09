@@ -23,6 +23,7 @@ async function main(){
     await nws(p);const before=await primary(p);await model(p);
     assert.deepEqual(await primary(p),before,'NBM never changes official values/text or risk decisions');
     assert.equal(await p.locator('.nbm-inline').count(),3);assert.equal(await p.locator('.nbm-comparison').count(),5);
+    assert.deepEqual(await p.locator('.nbm-inline .nbm-label').allTextContents(),Array(3).fill('NBM model range'));
     assert.equal(await p.locator('.nbm-inline .nbm-window-note').count(),0);
     assert.equal(await p.locator('#nbmWindowHelp').count(),1);
     assert.match(await p.locator('#nbmWindowHelp').innerText(),/18-hour windows/);
@@ -35,6 +36,7 @@ async function main(){
     await p.evaluate(()=>loadForecast._paint());assert.equal(await p.locator('#daily .day').first().getAttribute('aria-expanded'),'true');
     assert(await p.locator('#daily .day').first().evaluate(e=>e===document.activeElement));
     const summary=p.locator('#nbmInfo summary');await summary.focus();await summary.press('Enter');
+    assert.match(await p.locator('#nbmInfoBody').innerText(),/P25 to P75, the middle 50%.*25%.*25% above.*outside remain possible/);
     await p.evaluate(()=>loadNbmRange());assert(await summary.evaluate(e=>e===document.activeElement));
     assert.match(await p.locator('#nbmInfoBody').innerText(),/Unpaired model windows/);
     assert.equal(await p.locator('#nbmInfoBody li').count(),1);

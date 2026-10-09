@@ -2,7 +2,8 @@
 
 This draft replaces daily and hourly P10/P50/P90 with native NOAA P25/P50/P75. NWS temperatures,
 NWS Key Messages, alerts, the LSX location boundary and forecast decisions retain their existing
-sources and behavior. “Middle 50% model range” spans P25–P75: roughly 25% of modeled outcomes lie
+sources and behavior. The visible label is “NBM model range”. Expanded details and accessibility
+describe P25–P75 as the middle 50%: roughly 25% of modeled outcomes lie
 below and 25% above; outcomes outside remain possible. This describes each native window/hour,
 not the probability of the entire time series staying inside. P50 remains the median.
 The optional P10/P90 threshold commentary is removed.
@@ -88,5 +89,15 @@ isolation at 320/390/1440px in Chicago/Tokyo, both themes and 200% text. Separat
 unchanged wording, official fallback, saved-location LSX membership, natural card height, Now-strip
 UV wrapping, warnings and source focus. Hosted preview tests use exact commit-byte hashes and
 normal TLS. The strict existing Cloudflare HTML-injection verifier remains intact.
+
+Hosted network diagnostics record bounded sanitized endpoint/error groups, request start/failure
+scenarios and document epochs, real elapsed times, pending requests at theme/layout/location/reload/
+teardown boundaries, and observed signal-abort call sites. The native 20-second weather timeout is
+distinguished from observed location cancellation; lifecycle-only correlations stay labeled as
+correlations. Current unsaved daily/hourly NWS, alerts, Key Messages and model loader states,
+successful-check/source timestamps, model notices and map health are logged at recovery checkpoints.
+These observations do not replace native-value/time comparisons. The older run's 65 failure events
+remain unclassified because its artifact download returned 403; subsequent diagnostic runs establish
+evidence for their own events only. No extraction or production refresh is part of these reruns.
 
 This is a draft review artifact. No merge or production activation is authorized by this change.
