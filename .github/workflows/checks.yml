@@ -51,6 +51,10 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/lsx-browser" playwright@1.62.1 pngjs@7.0.0 leaflet@1.9.4 maplibre-gl@5.24.0 @maplibre/maplibre-gl-leaflet@0.1.4
           node "$RUNNER_TEMP/lsx-browser/node_modules/playwright/cli.js" install --with-deps ${{ matrix.browser }}
+      - name: Verify official NWS messages, fallback, warning precedence and location races
+        env:
+          WEATHER_BROWSER: ${{ matrix.browser }}
+        run: NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" NWS_ARTIFACTS="$RUNNER_TEMP/redesign/nws" xvfb-run -a node tools/nws-message-browser-tests.js
       - name: Verify weather icon artwork in both themes
         env:
           WEATHER_BROWSER: ${{ matrix.browser }}
@@ -87,10 +91,6 @@ jobs:
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: |
           NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" REDESIGN_ARTIFACTS="$RUNNER_TEMP/redesign" xvfb-run -a node tools/redesign-tests.js
-      - name: Verify official NWS messages, fallback, warning precedence and location races
-        env:
-          WEATHER_BROWSER: ${{ matrix.browser }}
-        run: NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" NWS_ARTIFACTS="$RUNNER_TEMP/redesign/nws" xvfb-run -a node tools/nws-message-browser-tests.js
       - name: Verify optional NBM range prototype
         if: matrix.browser == 'chromium'
         run: |

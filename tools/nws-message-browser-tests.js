@@ -9,6 +9,10 @@ const prod=recording.products[0],endpoint='**/products/11111111-1111-1111-1111-1
 const expected=['Near-record warmth and predominantly dry weather is forecast into early next week.','The remnants of Tropical Cyclone Isaias bring slightly "cooler" temperatures Saturday and Sunday due to clouds, as well as chances of light rain in southeast Missouri and southwest Illinois.'];
 async function replace(p,product){await p.unroute(endpoint);await p.route(endpoint,r=>r.fulfill({json:product}));await p.evaluate(()=>loadAFD());}
 async function currentMessages(p){return p.locator('#callRow li').allTextContents();}
+async function sourceTarget(source){
+ const box=await source.boundingBox();
+ assert(box&&box.height>=44,'Source tap target: '+JSON.stringify(await source.evaluate(e=>{const c=getComputedStyle(e),r=e.getBoundingClientRect();return {rect:r.toJSON(),height:c.height,minHeight:c.minHeight,display:c.display,padding:c.padding,lineHeight:c.lineHeight,open:e.parentElement.open};})));
+}
 async function fallback(p,reason){
  assert.equal(await p.locator('#keyMessagesTitle').innerText(),'NWS Local Forecast');
  assert.match(await p.locator('#keyMessagesStatus').innerText(),reason);
@@ -27,10 +31,10 @@ async function main(){
     assert.match(await p.locator('#keyMessagesMeta').innerText(),/Regional outlook.*NWS St Louis MO \(LSX\)/);
     assert.match(await p.locator('#keyMessagesStatus').innerText(),/AFD issued Oct 8, 6:02 PM CDT/);
     assert.equal(new URL(await p.locator('#keyDiscussionLink').getAttribute('href')).searchParams.get('issuedby'),'LSX');
-    const source=p.locator('#briefWhy > summary');assert((await source.boundingBox()).height>=44);if(width<500)await source.tap();else{await source.focus();await source.press('Enter');}
+    const source=p.locator('#briefWhy > summary');await sourceTarget(source);if(width<500)await source.tap();else{await source.focus();await source.press('Enter');}
     assert(await p.locator('#briefWhy').evaluate(e=>e.open));assert.match(await p.locator('#briefEvidence').textContent(),/revision time is not supplied/);
     await source.focus();await p.evaluate(()=>loadAFD());assert(await source.evaluate(e=>e===document.activeElement));assert(await p.locator('#briefWhy').evaluate(e=>e.open));
-    assert((await source.boundingBox()).height>=44);
+    await sourceTarget(source);
     for(const theme of ['light','dark']){
      await p.evaluate(t=>applyTheme(t),theme);assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
      if(out&&timezone==='America/Chicago'){
