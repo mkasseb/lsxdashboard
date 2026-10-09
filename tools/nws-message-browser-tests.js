@@ -87,22 +87,19 @@ async function main(){
    let release,called=0;await p.unroute(endpoint);await p.route(endpoint,async r=>{if(called++===0){await new Promise(resolve=>release=resolve);await r.fulfill({json:{...prod,productText:prod.productText.replace('Near-record warmth','Older response warmth')}}).catch(()=>{});}else await r.fulfill({json:prod});});
    const oldRequest=p.waitForRequest(endpoint);await p.evaluate(()=>{window.oldAfd=loadAFD();});await oldRequest;
    await p.evaluate(()=>loadAFD());release();await p.evaluate(()=>window.oldAfd);assert.deepEqual(await currentMessages(p),expected);
-   // Crossing an office boundary clears the old office immediately and rejects its late reply.
-   let late;await p.unroute(endpoint);await p.route(endpoint,async r=>{await new Promise(resolve=>late=resolve);await r.fulfill({json:prod}).catch(()=>{});});
+   // A supported LSX town change clears old text and rejects the prior town's late reply.
+   let late,calls=0;await p.unroute(endpoint);await p.route(endpoint,async r=>{if(calls++===0){await new Promise(resolve=>late=resolve);await r.fulfill({json:{...prod,productText:prod.productText.replace('Near-record warmth','Prior-town response warmth')}}).catch(()=>{});}else await r.fulfill({json:prod});});
    const pending=p.waitForRequest(endpoint);await p.evaluate(()=>{window.lateAfd=loadAFD();});await pending;
-   const eax={...prod,issuingOffice:'KEAX',productText:prod.productText.replaceAll('AFDLSX','AFDEAX').replace('St Louis MO','Kansas City/Pleasant Hill MO').replace(/\.KEY MESSAGES[\s\S]*?&&/,'.KEY MESSAGES...\n- Dry weather is expected across western Missouri.\n&&')};
-   await p.route('**/points/39.0000,-94.0000',r=>r.fulfill({json:{properties:{cwa:'EAX',forecast:'https://api.weather.gov/gridpoints/LSX/0/forecast',forecastHourly:'https://api.weather.gov/gridpoints/LSX/0/forecast/hourly',forecastGridData:'https://api.weather.gov/gridpoints/LSX/0',observationStations:'https://api.weather.gov/gridpoints/LSX/0/stations'}}}));
-   await p.route('**/products/types/AFD/locations/EAX',r=>r.fulfill({json:{'@graph':[{'@id':'https://api.weather.gov/products/22222222-2222-2222-2222-222222222222',productCode:'AFD',issuingOffice:'KEAX',issuanceTime:prod.issuanceTime}]}}));
-   await p.route('**/products/22222222-2222-2222-2222-222222222222',r=>r.fulfill({json:eax}));
-   await p.evaluate(()=>setLocation({name:'Controlled EAX point',lat:39,lon:-94,precision:'representative',station:'KSUS'},{save:true}));
-   assert(!/St Louis MO|southeast Missouri/.test(await p.locator('#callCard').innerText()));
-   await p.waitForFunction(()=>nwsMessages?.office==='EAX');late();await p.evaluate(()=>window.lateAfd);
-   assert.deepEqual(await currentMessages(p),['Dry weather is expected across western Missouri.']);assert.match(await p.locator('#keyMessagesMeta').innerText(),/Kansas City\/Pleasant Hill MO \(EAX\)/);
-   assert.equal(new URL(await p.locator('#keyDiscussionLink').getAttribute('href')).searchParams.get('issuedby'),'EAX');
-   // Saved HTML cannot restore regional messages under the next location or office.
+   await p.evaluate(()=>{setLocation({name:'Belleville, IL',lat:38.52,lon:-89.98,precision:'representative',station:'KSUS'},{save:true});window.immediateMessages=document.getElementById('callRow').textContent;});
+   assert(!/Prior-town response|southeast Missouri/.test(await p.evaluate(()=>window.immediateMessages)));
+   await p.waitForFunction(()=>nwsMessages?.generation===locSeq&&nwsMessages?.status==='ready');late();await p.evaluate(()=>window.lateAfd);
+   assert.deepEqual(await currentMessages(p),expected);assert.match(await p.locator('#keyMessagesMeta').innerText(),/Regional outlook.*St Louis MO \(LSX\)/);
+   assert.equal(new URL(await p.locator('#keyDiscussionLink').getAttribute('href')).searchParams.get('issuedby'),'LSX');
+   assert(!s.requests.some(u=>/products\/types\/AFD\/locations\/(?!LSX)/.test(u)),'Only LSX discussion products are requested');
+   // Saved HTML cannot restore regional messages under the next selected location.
    assert(await p.evaluate(()=>!SNAP_PARTS.some(p=>['afd','callRow'].includes(p.id))));
    await p.evaluate(()=>{snapSafeSeq=locSeq;saveSnapshot();});const saved=await p.evaluate(()=>JSON.parse(localStorage.getItem(SNAP_KEY)));assert(!saved.parts.afd&&!saved.parts.callRow);
-   assert.deepEqual(s.errors,[]);results.push({test:'Warning precedence; independent forecast fallback; escaping; failed refresh; same-location overlap; office switch; saved HTML exclusion',status:'passed'});
+   assert.deepEqual(s.errors,[]);results.push({test:'Warning precedence; independent forecast fallback; escaping; failed refresh; same-location overlap; LSX town switch; saved HTML exclusion',status:'passed'});
   }finally{await s.context.close();}
  }finally{await browser.close();}
  if(out){fs.mkdirSync(out,{recursive:true});fs.writeFileSync(path.join(out,engine+'-nws-message-report.json'),JSON.stringify(results,null,2));}

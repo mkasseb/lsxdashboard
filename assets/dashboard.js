@@ -2864,14 +2864,14 @@ document.addEventListener("keydown",function(e){
 });
 
 /* ============ FORECAST DISCUSSION (the pulse) ============ */
-var nwsDiscussionOffice='', nwsMessages=null, nwsLocalForecast=null;
-function discussionLink(office){
-  return /^[A-Z]{3}$/.test(office||'')?'https://forecast.weather.gov/product.php?site='+office+'&issuedby='+office+'&product=AFD&format=CI&version=1&glossary=1':'';
+var nwsDiscussionOffice='LSX', nwsMessages=null, nwsLocalForecast=null;
+function discussionLink(){
+  return 'https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&version=1&glossary=1';
 }
 
 function renderAFD(sec, issued){
   var el=document.getElementById("afd");
-  var link=discussionLink(nwsDiscussionOffice), anchor=document.getElementById('afdDiscussionLink');
+  var link=discussionLink(), anchor=document.getElementById('afdDiscussionLink');
   anchor.hidden=!link;
   if(link){anchor.href=link;anchor.setAttribute('aria-label','Full NWS '+nwsDiscussionOffice+' forecast discussion (opens in a new tab)');}
   if(!sec){
@@ -2985,7 +2985,7 @@ function locSignal(){ if(!locAbort) locAbort=new AbortController(); return locAb
 /* Derived state is cleared on every change so a render can never MIX two places -- e.g. the new
    town's forecast high ranked against the old town's 96-year record. */
 function resetLocationState(){
-  nwsMessages=null; nwsLocalForecast=null; nwsDiscussionOffice='';
+  nwsMessages=null; nwsLocalForecast=null;
   if(typeof NbmRange!=="undefined") NbmRange.reset();
   if(typeof NbmHourly!=="undefined") NbmHourly.reset();
   lastAlertData=null; alertsRetained=false; retainedAlertKey=""; alertUpdateNotice();
@@ -3583,7 +3583,7 @@ function renderNwsMessages(){
   var now=Date.now(), c=feedChecks.afd, m=nwsMessages, status=m&&m.generation===locSeq?m.status:'loading';
   if(status==='ready'&&(feedState(c,now,FEEDS.afd.age)!=='ready'||now-m.issuedAt>NWS_MESSAGES_MAX_AGE||m.sectionIssuedAt&&now-m.sectionIssuedAt>NWS_MESSAGES_MAX_AGE)) status='stale';
   var title=document.getElementById('keyMessagesTitle'), meta='', notice='', evidence='', html='';
-  var link=discussionLink(nwsDiscussionOffice), anchor=document.getElementById('keyDiscussionLink');
+  var link=discussionLink(), anchor=document.getElementById('keyDiscussionLink');
   if(!link&&document.activeElement===anchor)document.querySelector('#briefWhy > summary').focus({preventScroll:true});
   anchor.hidden=!link;
   if(link){anchor.href=link;anchor.setAttribute('aria-label','Full NWS '+nwsDiscussionOffice+' forecast discussion (opens in a new tab)');}
@@ -3598,7 +3598,7 @@ function renderNwsMessages(){
       +'<p>Messages are withheld after 18 hours from the AFD issuance or an explicit Key Messages section time, or after one hour without a successful discussion check. They are fetched again on location changes and are never restored from saved HTML.</p>';
   }else{
     title.textContent='NWS Local Forecast';
-    meta='Local forecast for '+current.name+(nwsDiscussionOffice?' · NWS '+nwsDiscussionOffice:'');
+    meta='Local forecast for '+current.name;
     notice=({loading:'Checking regional Key Messages. Local forecast fallback.',missing:'Key Messages are not included in the latest discussion. Local forecast fallback.',stale:'Key Messages or their verification are stale. Local forecast fallback.',malformed:'Key Messages could not be verified in the latest discussion. Local forecast fallback.',unavailable:'Regional Key Messages are unavailable. Local forecast fallback.'}[status]||'Regional Key Messages are unavailable. Local forecast fallback.');
     var local=nwsLocalForecast&&nwsLocalForecast.generation===locSeq?nwsLocalForecast:null;
     var chosen=local&&nwsLocalPeriod(local.daily,feedChecks.daily,now,FEEDS.daily.age), source='Daily';

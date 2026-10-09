@@ -62,7 +62,7 @@ async function main(){
     // Real point switching runs before any controlled response routing.
     await p.evaluate(()=>{setLocation({name:'Wentzville, MO',lat:38.81,lon:-90.86,station:null,precision:'representative'},{save:false});setLocation({name:'Belleville, IL',lat:38.52,lon:-89.98,station:null,precision:'representative'},{save:false});});
     await p.waitForFunction(()=>snapSafeSeq===locSeq&&nwsMessages?.status==='ready',null,{timeout:90000});
-    assert.equal(await p.evaluate(()=>current.name),'Belleville, IL');assert.match(await p.locator('#keyMessagesMeta').textContent(),/LSX/);audit.live.push({width,test:'Rapid real point changes and office resolution',status:'passed'});
+    assert.equal(await p.evaluate(()=>current.name),'Belleville, IL');assert.match(await p.locator('#keyMessagesMeta').textContent(),/LSX/);audit.live.push({width,test:'Rapid real LSX point changes and fixed regional attribution',status:'passed'});
     // Clearly controlled latest-discussion absence/failure on hosted assets; source clocks stay real.
     await p.route('**/products/'+product.id,r=>r.fulfill({json:{...product,productText:product.productText.replace('.KEY MESSAGES...','.SYNOPSIS...')}}));
     await p.evaluate(()=>loadAFD());assert.equal(await p.locator('#keyMessagesTitle').textContent(),'NWS Local Forecast');assert.match(await p.locator('#keyMessagesStatus').textContent(),/not included/);

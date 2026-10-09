@@ -1351,16 +1351,12 @@ function loadStationPlot(){
 
 var afdRequestSeq=0;
 function loadAFD(){
-  var guard=locGuard(), seq=++afdRequestSeq, signal=locSignal(), office='';
+  var guard=locGuard(), seq=++afdRequestSeq, signal=locSignal(), office='LSX';
   function fresh(){return guard()&&seq===afdRequestSeq;}
   function read(url){return requestJSON(url,{headers:LD,cache:'no-cache'},signal);}
-  return pointsFor(current.lat,current.lon).then(function(pt){
-    if(!fresh()) return null;
-    office=pt&&pt.properties&&(pt.properties.cwa||pt.properties.gridId)||'';
-    if(!/^[A-Z]{3}$/.test(office)) throw new Error('No forecast office');
-    nwsDiscussionOffice=office;
-    return read(API+'/products/types/AFD/locations/'+office);
-  }).then(function(list){
+  // This is an LSX dashboard: regional guidance always comes from NWS St. Louis. Location
+  // guards still prevent a late request from repopulating a newly selected town's card.
+  return read(API+'/products/types/AFD/locations/LSX').then(function(list){
     if(!fresh()) return null;
     var g=list&&list['@graph'];
     if(!Array.isArray(g)) throw new Error('Invalid discussion list');

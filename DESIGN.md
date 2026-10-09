@@ -167,8 +167,8 @@ Local alerts and active mesoscale discussions come first. The hero pairs Now wit
 then hourly planning and the compact seven-day forecast stack beside the radar on wide screens.
 Phones read hourly, radar and seven-day in that order. Context cards keep individual disclosures.
 
-The hero (`callCard`/`callRow`) contains verified forecaster-written AFD Key Messages from the office
-resolved for the selected point. It preserves wording, geographic qualifiers and bullet order in a
+The hero (`callCard`/`callRow`) contains verified forecaster-written AFD Key Messages from NWS
+St. Louis (LSX). This dashboard’s existing location controls and boundaries are unchanged. It preserves wording, geographic qualifiers and bullet order in a
 single semantic list. It does not select, rewrite or rank the official messages. Local warnings
 remain prominent above the regional outlook even if the outlook describes generally calm weather.
 
@@ -184,9 +184,8 @@ reason. Only a current, verified daily/hourly NWS period can supply that text; s
 than 12 hours, saved HTML, overdue checks and expired periods are withheld. The official forecast
 link always follows the selected coordinates. No generated text supplies the NWS message card.
 
-The loader revalidates HTTP cache, resolves office metadata, sorts products by issuance and guards
-both location generations and overlapping request order. Changing location clears old text and
-attribution immediately. Neither Key Messages nor lower discussion markup is restored from the
+The loader revalidates HTTP cache, requests only LSX discussions, sorts products by issuance and guards
+both location generations and overlapping request order. Changing location clears old text immediately; the regional attribution remains LSX. Neither Key Messages nor lower discussion markup is restored from the
 snapshot. The lower NWS Forecast Details card displays forecaster reasoning without duplicating
 Key Messages. Disclosures and source anchors stay independent, keyboard accessible and at least
 44px tall; refresh preserves focus and unchanged live-status text avoids repeated announcements.

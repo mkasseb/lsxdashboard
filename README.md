@@ -169,7 +169,7 @@ The full design rationale — what each decision replaced, and why — lives in
   product dates retain their stated day; daylight-saving changes never shorten a climate day.
 - **Location generations.** Every location-scoped fetch checks `fresh()` before writing to the
   DOM, so one town's numbers can never appear under another town's label.
-- **Official message provenance.** NWS Key Messages preserves the selected office’s AFD wording
+- **Official message provenance.** NWS Key Messages preserves NWS St. Louis AFD wording
   and bullet order. “Source and freshness” separates AFD product issuance from explicit section
   time, and identifies the current local NWS forecast fallback when messages cannot be verified.
 - **Visible, shareable locations.** The sticky navigation retains the selected town. Favorites
@@ -705,9 +705,9 @@ with a clear previous-range notice until its original expiry; location reset cle
 
 ### NWS Key Messages and current local fallback
 
-The hero replaces generated Bottom Line advice with the selected forecast office’s `.KEY MESSAGES…`
-section. The point metadata supplies the office; the product list is sorted by issuance rather than
-assuming array order. Requests revalidate their HTTP cache, use location cancellation and generation
+The hero replaces generated Bottom Line advice with NWS St. Louis (LSX) `.KEY MESSAGES…`
+text. This remains an LSX-only dashboard, with its existing location controls and boundaries.
+The LSX product list is sorted by issuance rather than assuming array order. Requests revalidate their HTTP cache, use location cancellation and generation
 guards, and reject older overlapping refreshes. Product identity, timestamps, section termination and
 bullet formatting must validate before official text is shown. Wrapped decimals, negative temperatures,
 geographic qualifiers and source order are preserved. Only whitespace and list markers are normalized.
