@@ -163,122 +163,38 @@ stay on explicit pixels: those values are tuned to SVG geometry.
 
 ## The page is ordered by what a visitor came for
 
-Alerts first (in calm weather that card collapses to a single all-clear line), then the Bottom
-Line, then The Pulse, then the hero band — "Now" on the left, the Sky card on the right — then the
-next 24 hours in a full-width band of its own, and finally the masonry.
-The Bottom Line (né The Call; ids are still `callCard`/`callRow`) is the page reasoning on the
-visitor's behalf rather than handing them numbers: rain/storm windows, heat and cold, UV with a
-burn clock, wind, air quality, a temperature-crash warning, climate records — and one synthesized
-verdict that scores every daylight hour on comfort, rain risk and wind to name the best two-hour
-window to be outside, spoken only when the day has adversity worth dodging. It ranks directly
-under safety, so the card is on the first screen whatever the weather is doing.
-The same briefing now reads the NWS seven-day day/night periods after the hourly edge. Later-week
-rain, storms, wintry weather, heat, freezing cold and wind appear in their own expandable planning
-section alongside the near-term advice.
-Those cues name the forecast day, avoid exact timing and use softer planning language; current
-warnings never borrow them as evidence. The daily feed can still populate the card when the hourly
-feed fails. Bottom Line keeps the feed's final day-only period after an evening load even though
-the seven-row forecast card leaves that incomplete row off its display.
-Because that briefing now owns the cross-week synthesis, the seven-day card starts directly with
-its expandable day rows. The former forecast summary repeated the same headline, precipitation
-window, and weekly temperature range without adding a distinct decision, so it was removed.
-If a later forecast refresh fails, the saved in-memory week and hourly guidance is cleared before
-the briefing repaints; a failed hourly request also clears the old 24-hour chart.
+Local alerts and active mesoscale discussions come first. The hero pairs Now with NWS Key Messages,
+then hourly planning and the compact seven-day forecast stack beside the radar on wide screens.
+Phones read hourly, radar and seven-day in that order. Context cards keep individual disclosures.
 
-Its presentation is a decision briefing, not a pill cloud. `buildBottomLine()` receives structured
-candidates and chooses one actionable lead; climate context can never take that slot, and the
-rain/no-rain candidate is the fallback when the forecast offers no stronger decision. Up to three
-supporting cues are then ranked by consequence: useful wet timing receives a protected rank, while
-a dry forecast competes normally with air quality, wind, overnight comfort and other decisions.
-Duplicate topics collapse before selection, so two ways of describing the same cold trough or heat
-episode cannot consume the card.
-On desktop, the near-term section owns the two-column layout beneath its full-width heading:
-the lead sits beside its supporting cues. A lead without supporting cues fills the width, and
-tablet and phone layouts stack the advice.
+The hero (`callCard`/`callRow`) contains verified forecaster-written AFD Key Messages from the office
+resolved for the selected point. It preserves wording, geographic qualifiers and bullet order in a
+single semantic list. It does not select, rewrite or rank the official messages. Local warnings
+remain prominent above the regional outlook even if the outlook describes generally calm weather.
 
-The synthesized outdoor window now searches the full forecast horizon, including tomorrow after
-an evening page load. For heat and wind, that candidate can be folded into the lead as an exact
-two-hour plan and removed from the support list. Rain and storm timing stay separate: the endpoint
-of the most comfortable pair of hours is not evidence that a storm begins then, so it can only
-appear as an explicitly labelled supporting window and never as “finish by” guidance. A matching
-storm alert suppresses that comfort cue entirely. The Alerts section remains the safety authority;
-the strongest active local alert changes matching Bottom Line wording into an action without
-copying the product title, and a short-fuse storm warning always says to shelter now rather than
-allowing any later forecast window to qualify the warning.
-The live countdown reselects the strongest local alert at its verified expiration, without waiting
-for the next feed poll. Folded cards are evaluated phase by phase: a warning's expired tier cannot
-inherit a later advisory's end time. Unknown end times remain conservative.
-Historical context fills a spare support slot
-only when the lead itself is neutral or good; a warning never spends scarce space on a record fact.
-Below 600px that optional context cue yields the space entirely because the same information
-remains available in the Climate section.
+The attribution names the office and regional scope. AFD product issuance and successful-check times
+are shown explicitly; an aviation-only product update does not establish a message revision time.
+A supplied section timestamp remains separate. Unknown section revision time is stated in Source
+and freshness. Product and explicit section age must stay within 18 hours; the successful discussion
+check must stay within one hour. These dashboard gates withhold stale messages without inferring
+when a carried-forward bullet changed.
 
-Near-term guidance and later-week planning are selected independently, so the same topic can
-describe a dry next day and storm potential later in the week without one suppressing the other.
-The header names the near-term horizon; expandable planning names its own seven-day endpoint.
-Local warnings and emergencies suppress later-week planning. Both use Central Time.
+Missing, malformed, unavailable or stale discussions show NWS Local Forecast with a clear fallback
+reason. Only a current, verified daily/hourly NWS period can supply that text; source issuance older
+than 12 hours, saved HTML, overdue checks and expired periods are withheld. The official forecast
+link always follows the selected coordinates. No generated text supplies the NWS message card.
 
-The Bottom Line explicitly identifies dashboard-generated advice; The Pulse identifies
-NWS-authored guidance. A native “Why this recommendation?” disclosure exposes the selected
-candidates' forecast values, the rule used, successful-check and source ages, missing data and
-timing uncertainty. Source issuance stays unknown when a service does not supply it. Disclosures
-remain stable DOM nodes so their open state and summary focus survive refreshes.
-The renderer
-preserves the hierarchy in DOM order — heading, lead,
-semantic support list — and uses severity colour only when the underlying candidate warrants it.
-The blocks are deliberately not pill-shaped and have no hover state: they are readings, not
-controls.
+The loader revalidates HTTP cache, resolves office metadata, sorts products by issuance and guards
+both location generations and overlapping request order. Changing location clears old text and
+attribution immediately. Neither Key Messages nor lower discussion markup is restored from the
+snapshot. The lower NWS Forecast Details card displays forecaster reasoning without duplicating
+Key Messages. Disclosures and source anchors stay independent, keyboard accessible and at least
+44px tall; refresh preserves focus and unchanged live-status text avoids repeated announcements.
 
-All hourly decisions run through `bottomLineHours()` and the pure
-`bottomLineHourlyCandidates()` before rendering. That boundary is intentional safety engineering:
-thresholds, wet-block timing, daylight continuity, missing-data behavior and slower-feed inputs can
-be tested without a DOM or a live forecast. “Dry air” requires an actual dew point, an outdoor
-window requires two truly consecutive hours carrying NWS `isDaytime`, and a local warning or
-emergency can promote its matching forecast candidate over an unrelated numeric priority. If an
-emergency has no matching evidence to translate, the briefing yields rather than placing an
-unrelated recommendation directly below the emergency banner. Air-quality, smoke and fog products
-use exclusive semantic matches so their fallback alert styling cannot accidentally rewrite storm
-or fire-weather guidance.
-`bottomLineWeekCandidates()` is the matching pure boundary for the coarser NWS day/night periods.
-When a period crosses the 24-hour cutoff, the extra NWS hourly records assess only its remaining
-hours; a gap in that tail suppresses the period instead of assigning its whole-period high, low or
-rain chance to the tail. Missing precipitation chances stay unknown, and later-week hazards rank
-below urgent hourly ones.
-
-**The Pulse rides directly behind it in calm weather, at full length.** `#afdCard` is the same kind
-of card as the Bottom Line — one verdict computed by this page, one written by a human at NWS
-St. Louis — so the two reason together above the numbers. It used to sit below the
-hero under "the week ahead & deeper context", which mis-filed it twice: `extractAFD` reaches for
-Key Messages, then the Synopsis, then the **Short-Term Outlook**, all of which describe the next
-12–24 hours rather than the week, and the rank buried the forecaster's read of the day some
-2,000px down.
-
-**There is deliberately no clamp, and that took two attempts.** The card first shipped collapsed to
-a few lines behind a "Read the full discussion" button, on the theory that it had to be cheap to
-deserve the rank. Measuring the 21 most recent LSX products said otherwise: in the calm-weather
-layout the card runs 151–365px (median 304), putting the top of `#currentCard` between 668px and
-881px — so on a 912px phone the hero is on the first screen in every one of them, clamped or not.
-The clamp was hiding up to 200px, and cutting the forecaster off mid-sentence, to buy room nothing
-needed. It had been sized against multi-paragraph Short-Term prose, which is an input this card has
-never actually been handed (see below).
-
-One thing to know before touching `extractAFD`: its Synopsis and Short-Term fallbacks currently
-match **nothing** on this office's products. LSX writes `.SHORT TERM /THROUGH THURSDAY/...` and the
-pattern wants `.SHORT TERM...`, so the qualifier between the name and the dots defeats it. It goes
-unnoticed because Key Messages was present in all 21 recent products sampled, so the first branch
-always wins. That is pre-existing and deliberately left alone — fixing it changes what the card
-*says*, which deserves its own review. It is also the input the clamp was built for, so if it is
-ever fixed, re-measure before reaching for one again.
-
-`.railhead` labels name each band — "Right now", "Next 24 hours", "The week ahead" — so the scroll
-has a spine. The grid renders in DOM order (no card carries a CSS `order`), so the sequence above
-is exactly the source order of `index.html`.
-
-AQI category wording is shared between the exposure card and the briefing. Unhealthy air suppresses
-favorable outdoor and window-opening cues; unverified alerts or air checks also prevent comfort
-assurances and display a short status beside the advice. Gaps between forecast hours remain unknown
-in both the advice and chart. Chart x positions use timestamps, and curves and filled areas stop at
-missing hours instead of interpolating across the gap.
+Existing pure weather candidates remain internal safety guards for optional NBM temperature
+commentary, which now lives inside hourly Temperature uncertainty details. Daily/hourly NWS and
+NBM data integration is unchanged. Chart gaps still represent missing hours and do not interpolate
+across unknown conditions. The grid uses DOM order throughout.
 
 ## The 24-hour chart is never nested inside `#current`
 

@@ -147,7 +147,7 @@ check('the previous v20 snapshot is explicitly discarded',
 const snapshotParts = new Function(lift(/^var FEEDS=\{[\s\S]*?^\};/m, 'FEEDS')+'\n'+
   lift(/^var SNAP_PARTS=.*$/m, 'SNAP_PARTS')+'; return SNAP_PARTS;')();
 check('saved HTML cannot restore stale current readings, risk or briefing',
-  ['current', 'ccStation', 'spc', 'spcThreats', 'precipEvents', 'callRow', 'alerts', 'mcd', 'aqi'].every(id => !snapshotParts.some(p=>p.id===id)), true);
+  ['current', 'ccStation', 'spc', 'spcThreats', 'precipEvents', 'callRow', 'afd', 'alerts', 'mcd', 'aqi'].every(id => !snapshotParts.some(p=>p.id===id)), true);
 
 /* Correctness must survive the viewer's clock, not just the CI runner's default timezone. */
 {

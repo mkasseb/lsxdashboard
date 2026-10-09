@@ -1191,6 +1191,69 @@ function extractAFD(text){
   return null;
 }
 
+/* AFD Key Messages are official text, never a synopsis or a generated substitute. Keep the
+   product clock separate: aviation-only issuances often carry the same messages forward. */
+var NWS_MESSAGES_MAX_AGE=18*3600000;
+function nwsTextTime(line){
+  var m=/^(?:Issued at\s+)?(\d{1,4})\s+(AM|PM)\s+(CST|CDT|EST|EDT|MST|MDT|PST|PDT|AKST|AKDT|HST|UTC|GMT)\s+(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})$/i.exec(line.trim());
+  if(!m) return 0;
+  var clock=+m[1], h=clock<13?clock:Math.floor(clock/100), min=clock<13?0:clock%100;
+  var month=['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'].indexOf(m[4].toLowerCase());
+  if(h<1||h>12||min>59||month<0) return 0;
+  var day=+m[5], year=+m[6], date=new Date(Date.UTC(year,month,day));
+  if(date.getUTCMonth()!==month||date.getUTCDate()!==day) return 0;
+  var offset={CST:6,CDT:5,EST:5,EDT:4,MST:7,MDT:6,PST:8,PDT:7,AKST:9,AKDT:8,HST:10,UTC:0,GMT:0}[m[3].toUpperCase()];
+  return Date.UTC(year,month,day,h%12+(m[2].toUpperCase()==='PM'?12:0)+offset,min);
+}
+function afdKeyMessages(prod,office,now){
+  var bad=function(status){return {status:status,messages:[]};};
+  if(!prod||typeof prod.productText!=='string'||prod.productText.length>150000||! /^[A-Z]{3}$/.test(office||'')) return bad('malformed');
+  var text=prod.productText.replace(/\r/g,''), issued=Date.parse(prod.issuanceTime||'');
+  var header=new RegExp('^AFD'+office+'[ \\t]*$','m');
+  if(prod.productCode!=='AFD'||prod.issuingOffice!=='K'+office||!header.test(text)||!isFinite(issued)||issued<=0||issued>now+10*60000) return bad('malformed');
+  var name=/^National Weather Service[ \t]+([^\n]+)$/im.exec(text);
+  if(!name) return bad('malformed');
+  if(now-issued>NWS_MESSAGES_MAX_AGE) return bad('stale');
+  var headings=Array.from(text.matchAll(/^[ \t]*\.KEY[ \t]+MESSAGES(?:\.{3}|…)[ \t]*$/gim));
+  if(!headings.length) return bad('missing');
+  if(headings.length!==1) return bad('malformed');
+  var rest=text.slice(headings[0].index+headings[0][0].length);
+  var end=/^[ \t]*(?:&&|\$\$|\.[A-Z][^\n]*(?:\.{3}|…))[^\n]*$/m.exec(rest);
+  if(!end) return bad('malformed'); // A truncated section must not silently lose a qualifier.
+  var lines=rest.slice(0,end.index).trim().split('\n'), sectionIssued=0;
+  if(/^(?:Issued at\b|\d.*\b(?:AM|PM)\b)/i.test(lines[0]||'')){
+    sectionIssued=nwsTextTime(lines.shift());
+    if(!sectionIssued||sectionIssued>issued+10*60000) return bad('malformed');
+    if(now-sectionIssued>NWS_MESSAGES_MAX_AGE) return bad('stale');
+  }
+  var messages=[], item='';
+  for(var i=0;i<lines.length;i++){
+    var line=lines[i].trim(); if(!line) continue;
+    if(/^(?:[-*•]|\d{1,2}[.)])\s*$/.test(line)) return bad('malformed');
+    // A wrapped decimal or negative temperature is prose, not another bullet. NWS also uses
+    // "-Dry" without a space, while numbered lists require a space after their marker.
+    var bullet=/^(?:[-*•][ \t]+|[-*•](?=[A-Za-z"“(])|\d{1,2}[.)][ \t]+)(\S.*)$/.exec(line);
+    if(bullet){if(item) messages.push(item);item=bullet[1];}
+    else if(item) item+=' '+line;
+    else return bad('malformed');
+  }
+  if(item) messages.push(item);
+  messages=messages.map(function(s){return s.replace(/\s+/g,' ').trim();});
+  if(!messages.length) return bad('missing');
+  if(messages.length>10||messages.some(function(s){return s.length<8||s.length>2500||/[\x00-\x08\x0b\x0c\x0e-\x1f]/.test(s);})) return bad('malformed');
+  return {status:'ready',messages:messages,issuedAt:issued,sectionIssuedAt:sectionIssued,office:office,officeName:name[1].trim()};
+}
+function nwsLocalPeriod(data,check,now,maxCheckAge){
+  if(feedState(check,now,maxCheckAge)!=='ready'||check.saved) return null;
+  var issued=Date.parse(data&&data.properties&&(data.properties.updateTime||data.properties.updated||data.properties.generatedAt)||'');
+  if(!isFinite(issued)||issued<=0||issued>now+10*60000||now-issued>12*3600000) return null;
+  var periods=data&&data.properties&&data.properties.periods;
+  if(!Array.isArray(periods)) return null;
+  var period=periods.find(function(p){return p&&Date.parse(p.startTime)<=now&&Date.parse(p.endTime)>now
+    &&typeof (p.detailedForecast||p.shortForecast)==='string'&&(p.detailedForecast||p.shortForecast).trim();});
+  return period?{period:period,issuedAt:issued}:null;
+}
+
 /* ============ SPC MESOSCALE DISCUSSIONS ============ */
 /* The gap the outlook matrix can't see: a Mesoscale Discussion is SPC's short-fused note that
    severe weather — usually a watch — is expected in the next 1–3 hours, issued hours after the

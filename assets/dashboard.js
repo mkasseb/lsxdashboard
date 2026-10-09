@@ -61,8 +61,7 @@ function freshnessCheck(){
   renderBriefingStatus();
   if(renderTheCall._comfortAllowed!=null&&renderTheCall._comfortAllowed!==briefingComfortAllowed()) renderTheCall();
   if(typeof NbmHourly!=="undefined") renderNbmBriefing();
-  var evidence=renderBriefingEvidence._models;
-  if(evidence) renderBriefingEvidence(evidence.near,evidence.planning,evidence.hours);
+  renderNwsMessages();
 }
 
 function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
@@ -2865,12 +2864,18 @@ document.addEventListener("keydown",function(e){
 });
 
 /* ============ FORECAST DISCUSSION (the pulse) ============ */
-var AFD_LINK="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1";
+var nwsDiscussionOffice='', nwsMessages=null, nwsLocalForecast=null;
+function discussionLink(office){
+  return /^[A-Z]{3}$/.test(office||'')?'https://forecast.weather.gov/product.php?site='+office+'&issuedby='+office+'&product=AFD&format=CI&version=1&glossary=1':'';
+}
 
 function renderAFD(sec, issued){
   var el=document.getElementById("afd");
+  var link=discussionLink(nwsDiscussionOffice), anchor=document.getElementById('afdDiscussionLink');
+  anchor.hidden=!link;
+  if(link){anchor.href=link;anchor.setAttribute('aria-label','Full NWS '+nwsDiscussionOffice+' forecast discussion (opens in a new tab)');}
   if(!sec){
-    el.innerHTML='<div class="empty">Discussion unavailable right now. <a href="'+AFD_LINK+'" target="_blank" rel="noopener">Open the full AFD ↗</a></div>';
+    el.innerHTML='<div class="empty">Discussion details unavailable right now.'+(link?' <a href="'+esc(link)+'" target="_blank" rel="noopener noreferrer">Open the full AFD ↗</a>':'')+'</div>';
     return;
   }
   var inner;
@@ -2883,8 +2888,8 @@ function renderAFD(sec, issued){
     var paras=sec.text.split(/\n\s*\n/).map(function(p){return esc(p.replace(/\s*\n\s*/g," ").trim());}).filter(Boolean);
     inner=paras.map(function(p){return '<p>'+p+'</p>';}).join("");
   }
-  var meta=sec.label+" · NWS St. Louis"+(issued?" · issued "+timeAgo(issued):"");
-  el.innerHTML='<div class="afd-body">'+inner+'</div><div class="afd-meta">'+meta+'</div>';
+  var meta=sec.label+' · NWS '+(nwsMessages&&nwsMessages.officeName||nwsDiscussionOffice)+(issued?' · AFD issued '+timeAgo(issued):'');
+  el.innerHTML='<div class="afd-body">'+inner+'</div><div class="afd-meta">'+esc(meta)+'</div>';
 }
 
 
@@ -2973,17 +2978,17 @@ function locGuard(){ var g=locSeq; return function(){ return g===locSeq; }; }
    towns a few times leaves every superseded fetch running to completion, competing for the browser's
    handful of per-host connections with the ones the user is actually waiting on.
    Only feeds that describe A PLACE carry this signal. The CWA-wide alert list, the fixed river
-   gauges, the AFD, the regional station plot and the one-shot service-metadata lookups deliberately
+   gauges, the regional station plot and the one-shot service-metadata lookups deliberately
    do not — aborting those would paint their error states every time the user moved. */
 var locAbort=null;
 function locSignal(){ if(!locAbort) locAbort=new AbortController(); return locAbort.signal; }
 /* Derived state is cleared on every change so a render can never MIX two places -- e.g. the new
    town's forecast high ranked against the old town's 96-year record. */
 function resetLocationState(){
+  nwsMessages=null; nwsLocalForecast=null; nwsDiscussionOffice='';
   if(typeof NbmRange!=="undefined") NbmRange.reset();
   if(typeof NbmHourly!=="undefined") NbmHourly.reset();
   lastAlertData=null; alertsRetained=false; retainedAlertKey=""; alertUpdateNotice();
-  renderBriefingEvidence._models=null;
   Object.keys(FEEDS).forEach(function(k){if(FEEDS[k].local&&FEEDS[k].tracked!==false) feedChecks[k]={status:"loading",successAt:0,issuedAt:0,saved:false};});
   savedParts={}; freshnessCheck();
   climate.normHi=null; climate.normLo=null; climate.normDate=null; climate.fcHi=null; climate.fcLo=null; climate.fcHiDate=null; climate.fcLoDate=null;
@@ -3011,11 +3016,7 @@ function clearLocationUI(){
     });
   });
   syncHourlyControls();
-  var briefing=document.getElementById("callRow");if(briefing) briefing.innerHTML="";
-  document.getElementById("briefPlanning").hidden=true;
-  document.getElementById("briefEvidence").innerHTML="";
-  var cc=document.getElementById("callCard"); if(cc) cc.classList.remove("has");
-  var ch=document.getElementById("callHorizon"); if(ch) ch.textContent="Next 24 hours";
+  renderNwsMessages(); renderAFD(null); renderNbmBriefing();
   var aq=document.getElementById("aqiCard"); if(aq) aq.classList.remove("show");
   var cs=document.getElementById("cnStation"); if(cs) cs.textContent="\u2026";
   drawMcdPolygons();   // lastMcds was just reset; take the old place's outline off the map with it
@@ -3567,42 +3568,59 @@ function renderUvNow(){
     +'<div class="s">'+(sub.length?'<span class="ex-b">'
       +sub.join('</span> <span class="ex-sep">·</span> <span class="ex-b">')+'</span>':'')+'</div>';
 }
-/* ============ BOTTOM LINE (né The Call — plain-English verdicts from data on hand) ============
-   Near-term rules use the next ~24 hourly periods; later rules use NWS seven-day periods. AQI,
-   local alerts and outlooks refine that picture. One candidate leads and up to three distinct
-   topics support it. The hourly rain call is the near-term fallback; the daily feed can still
-   give a briefing when the hourly service is unavailable. */
+/* ============ NWS KEY MESSAGES ============
+   The hero displays only verified official text. Existing hazard candidates remain internal
+   guards for the optional model note in hourly details; they never supply the NWS message card. */
 var callAqi=null;
 var callRisk=null;   // {spc, ero, fire, wssi}, each [day1,day2] — raw dn/rank values from loadSpc
 var callLocalAlert=null; // strongest active LSX alert covering the selected location, if known
 var callAlertGroups=[]; // retained so an expiring warning can yield to another active local hazard
 
-function renderBriefingEvidence(near,planning,H){
-  var el=document.getElementById("briefEvidence"); if(!el) return;
-  renderBriefingEvidence._models={near:near,planning:planning,hours:H};
-  var sources={}, html="";
-  [["Near-term guidance",near],["Later-week planning",planning]].forEach(function(pair){
-    var model=pair[1]; if(!model||!model.lead) return;
-    html+='<h3 class="brief-section-title">'+pair[0]+'</h3><dl>';
-    [model.lead].concat(model.supports).forEach(function(c){
-      var e=briefingEvidence(c,H);
-      e.sources.forEach(function(k){sources[k]=true;});
-      html+='<dt>'+esc(c.headline)+'</dt><dd>'+esc(e.reason)
-        +(e.values.length?'<ul>'+e.values.map(function(v){return '<li>'+esc(v)+'</li>';}).join('')+'</ul>':'')
-        +(e.limits.length?'<p>'+esc(e.limits.join(' '))+'</p>':'')+'</dd>';
-    });
-    html+='</dl>';
-  });
-  html+='<h3 class="brief-section-title">Sources and age</h3><ul>';
-  Object.keys(sources).forEach(function(k){
-    var cfg=FEEDS[k], c=feedChecks[k], state=feedState(c,Date.now(),cfg.age);
-    var label=cfg.label+': '+(c.successAt?'last successful check '+timeAgo(new Date(c.successAt).toISOString()):'no successful check');
-    label+=' · '+({ready:'verified',partial:'some data unavailable',stale:'check overdue',unavailable:'unavailable',saved:'saved and unverified',loading:'checking'}[state]||'unavailable');
-    label+=c.issuedAt?' · source '+timeAgo(new Date(c.issuedAt).toISOString()):' · source issuance time not supplied';
-    html+='<li>'+esc(label)+'</li>';
-  });
-  html+='</ul><p>Generated automatically for '+esc(current.name)+'. '+(current.precision==='representative'?'The selected town point may differ from your exact position. ':'')+'Official NWS warning instructions take precedence.</p>';
-  if(el.innerHTML!==html) el.innerHTML=html;
+function nwsStamp(time){return weatherTime(time,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'});}
+function renderNwsMessages(){
+  var card=document.getElementById('callCard'), row=document.getElementById('callRow');
+  if(!card||!row) return;
+  var now=Date.now(), c=feedChecks.afd, m=nwsMessages, status=m&&m.generation===locSeq?m.status:'loading';
+  if(status==='ready'&&(feedState(c,now,FEEDS.afd.age)!=='ready'||now-m.issuedAt>NWS_MESSAGES_MAX_AGE||m.sectionIssuedAt&&now-m.sectionIssuedAt>NWS_MESSAGES_MAX_AGE)) status='stale';
+  var title=document.getElementById('keyMessagesTitle'), meta='', notice='', evidence='', html='';
+  var link=discussionLink(nwsDiscussionOffice), anchor=document.getElementById('keyDiscussionLink');
+  if(!link&&document.activeElement===anchor)document.querySelector('#briefWhy > summary').focus({preventScroll:true});
+  anchor.hidden=!link;
+  if(link){anchor.href=link;anchor.setAttribute('aria-label','Full NWS '+nwsDiscussionOffice+' forecast discussion (opens in a new tab)');}
+  if(status==='ready'){
+    title.textContent='NWS Key Messages';
+    meta='Regional outlook · NWS '+m.officeName+' ('+m.office+')';
+    html='<ul class="nws-key-list">'+m.messages.map(function(s){return '<li>'+esc(s)+'</li>';}).join('')+'</ul>';
+    notice='AFD issued '+nwsStamp(m.issuedAt)+' · checked '+nwsStamp(c.successAt);
+    evidence='<p>'+(m.sectionIssuedAt?'Key Messages section issued '+esc(nwsStamp(m.sectionIssuedAt))+'.':'Key Messages revision time is not supplied in this discussion.')+'</p>'
+      +'<p>AFD product issuance can reflect an aviation-only update; it does not establish when these messages changed. Official wording and bullet order are preserved; line wrapping is removed.</p>'
+      +'<p>This is an office-wide outlook. Geographic qualifiers apply to the named areas; these bullets are not a point forecast for '+esc(current.name)+'. Location-specific warnings above take precedence.</p>'
+      +'<p>Messages are withheld after 18 hours from the AFD issuance or an explicit Key Messages section time, or after one hour without a successful discussion check. They are fetched again on location changes and are never restored from saved HTML.</p>';
+  }else{
+    title.textContent='NWS Local Forecast';
+    meta='Local forecast for '+current.name+(nwsDiscussionOffice?' · NWS '+nwsDiscussionOffice:'');
+    notice=({loading:'Checking regional Key Messages. Local forecast fallback.',missing:'Key Messages are not included in the latest discussion. Local forecast fallback.',stale:'Key Messages or their verification are stale. Local forecast fallback.',malformed:'Key Messages could not be verified in the latest discussion. Local forecast fallback.',unavailable:'Regional Key Messages are unavailable. Local forecast fallback.'}[status]||'Regional Key Messages are unavailable. Local forecast fallback.');
+    var local=nwsLocalForecast&&nwsLocalForecast.generation===locSeq?nwsLocalForecast:null;
+    var chosen=local&&nwsLocalPeriod(local.daily,feedChecks.daily,now,FEEDS.daily.age), source='Daily';
+    if(!chosen&&local){chosen=nwsLocalPeriod(local.hourly,feedChecks.hourly,now,FEEDS.hourly.age);source='Hourly';}
+    if(chosen){
+      var p=chosen.period;
+      html='<p class="nws-local-period"><strong>'+esc(p.name||nwsStamp(Date.parse(p.startTime)))+'</strong> '+esc(p.detailedForecast||p.shortForecast)+'</p>';
+      evidence='<p>'+source+' NWS forecast issued '+esc(nwsStamp(chosen.issuedAt))+'; checked '+esc(nwsStamp(feedChecks[source==='Daily'?'daily':'hourly'].successAt))+'. Valid '+esc(nwsStamp(Date.parse(p.startTime)))+' – '+esc(nwsStamp(Date.parse(p.endTime)))+'.</p>';
+    }else html='<p>Current NWS local forecast unavailable. Open the official forecast for this location.</p>';
+    html+='<p class="nws-local-link">'+officialSourceLink('https://forecast.weather.gov/MapClick.php?lat='+current.lat+'&lon='+current.lon,'NWS local forecast for '+current.name,'Open local NWS forecast ↗')+'</p>';
+    evidence+='<p>This fallback uses the current period of a live NWS local forecast, with an issuance no more than 12 hours old and a successful check within one hour. Saved, expired or unverified text is withheld. It is not an NWS Key Messages section. Local warnings above take precedence.</p>';
+  }
+  var metaEl=document.getElementById('keyMessagesMeta');if(metaEl.textContent!==meta)metaEl.textContent=meta;
+  var statusEl=document.getElementById('keyMessagesStatus');if(statusEl.textContent!==notice)statusEl.textContent=notice;
+  if(statusEl.getAttribute('data-state')!==status)statusEl.setAttribute('data-state',status);
+  if(row.innerHTML!==html){
+    var rowFocused=row.contains(document.activeElement);
+    row.innerHTML=html;
+    if(rowFocused){var restore=row.querySelector('a')||document.querySelector('#briefWhy > summary');restore.focus({preventScroll:true});}
+  }
+  var details=document.getElementById('briefEvidence');if(details.innerHTML!==evidence) details.innerHTML=evidence;
+  card.classList.add('has');
 }
 function briefingComfortAllowed(){
   return feedState(feedChecks.alerts,Date.now(),FEEDS.alerts.age)==="ready"
@@ -3612,14 +3630,14 @@ function renderBriefingStatus(){
   var el=document.getElementById("briefStatus"); if(!el) return;
   var notes=[];
   if(feedState(feedChecks.alerts,Date.now(),FEEDS.alerts.age)!=="ready") notes.push("Alert status is unverified. Check official NWS warnings.");
-  if(feedState(feedChecks.aqi,Date.now(),FEEDS.aqi.age)!=="ready") notes.push("Air quality is unverified; outdoor comfort guidance is limited.");
   el.textContent=notes.join(" "); el.hidden=!notes.length;
 }
 // Supplemental temperature context never enters the official candidate selector.
 function renderNbmBriefing(){
-  var context=renderTheCall._nbmContext,host=document.getElementById('briefNear'),el=document.getElementById('nbmBriefNote');
+  var context=renderTheCall._nbmContext,host=document.getElementById('forecastTempBody'),container=document.getElementById('forecastTempContext'),el=document.getElementById('nbmBriefNote');
   var note=host&&context&&typeof NbmHourly!=="undefined"?NbmHourly.briefing(smart.hourlyAll,context.candidates,context.model,callLocalAlert,Date.now()):null;
-  if(!note){if(el){if(el.contains(document.activeElement)){var fallback=document.querySelector('#briefWhy summary');if(fallback)fallback.focus({preventScroll:true});}el.remove();}return;}
+  if(!note){if(container){if(container.contains(document.activeElement)){var fallback=document.getElementById('nbmHourlyToggle')||document.getElementById('h24Title');if(fallback)fallback.focus({preventScroll:true});}container.hidden=true;}if(el)el.remove();return;}
+  container.hidden=false;
   if(!el){
     el=document.createElement('div');el.id='nbmBriefNote';el.className='nbm-brief-note';
     el.innerHTML='<p id="nbmBriefText"></p><details><summary>About this model range</summary><p id="nbmBriefSource"></p></details>';
@@ -3636,16 +3654,9 @@ function renderTheCall(){
   var hourlyReady=H.length>=6;
   var comfort=briefingComfortAllowed(); renderTheCall._comfortAllowed=comfort; renderBriefingStatus();
   var candidates=bottomLineHourlyCandidates(hourlyReady?H:[],{now:now,uvPeak:uv.peak,aqi:callAqi,allowComfort:comfort});
-  var cutoff=hourlyReady?H[H.length-1].end:now;
-  /* A local warning or emergency owns the immediate reading. Later forecasts cannot corroborate
-     its timing, and should not compete for scarce space directly under the alert banner. */
-  var weekEnabled=!callLocalAlert||!(callLocalAlert.level==="warning"||callLocalAlert.level==="emergency");
-  var weekCandidates=weekEnabled?bottomLineWeekCandidates(smart.weekDays,cutoff,smart.hourlyAll):[];
   function push(pri,ico,topic,label,headline,detail,action,tone,context,opts){
     candidates.push(bottomCandidate(pri,ico,topic,label,headline,detail,action,tone,context,opts));
   }
-  var horizon=document.getElementById("callHorizon");
-  if(horizon) horizon.textContent=hourlyReady?bottomLineHorizon(H[H.length-1].end):"Today and tomorrow";
 
   /* The outlook desks see hazards beyond the hourly edge. Their pure verdicts join the hourly
      candidates before one deterministic selector chooses the lead and supports. */
@@ -3676,46 +3687,9 @@ function renderTheCall(){
   if(ctx.ready&&ctx.dry&&ctx.dry.days>=10) push(45,"drought","climate","Context","Long dry stretch",
     "Day "+ctx.dry.days+" with no measurable rain.","","context",true);
 
-  var model=buildBottomLine(candidates,callLocalAlert), planning=buildBottomLine(weekCandidates,null);
+  var model=buildBottomLine(candidates,callLocalAlert);
   renderTheCall._nbmContext={model:model,candidates:candidates};
-  if(alertsRetained&&model.lead&&model.lead.alertAware) model.lead.detail=model.lead.detail.replace("Alert active locally","Last verified local alert");
-  var planningEl=document.getElementById("briefPlanning");
-  if(!model.lead&&!planning.lead){ renderNbmBriefing(); card.classList.remove("has"); row.innerHTML="";planningEl.hidden=true;renderBriefingEvidence._models=null; return; }
-  function tone(c){ return /^(danger|warning|good|context)$/.test(c.tone)?c.tone:"neutral"; }
-  function detail(c){
-    var parts=[];
-    if(c.detail) parts.push('<span>'+esc(c.detail)+'</span>');
-    if(c.action) parts.push('<strong>'+esc(c.action)+'</strong>');
-    return parts.join(' ');
-  }
-  function section(model){
-    if(!model.lead) return '<p class="muted">Near-term guidance unavailable. Check the official forecast and alerts.</p>';
-    var lead=model.lead;
-    return '<div class="bl-lead bl-tone-'+tone(lead)+'">'
-    +'<div class="bl-lead-ico" aria-hidden="true">'+ic(lead.icon)+'</div><div>'
-    +'<div class="bl-kicker">'+esc(lead.label)+'</div>'
-    +'<div class="bl-headline">'+esc(lead.headline)+'</div>'
-    +(lead.detail?'<div class="bl-detail">'+esc(lead.detail)+'</div>':'')
-    +(lead.action?'<div class="bl-action">'+esc(lead.action)+'</div>':'')+'</div></div>'
-    +(model.supports.length?'<ul class="bl-support" aria-label="Supporting considerations">'
-      +model.supports.map(function(c){ return '<li class="bl-tone-'+tone(c)+'">'
-        +'<span class="bl-sico" aria-hidden="true">'+ic(c.icon)+'</span><div>'
-        +'<div class="bl-slabel">'+esc(c.label)+'</div><div class="bl-sheadline">'+esc(c.headline)+'</div>'
-        +(detail(c)?'<div class="bl-sdetail">'+detail(c)+'</div>':'')+'</div></li>'; }).join('')+'</ul>':'');
-  }
-  var oldNbm=document.getElementById("nbmBriefNote"),nbmFocus=oldNbm&&oldNbm.contains(document.activeElement)?document.activeElement:null;
-  row.innerHTML='<section id="briefNear"><h3 class="brief-section-title">Near-term guidance</h3>'+section(model)+'</section>';
-  if(oldNbm)document.getElementById("briefNear").appendChild(oldNbm);
-  var planningFocused=planningEl.contains(document.activeElement);
-  planningEl.hidden=!planning.lead;
-  if(planning.lead){
-    document.getElementById("briefPlanningTitle").textContent="Later-week planning · "+planning.lead.headline+" · "+bottomLineWeekHorizon(smart.weekDays);
-    document.getElementById("briefPlanningBody").innerHTML=section(planning);
-  }else if(planningFocused){document.querySelector("#briefWhy summary").focus({preventScroll:true});}
-  renderNbmBriefing();
-  if(nbmFocus){var restore=nbmFocus.isConnected?nbmFocus:document.querySelector("#briefWhy summary");if(restore)restore.focus({preventScroll:true});}
-  renderBriefingEvidence(model,planning,H);
-  card.classList.add("has");
+  renderNwsMessages(); renderNbmBriefing();
 }
 
 /* ============ INSTANT PAINT (snapshot → localStorage → restore before any fetch) ============

@@ -41,7 +41,7 @@ var FEEDS={
   hazards:{label:"Hazards outlook",card:"hazardsCard",load:"loadHazards",every:60*60000,age:120*60000,local:true,reset:{hazards:"Loading hazards…"},snapshot:[{id:"hazards",ttl:24*3600000}]},
   drought:{label:"Drought",card:"droughtCard",load:"loadDrought",every:6*3600000,age:12*3600000,local:true,reset:{drNow:"Loading…",drMonth:"Loading…",drSeason:"Loading…"},snapshot:[{id:"drNow",ttl:48*3600000},{id:"drMonth",ttl:48*3600000},{id:"drSeason",ttl:48*3600000}]},
   rivers:{label:"River gauges",card:"riversCard",load:"loadRivers",every:15*60000,age:30*60000,snapshot:[{id:"rivers",ttl:3*3600000}]},
-  afd:{label:"NWS discussion",card:"afdCard",load:"loadAFD",every:30*60000,age:60*60000,snapshot:[{id:"afd",ttl:6*3600000}]},
+  afd:{label:"NWS discussion",card:"afdCard",load:"loadAFD",every:30*60000,age:60*60000,local:true,reset:{afd:"Loading discussion…"}},
   climate:{label:"Climate",card:"climateCard",load:"loadClimate",every:6*3600000,age:12*3600000,local:true,reset:{cnToday:"",cnGrid:"Loading departures…",cnStation:"…",cnSrc:""},snapshot:[{id:"cnToday",ttl:12*3600000},{id:"cnGrid",ttl:12*3600000},{id:"cnStation",ttl:12*3600000}]},
   context:{label:"Records",card:"climateCard",load:"loadClimateContext",every:6*3600000,age:12*3600000,local:true,reset:{cnCtx:""},snapshot:[{id:"cnCtx",ttl:12*3600000}]},
   stations:{label:"Station plot",card:"obsCard",load:"loadStationPlot",every:12*60000,age:24*60000},
@@ -138,6 +138,7 @@ function loadForecast(){
     return Promise.all([getJSON(fUrl,HEADERS,locSignal()).catch(function(){return null;}), getJSON(hUrl,HEADERS,locSignal()).catch(function(){return null;})]).then(function(res){
       if(!fresh()) return;   // user moved while this was in flight
       var f=validatedForecast(res[0],Date.now()), h=validatedForecast(res[1],Date.now());
+      nwsLocalForecast={generation:locSeq,daily:f,hourly:h};
       feedUpdate("hourly",h?"ready":"unavailable",h&&(h.properties.updateTime||h.properties.updated||h.properties.generatedAt));
       if(!f){
         failDaily();
@@ -160,6 +161,7 @@ function loadForecast(){
     });
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
+    nwsLocalForecast=null;
     failDaily(); feedUpdate("hourly","unavailable");
     smart.hourly=[]; smart.hourlyAll=[]; renderHourly24._hrs=null;
     clearHourlyForecast();
@@ -1347,17 +1349,41 @@ function loadStationPlot(){
   }).catch(function(){ feedUpdate("stations","unavailable"); });
 }
 
+var afdRequestSeq=0;
 function loadAFD(){
-  return getJSON(API+"/products/types/AFD/locations/LSX",LD).then(function(list){
-    var g=list["@graph"]||[];
-    if(!g.length) throw new Error("no AFD");
-    var latest=g[0], purl=latest["@id"]||(API+"/products/"+latest.id);
-    return getJSON(purl,LD);
+  var guard=locGuard(), seq=++afdRequestSeq, signal=locSignal(), office='';
+  function fresh(){return guard()&&seq===afdRequestSeq;}
+  function read(url){return requestJSON(url,{headers:LD,cache:'no-cache'},signal);}
+  return pointsFor(current.lat,current.lon).then(function(pt){
+    if(!fresh()) return null;
+    office=pt&&pt.properties&&(pt.properties.cwa||pt.properties.gridId)||'';
+    if(!/^[A-Z]{3}$/.test(office)) throw new Error('No forecast office');
+    nwsDiscussionOffice=office;
+    return read(API+'/products/types/AFD/locations/'+office);
+  }).then(function(list){
+    if(!fresh()) return null;
+    var g=list&&list['@graph'];
+    if(!Array.isArray(g)) throw new Error('Invalid discussion list');
+    var products=g.filter(function(p){return p&&p.productCode==='AFD'&&p.issuingOffice==='K'+office&&isFinite(Date.parse(p.issuanceTime));})
+      .sort(function(a,b){return Date.parse(b.issuanceTime)-Date.parse(a.issuanceTime);});
+    if(!products.length) throw new Error('No discussion');
+    var latest=products[0], url=latest['@id']||(API+'/products/'+latest.id);
+    if(!/^https:\/\/api\.weather\.gov\/products\/[a-f0-9-]+$/i.test(url)) throw new Error('Invalid discussion URL');
+    return read(url);
   }).then(function(prod){
-    var sec=extractAFD(prod.productText||"");
-    feedUpdate("afd",sec?"ready":"unavailable",prod.issuanceTime);
-    renderAFD(sec, prod.issuanceTime);
-  }).catch(function(){ feedUpdate("afd","unavailable"); renderAFD(null); });
+    if(!fresh()) return;
+    nwsMessages=afdKeyMessages(prod,office,Date.now());
+    nwsMessages.generation=locSeq;
+    feedUpdate('afd',nwsMessages.status==='ready'?'ready':'unavailable',prod&&prod.issuanceTime);
+    // Keep detailed forecaster reasoning below the forecast, without repeating the hero bullets.
+    var text=prod&&prod.productText||'', sec=nwsMessages.status==='ready'?extractAFD(text.replace(/^[ \t]*\.KEY[ \t]+MESSAGES(?:\.{3}|…)[\s\S]*?(?=^[ \t]*(?:&&|\.[A-Z]|\$\$))/im,'')):null;
+    renderAFD(sec,prod&&prod.issuanceTime);
+    renderNwsMessages();
+  }).catch(function(){
+    if(!fresh()) return;
+    nwsMessages={status:'unavailable',messages:[],generation:locSeq};
+    feedUpdate('afd','unavailable'); renderAFD(null); renderNwsMessages();
+  });
 }
 
 function pointQuery(base,layer,fields){

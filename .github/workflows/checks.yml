@@ -21,6 +21,7 @@ jobs:
           node-version: '22'
       - run: python3 tools/check.py
       - run: node tools/logic-tests.js
+      - run: node tools/nws-message-tests.js
       - run: node tools/seasonal-tests.js
       - run: node tools/nbm-tests.js
       - run: python3 tools/nbm-extract-tests.py
@@ -86,6 +87,10 @@ jobs:
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: |
           NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" REDESIGN_ARTIFACTS="$RUNNER_TEMP/redesign" xvfb-run -a node tools/redesign-tests.js
+      - name: Verify official NWS messages, fallback, warning precedence and location races
+        env:
+          WEATHER_BROWSER: ${{ matrix.browser }}
+        run: NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" NWS_ARTIFACTS="$RUNNER_TEMP/redesign/nws" xvfb-run -a node tools/nws-message-browser-tests.js
       - name: Verify optional NBM range prototype
         if: matrix.browser == 'chromium'
         run: |
@@ -93,7 +98,7 @@ jobs:
       - name: Verify hourly NBM band and isolation
         if: matrix.browser == 'chromium'
         run: NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" NBM_ARTIFACTS="$RUNNER_TEMP/redesign/nbm-hourly" node tools/nbm-hourly-browser-tests.js
-      - name: Verify supplemental Bottom Line temperature context
+      - name: Verify supplemental forecast temperature context
         if: matrix.browser == 'chromium'
         run: NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" NBM_ARTIFACTS="$RUNNER_TEMP/redesign/nbm-briefing" node tools/nbm-briefing-browser-tests.js
       - uses: actions/upload-artifact@v4
