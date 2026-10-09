@@ -68,7 +68,11 @@ async function main(){
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No horizontal overflow');
     await page.locator('#moreWeatherResources').screenshot({path:path.join(out,width+'-'+theme+'-resources.png')});
     for(const id of ['h24Card','radarCard','riskCard','climateCard'])await page.locator('#'+id).screenshot({path:path.join(out,width+'-'+theme+'-'+id+'.png'),style:'.jump-wrap,.skip{visibility:hidden !important}'});
-    await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:path.join(out,width+'-'+theme+'-expanded.png'),fullPage:true});
+    // Long popup/scroll sequences can leave offscreen backdrop-filter surfaces absent
+    // from Chromium full-page captures. Keep expanded evidence in the painted viewport;
+    // the collapsed full-page image and card crops cover the rest of the dashboard.
+    await page.locator('#moreWeatherResources').scrollIntoViewIfNeeded();
+    await page.screenshot({path:path.join(out,width+'-'+theme+'-expanded-viewport.png')});
     audit.live.push({width,theme,test:'Hosted resource placement, targets, disclosure, live rendering and overflow',status:'passed',checks:await page.evaluate(()=>Object.fromEntries(Object.entries(feedChecks).map(([key,value])=>[key,value.status])))});
     audit.controlled.push({width,theme,test:'Six native resource popups with navigation fixtures and no opener',status:'passed'});
     if(touch)await summary.tap();else{await summary.focus();await summary.press('Space');}

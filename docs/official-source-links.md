@@ -99,7 +99,8 @@ Set `SOURCE_LINK_ARTIFACTS` to capture the related cards and the expanded resour
 The existing read-only hosted-verification job also runs for this draft branch. Its NWS verifier
 compares the exact deployed app and both NBM datasets/receipts/publication manifest to the PR
 commit before checking live integration. `tools/weather-resources-preview-tests.js` then checks
-the immutable HTTPS preview at 390/1440px in both themes, saves collapsed/expanded screenshots,
+the immutable HTTPS preview at 390/1440px in both themes, saves collapsed full-page screenshots
+and expanded viewport/card captures (avoiding offscreen backdrop-filter capture artifacts),
 verifies static destinations and native disclosure behavior, and tests opener-free native popups
 with clearly labeled navigation fixtures. Default TLS validation remains enabled. Artifacts are
 saved in the existing hosted-verification upload. Production refresh events, schedules, data,
