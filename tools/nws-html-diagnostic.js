@@ -23,6 +23,7 @@ async function main(){
     removed:removed.toString('utf8').slice(0,16000),inserted:inserted.toString('utf8').slice(0,16000),diffTruncated:removed.length>16000||inserted.length>16000,
     headers:Object.fromEntries(Object.entries(r.headers()).filter(([k])=>['content-type','cache-control','cf-cache-status','cf-ray','etag'].includes(k)))};
    audit.responses.push(item);console.log(JSON.stringify(item));
+   if(!item.exact)console.log('::notice title=Exact hosted HTML difference::'+JSON.stringify(item).replace(/%/g,'%25').replace(/\r/g,'%0D').replace(/\n/g,'%0A'));
   }
  }finally{await api.dispose();fs.writeFileSync(path.join(out,'html-diagnostic.json'),JSON.stringify(audit,null,2)+'\n');}
  assert(audit.responses.every(r=>r.exact),'Captured HTML differs from the release; inspect exact inserted/removed bytes');
