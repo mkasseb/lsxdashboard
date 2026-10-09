@@ -154,7 +154,7 @@ The full design rationale — what each decision replaced, and why — lives in
 - **Colour is scarce.** Saturated colour means severity, links are blue; that is the whole budget.
   Type carries the hierarchy through the `--fs-*`/`--r-*`/`--sp-*` scales.
 - **The page is ordered by what a visitor came for.** Alerts and active mesoscale discussions,
-  a combined Now / Bottom Line hero, hourly planning, radar and seven-day forecast, then local
+  a combined Now / NWS Key Messages hero, hourly planning, radar and seven-day forecast, then local
   context. Hourly and a compact seven-day card stack beside a full-height radar; phones read hourly,
   radar, then seven-day. Every existing card and individual disclosure remains available.
 - **Radar is a peek, not the product.** The map's height is an aspect ratio, never leftover space;
@@ -169,9 +169,9 @@ The full design rationale — what each decision replaced, and why — lives in
   product dates retain their stated day; daylight-saving changes never shorten a climate day.
 - **Location generations.** Every location-scoped fetch checks `fresh()` before writing to the
   DOM, so one town's numbers can never appear under another town's label.
-- **Inspectable advice.** The Bottom Line labels its dashboard-generated guidance, separates
-  near-term advice from expandable later-week planning, and explains inputs, source age and
-  uncertainty in “Why this recommendation?”. The Pulse contains NWS-authored guidance.
+- **Official message provenance.** NWS Key Messages preserves NWS St. Louis AFD wording
+  and bullet order. “Source and freshness” separates AFD product issuance from explicit section
+  time, and identifies the current local NWS forecast fallback when messages cannot be verified.
 - **Visible, shareable locations.** The sticky navigation retains the selected town. Favorites
   and river pins persist locally; location URLs carry the selected point and override a saved
   location after LSX validation. City searches use representative points; geolocation is more precise.
@@ -185,8 +185,8 @@ The full design rationale — what each decision replaced, and why — lives in
   are fetched live. Saved labels persist until their own feed is verified or cleared. Reshaping
   a card’s DOM or freshness metadata means bumping `SNAP_KEY`.
 
-The briefing shares AQI category guidance with the air-quality card. Poor air or unverified alert/air
-checks suppress favorable outdoor and open-window recommendations. Missing hourly samples leave
+Internal safety guards for optional model commentary share AQI category guidance with the air-quality
+card. Poor air or unverified alert/air checks suppress favorable comfort assumptions. Missing hourly samples leave
 real gaps on the time axis and cannot certify an all-day forecast. Daily and hourly endpoint
 failures are isolated.
 
@@ -703,13 +703,62 @@ and P90. Daily rows also use the shorter “NBM range” label while preserving 
 18-hour windows in their details. A failed browser check retains validated same-location guidance
 with a clear previous-range notice until its original expiry; location reset clears it immediately.
 
-### Optional Bottom Line temperature context
+### NWS Key Messages and current local fallback
+
+The hero replaces generated Bottom Line advice with NWS St. Louis (LSX) `.KEY MESSAGES…`
+text. This remains an LSX-only dashboard, with its existing location controls and boundaries.
+Saved startup coordinates now pass the same live `/points` LSX membership check as shared links
+and favorites. The known Lake St. Louis default stays active until that check succeeds, so outside,
+unavailable or malformed membership cannot pair another office's local forecasts with LSX messages
+and alerts. Unverified saved HTML is not restored; a newer selection supersedes a pending lookup.
+The stored choice is retained for a later retry when verification is unavailable.
+The LSX product list is sorted by issuance rather than assuming array order. Requests revalidate their HTTP cache, use location cancellation and generation
+guards, and reject older overlapping refreshes. Product identity, timestamps, section termination and
+bullet formatting must validate before official text is shown. Wrapped decimals, negative temperatures,
+geographic qualifiers and source order are preserved. Only whitespace and list markers are normalized.
+
+The card names the regional office, links to its full discussion, and shows **AFD issued** and successful
+check times. AFD issuance is not a Key Messages revision clock: aviation-only updates can carry the same
+messages forward. An explicit section timestamp, with or without “Issued at”, is retained separately;
+otherwise its revision time remains unknown. Messages are withheld after 18 hours of product/explicit
+section age or one hour without a successful check. These conservative dashboard limits are not NWS
+product expiration rules. The messages and detailed discussion are never restored from saved HTML.
+
+Missing, stale, malformed or unavailable messages change the heading to **NWS Local Forecast**, with a
+reason and a link for the selected coordinates. Fallback text is the current official daily period,
+or independently verified current hourly period; source issuance must be within 12 hours and check
+age within one hour. Saved, expired and unverified forecasts supply no fallback text. Generated
+advice is never labeled NWS Key Messages. Local active warnings remain above the regional outlook
+and take precedence; the regional bullets keep their geographic qualifiers.
+
+The lower **NWS Forecast Details** card retains short-term/synopsis reasoning without repeating the
+hero bullets. Daily and hourly NBM feeds, ranges, toggles and publication are unchanged. Optional NBM
+commentary lives in hourly “Temperature uncertainty” details and keeps its existing hazard/freshness
+and location guards. Stable disclosures preserve keyboard focus and open state; unchanged live-status
+text is not rewritten on unrelated feed checks.
+
+Sources: [LSX AFD](https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&version=1&glossary=1)
+and [NWS Central Region AFD section guidance](https://www.weather.gov/media/directives/010_pdfs/pd01005003c102023curr.pdf).
+The authentic recorded October 8 afternoon/evening issuances test carried-forward messages at
+October 9 01:04 UTC. Tests never refresh or publish NBM data.
+
+Run `node tools/nws-message-tests.js` and
+`NODE_PATH=<test dependencies>/node_modules CHROMIUM_PATH=<chromium> node tools/nws-message-browser-tests.js`.
+The aggregate check workflow includes the parser suite and Chromium/Firefox/WebKit browser coverage.
+Hosted verification uses `tools/nws-preview-tests.js`, default TLS and exact checkout-byte hashes,
+including both NBM datasets, receipts and the publication manifest. It checks an immutable PR preview
+or the main deployment through the existing push event, without extraction, publication, credentials
+or schedule changes. Saved LSX and outside points also exercise actual live membership/alert lookups.
+Controlled missing-section checks are reported separately from live weather; expired static NBM
+guidance is accepted only when correctly withheld, without rewriting its timestamps.
+
+### Optional forecast temperature context
 
 This feature uses the validated hourly-range feed. It adds at most one supplemental
-sentence below the existing official near-term briefing; it never enters candidate ranking,
+sentence inside the hourly card’s “Temperature uncertainty” details; it never enters candidate ranking,
 changes NWS temperatures, or creates an alert/action. Precipitation is outside this change.
 The existing “Show model temperature range” checkbox also controls the sentence. It is omitted
-when the official briefing already has three supporting items.
+when the retained internal hazard selector already has three supporting items.
 
 `NbmHourly.briefingConfig` documents the conservative display heuristics: 32°F freezing and
 90°F warm-weather planning thresholds, at least 2°F on each side in P10–P90, at least 6°F of

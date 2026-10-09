@@ -21,6 +21,7 @@ jobs:
           node-version: '22'
       - run: python3 tools/check.py
       - run: node tools/logic-tests.js
+      - run: node tools/nws-message-tests.js
       - run: node tools/seasonal-tests.js
       - run: node tools/nbm-tests.js
       - run: python3 tools/nbm-extract-tests.py
@@ -50,6 +51,10 @@ jobs:
         run: |
           npm install --prefix "$RUNNER_TEMP/lsx-browser" playwright@1.62.1 pngjs@7.0.0 leaflet@1.9.4 maplibre-gl@5.24.0 @maplibre/maplibre-gl-leaflet@0.1.4
           node "$RUNNER_TEMP/lsx-browser/node_modules/playwright/cli.js" install --with-deps ${{ matrix.browser }}
+      - name: Verify official NWS messages, fallback, warning precedence and location races
+        env:
+          WEATHER_BROWSER: ${{ matrix.browser }}
+        run: NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" NWS_ARTIFACTS="$RUNNER_TEMP/redesign/nws" xvfb-run -a node tools/nws-message-browser-tests.js
       - name: Verify weather icon artwork in both themes
         env:
           WEATHER_BROWSER: ${{ matrix.browser }}
@@ -93,7 +98,7 @@ jobs:
       - name: Verify hourly NBM band and isolation
         if: matrix.browser == 'chromium'
         run: NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" NBM_ARTIFACTS="$RUNNER_TEMP/redesign/nbm-hourly" node tools/nbm-hourly-browser-tests.js
-      - name: Verify supplemental Bottom Line temperature context
+      - name: Verify supplemental forecast temperature context
         if: matrix.browser == 'chromium'
         run: NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" NBM_ARTIFACTS="$RUNNER_TEMP/redesign/nbm-briefing" node tools/nbm-briefing-browser-tests.js
       - uses: actions/upload-artifact@v4
@@ -104,3 +109,33 @@ jobs:
             ${{ runner.temp }}/weather-scenarios.json
             ${{ runner.temp }}/redesign
           if-no-files-found: ignore
+
+  nws-hosted-preview:
+    # Read-only hosted verification. Existing push trigger; no extraction or publication.
+    name: ${{ github.event_name == 'push' && 'nws-hosted-production' || 'nws-hosted-preview' }}
+    if: (github.head_ref == 'codex/nws-key-messages' && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Install hosted browser verification tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/nws-browser" playwright@1.62.1
+          node "$RUNNER_TEMP/nws-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Verify exact deployment with live feeds and normal TLS
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          NWS_VERIFY_TARGET: ${{ github.event_name == 'push' && 'production' || 'preview' }}
+        run: NODE_PATH="$RUNNER_TEMP/nws-browser/node_modules" node tools/nws-preview-tests.js "$RUNNER_TEMP/nws-hosted"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nws-hosted-preview-verification
+          path: ${{ runner.temp }}/nws-hosted
+          retention-days: 7
+          if-no-files-found: warn

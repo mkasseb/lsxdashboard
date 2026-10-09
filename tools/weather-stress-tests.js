@@ -90,7 +90,7 @@ async function open(c, width=390) {
   if(c.storage)await page.addInitScript(storage=>Object.entries(storage).forEach(([key,value])=>localStorage.setItem(key,typeof value==='string'?value:JSON.stringify(value))),c.storage);
   if(c.geo)await page.addInitScript(geo=>Object.defineProperty(navigator,'geolocation',{value:{getCurrentPosition:success=>queueMicrotask(()=>success({coords:{latitude:geo.lat,longitude:geo.lon,accuracy:25}}))}}),c.geo);
   if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v21',snapshot),c.snapshot);
-  const errors=[],requests=[],delayedMapScripts=[];
+  const errors=[],requests=[],delayedMapScripts=[],heldPoints=[];
   page.on('pageerror',e=>errors.push(e.message));
   let active=c;
   await context.route('**/*',async route=>{
@@ -160,7 +160,16 @@ async function open(c, width=390) {
       const f=chosen.recorded?clone(recorded.responses):feeds(chosen,id);
       if(chosen.cwa)f.points.properties.cwa=chosen.cwa;
       if(chosen.delay) await new Promise(resolve=>setTimeout(resolve,chosen.delay));
-      if(u.pathname.startsWith('/points/')) return reply(f.points);
+      if(u.pathname.startsWith('/products/types/AFD/locations/')){
+        const office=u.pathname.split('/').at(-1);
+        return reply({'@graph':[{id:'11111111-1111-1111-1111-111111111111','@id':'https://api.weather.gov/products/11111111-1111-1111-1111-111111111111',productCode:'AFD',issuingOffice:'K'+office,issuanceTime:c.afdProduct?.issuanceTime||new Date(c.now-H).toISOString()}]},c.afdDown?503:200);
+      }
+      if(u.pathname.startsWith('/products/'))return reply(c.afdProduct||{productCode:'AFD',issuingOffice:'KLSX',issuanceTime:new Date(c.now-H).toISOString(),productText:c.afdText||'AFDLSX\nNational Weather Service St Louis MO\n.KEY MESSAGES...\n- Dry weather is expected across the region into Thursday.\n- Light rain is possible in southeast Missouri and southwest Illinois.\n&&\n.SHORT TERM...\nIssued at 1200 PM CDT Wed Sep 30 2026\nSynthetic discussion details for browser testing.\n&&'},c.afdDown?503:200);
+      if(u.pathname.startsWith('/points/')) {
+        const body=chosen.pointsMalformed?{}:f.points,status=chosen.pointsDown?503:200;
+        if(chosen.holdPoints){heldPoints.push({route,id,body,status});return;}
+        return reply(body,status);
+      }
       if(u.pathname.endsWith('/forecast/hourly')&&chosen.hourlyHang)return;
       if(u.pathname.endsWith('/forecast/hourly')) return reply(chosen.hourlyDown||chosen.hourlyMalformed?{}:chosen.hourlyEmpty?{properties:{periods:[]}}:f.hourly,chosen.hourlyDown?503:200);
       if(u.pathname.endsWith('/forecast')) return reply(chosen.dailyDown?{}:chosen.dailyMalformed?{properties:{periods:[null,{temperature:'hot'},{}]}}:f.daily,chosen.dailyDown?503:200);
@@ -203,11 +212,17 @@ async function open(c, width=390) {
   });
   await page.goto('https://lsx-weather-test.invalid/'+(c.search||''),{waitUntil:'domcontentloaded'});
   if(!c.skipWait)await page.waitForFunction(()=>typeof refreshInFlight!=='undefined'&&refreshInFlight===null&&snapSafeSeq===locSeq);
-  return {page,context,errors,requests,change:c=>{active=c;},releaseMapScripts:()=>Promise.all(delayedMapScripts.map(({route,asset})=>route.fulfill({contentType:asset[2],body:fs.readFileSync(require.resolve(asset[1]))}).catch(()=>{})))};
+  return {page,context,errors,requests,change:c=>{active=c;},
+    releaseMapScripts:()=>Promise.all(delayedMapScripts.map(({route,asset})=>route.fulfill({contentType:asset[2],body:fs.readFileSync(require.resolve(asset[1]))}).catch(()=>{}))),
+    releasePoints:id=>Promise.all(heldPoints.filter(p=>p.id===id&&!p.released).map(p=>{p.released=true;return p.route.fulfill({status:p.status,json:p.body}).catch(()=>{});}))};
 }
 async function expectText(page,selector,pattern) {
   assert.match(await page.locator(selector).innerText(),pattern);
 }
+async function internalGuidance(page){
+  return page.evaluate(()=>{const m=renderTheCall._nbmContext?.model;return m?[m.lead,...m.supports].filter(Boolean).map(c=>[c.headline,c.detail,c.action].join(' ')).join(' '):'';});
+}
+async function expectGuidance(page,pattern){assert.match(await internalGuidance(page),pattern);}
 async function noOverflow(page) {
   const faults=await page.locator('.spc-threat-value').evaluateAll(els=>els.filter(el=>{
     const r=el.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(el);
@@ -323,36 +338,50 @@ async function main() {
       await page.locator('#riskHelp summary').click();await noCardOverlap(page);
       assert.equal(await page.evaluate(()=>document.activeElement.parentElement.id),'riskHelp');
     },width);
-    await run('briefing separates dry near-term guidance from later storms',config('briefing horizons',{weekRain:true}),async({page})=>{
-      await expectText(page,'#briefNear',/Rain unlikely/);await expectText(page,'#briefPlanning',/Storms possible Saturday/);
-      await page.locator('#briefPlanning summary').click();
-      await expectText(page,'.brief-author',/Dashboard-generated.*NWS-authored/);
-      await page.locator('#briefWhy summary').click();
-      await expectText(page,'#briefEvidence',/precipitation chance 0%/);
-      await expectText(page,'#briefEvidence',/NWS precipitation chance 80%/);
-      await expectText(page,'#briefEvidence',/source.*ago/);
-      await expectText(page,'#briefEvidence',/do not establish an exact arrival hour/);
-      await page.locator('#briefWhy summary').focus();await page.evaluate(()=>loadForecast());
-      assert(await page.locator('#briefWhy').evaluate(el=>el.open));
-      assert(await page.locator('#briefPlanning').evaluate(el=>el.open));
-      assert.equal(await page.evaluate(()=>document.activeElement.parentElement.id),'briefWhy');
-      await page.locator('#briefPlanning summary').focus();await page.evaluate(()=>loadForecast());
-      assert(await page.locator('#briefPlanning').evaluate(el=>el.open));
-      assert.equal(await page.evaluate(()=>document.activeElement.parentElement.id),'briefPlanning');
-    });
-    await run('open briefing evidence updates source age when checks become overdue',config('evidence age',{weekRain:true}),async({page})=>{
+    await run('risk explanations keep their pressed target during a failed radar retry',config('risk retry',{maps:true,mapLibrariesDown:true}),async({page})=>{
+      await page.locator('#radar [data-retry-maps]').waitFor();
+      // Keep the lazy station observer from starting this retry before pointerdown.
+      await page.evaluate(()=>{deferredFeeds.stations=true;});
+      const summary=page.locator('#riskHelp summary');await summary.scrollIntoViewIfNeeded();
+      let release;
+      await page.route('**/leaflet/1.9.4/leaflet.min.js',async route=>{await new Promise(resolve=>release=resolve);await route.fulfill({status:503,body:''});});
+      const before=await summary.boundingBox(),beforeDocument=await summary.evaluate(e=>e.getBoundingClientRect().top+scrollY);await page.mouse.move(before.x+before.width/2,before.y+before.height/2);await page.mouse.down();
+      const pending=page.waitForRequest('**/leaflet/1.9.4/leaflet.min.js');
+      await page.evaluate(()=>{window.pressedMapRetry=ensureMaps();});await pending;
+      const during=await summary.boundingBox(),duringDocument=await summary.evaluate(e=>e.getBoundingClientRect().top+scrollY);
+      assert(Math.abs(during.y-before.y)<2&&Math.abs(duringDocument-beforeDocument)<2,'A pending retry must not move the pressed summary or rely on scroll anchoring: '+JSON.stringify({before,during,beforeDocument,duringDocument}));
+      assert(await page.locator('#radar a[href="https://radar.weather.gov/station/KLSX/standard"]').isVisible());
+      assert(await page.locator('#radar [data-retry-maps]').isDisabled());
+      await page.mouse.up();assert(await page.locator('#riskHelp').evaluate(e=>e.open));
+      assert.equal(await page.evaluate(()=>document.activeElement.parentElement.id),'riskHelp');
+      release();await page.evaluate(()=>window.pressedMapRetry);
+      assert(await page.locator('#radar [data-retry-maps]').isEnabled());
+      assert(await page.locator('#riskHelp').evaluate(e=>e.open));await noCardOverlap(page);
+    },1280);
+    await run('official messages remain independent of modeled later storms',config('message horizons',{weekRain:true}),async({page})=>{
+      await expectText(page,'#keyMessagesTitle',/NWS Key Messages/);
+      await expectText(page,'#callRow',/southeast Missouri and southwest Illinois/);
+      assert(!/Storms possible Saturday|Rain unlikely/.test(await page.locator('#callRow').innerText()));
       await page.locator('#briefWhy summary').click();await page.locator('#briefWhy summary').focus();
-      await expectText(page,'#briefEvidence',/Hourly forecast:.*verified/);
+      await page.evaluate(()=>loadForecast());
+      assert(await page.locator('#briefWhy').evaluate(el=>el.open));
+      assert.equal(await page.evaluate(()=>document.activeElement.parentElement.id),'briefWhy');
+    });
+    await run('official message check expiry withholds regional text',config('message age'),async({page})=>{
+      await page.locator('#briefWhy summary').click();await page.locator('#briefWhy summary').focus();
+      await expectText(page,'#briefEvidence',/aviation-only update/);
       await page.evaluate(()=>stopSchedule());
       await page.clock.setSystemTime(new Date(base+61*60000));await page.evaluate(()=>freshnessCheck());
-      await expectText(page,'#briefEvidence',/Hourly forecast:.*check overdue/);
+      await expectText(page,'#keyMessagesTitle',/NWS Local Forecast/);
+      await expectText(page,'#keyMessagesStatus',/stale/);
       assert(await page.locator('#briefWhy').evaluate(el=>el.open));
       assert.equal(await page.evaluate(()=>document.activeElement.parentElement.id),'briefWhy');
     });
-    await run('local warning suppresses later-week planning',config('warning horizons',{weekRain:true,pop:80,condition:'Thunderstorms',alerts:[alert('Tornado Warning',base)]}),async({page})=>{
-      await expectText(page,'#briefNear',/Take tornado shelter now/);
-      assert(!(await page.locator('#briefPlanning').isVisible()));
-      await page.locator('#briefWhy summary').click();await expectText(page,'#briefEvidence',/active local NWS alert takes priority/);
+    await run('local warning precedes unchanged official regional outlook',config('warning horizons',{weekRain:true,pop:80,condition:'Thunderstorms',alerts:[alert('Tornado Warning',base)]}),async({page})=>{
+      await expectText(page,'#alerts',/Tornado Warning/);
+      await expectText(page,'#callRow',/Dry weather is expected/);
+      const order=await page.evaluate(()=>document.getElementById('alertsCard').getBoundingClientRect().bottom<=document.getElementById('callCard').getBoundingClientRect().top);
+      assert(order,'Active local warnings precede regional messages');
     });
     await run('selected town stays visible in sticky navigation',config('sticky town'),async({page})=>{
       await page.evaluate(()=>window.scrollTo(0,1800));
@@ -364,7 +393,7 @@ async function main() {
       search:'?lat=38.81000&lon=-90.86000&place='+encodeURIComponent('A long shared location name '.repeat(4)),weekRain:true
     }),async({page})=>{
       await page.locator('#locationTools summary').click();await page.locator('#favoriteToggle').click();
-      await page.locator('#briefPlanning summary').click();await page.locator('#briefWhy summary').click();
+      await page.locator('#briefWhy summary').click();
       await page.locator('#riskHelp summary').click();
       for(const theme of ['light','dark']){await page.evaluate(theme=>applyTheme(theme),theme);await noOverflow(page);}
       assert.equal(new URL(await page.locator('#locationLink').inputValue()).searchParams.get('place'),'A long shared location name '.repeat(4).trim());
@@ -671,7 +700,7 @@ async function main() {
     });
     for(const timezone of ['America/Chicago','UTC','America/Los_Angeles','Asia/Tokyo']){
       await run('Central weather timing in '+timezone,config('Central timing',{timezone,delayedRain:true,uv:6,aqi:35}),async({page})=>{
-        await expectText(page,'#callRow',/~7pm–1am tomorrow/);
+        await expectGuidance(page,/~7pm–1am tomorrow/);
         await expectText(page,'#hourlyDetail',/Wed 1:00 PM/);
         await expectText(page,'#clock',/01:00 PM CT/);
         assert.equal(await page.evaluate(()=>uv.now),6);
@@ -690,7 +719,7 @@ async function main() {
     }
 
     await run('hazardous air suppresses comfortable outdoor and open-window advice',config('smoke comfort',{aqi:325,temp:72}),async({page})=>{
-      await expectText(page,'#callRow',/Avoid all outdoor physical activity/);
+      await expectGuidance(page,/Avoid all outdoor physical activity/);
       assert(!/Excellent outdoor|Good window-opening|Good day to keep outdoor|Use this window for strenuous/.test(await page.locator('#callRow').innerText()));
     });
     await run('daily outage preserves a successful hourly response',config('daily only outage',{dailyDown:true,aqi:35}),async({page})=>{
@@ -702,7 +731,7 @@ async function main() {
       await expectText(page,'#hourly24',/23 forecast hours.*gaps/);
       assert.equal((await page.locator('.h24-line').getAttribute('d')).split('M ').length-1,2);
       assert(!/Excellent outdoor|dry all day/.test(await page.locator('#callRow').innerText()));
-      await expectText(page,'#callRow',/Rain chance incomplete/);
+      await expectGuidance(page,/Rain chance incomplete/);
     });
     await run('evening forecast comparisons use the high and low calendar dates',config('dated climate'),async({page})=>{
       await page.evaluate(()=>{
@@ -941,7 +970,7 @@ async function main() {
       assert(await page.locator('#callRow').innerText());
     });
     await run('unverified alerts and AQI visibly limit outdoor guidance',config('unknown exposure'),async({page})=>{
-      await expectText(page,'#briefStatus',/Air quality is unverified/);
+      assert.equal(await page.evaluate(()=>briefingComfortAllowed()),false);
       assert(!/Excellent outdoor|Good window-opening/.test(await page.locator('#callRow').innerText()));
       await page.evaluate(()=>{feedChecks.alerts.status='unavailable';renderTheCall();});
       await expectText(page,'#briefStatus',/Alert status is unverified/);
@@ -1060,8 +1089,8 @@ async function main() {
     for(const [name,date,extra,expected] of seasons){
       const now=Date.parse(date), c=config(name,{now,aqi:35,...(extra.snow||extra.ice?{qpf:[[0,6,12.7],[6,90,0]]}:{}),...extra,alerts:extra.event?[alert(extra.event,now)]:[]});
       await run('seasonal '+name,c,async({page})=>{
-        await expectText(page,'#callRow',expected);
-        const body=await page.locator('#callRow').innerText();
+        await expectGuidance(page,expected);
+        const body=await internalGuidance(page);
         assert(!/NaN|undefined|Infinity/.test(body+await page.locator('#hourly24').innerText()));
         if(!name.includes(' fair'))assert(!/Excellent outdoor|Good window-opening|Use this window for strenuous/.test(body));
         if(extra.event){await expectText(page,'#alerts',new RegExp(extra.event));assert(await page.evaluate(()=>lastWarnFeats.length>0));}
@@ -1084,10 +1113,10 @@ async function main() {
     });
     for(const extra of [{aqiMissingTime:true},{aqiAgeHours:24},{aqiAgeHours:-1}])await run('seasonal AQI source time '+JSON.stringify(extra),config('AQI time',{aqi:35,...extra}),async({page})=>{
       assert.equal(await page.evaluate(()=>feedChecks.aqi.status),'unavailable');
-      await expectText(page,'#briefStatus',/Air quality is unverified/);assert(!/Excellent outdoor|Good window-opening/.test(await page.locator('#callRow').innerText()));
+      assert.equal(await page.evaluate(()=>briefingComfortAllowed()),false);assert(!/Excellent outdoor|Good window-opening/.test(await page.locator('#callRow').innerText()));
     });
     await run('seasonal leading hourly gap cannot mean rain now',config('leading gap',{leadingGap:true,aqi:35,pop:90,condition:'Thunderstorms'}),async({page})=>{
-      const text=await page.locator('#callRow').innerText();assert(!/\bnow\b/.test(text));assert(/from ~/.test(text));
+      const text=await internalGuidance(page);assert(!/\bnow\b/.test(text));assert(/from ~/.test(text));
       assert(!/Excellent outdoor|Good window-opening/.test(text));await expectText(page,'#hourly24',/gaps/);
     });
     await run('seasonal fresh warning expires across list briefing and map',config('fresh expiry',{alerts:[{...alert('Tornado Warning',base),properties:{...alert('Tornado Warning',base).properties,expires:new Date(base+30000).toISOString()}}],aqi:35}),async({page})=>{

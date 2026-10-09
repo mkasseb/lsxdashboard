@@ -52,7 +52,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css"
   integrity="sha384-uTttxo/aOKbdE5RlD/SPzSDoDmNvGlUYPjONi2MN/b7c9HPSvW07OIuyP7uL6jxK" crossorigin="anonymous"
   media="print" onload="this.media='all'">
-<link rel="stylesheet" href="/assets/dashboard.css?v=97bdeb95b5aab595">
+<link rel="stylesheet" href="/assets/dashboard.css?v=e87360cace56f657">
 </head>
 <body>
 <!-- First focusable thing on the page, and deliberately ahead of the sprite so it stays that way.
@@ -240,18 +240,15 @@
     </section>
 <section class="card " id="callCard">
     <div class="call-head">
-      <h2>Bottom Line</h2>
-      <span class="call-horizon" id="callHorizon">Next 24 hours</span>
+      <h2 id="keyMessagesTitle">NWS Local Forecast</h2>
+      <a class="link" id="keyDiscussionLink" hidden target="_blank" rel="noopener noreferrer">Full discussion ↗</a>
     </div>
     <p id="briefStatus" class="feed-status" data-state="unavailable" role="status" hidden></p>
+    <p class="nws-message-meta" id="keyMessagesMeta"></p>
+    <p class="nws-message-status" id="keyMessagesStatus" role="status">Checking regional Key Messages and the local forecast…</p>
     <div class="callrow" id="callRow"></div>
-    <details class="disclosure brief-planning" id="briefPlanning" hidden>
-      <summary id="briefPlanningTitle">Later-week planning</summary>
-      <div id="briefPlanningBody"></div>
-    </details>
-    <p class="brief-author">Dashboard-generated advice. The Pulse below contains NWS-authored guidance.</p>
     <details class="disclosure" id="briefWhy">
-      <summary>Why this recommendation?</summary>
+      <summary><span class="nws-source-arrow" aria-hidden="true">▸</span>Source and freshness</summary>
       <div id="briefEvidence"></div>
     </details>
   </section>
@@ -269,6 +266,10 @@
     </div>
     <div class="precip-events" id="precipEvents"><div class="loading">Loading precipitation amounts…</div></div>
     <div id="hourly24"><div class="loading">Loading hourly…</div></div>
+    <details class="disclosure" id="forecastTempContext" hidden>
+      <summary>Temperature uncertainty</summary>
+      <div id="forecastTempBody"></div>
+    </details>
   </section>
 <section class="card hero" id="radarCard">
     <div class="rs-head">
@@ -352,8 +353,8 @@
       <div id="aqi"></div>
     </section>
 <section class="card " id="afdCard">
-    <h2>The Pulse — NWS Forecast Discussion
-      <a class="link" href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener">Full discussion ↗</a>
+    <h2>NWS Forecast Details
+      <a class="link" id="afdDiscussionLink" target="_blank" rel="noopener noreferrer" hidden>Full discussion ↗</a>
     </h2>
     <div id="afd"><div class="loading">Loading discussion…</div></div>
   </section>
@@ -458,12 +459,12 @@
   integrity="sha384-5+cfbwT0iiub6VsQAdn6yz16nr6sDiQoHx6tm4O8OVYXHYOxcffFmCJBL0dgdvGp" crossorigin="anonymous"></script>
 <script type="application/json" data-map-src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"
   integrity="sha384-tXYNKOHx4T02jMP7YYCtBxPIv1B5gaA5mcVPBzqMp6d7VzWzxJgI2aWF/nJLrQdS" crossorigin="anonymous"></script>
-<script src="/assets/weather-core.js?v=8184114e25bf92d3"></script>
-<script src="/assets/weather-feeds.js?v=fc7d4416ab58bcf2"></script>
+<script src="/assets/weather-core.js?v=0e0c0cd0b390374b"></script>
+<script src="/assets/weather-feeds.js?v=3b5010bd8ddba31d"></script>
 <script src="/assets/forecast-view.js?v=146a61b5b05d825c"></script>
 <script src="/assets/dashboard-context.js?v=9e972fd51f4d5fd2"></script>
 <script src="/assets/forecast-range.js?v=60eb5b8c21098806"></script>
 <script src="/assets/hourly-range.js?v=bb912f3f6cdce477"></script>
-<script src="/assets/dashboard.js?v=255b16c6162062ca"></script>
+<script src="/assets/dashboard.js?v=5a548c2227f36551"></script>
 </body>
 </html>
