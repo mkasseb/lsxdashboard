@@ -23,11 +23,11 @@ def candidate(directory, now):
         files[name] = file.read_bytes()
     data, receipt, status = [json.loads(files[p]) for p in (*publisher.PATHS, 'nbm-hourly-status.json')]
     digest = hashlib.sha256(files[publisher.PATHS[0]]).hexdigest()
-    if receipt != dict(validator='hourly-v1', run=data['run'], sha256=digest):
+    if receipt != dict(validator='hourly-quartiles-v2', run=data['run'], sha256=digest):
         raise ValueError('Hourly receipt mismatch')
     if (status.get('status') not in ('ready', 'unchanged') or type(status.get('changed')) is not bool or
             status.get('dataRun') != data['run'] or not 0 <= (now-publisher.stamp(status['checkedAt'])).total_seconds() <= 1800 or
-            len(data.get('hours', [])) != 48):
+            data.get('schema') != 2 or data.get('percentiles') != [25, 50, 75] or len(data.get('hours', [])) != 48):
         raise ValueError('Incomplete or failed hourly candidate')
     js = """const fs=require('fs'),vm=require('vm');const s={Intl,Date,URLSearchParams};
 vm.createContext(s);vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),s);

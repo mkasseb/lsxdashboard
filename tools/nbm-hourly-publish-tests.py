@@ -32,7 +32,7 @@ class PublisherTests(unittest.TestCase):
         p.git(self.repo, 'remote', 'add', 'origin', str(self.remote))
         p.git(self.repo, 'push', 'origin', 'main')
         self.base = self.head()
-        self.data = json.loads(gzip.decompress((Path(__file__).parent/'fixtures/weather/nbm-hourly-full-recorded.json.gz').read_bytes()))
+        self.data = json.loads(gzip.decompress((Path(__file__).parent/'fixtures/weather/nbm-quartile-hourly-recorded.json.gz').read_bytes()))
         self.now = p.stamp(self.data['retrievedAt'])+timedelta(minutes=1)
         self.write_candidate()
 
@@ -42,7 +42,7 @@ class PublisherTests(unittest.TestCase):
     def write_candidate(self, changed=True):
         raw = (json.dumps(self.data,separators=(',',':'))+'\n').encode()
         (self.candidate/'nbm-hourly.json').write_bytes(raw)
-        (self.candidate/'nbm-hourly-receipt.json').write_text(json.dumps(dict(validator='hourly-v1', run=self.data['run'], sha256=hashlib.sha256(raw).hexdigest())))
+        (self.candidate/'nbm-hourly-receipt.json').write_text(json.dumps(dict(validator='hourly-quartiles-v2', run=self.data['run'], sha256=hashlib.sha256(raw).hexdigest())))
         (self.candidate/'nbm-hourly-status.json').write_text(json.dumps(dict(status='ready' if changed else 'unchanged', changed=changed, dataRun=self.data['run'], checkedAt=self.now.isoformat())))
 
     def publish(self, **kwargs):

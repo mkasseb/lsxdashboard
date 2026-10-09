@@ -1,0 +1,61 @@
+[
+  {
+    "url": "https://noaa-nbm-grib2-pds.s3.amazonaws.com/blend.20261009/00/qmd/blend.t00z.qmd.f001.co.grib2.idx",
+    "sha256": "05e932a8e348dfa95bee65b80615a562838d428f86312509d5ff4ead3d5f1173",
+    "bytes": 16777,
+    "lines": [
+      "152:275471530:d=2026100900:TMP:2 m above ground:1 hour fcst:25% level",
+      "157:301007975:d=2026100900:TMP:2 m above ground:1 hour fcst:50% level",
+      "162:326502669:d=2026100900:TMP:2 m above ground:1 hour fcst:75% level"
+    ]
+  },
+  {
+    "url": "https://noaa-nbm-grib2-pds.s3.amazonaws.com/blend.20261009/00/qmd/blend.t00z.qmd.f018.co.grib2.idx",
+    "sha256": "5de6dc580d3796926014590ab17bd05aee67881674e91a329fa78a6acdbd9838",
+    "bytes": 24535,
+    "lines": [
+      "218:373052773:d=2026100900:TMP:2 m above ground:0-18 hour min fcst:25% level",
+      "223:383368011:d=2026100900:TMP:2 m above ground:0-18 hour min fcst:50% level",
+      "228:393641626:d=2026100900:TMP:2 m above ground:0-18 hour min fcst:75% level",
+      "249:439910813:d=2026100900:TMP:2 m above ground:18 hour fcst:25% level",
+      "254:465741406:d=2026100900:TMP:2 m above ground:18 hour fcst:50% level",
+      "259:491400607:d=2026100900:TMP:2 m above ground:18 hour fcst:75% level"
+    ]
+  },
+  {
+    "url": "https://noaa-nbm-grib2-pds.s3.amazonaws.com/blend.20261009/00/qmd/blend.t00z.qmd.f030.co.grib2.idx",
+    "sha256": "fcbdec71568748e9069a1f05d7837bc060a3c0f6d6cc620054ccfedbaa48cf30",
+    "bytes": 31701,
+    "lines": [
+      "249:439997650:d=2026100900:TMP:2 m above ground:12-30 hour max fcst:25% level",
+      "254:450970868:d=2026100900:TMP:2 m above ground:12-30 hour max fcst:50% level",
+      "259:461903023:d=2026100900:TMP:2 m above ground:12-30 hour max fcst:75% level",
+      "280:507969482:d=2026100900:TMP:2 m above ground:30 hour fcst:25% level",
+      "285:532644276:d=2026100900:TMP:2 m above ground:30 hour fcst:50% level",
+      "290:557150213:d=2026100900:TMP:2 m above ground:30 hour fcst:75% level"
+    ]
+  },
+  {
+    "url": "https://noaa-nbm-grib2-pds.s3.amazonaws.com/blend.20261009/00/qmd/blend.t00z.qmd.f048.co.grib2.idx",
+    "sha256": "e5e7968f24034d614e07af4b04050a3e958e0cbd07a85b5e65facd9bea461571",
+    "bytes": 26502,
+    "lines": [
+      "280:562030455:d=2026100900:TMP:2 m above ground:48 hour fcst:25% level",
+      "285:587629240:d=2026100900:TMP:2 m above ground:48 hour fcst:50% level",
+      "290:613201437:d=2026100900:TMP:2 m above ground:48 hour fcst:75% level"
+    ]
+  },
+  {
+    "url": "https://noaa-nbm-grib2-pds.s3.amazonaws.com/blend.20261009/00/qmd/blend.t00z.qmd.f222.co.grib2.idx",
+    "sha256": "d35fce642bd3e7cba8bda7f733e1695f590f6b84dde0c32ab4cacda994890776",
+    "bytes": 29909,
+    "lines": [
+      "217:365977009:d=2026100900:TMP:2 m above ground:204-222 hour max fcst:25% level",
+      "222:377141512:d=2026100900:TMP:2 m above ground:204-222 hour max fcst:50% level",
+      "227:388156096:d=2026100900:TMP:2 m above ground:204-222 hour max fcst:75% level",
+      "248:434424699:d=2026100900:TMP:2 m above ground:222 hour fcst:25% level",
+      "253:459484620:d=2026100900:TMP:2 m above ground:222 hour fcst:50% level",
+      "258:484515876:d=2026100900:TMP:2 m above ground:222 hour fcst:75% level"
+    ]
+  }
+]

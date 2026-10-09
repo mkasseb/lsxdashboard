@@ -28,24 +28,27 @@ var NbmRange=(function(){
     var firstEnd=Math.ceil((time(d.run)+12*H)/(12*H))*12*H+6*H;
     var periods=d.periods.map(function(p,i){
       if(time(p.end)!==firstEnd+i*12*H||p.kind!==(new Date(time(p.end)).getUTCHours()===6?'TMAX':'TMIN'))throw new Error('Incomplete native horizon');
-      if(!Array.isArray(p.kelvin)||p.kelvin.length!==d.cells.length||!Array.isArray(p.kelvin[chosen])||p.kelvin[chosen].length!==3||
+      if(!Array.isArray(p.kelvin)||p.kelvin.length!==d.cells.length||
          !Array.isArray(p.members)||p.members.length!==3)throw new Error('Missing native interval values');
+      p.kelvin.forEach(function(k){if(!Array.isArray(k)||k.length!==3||!k.every(function(v){return finite(v)&&v>=180&&v<=340;})||k[0]>k[1]||k[1]>k[2])throw new Error('Invalid quartile row');});
       var values=p.kelvin[chosen],f=values.map(function(k){if(!finite(k))throw new Error('Invalid Kelvin');return (k-273.15)*9/5+32;});
       var members=p.members.map(function(m,i){
         if(m.gridHash!==d.gridHash||m.units!=='K')throw new Error('Mixed regional grid or units');
         return Object.assign({},m,{cell:cell,kelvin:values[i],fahrenheit:f[i]});
       });
-      return Object.assign({},p,{p10:f[0],p50:f[1],p90:f[2],members:members});
+      return Object.assign({},p,{p25:f[0],p50:f[1],p75:f[2],members:members});
     });
-    return Object.assign({},d,{schema:1,units:'degF',requestedPoint:point,cell:cell,periods:periods});
+    return Object.assign({},d,{schema:4,units:'degF',requestedPoint:point,cell:cell,periods:periods});
   }
   function validate(d,point,now){
     function bad(){return {status:'unavailable',reason:'Range data failed validation.'};}
-    if(d&&d.schema===2){
+    try{
+    if(!d||JSON.stringify(d.percentiles)!=='[25,50,75]')return bad();
+    if(d.schema===3){
       try{d=regionalPoint(d,point);}catch(e){return bad();}
       if(!d)return {status:'missing',reason:'Outside the supported St. Louis metro range coverage (38.2–39.2°N, 91.1–89.5°W), or no grid cell within 3 km.'};
     }
-    if(!d||d.schema!==1||d.source!=='NOAA NBM QMD GRIB2'||d.units!=='degF'||d.timezone!=='America/Chicago'||
+    if(!d||d.schema!==4||d.source!=='NOAA NBM QMD GRIB2'||d.units!=='degF'||d.timezone!=='America/Chicago'||
        !d.requestedPoint||!finite(d.requestedPoint.lat)||!finite(d.requestedPoint.lon))return bad();
     if(Math.abs(d.requestedPoint.lat-point.lat)>0.000001||Math.abs(d.requestedPoint.lon-point.lon)>0.000001)
       return {status:'missing',reason:'No extracted NBM range for this selected point.'};
@@ -54,16 +57,16 @@ var NbmRange=(function(){
        !Number.isInteger(d.cell.index)||!finite(d.cell.lat)||!finite(d.cell.lon)||
        !finite(d.cell.distance)||d.cell.distance<0||d.cell.distance>5||typeof d.cell.gridHash!=='string'||
        !Array.isArray(d.periods)||!d.periods.length||!Array.isArray(d.missingHours))return bad();
-    if(now-run>MAX_AGE)return {status:'stale',reason:'NBM source cycle is over 24 hours old; values withheld.',run:run};
+    if(now-run>=MAX_AGE)return {status:'stale',reason:'NBM source cycle is 24 hours old or older; values withheld.',run:run};
     var seen={},periods=[];
     for(var p of d.periods){
       var start=time(p.start),end=time(p.end),kind=p.kind,key=kind+':'+p.start+':'+p.end;
       if(!['TMAX','TMIN'].includes(kind)||!finite(start)||!finite(end)||end-start!==18*H||start<run||seen[key]||
-         ![p.p10,p.p50,p.p90].every(finite)||p.p10>p.p50||p.p50>p.p90||!Array.isArray(p.members)||p.members.length!==3)return bad();
+         'p10' in p||'p90' in p||![p.p25,p.p50,p.p75].every(finite)||p.p25>p.p50||p.p50>p.p75||!Array.isArray(p.members)||p.members.length!==3)return bad();
       seen[key]=true;
       for(var i=0;i<3;i++){
-        var m=p.members[i],v=[p.p10,p.p50,p.p90][i],published=time(m.publishedAt);
-        if(m.percentile!==[10,50,90][i]||m.template!==10||m.statistic!==(kind==='TMAX'?2:3)||
+        var m=p.members[i],v=[p.p25,p.p50,p.p75][i],published=time(m.publishedAt);
+        if(m.percentile!==[25,50,75][i]||m.template!==10||m.statistic!==(kind==='TMAX'?2:3)||
            m.run!==d.run||m.kind!==kind||m.start!==p.start||m.end!==p.end||!same(m.cell,d.cell)||!finite(m.kelvin)||
            m.kelvin<180||m.kelvin>340||!finite(m.fahrenheit)||Math.abs(m.fahrenheit-v)>1e-7||
            Math.abs((m.kelvin-273.15)*9/5+32-v)>1e-7||!finite(published)||published<run||published>retrieved+60000||
@@ -74,6 +77,7 @@ var NbmRange=(function(){
     if(!periods.length)return {status:'missing',reason:'No unexpired native temperature intervals.',run:run};
     periods.sort(function(a,b){return time(a.end)-time(b.end);});
     return {status:d.missingHours.length?'partial':'ready',run:run,periods:periods,cell:d.cell};
+    }catch(e){return bad();}
   }
   function local(s){return new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',month:'short',day:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'}).format(new Date(s));}
   function age(run,now){return ((now-run)/H).toFixed(1)+' hours';}
@@ -104,7 +108,7 @@ var NbmRange=(function(){
   var failure='Checking NBM model guidance…';
   function enabled(){return typeof FEEDS!=='undefined'&&!!FEEDS.nbmRange;}
   function add(tag,text,parent,cls){var el=document.createElement(tag);el.textContent=text;if(cls)el.className=cls;parent.appendChild(el);return el;}
-  function bounds(p){return Math.round(p.p10)+'–'+Math.round(p.p90)+'°F';}
+  function bounds(p){return Math.round(p.p25)+'–'+Math.round(p.p75)+'°F';}
   function windowText(a,b){return local(a)+' – '+local(b);}
   function render(){
     if(!enabled())return;
@@ -115,7 +119,7 @@ var NbmRange=(function(){
     var currentData=raw&&storedSeq===locSeq&&storedPoint.lat===current.lat&&storedPoint.lon===current.lon;
     var result=currentData?validate(raw,storedPoint,Date.now()):{status:'unavailable',reason:failure};
     status.textContent=result.periods?'NBM model guidance · QMD cycle '+new Date(result.run).toISOString().slice(0,16).replace('T',' ')+' UTC · '+age(result.run,Date.now())+' old':result.reason;
-    add('p','NWS temperatures are the official forecast. The NBM range covers the central 80% of the modeled temperature distribution, with about 10% below and 10% above it. It is not a guarantee or an NWS confidence interval. The bounds are P10 and P90; P50 is the median (middle estimate). Model values never replace the NWS forecast.',body);
+    add('p','NWS temperatures are the official forecast. The NBM model range spans native NOAA NBM P25 to P75, the middle 50% of modeled outcomes. Roughly 25% of modeled outcomes lie below it and 25% above it; outcomes outside remain possible. This applies to each native temperature interval, not to the whole forecast staying inside. The bounds are P25 and P75; P50 is the median (middle estimate). Model values never replace the NWS forecast.',body);
     add('p','NBM maximum/minimum temperatures cover native 18-hour windows, not calendar-day highs/lows. A range appears alongside a day or night only when there is one unambiguous overlapping window. Expand the NWS row to compare both intervals. Rows without a range have no unique, currently usable NBM window. All times are Central, with daylight-saving offsets at each endpoint.',body);
     if(!result.periods)return;
     var pairing=align(forecastSeq===locSeq&&forecastPoint&&forecastPoint.lat===current.lat&&forecastPoint.lon===current.lon?days:[],result.periods,Date.now()),items=daily.querySelectorAll('.day-item');
@@ -123,7 +127,7 @@ var NbmRange=(function(){
     Object.keys(groups).forEach(function(index){
       var item=items[index];if(!item)return;
       var matches=groups[index],line=document.createElement('div');line.className='nbm-inline';
-      add('span','NBM range',line,'nbm-label');
+      add('span','NBM model range',line,'nbm-label');
       matches.forEach(function(m){add('span',(m.part==='day'?'High ':'Low ')+bounds(m.nbm),line,'nbm-band');});
       item.querySelector('.day').after(line);
       var detail=document.createElement('div');detail.className='nbm-period-detail';
@@ -131,7 +135,7 @@ var NbmRange=(function(){
       matches.forEach(function(m){
         var group=add('div','',detail,'nbm-comparison');
         add('p','NWS '+(m.part==='day'?'high ':'low ')+m.nws.temperature+'°F · '+windowText(m.nws.startTime,m.nws.endTime),group,'nbm-official');
-        add('p','NBM '+(m.part==='day'?'maximum':'minimum')+' · P10 '+Math.round(m.nbm.p10)+'°F · P50 '+Math.round(m.nbm.p50)+'°F · P90 '+Math.round(m.nbm.p90)+'°F',group);
+        add('p','NBM '+(m.part==='day'?'maximum':'minimum')+' · P25 '+Math.round(m.nbm.p25)+'°F · P50 '+Math.round(m.nbm.p50)+'°F · P75 '+Math.round(m.nbm.p75)+'°F',group);
         add('p',(m.exact?'Same interval: ':'Different interval (18 hours): ')+windowText(m.nbm.start,m.nbm.end),group,'nbm-window-note');
       });
       var grid=item.querySelector('.dd-grid');grid.before(detail);
@@ -142,7 +146,7 @@ var NbmRange=(function(){
       add('h3','Unpaired model windows',body);
       add('p','These windows have no unique matching NWS day/night entry with sufficient overlap. They are not paired comparisons or replacements for missing official temperatures.',body);
       var list=add('ul','',body);
-      pairing.unmatched.forEach(function(p){add('li',(p.kind==='TMAX'?'Maximum':'Minimum')+' · '+windowText(p.start,p.end)+' · P10–P90 '+bounds(p)+' · P50 '+Math.round(p.p50)+'°F',list);});
+      pairing.unmatched.forEach(function(p){add('li',(p.kind==='TMAX'?'Maximum':'Minimum')+' · '+windowText(p.start,p.end)+' · NBM model range '+bounds(p)+' · P50 '+Math.round(p.p50)+'°F',list);});
     }
   }
   function forecast(value){days=value;forecastPoint={lat:current.lat,lon:current.lon};forecastSeq=locSeq;render();}

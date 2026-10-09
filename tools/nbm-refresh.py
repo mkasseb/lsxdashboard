@@ -11,6 +11,7 @@ import math
 import os
 from pathlib import Path
 import resource
+import subprocess
 import tempfile
 import time
 import urllib.error
@@ -23,6 +24,8 @@ spec.loader.exec_module(nbm)
 UTC = timezone.utc
 COVERAGE = dict(south=38.2, north=39.2, west=-91.1, east=-89.5, maxDistanceKm=3)
 PERIOD_COUNT = 18  # Nine days of native windows: buffers a <=24h-old cycle around seven NWS rows.
+SCHEMA = 3
+VALIDATOR = 'regional-quartiles-v2'
 NS = {'s': 'http://s3.amazonaws.com/doc/2006-03-01/'}
 
 
@@ -122,7 +125,7 @@ def region(client, run, planned):
     import numpy as np
     cycle = datetime.strptime(run, '%Y%m%d%H').replace(tzinfo=UTC)
     cells, indices, grid_hash = None, None, None
-    result = dict(schema=2, source='NOAA NBM QMD GRIB2', run=nbm.iso(cycle),
+    result = dict(schema=SCHEMA, percentiles=list(nbm.PERCENTILES), source='NOAA NBM QMD GRIB2', run=nbm.iso(cycle),
                   timezone='America/Chicago', units='K', coverage=COVERAGE.copy(), periods=[], missingHours=[])
     for url, rows in planned:
         members, values = [], []
@@ -181,6 +184,18 @@ def region(client, run, planned):
     return result
 
 
+def consumer_valid(raw, asset):
+    """Independently validate retained bytes before permitting a no-op; never renew their age."""
+    js = """const fs=require('fs'),vm=require('vm');const s={Intl,Date,URLSearchParams};
+vm.createContext(s);vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),s);
+const d=JSON.parse(fs.readFileSync(0,'utf8')),n=process.argv[2];
+if(s[n].validate(d,{lat:38.8,lon:-90.79},Date.parse(d.retrievedAt)).status!=='ready')process.exit(1);"""
+    result = subprocess.run(['node', '-e', js, str(Path(__file__).resolve().parent.parent/'assets'/asset),
+                             'NbmRange' if asset == 'forecast-range.js' else 'NbmHourly'],
+                            input=raw, capture_output=True, timeout=30)
+    return result.returncode == 0
+
+
 def retained_unchanged(client, directory, run, planned):
     """Reuse only a complete prior validated output with intact receipt and unchanged objects."""
     target, receipt_path = directory/'nbm-range.json', directory/'nbm-receipt.json'
@@ -190,9 +205,11 @@ def retained_unchanged(client, directory, run, planned):
         raw = target.read_bytes()
         data, receipt = json.loads(raw), json.loads(receipt_path.read_text())
         stamp = datetime.strptime(run, '%Y%m%d%H').replace(tzinfo=UTC)
-        if (receipt != dict(validator='regional-v1', run=nbm.iso(stamp), sha256=hashlib.sha256(raw).hexdigest()) or
-                data.get('run') != nbm.iso(stamp) or data.get('schema') != 2 or data.get('coverage') != COVERAGE or
+        if (receipt != dict(validator=VALIDATOR, run=nbm.iso(stamp), sha256=hashlib.sha256(raw).hexdigest()) or
+                data.get('run') != nbm.iso(stamp) or data.get('schema') != SCHEMA or data.get('percentiles') != list(nbm.PERCENTILES) or data.get('coverage') != COVERAGE or
                 data.get('missingHours') != [] or len(data.get('periods', [])) != len(planned)):
+            return None
+        if not consumer_valid(raw, 'forecast-range.js'):
             return None
     except (OSError, ValueError, TypeError):
         return None
@@ -242,7 +259,7 @@ def publish_local(directory, data):
     atomic(directory/'history'/f'{stamp}.json', data)
     try:
         size = atomic(target, data)
-        atomic(directory/'nbm-receipt.json', dict(validator='regional-v1', run=data['run'],
+        atomic(directory/'nbm-receipt.json', dict(validator=VALIDATOR, run=data['run'],
                                                 sha256=hashlib.sha256(target.read_bytes()).hexdigest()))
     finally:
         for obsolete in sorted((directory/'history').glob('[0-9]'*10+'.json'), reverse=True)[2:]:

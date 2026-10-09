@@ -114,7 +114,7 @@ jobs:
   nws-hosted-preview:
     # Read-only hosted verification. Existing push trigger; no extraction or publication.
     name: ${{ (github.head_ref == 'codex/nws-production-verifier' || github.event_name == 'push') && 'nws-hosted-production' || 'nws-hosted-preview' }}
-    if: ((github.head_ref == 'codex/nws-key-messages' || github.head_ref == 'codex/nws-production-verifier') && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: ((github.head_ref == 'codex/nws-key-messages' || github.head_ref == 'codex/nws-production-verifier' || github.head_ref == 'codex/nbm-middle-50') && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

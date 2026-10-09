@@ -208,8 +208,8 @@ in [`DESIGN.md`](DESIGN.md#adding-a-card-adding-a-loader).
 ## Supplemental NBM temperature range
 
 Supplemental NBM ranges appear alongside official NWS day/night entries in the forecast card.
-Expand an entry to compare the NWS temperature and exact interval with the NBM P10/P50/P90
-values and native 18-hour interval. The compact range is P10–P90, not a replacement high/low. A single shared note explains the
+Expand an entry to compare the NWS temperature and exact interval with native NOAA NBM P25/P50/P75
+values and the native 18-hour interval. **NBM model range** spans P25–P75 alongside the official NWS high/low. A single shared note explains the
 18-hour windows; individual rows keep only the ranges. Exact interval differences remain in expanded details.
 The collapsed **About NBM ranges & unmatched windows** section explains the percentiles,
 source age, nearest cell, coverage, and windows that cannot be paired. `/?nbm=0` disables guidance.
@@ -264,7 +264,7 @@ Existing dashboard LSX location checks still apply. Requests outside the rectang
 coverage. Inside it, the card selects the nearest stored native GRIB cell by spherical distance,
 requiring at most **3 km**; it neither interpolates values nor substitutes a station. A small grid
 padding permits correct selection at the rectangle's edges. All three percentiles use that same
-cell, run and native interval. The original single-point extractor and schema remain compatible.
+cell, run and native interval. The point extractor uses schema 4; regional data uses schema 3. Both identify native [25, 50, 75]. Legacy P10/P50/P90 schemas are rejected.
 
 ### Data correctness and freshness
 
@@ -275,11 +275,11 @@ minimum spans Oct 8 19:00 CDT to Oct 9 13:00 CDT. Both endpoints use America/Chi
 across DST. Hourly percentiles are never used to derive extrema; crossed percentiles are rejected,
 not reordered. P50 is the model median, not the official NWS forecast.
 
-Regional schema 2 stores a shared cell table and shared per-interval provenance, plus three Kelvin
+Regional schema 3 stores a shared cell table and shared per-interval provenance, plus three Kelvin
 values per cell. Each message preserves its NOAA URL, byte range, SHA-256, ETag, upload time, decoded
 cycle, native interval and grid identity. The browser converts the selected cell to Fahrenheit and
-revalidates the percentile group. Cycle age never resets on extraction or page refresh. Data older
-than 24 hours is withheld on the next 15-minute card refresh; expired native intervals are removed.
+revalidates the percentile group. Cycle age never resets on extraction or page refresh. Data 24 hours old
+or older is withheld on the next 15-minute card refresh; expired native intervals are removed.
 The 24-hour limit is dashboard policy, not a NOAA SLA.
 
 Local writes use a flushed temporary file and atomic replacement, with a writer lock and rejection
@@ -290,7 +290,7 @@ notes, bytes, requests, elapsed time and peak RSS. Two distinct cycle snapshots 
 
 An unchanged-source gate reuses retained output only when its validation receipt matches the bytes,
 validator version and cycle, the current index ranges match, and eighteen one-byte probes confirm unchanged
-source ETags. A missing receipt or source revision requires extraction. An unchanged result reports
+source ETags. Structural consumer validation also runs before reuse. The `regional-quartiles-v2` receipt identity rejects legacy data and receipts even for the same source cycle. A missing receipt, old schema or source revision requires native extraction. An unchanged result reports
 `changed:false` without rewriting data, receipt, history or retrieval time. `nbm-status.json` still
 records the check; the publisher gates on `changed` and never commits status timestamps.
 The receipt is local integrity evidence, not a signature or a replacement for source validation.
@@ -353,7 +353,7 @@ endpoints at 06/18 UTC and each native interval retaining its actual 18-hour len
 buffer beyond seven NWS rows for a cycle up to 24 hours old, partial first/last periods and DST.
 Only unique same-kind overlaps are paired; a missing/ambiguous NWS period is never synthesized.
 
-The consumer also accepts legacy six-window snapshots for compatibility. New publication requires
+The consumer accepts six-window quartile recordings for tests; legacy percentile schemas fail closed. New publication requires
 all 18 windows; incomplete new cycles retry/fall back within existing limits and never publish a
 shortened replacement. A cached six-window snapshot cannot pass the longer-plan unchanged gate.
 
@@ -541,13 +541,13 @@ The existing weather, seasonal and real-cache upgrade suites remain required.
 
 The hourly branch depends on the reviewed seven-day work in PR #58. The existing NWS hourly
 line, values, summaries, precipitation, headlines and risk logic remain primary. A checkbox in
-**Plan your day** enables a separate P10–P90 temperature band in the 24-hour view. It plots the
+**Plan your day** enables a separate **NBM model range** (native P25–P75) in the 24-hour view. It plots the
 actual model bounds; the NWS line can be outside them. Slider, keyboard and touch details show
-P10/P50/P90 and the valid Central time with CDT/CST. The range is model guidance, not an NWS
+P25/P50/P75 and the valid Central time with CDT/CST. The range is model guidance, not an NWS
 confidence interval. Longer views remain NWS-only; no interpolation fills missing native hours.
 
 `tools/nbm-hourly-refresh.py` independently extracts instantaneous **TMP at 2 m**, GRIB2 PDT6,
-NOAA centre, Kelvin, native P10/P50/P90. It checks decoded run, forecast step, valid UTC time,
+NOAA centre, Kelvin, native P25/P50/P75. It checks decoded run, forecast step, valid UTC time,
 percentile order and the identical subset grid/cell coordinates across all groups. These fields
 are not the 18-hour TMAX/TMIN extrema. Current inventories were verified to include hourly
 percentiles through f060; later sampled fields are three-hourly. QMD publication is about seven
@@ -695,12 +695,12 @@ Artifacts can include both current pairs plus daily history: roughly 6.3 MB per 
 before compression in this rehearsal, about 450 MB if all 72 hourly artifacts were that size.
 Account quotas and remaining usage are not verified here; this existing-service release makes no zero-overage promise.
 
-The interface says **model range** and **middle estimate**, with percentile definitions, valid
-hour/units and source-cycle details in a keyboard/touch-accessible disclosure. The band represents
-the central 80% of the modeled distribution, with about 10% below and above—not guaranteed limits
-or an NWS confidence interval. The middle estimate is P50 (the median), not the midpoint of P10
-and P90. Daily rows also use the shorter “NBM range” label while preserving explicit native
-18-hour windows in their details. A failed browser check retains validated same-location guidance
+The daily and hourly interfaces say **NBM model range** and use native NOAA P25/P50/P75.
+Roughly 25% of modeled outcomes lie below the range and 25% above it; outcomes outside remain possible.
+This applies to each hour or native extrema window, not the chance that the whole time series stays inside.
+No accuracy improvement or confidence probability is claimed. P50 is the median, not the midpoint of P25
+and P75. Daily details preserve explicit native 18-hour windows; hourly details retain exact UTC matching
+and Central display time. Percentile definitions and source details remain keyboard/touch accessible. A failed browser check retains validated same-location guidance
 with a clear previous-range notice until its original expiry; location reset clears it immediately.
 
 ### NWS Key Messages and current local fallback
@@ -732,9 +732,8 @@ advice is never labeled NWS Key Messages. Local active warnings remain above the
 and take precedence; the regional bullets keep their geographic qualifiers.
 
 The lower **NWS Forecast Details** card retains short-term/synopsis reasoning without repeating the
-hero bullets. Daily and hourly NBM feeds, ranges, toggles and publication are unchanged. Optional NBM
-commentary lives in hourly “Temperature uncertainty” details and keeps its existing hazard/freshness
-and location guards. Stable disclosures preserve keyboard focus and open state; unchanged live-status
+hero bullets. NWS Key Messages and its fallback remain independent of native daily/hourly NBM quartiles.
+The former optional P10/P90 threshold commentary has been removed; quartiles do not inherit those tail heuristics. Stable disclosures preserve keyboard focus and open state; unchanged live-status
 text is not rewritten on unrelated feed checks.
 
 Sources: [LSX AFD](https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&version=1&glossary=1)
@@ -758,50 +757,31 @@ match the release exactly; unknown bootstrap shapes or application changes still
 NBM files remain raw-byte comparisons. The browser receives the original response, including the
 Cloudflare script. Recorded hosted captures and negative controls run in `tools/hosted-html-tests.js`.
 
-### Optional forecast temperature context
+### Native quartile draft preview
 
-This feature uses the validated hourly-range feed. It adds at most one supplemental
-sentence inside the hourly card’s “Temperature uncertainty” details; it never enters candidate ranking,
-changes NWS temperatures, or creates an alert/action. Precipitation is outside this change.
-The existing “Show model temperature range” checkbox also controls the sentence. It is omitted
-when the retained internal hazard selector already has three supporting items.
+This scoped change replaces the three stored values with native NOAA P25/P50/P75; it does not add
+wider percentiles or interpolate the old P10/P50/P90 values. Daily schema 3 (point schema 4), hourly
+schema 2, top-level percentile tuples, member/hour tuples and new receipt identities all agree.
+Legacy schemas and mixed identities are withheld. Snapshot v22 discards v21; versioned asset URLs
+and real HTTP-cache upgrade tests cover retained old JSON. Same-cycle migration requires a real
+native extraction, while valid no-ops retain original data, receipts and retrieval timestamps.
+The optional threshold sentence and its tail-based API/styles/markup have been removed.
 
-`NbmHourly.briefingConfig` documents the conservative display heuristics: 32°F freezing and
-90°F warm-weather planning thresholds, at least 2°F on each side in P10–P90, at least 6°F of
-spread, and the NWS temperature 2–8°F on the milder side, inside that same model band. The latter
-prevents distant/outside-band disagreements from becoming an alarming recommendation. These
-are configurable code constants, not calibrated probability cutoffs, heat-health criteria or
-user-adjustable safety thresholds. Two qualifying consecutive future UTC hourly samples of the
-same kind are required to avoid isolated spikes. The earliest pair wins; the sentence describes
-only its first sample, with that hour's own bounds, NWS temperature, Central date/time and CDT/CST.
-There is no combined two-hour range or claimed event duration. Rules operate in every season.
+The October 9 00Z preview dataset was extracted once over normal TLS: daily **72 requests,
+115,829,780 response-body bytes, 29.966 seconds, 1,244,105 output bytes**; hourly **146 requests,
+6,718,439 bytes, 375.318 seconds, 3,819,881 output bytes**. Both include 2,969 native cells;
+daily has 18 windows/54 messages and hourly has fixed f001–f048. The explicit-cycle command omits
+normal discovery overhead. Historical measurements above used older percentile schemas and
+remain historical evidence, not active quartile fixtures. Existing request/byte/runtime/output
+limits and the six-hour production publication budget are unchanged. Header/transport, package,
+Git and deployment overhead are outside measured response-body counts. Hourly output has only
+180,119 bytes of remaining headroom; no five-value payload is introduced.
 
-Fresh live NWS hourly data must be bound to the current location generation, checked within the
-existing one-hour limit, with a known issuance no more than 12 hours old. NBM must pass existing
-full native-data validation, have a current successful check (30-minute limit), and a source run
-less than 24 hours old. A failed latest NBM check suppresses the sentence even if the separate
-chart retains previously validated guidance. Missing/partial checks, snapshots, unmatched hours,
-unsupported locations and location-reset races cannot supply the note. Existing regional limits
-and exact UTC/DST matching are unchanged. No hourly percentile extrema are used as daily ranges.
-
-Any local alert or danger candidate suppresses the supplement. Other warning-tone candidates
-also suppress it, except an existing cold-topic clothing/temperature-drop advisory can receive
-freezing context; its headline/action/severity remain unchanged. Heat context requires a neutral
-or good lead. Hidden competing candidates still count. Unverified alerts suppress the note.
-The disclosure explains the central 80% model distribution, non-guaranteed limits, source age,
-and two-sample display rule. No freeze probability, icy-road, heat-index, model-consensus or
-forecast-confidence inference is made.
-
-Validation: `node tools/nbm-briefing-tests.js` checks thresholds/margins/widths, future and missing
-hours, NWS outside the band, source age, seasons and both DST transitions. The explicitly
-synthetic `tools/nbm-briefing-browser-tests.js` covers cold/heat, competing hazards and alert
-arrival, stale/failed/saved feeds, location races, checkbox control, disclosure keyboard/touch,
-320/390/1440px layouts and Chicago/Tokyo browsers. Hosted verification separates untouched live
-forecast checks from labeled synthetic threshold scenarios. Ordinary weather and seasonal
-checks remain applicable. No new data extraction, storage, backend, refresh activation or
-infrastructure commitment is introduced.
-
-Offline hourly regression and transaction tests use the authentic compressed recording
-`tools/fixtures/weather/nbm-hourly-full-recorded.json.gz` (unchanged October 8 06Z source bytes),
-paired with recorded NWS responses and a fixed clock. Production JSON is allowed to refresh
-without rewriting historical test expectations. Live checks separately validate current data.
+New authentic recordings are `tools/fixtures/weather/nbm-quartile-*`. Historical wider-percentile
+recordings remain unmodified as negative controls. Tests cover old/malformed/mixed schemas,
+missing periods, ordering, receipt/cache migration, no-ops/budgets, native daily/hourly alignment,
+NWS wording/state, location changes, stale withholding and phone/desktop/200% text layouts.
+[Preview provenance and measurements](docs/native-quartile-preview.md) record sampled raw-GRIB
+validation and limits. The immutable preview retains actual source timestamps and expires at
+October 10 00Z; that expiry is distinct from production refresh failure. This draft does not merge,
+activate production refreshes, change permissions, or create services/credentials.

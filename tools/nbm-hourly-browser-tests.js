@@ -1,7 +1,7 @@
 'use strict';
 const assert=require('assert/strict'),fs=require('fs'),path=require('path');
 const {chromium}=require('playwright');const {open,config,setBrowser}=require('./weather-stress-tests');
-const data=JSON.parse(require('zlib').gunzipSync(fs.readFileSync('tools/fixtures/weather/nbm-hourly-full-recorded.json.gz'))),capture=JSON.parse(fs.readFileSync('tools/fixtures/weather/nbm-hourly-nws-recorded.json'));
+const data=JSON.parse(require('zlib').gunzipSync(fs.readFileSync('tools/fixtures/weather/nbm-quartile-hourly-recorded.json.gz'))),capture=JSON.parse(fs.readFileSync('tools/fixtures/weather/nbm-quartile-hourly-nws-recorded.json'));
 const now=Math.max(Date.parse(data.retrievedAt),Date.parse(capture.retrievedAt)),H=3600000,route='**/data/nbm-hourly.json';
 async function model(p,d=data){await p.unroute(route);await p.route(route,r=>r.fulfill({json:d}));await p.evaluate(()=>loadNbmHourly());}
 async function official(p){await p.route('**/forecast/hourly',r=>r.fulfill({json:capture.forecast}));await p.evaluate(()=>loadForecast());}
@@ -13,14 +13,17 @@ async function primary(p){return p.evaluate(()=>({hrs:JSON.stringify(renderHourl
   try{
    await official(p);const before=await primary(p);await model(p);assert.deepEqual(await primary(p),before);
    assert.equal(await p.locator('.nbm-hourly-band').count(),1);assert.match(await p.locator('#nbmHourlyStatus').innerText(),/24\/24 hours matched/);
+   assert.equal(await p.locator('#nbmHourlyToggle').locator('..').innerText(),'Show NBM model range');
+   assert.match(await p.locator('.h24-svg').getAttribute('aria-label'),/NBM model range: the middle 50%.*P25–P75/);
    const input=p.locator('#hourlyCursor');await input.focus();await input.press('ArrowRight');
-   assert.match(await p.locator('#hourlyDetail').innerText(),/Model range .*°F · middle estimate .*°F/);
+   assert.match(await p.locator('#hourlyDetail').innerText(),/NBM model range .*°F · middle estimate .*°F/);
    const info=p.locator('#nbmHourlyInfo'),help=info.locator('summary');
    assert.equal(await info.evaluate(e=>e.open),false);
    if(width<500)await help.tap();else{await help.focus();await help.press('Enter');}
    assert.equal(await info.evaluate(e=>e.open),true);
-   assert.match(await info.innerText(),/not guaranteed limits or an NWS confidence interval/);
-   assert.match(await p.locator('#nbmHourlyPercentiles').innerText(),/P10 .* P50 .* P90/);
+   assert.match(await info.innerText(),/outcomes outside remain possible/);
+   assert.match(await info.innerText(),/NBM model range shows the middle 50%.*25%.*25% above/);
+   assert.match(await p.locator('#nbmHourlyPercentiles').innerText(),/P25 .* P50 .* P75/);
    assert.match(await p.locator('#nbmHourlySource').innerText(),/Native 2 m temperature/);
    if(process.env.NBM_ARTIFACTS){fs.mkdirSync(process.env.NBM_ARTIFACTS,{recursive:true});await info.screenshot({path:path.join(process.env.NBM_ARTIFACTS,`hourly-about-${width}-${timezone.replace('/','-')}.png`)});}
    await help.click();await input.focus();
@@ -34,6 +37,9 @@ async function primary(p){return p.evaluate(()=>({hrs:JSON.stringify(renderHourl
     assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
     if(process.env.NBM_ARTIFACTS){fs.mkdirSync(process.env.NBM_ARTIFACTS,{recursive:true});await p.locator('#h24Card').screenshot({style:'.jump-wrap,.skip{visibility:hidden !important}',path:path.join(process.env.NBM_ARTIFACTS,`hourly-${width}-${timezone.replace('/','-')}-${theme}.png`)});}
    }
+   await p.evaluate(()=>{document.documentElement.style.fontSize='200%';layoutMasonry();});await p.clock.runFor(500);
+   assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+   await p.evaluate(()=>{document.documentElement.style.fontSize='';layoutMasonry();});
    // A real pointer/touch selection updates the accessible details.
    const beforePointer=await p.evaluate(()=>renderHourly24._selectedTime);
    const svg=p.locator('.h24-svg');if(width<500)await svg.tap({position:{x:100,y:100}});else await svg.hover({position:{x:100,y:100}});

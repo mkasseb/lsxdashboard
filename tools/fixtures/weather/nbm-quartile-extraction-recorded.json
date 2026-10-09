@@ -1,0 +1,49 @@
+{
+  "run": "2026100900",
+  "daily": {
+    "status": "ready",
+    "changed": true,
+    "dataRun": "2026-10-09T00:00:00Z",
+    "candidateRuns": [
+      "2026100900"
+    ],
+    "publicationNotes": [],
+    "cells": 2969,
+    "periods": 18,
+    "outputBytes": 1244105,
+    "coverage": {
+      "south": 38.2,
+      "north": 39.2,
+      "west": -91.1,
+      "east": -89.5,
+      "maxDistanceKm": 3
+    },
+    "checkedAt": "2026-10-09T12:50:56.042111Z",
+    "downloadBytes": 115829780,
+    "requests": 72,
+    "elapsedSeconds": 29.966,
+    "peakRssMiB": 184.33
+  },
+  "hourly": {
+    "status": "ready",
+    "changed": true,
+    "dataRun": "2026-10-09T00:00:00Z",
+    "hours": 48,
+    "cells": 2969,
+    "outputBytes": 3819881,
+    "publicationNotes": [],
+    "checkedAt": "2026-10-09T12:57:11.362743Z",
+    "downloadBytes": 6718439,
+    "requests": 146,
+    "elapsedSeconds": 375.318,
+    "peakRssMiB": 184.33,
+    "limits": {
+      "requests": 180,
+      "downloadBytes": 30000000,
+      "elapsedSeconds": 600,
+      "outputBytes": 4000000
+    }
+  },
+  "requests": 218,
+  "downloadBytes": 122548219
+}

@@ -31,7 +31,7 @@ class PublisherTests(unittest.TestCase):
         p.git(self.repo, 'remote', 'add', 'origin', str(self.remote))
         p.git(self.repo, 'push', 'origin', 'main')
         self.base = self.head()
-        self.data = json.loads(gzip.decompress((Path(__file__).parent/'fixtures/weather/nbm-regional-full-recorded.json.gz').read_bytes()))
+        self.data = json.loads(gzip.decompress((Path(__file__).parent/'fixtures/weather/nbm-quartile-daily-recorded.json.gz').read_bytes()))
         self.now = p.stamp(self.data['retrievedAt'])+timedelta(minutes=1)
         self.write_candidate()
 
@@ -41,7 +41,7 @@ class PublisherTests(unittest.TestCase):
     def write_candidate(self, changed=True):
         raw = (json.dumps(self.data)+'\n').encode()
         (self.candidate/'nbm-range.json').write_bytes(raw)
-        (self.candidate/'nbm-receipt.json').write_text(json.dumps(dict(validator='regional-v1', run=self.data['run'], sha256=hashlib.sha256(raw).hexdigest())))
+        (self.candidate/'nbm-receipt.json').write_text(json.dumps(dict(validator='regional-quartiles-v2', run=self.data['run'], sha256=hashlib.sha256(raw).hexdigest())))
         (self.candidate/'nbm-status.json').write_text(json.dumps(dict(status='ready' if changed else 'unchanged', changed=changed, dataRun=self.data['run'], checkedAt=self.now.isoformat())))
 
     def publish(self, **kwargs):

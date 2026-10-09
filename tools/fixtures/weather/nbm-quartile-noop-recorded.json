@@ -1,0 +1,59 @@
+{
+  "status": "passed",
+  "explicitRun": "2026100900",
+  "daily": {
+    "status": "unchanged",
+    "changed": false,
+    "dataRun": "2026-10-09T00:00:00Z",
+    "candidateRuns": [
+      "2026100900"
+    ],
+    "publicationNotes": [],
+    "cells": 2969,
+    "periods": 18,
+    "outputBytes": 1244105,
+    "coverage": {
+      "south": 38.2,
+      "north": 39.2,
+      "west": -91.1,
+      "east": -89.5,
+      "maxDistanceKm": 3
+    },
+    "checkedAt": "2026-10-09T12:59:46.961366Z",
+    "downloadBytes": 505293,
+    "requests": 36,
+    "elapsedSeconds": 9.094,
+    "peakRssMiB": 36.0
+  },
+  "hourly": {
+    "status": "unchanged",
+    "changed": false,
+    "dataRun": "2026-10-09T00:00:00Z",
+    "hours": 48,
+    "cells": 2969,
+    "outputBytes": 3819881,
+    "publicationNotes": [],
+    "checkedAt": "2026-10-09T12:59:53.649021Z",
+    "downloadBytes": 336746,
+    "requests": 49,
+    "elapsedSeconds": 6.684,
+    "peakRssMiB": 88.66,
+    "limits": {
+      "requests": 180,
+      "downloadBytes": 30000000,
+      "elapsedSeconds": 600,
+      "outputBytes": 4000000
+    }
+  },
+  "requests": 85,
+  "downloadBytes": 842039,
+  "unchangedFiles": {
+    "nbm-range.json": "3bf494373d2e6bab31de4de8a1631b88814b96b75ddbaff1de862cde80834b6d",
+    "nbm-receipt.json": "26082762313e2da5b9f98a909c02658f7e78392d96e568a8682efefaa093629a",
+    "nbm-hourly.json": "e4aa454c06e51bdc1595644992ffa3c6c6adfff0d7b484a1532d561563575749",
+    "nbm-hourly-receipt.json": "ccfa7c5ba2605b1c590b29a5743c1916fd5f2f88180519233a9db9a133ed83d5",
+    "nbm-publication.json": "4728e62a840987130e92dbe8ac589b418da6ab976ca84cf29384f5cce40a9c47"
+  },
+  "sourceTimestampsPreserved": true,
+  "publicationManifestPreserved": true
+}

@@ -14,7 +14,9 @@ from zoneinfo import ZoneInfo
 BASE = "https://noaa-nbm-grib2-pds.s3.amazonaws.com/"
 UTC = timezone.utc
 CENTRAL = ZoneInfo("America/Chicago")
-ROW = re.compile(r"^\d+:(\d+):d=(\d{10}):(TMP|TMAX|TMIN):2 m above ground:(\d+)-(\d+) hour (max|min) fcst:(10|50|90)% level$")
+PERCENTILES = (25, 50, 75)
+POINT_SCHEMA = 4  # Schemas 1/2 held P10/P50/P90 and must never gain quartile labels.
+ROW = re.compile(r"^\d+:(\d+):d=(\d{10}):(TMP|TMAX|TMIN):2 m above ground:(\d+)-(\d+) hour (max|min) fcst:(25|50|75)% level$")
 
 
 class IncompletePercentiles(ValueError):
@@ -51,7 +53,7 @@ def select_rows(text, run, hour):
                           start=int(start), end=int(end), kind=kind, percentile=int(percentile)))
     if found and len(found) < 3 and len({x['percentile'] for x in found}) == len(found) and len({(x['start'], x['end'], x['kind']) for x in found}) == 1:
         raise IncompletePercentiles('Percentile index group not complete')
-    if found and (len(found) != 3 or sorted(x["percentile"] for x in found) != [10, 50, 90]
+    if found and (len(found) != 3 or sorted(x["percentile"] for x in found) != list(PERCENTILES)
                   or len({(x["start"], x["end"], x["kind"]) for x in found}) != 1):
         raise ValueError("Incomplete or mixed percentile group")
     return found
@@ -106,7 +108,7 @@ def extract(run, hours, lat, lon):
     now = datetime.now(UTC)
     if run_time > now or now-run_time > timedelta(hours=24):
         raise ValueError("Select an authentic current QMD run within 24 hours")
-    result = {"schema": 1, "source": "NOAA NBM QMD GRIB2", "run": iso(run_time), "retrievedAt": iso(now),
+    result = {"schema": POINT_SCHEMA, "percentiles": list(PERCENTILES), "source": "NOAA NBM QMD GRIB2", "run": iso(run_time), "retrievedAt": iso(now),
               "timezone": "America/Chicago", "units": "degF", "requestedPoint": {"lat": lat, "lon": lon},
               "periods": [], "missingHours": [], "downloadBytes": 0}
     common_cell = None
@@ -151,8 +153,8 @@ def extract(run, hours, lat, lon):
         if not members[0]["kelvin"] <= members[1]["kelvin"] <= members[2]["kelvin"]:
             raise ValueError("Crossed percentile values")
         result["periods"].append({k: first[k] for k in ["kind", "start", "end", "localStart", "localEnd"]} |
-                                 {"p10": members[0]["fahrenheit"], "p50": members[1]["fahrenheit"],
-                                  "p90": members[2]["fahrenheit"], "members": members})
+                                 {"p25": members[0]["fahrenheit"], "p50": members[1]["fahrenheit"],
+                                  "p75": members[2]["fahrenheit"], "members": members})
     if not result["periods"]:
         raise ValueError("No validated extrema periods")
     result["cell"] = common_cell

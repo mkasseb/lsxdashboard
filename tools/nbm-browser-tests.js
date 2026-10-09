@@ -3,11 +3,11 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {chromium}=require('playwright');
 const {open,config,setBrowser}=require('./weather-stress-tests');
-const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-qmd-recorded.json')));
-const regional=JSON.parse(require('node:zlib').gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-regional-recorded.json.gz'))));
-const capture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-nws-pairing-recorded.json'))),now=Date.parse(capture.retrievedAt);
-const full=JSON.parse(require('node:zlib').gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-regional-full-recorded.json.gz'))));
-const fullCapture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-nws-full-pairing-recorded.json')));
+const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-quartile-point-recorded.json')));
+const regional=JSON.parse(require('node:zlib').gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-quartile-daily-short-recorded.json.gz'))));
+const capture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-quartile-nws-recorded.json'))),now=Date.parse(capture.retrievedAt);
+const full=JSON.parse(require('node:zlib').gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-quartile-daily-recorded.json.gz'))));
+const fullCapture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-quartile-nws-recorded.json')));
 const modelRoute='**/data/nbm-range.json';
 async function nws(page,f=capture.forecast){await page.evaluate(f=>{renderDailyForecast(f,null);feedUpdate('daily','ready',f.properties.updateTime);},f);}
 async function model(page,data=regional){await page.unroute(modelRoute);await page.route(modelRoute,r=>r.fulfill({json:data}));await page.evaluate(()=>loadNbmRange());}
@@ -23,18 +23,20 @@ async function main(){
     await nws(p);const before=await primary(p);await model(p);
     assert.deepEqual(await primary(p),before,'NBM never changes official values/text or risk decisions');
     assert.equal(await p.locator('.nbm-inline').count(),3);assert.equal(await p.locator('.nbm-comparison').count(),5);
+    assert.deepEqual(await p.locator('.nbm-inline .nbm-label').allTextContents(),Array(3).fill('NBM model range'));
     assert.equal(await p.locator('.nbm-inline .nbm-window-note').count(),0);
     assert.equal(await p.locator('#nbmWindowHelp').count(),1);
     assert.match(await p.locator('#nbmWindowHelp').innerText(),/18-hour windows/);
     const day=p.locator('#daily .day').first();await day.focus();await day.press('Enter');
     assert.equal(await day.getAttribute('aria-expanded'),'true');
-    assert.match(await p.locator('.nbm-period-detail').first().innerText(),/NWS low.*Oct 7, 7:00 PM CDT.*Oct 8, 6:00 AM CDT/);
-    assert.match(await p.locator('.nbm-period-detail').first().innerText(),/Different interval \(18 hours\).*Oct 8, 1:00 PM CDT/);
+    assert.match(await p.locator('.nbm-period-detail').first().innerText(),/NWS high.*Oct 9.*CDT/);
+    assert.match(await p.locator('.nbm-period-detail').first().innerText(),/Different interval \(18 hours\).*Oct 10, 1:00 AM CDT/);
     await p.evaluate(()=>loadNbmRange());
     assert.equal(await day.getAttribute('aria-expanded'),'true');assert(await day.evaluate(e=>e===document.activeElement));
     await p.evaluate(()=>loadForecast._paint());assert.equal(await p.locator('#daily .day').first().getAttribute('aria-expanded'),'true');
     assert(await p.locator('#daily .day').first().evaluate(e=>e===document.activeElement));
     const summary=p.locator('#nbmInfo summary');await summary.focus();await summary.press('Enter');
+    assert.match(await p.locator('#nbmInfoBody').innerText(),/P25 to P75, the middle 50%.*25%.*25% above.*outside remain possible/);
     await p.evaluate(()=>loadNbmRange());assert(await summary.evaluate(e=>e===document.activeElement));
     assert.match(await p.locator('#nbmInfoBody').innerText(),/Unpaired model windows/);
     assert.equal(await p.locator('#nbmInfoBody li').count(),1);
@@ -46,6 +48,9 @@ async function main(){
      assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
      if(process.env.NBM_ARTIFACTS){fs.mkdirSync(process.env.NBM_ARTIFACTS,{recursive:true});await p.locator('#forecastCard').screenshot({style:'.jump-wrap,.skip{visibility:hidden !important}',path:path.join(process.env.NBM_ARTIFACTS,`recorded-inline-${width}-${timezone.replace('/','-')}-${theme}.png`)});}
     }
+    await p.evaluate(()=>{document.documentElement.style.fontSize='200%';layoutMasonry();});await p.clock.runFor(500);
+    assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+    await p.evaluate(()=>{document.documentElement.style.fontSize='';layoutMasonry();});
     // A real reload can show saved official HTML, but must wait for new NWS before pairing.
     let releaseForecast;
     const forecastHeld=new Promise(resolve=>{releaseForecast=resolve;});
@@ -61,11 +66,11 @@ async function main(){
     await p.unroute('**/forecast');
     // Both official and model zero values remain actual values, not unavailable placeholders.
     const zeroNws=structuredClone(capture.forecast);zeroNws.properties.periods.find(x=>x.isDaytime).temperature=0;
-    const zeroModel=structuredClone(fixture);zeroModel.periods.filter(x=>x.kind==='TMAX').forEach(x=>{x.p10=x.p50=x.p90=0;x.members.forEach(m=>{m.kelvin=(0-32)*5/9+273.15;m.fahrenheit=0;});});
+    const zeroModel=structuredClone(fixture);zeroModel.periods.filter(x=>x.kind==='TMAX').forEach(x=>{x.p25=x.p50=x.p75=0;x.members.forEach(m=>{m.kelvin=(0-32)*5/9+273.15;m.fahrenheit=0;});});
     await nws(p,zeroNws);await model(p,zeroModel);
-    assert.match(await p.locator('.nbm-inline').nth(1).innerText(),/High 0–0°F/);
-    assert.match(await p.locator('.nbm-period-detail').nth(1).textContent(),/NWS high 0°F/);
-    assert.match(await p.locator('.nbm-period-detail').nth(1).textContent(),/P50 0°F/);
+    assert.match(await p.locator('.nbm-inline').first().innerText(),/High 0–0°F/);
+    assert.match(await p.locator('.nbm-period-detail').first().textContent(),/NWS high 0°F/);
+    assert.match(await p.locator('.nbm-period-detail').first().textContent(),/P50 0°F/);
     // Model before official periods: unpaired until an independently loaded forecast arrives.
     await p.evaluate(()=>{NbmRange.forecast([]);document.getElementById('daily').innerHTML='';});await model(p);
     assert.equal(await p.locator('.nbm-inline').count(),0);assert.equal(await p.locator('#nbmInfoBody li').count(),6);
@@ -90,7 +95,7 @@ async function main(){
     await model(p);assert.match(await p.locator('#nbmStatus').innerText(),/Outside the supported/);
     await p.evaluate(()=>{locSeq++;current={...current,lat:38.8};resetLocationState();clearLocationUI();});await nws(p);await model(p);
     await p.clock.setFixedTime(new Date(Date.parse(regional.run)+25*3600000));await p.evaluate(()=>loadForecast._paint());
-    assert.equal(await p.locator('.nbm-inline').count(),0);assert.match(await p.locator('#nbmStatus').innerText(),/over 24 hours/);
+    assert.equal(await p.locator('.nbm-inline').count(),0);assert.match(await p.locator('#nbmStatus').innerText(),/24 hours old/);
     // Authentic full horizon: seven rows, including the final issued night, without repeated prompts.
     await p.clock.setFixedTime(new Date(Math.max(Date.parse(full.retrievedAt),Date.parse(fullCapture.retrievedAt))));
     await nws(p,fullCapture.forecast);const officialFull=await primary(p);await model(p,full);
