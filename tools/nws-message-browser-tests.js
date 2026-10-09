@@ -10,8 +10,9 @@ const expected=['Near-record warmth and predominantly dry weather is forecast in
 async function replace(p,product){await p.unroute(endpoint);await p.route(endpoint,r=>r.fulfill({json:product}));await p.evaluate(()=>loadAFD());}
 async function currentMessages(p){return p.locator('#callRow li').allTextContents();}
 async function sourceTarget(source){
- const box=await source.boundingBox();
- assert(box&&box.height>=44,'Source tap target: '+JSON.stringify(await source.evaluate(e=>{const c=getComputedStyle(e),r=e.getBoundingClientRect();return {rect:r.toJSON(),height:c.height,minHeight:c.minHeight,display:c.display,padding:c.padding,lineHeight:c.lineHeight,open:e.parentElement.open};})));
+ // DOMRect.height avoids Firefox protocol quads losing precision when subtracting coordinates.
+ const geometry=await source.evaluate(e=>{const c=getComputedStyle(e),r=e.getBoundingClientRect();return {rect:r.toJSON(),height:c.height,minHeight:c.minHeight,display:c.display,padding:c.padding,lineHeight:c.lineHeight,open:e.parentElement.open};});
+ assert(geometry.rect.height>=44&&parseFloat(geometry.height)>=44,'Source tap target: '+JSON.stringify(geometry));
 }
 async function fallback(p,reason){
  assert.equal(await p.locator('#keyMessagesTitle').innerText(),'NWS Local Forecast');
