@@ -4,15 +4,25 @@
 // Static model data may expire in a preview; retain its real timestamps and verify withholding.
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict'),cp=require('node:child_process');
 const {chromium,request}=require('playwright');
-const root=path.join(__dirname,'..'),out=process.argv[2]||'/tmp/nws-hosted',sha=process.env.EXPECTED_SHA,origin=process.env.PREVIEW_URL;
+const root=path.join(__dirname,'..'),out=process.argv[2]||'/tmp/nws-hosted',sha=process.env.EXPECTED_SHA;
+let origin=process.env.PREVIEW_URL;
 const audit={startedAt:new Date().toISOString(),commit:sha,origin,tls:'Default certificate validation; no bypass',assets:[],live:[],controlled:[],runtimeErrors:[],networkFailures:[]};
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 async function main(){
- assert(/^[a-f0-9]{40}$/.test(sha||''));assert(/^https:\/\/[a-f0-9]+\.lsxdashboard2\.pages\.dev$/.test(origin||''),'Immutable preview URL required');
+ assert(/^[a-f0-9]{40}$/.test(sha||''));
+ if(origin)assert(/^https:\/\/[a-f0-9]+\.lsxdashboard2\.pages\.dev$/.test(origin),'Immutable preview URL required');
  assert.equal(cp.execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim(),sha);
- const meta=await fetch('https://api.github.com/repos/mkasseb/lsxdashboard/commits/'+sha+'/check-runs',{headers:{Accept:'application/vnd.github+json'}});assert(meta.ok());
- const checks=(await meta.json()).check_runs,deploy=checks.find(c=>c.name==='Cloudflare Pages'&&c.conclusion==='success');
+ let deploy;
+ for(let i=0;i<24;i++){
+  const meta=await fetch('https://api.github.com/repos/mkasseb/lsxdashboard/commits/'+sha+'/check-runs',{headers:{Accept:'application/vnd.github+json'}});assert(meta.ok);
+  const checks=(await meta.json()).check_runs;
+  deploy=checks.find(c=>c.name==='Cloudflare Pages'&&c.conclusion==='success');
+  const url=deploy?.output?.summary?.match(/https:\/\/[a-f0-9]+\.lsxdashboard2\.pages\.dev/);
+  if(url){if(!origin)origin=url[0];assert.equal(origin,url[0]);break;}
+  await new Promise(resolve=>setTimeout(resolve,10000));
+ }
  assert(deploy?.output?.summary?.includes(origin),'Cloudflare check must confirm this preview for the expected commit');
+ audit.origin=origin;
  audit.deployment={check:deploy.html_url,summary:deploy.output.summary};
  const api=await request.newContext();let dailyModel,hourlyModel;
  try{

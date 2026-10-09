@@ -109,3 +109,31 @@ jobs:
             ${{ runner.temp }}/weather-scenarios.json
             ${{ runner.temp }}/redesign
           if-no-files-found: ignore
+
+  nws-hosted-preview:
+    # Branch-preview verification only. No credentials, publication or production writes.
+    if: github.head_ref == 'codex/nws-key-messages' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Install hosted browser verification tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/nws-browser" playwright@1.62.1
+          node "$RUNNER_TEMP/nws-browser/node_modules/playwright/cli.js" install --with-deps chromium
+      - name: Verify immutable preview with live feeds and normal TLS
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: NODE_PATH="$RUNNER_TEMP/nws-browser/node_modules" node tools/nws-preview-tests.js "$RUNNER_TEMP/nws-hosted"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: nws-hosted-preview-verification
+          path: ${{ runner.temp }}/nws-hosted
+          retention-days: 7
+          if-no-files-found: warn
