@@ -1682,30 +1682,121 @@ var MCD_URL="https://mapservices.weather.noaa.gov/vector/rest/services/outlooks/
 var RISK_LAYERS={spc:[1,9,17], ero:[0,1,2], fireCat:[1,4], fireD3:{dry:7,wind:8}, wssi:[1,2], mcd:0, wwa:1};
 var SPC_THREAT_LAYERS=[{},{}];
 var RISK_READY={spc:false,threats:false,ero:false,fire:false,wssi:false};
+/* SPC metadata is global, so callers and locations share one discovery flight. Only this
+   request retries: two waits, at 2s and 5s, then a 60s cooldown before another caller may try.
+   Point queries and product-issuance checks keep their existing unknown-risk semantics. */
+var SPC_DISCOVERY_DELAYS=[2000,5000], SPC_DISCOVERY_COOLDOWN=60000;
+var _spcDiscovery=null, _spcDiscoveryRetryAt=0, _spcDiscoveryError=null;
+var _spcDisposed=false, _spcRestoreRisk=false;
+function spcDiscoveryAbort(){
+  var err=new Error("SPC discovery cancelled"); err.name="AbortError"; return err;
+}
+function spcDiscoveryRetryable(err){
+  if(isAbort(err)) return false;
+  var status=Number(err&&err.status)||0;
+  return !status||status===408||status===429||status>=500;
+}
+function readSpcLayers(d){
+  if(!d||d.error||!Array.isArray(d.layers)){
+    var err=new Error("Invalid SPC layer metadata");
+    if(d&&d.error) err.status=d.error.code;
+    throw err;
+  }
+  var ids={}, threats=[{},{}];
+  d.layers.forEach(function(l){
+    var m=/^Day\s*([123])\s+Categorical/i.exec(l.name||""); if(m) ids[m[1]]=l.id;
+    var t=/^Day\s*([12])\s+Probabilistic\s+(Tornado|Wind|Hail)\s+Outlook$/i.exec(l.name||"");
+    if(t&&l.subLayerIds==null) threats[Number(t[1])-1][t[2].toLowerCase()]=l.id;
+  });
+  RISK_READY.spc=ids[1]!=null&&ids[2]!=null&&ids[3]!=null;
+  if(RISK_READY.spc) RISK_LAYERS.spc=[ids[1],ids[2],ids[3]];
+  SPC_THREAT_LAYERS=threats;
+  RISK_READY.threats=threats.every(function(t){return t.tornado!=null&&t.wind!=null&&t.hail!=null;});
+  if(!RISK_READY.spc||!RISK_READY.threats) throw new Error("SPC named layers unavailable");
+}
+function waitSpcDiscovery(run,delay){
+  return new Promise(function(resolve,reject){
+    function finish(err){
+      if(run.timer!=null) clearTimeout(run.timer);
+      run.timer=null; run.resume=null;
+      run.controller.signal.removeEventListener("abort",abort);
+      if(err) reject(err); else resolve();
+    }
+    function abort(){finish(spcDiscoveryAbort());}
+    run.resume=function(){
+      if(document.hidden||_spcDisposed||run.timer!=null) return;
+      run.timer=setTimeout(function(){finish();},delay);
+    };
+    run.controller.signal.addEventListener("abort",abort,{once:true});
+    if(run.controller.signal.aborted) abort(); else run.resume();
+  });
+}
+function discoverSpcLayers(){
+  if(_spcDisposed) return Promise.reject(spcDiscoveryAbort());
+  if(_spcDiscovery) return _spcDiscovery.promise;
+  if(RISK_READY.spc&&RISK_READY.threats) return Promise.resolve();
+  if(Date.now()<_spcDiscoveryRetryAt) return Promise.reject(_spcDiscoveryError);
+  var run={controller:new AbortController(),timer:null,resume:null};
+  _spcDiscovery=run;
+  function active(){return _spcDiscovery===run&&!_spcDisposed&&!run.controller.signal.aborted;}
+  function attempt(n){
+    if(!active()) return Promise.reject(spcDiscoveryAbort());
+    return getJSON(SPC_URL+"?f=json",null,run.controller.signal).then(function(d){
+      if(!active()) throw spcDiscoveryAbort();
+      readSpcLayers(d);
+    }).catch(function(err){
+      if(!active()||!spcDiscoveryRetryable(err)||n>=SPC_DISCOVERY_DELAYS.length) throw err;
+      return waitSpcDiscovery(run,SPC_DISCOVERY_DELAYS[n]).then(function(){return attempt(n+1);});
+    });
+  }
+  run.promise=attempt(0).catch(function(err){
+    if(active()&&!isAbort(err)){
+      _spcDiscoveryError=err; _spcDiscoveryRetryAt=Date.now()+SPC_DISCOVERY_COOLDOWN;
+    }
+    throw err;
+  }).finally(function(){
+    if(run.timer!=null) clearTimeout(run.timer);
+    if(_spcDiscovery===run) _spcDiscovery=null;
+  });
+  return run.promise;
+}
+function pauseSpcDiscovery(){
+  if(_spcDiscovery&&_spcDiscovery.timer!=null){
+    clearTimeout(_spcDiscovery.timer); _spcDiscovery.timer=null;
+  }
+}
+function resumeSpcDiscovery(){
+  if(!_spcDisposed&&_spcRestoreRisk) restoreSpcDiscovery();
+  if(_spcDiscovery&&_spcDiscovery.resume) _spcDiscovery.resume();
+}
+function disposeSpcDiscovery(){
+  _spcDisposed=true; _spcRestoreRisk=_spcRestoreRisk||!!(_spcDiscovery||_spcLoad);
+  if(_spcDiscovery) _spcDiscovery.controller.abort();
+  if(_spcLoad) _spcLoad.controller.abort();
+  _spcDiscovery=null; _spcLoad=null; _riskLayersP=null;
+}
+function restoreSpcDiscovery(){
+  _spcDisposed=false;
+  if(_spcRestoreRisk&&!document.hidden){
+    _spcRestoreRisk=false; stampSched(["risk"]); runFeed("risk");
+  }
+}
 /* Memoised and awaitable: loadSpc waits for names before querying. A failed metadata lookup
-   leaves that service unavailable and is retried on the next scheduled refresh. */
+   leaves that service unavailable. An exhausted SPC discovery may try again after cooldown. */
 var _riskLayersP=null;
 function resolveRiskLayers(){
   if(_riskLayersP) return _riskLayersP;
-  _riskLayersP=Promise.all([
-  getJSON(SPC_URL+"?f=json").then(function(d){
-    var ids={};
-    var threats=[{},{}];
-    (d.layers||[]).forEach(function(l){
-      var m=/^Day\s*([123])\s+Categorical/i.exec(l.name||""); if(m) ids[m[1]]=l.id;
-      var t=/^Day\s*([12])\s+Probabilistic\s+(Tornado|Wind|Hail)\s+Outlook$/i.exec(l.name||"");
-      if(t&&l.subLayerIds==null) threats[Number(t[1])-1][t[2].toLowerCase()]=l.id;
-    });
-    if(ids[1]!=null&&ids[2]!=null&&ids[3]!=null){ RISK_LAYERS.spc=[ids[1],ids[2],ids[3]]; RISK_READY.spc=true; }
-    SPC_THREAT_LAYERS=threats;
-    RISK_READY.threats=threats.every(function(t){return t.tornado!=null&&t.wind!=null&&t.hail!=null;});
-  }).catch(function(){}),
+  function active(){return _riskLayersP===pending&&!_spcDisposed;}
+  var pending=Promise.all([
+  discoverSpcLayers().catch(function(){}),
   getJSON(ERO_URL+"?f=json").then(function(d){
+    if(!active()) return;
     var ids={};
     (d.layers||[]).forEach(function(l){ var m=/^Excessive Rainfall Day\s*([123])/i.exec(l.name||""); if(m) ids[m[1]]=l.id; });
     if(ids[1]!=null&&ids[2]!=null&&ids[3]!=null){ RISK_LAYERS.ero=[ids[1],ids[2],ids[3]]; RISK_READY.ero=true; }
   }).catch(function(){}),
   getJSON(FIRE_URL+"?f=json").then(function(d){
+    if(!active()) return;
     var cat={}, d3={};
     (d.layers||[]).forEach(function(l){
       var n=l.name||"";
@@ -1718,19 +1809,25 @@ function resolveRiskLayers(){
     }
   }).catch(function(){}),
   getJSON(WSSI_URL+"?f=json").then(function(d){
+    if(!active()) return;
     var ids={};
     (d.layers||[]).forEach(function(l){ var m=/^Overall_Impact_Day_([12])$/i.exec(l.name||""); if(m) ids[m[1]]=l.id; });
     if(ids[1]!=null&&ids[2]!=null){ RISK_LAYERS.wssi=[ids[1],ids[2]]; RISK_READY.wssi=true; }
   }).catch(function(){}),
   getJSON(MCD_URL+"?f=json").then(function(d){
+    if(!active()) return;
     (d.layers||[]).forEach(function(l){ if(/Mesoscale Discussion/i.test(l.name||"")) RISK_LAYERS.mcd=l.id; });
   }).catch(function(){}),
   getJSON(WWA_URL+"?f=json").then(function(d){
+    if(!active()) return;
     (d.layers||[]).forEach(function(l){ if(/^WatchesWarnings$/i.test(l.name||"")) RISK_LAYERS.wwa=l.id; });
   }).catch(function(){})
   ]);
-  _riskLayersP.then(function(){ if(!RISK_READY.spc||!RISK_READY.threats||!RISK_READY.ero||!RISK_READY.fire||!RISK_READY.wssi) _riskLayersP=null; });
-  return _riskLayersP;
+  _riskLayersP=pending;
+  pending.then(function(){
+    if(_riskLayersP===pending&&(!RISK_READY.spc||!RISK_READY.threats||!RISK_READY.ero||!RISK_READY.fire||!RISK_READY.wssi)) _riskLayersP=null;
+  });
+  return pending;
 }
 function fireRisk(dn){
   var m={
@@ -4230,9 +4327,11 @@ function stopSchedule(){
 function syncTabMotion(){ document.documentElement.classList.toggle("tab-hidden", document.hidden); }
 document.addEventListener("visibilitychange",function(){
   syncTabMotion();
-  if(document.hidden){ stopSchedule(); radarPauseLoop(); saveSnapshot(); }   // no drain while backgrounded; bank the view on the way out
-  else { tick(); startSchedule(); runDue(); freshnessCheck(); } // catch up on return
+  if(document.hidden){ pauseSpcDiscovery(); stopSchedule(); radarPauseLoop(); saveSnapshot(); }   // no drain while backgrounded; bank the view on the way out
+  else { resumeSpcDiscovery(); tick(); startSchedule(); runDue(); freshnessCheck(); } // catch up on return
 });
+window.addEventListener("pagehide",disposeSpcDiscovery);
+window.addEventListener("pageshow",restoreSpcDiscovery);
 syncTabMotion();   // a page opened into a background tab never gets the event
 if(!document.hidden) startSchedule();
 document.getElementById("refresh").addEventListener("click",function(){ refreshAll(); });

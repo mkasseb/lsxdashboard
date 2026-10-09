@@ -68,7 +68,7 @@ function requestWeather(url,options,signal,asText){
   if(signal){ if(signal.aborted) abort(); else signal.addEventListener("abort",abort,{once:true}); }
   var timer=setTimeout(function(){ timedOut=true; ctl.abort(); },20000);
   return fetch(url,Object.assign({},options,{signal:ctl.signal})).then(function(r){
-    if(!r.ok) throw new Error("Weather service returned "+r.status);
+    if(!r.ok){ var err=new Error("Weather service returned "+r.status); err.status=r.status; throw err; }
     return asText?r.text():r.json();
   }).catch(function(e){
     if(timedOut){ var err=new Error("Weather request timed out"); err.name="TimeoutError"; throw err; }
@@ -798,19 +798,28 @@ function loadAqi(){
   });
 }
 
+var _spcLoad=null;
 function loadSpc(){
-  var fresh=locGuard();
+  if(_spcDisposed) return Promise.resolve();
+  if(_spcLoad&&_spcLoad.generation===locSeq) return _spcLoad.promise;
+  var guard=locGuard(), signal=locSignal();
+  var flight={generation:locSeq,controller:new AbortController()};
+  function abort(){flight.controller.abort();}
+  signal.addEventListener("abort",abort,{once:true});
+  if(signal.aborted) abort();
+  function fresh(){return guard()&&!flight.controller.signal.aborted&&!_spcDisposed&&_spcLoad===flight;}
+  _spcLoad=flight;
   var el=document.getElementById("spc");
   document.getElementById("spcLoc").textContent="For "+current.name.replace(" (home)","");
-  // Wait for named layer ids. If metadata fails, that service stays unavailable until retry.
-  return resolveRiskLayers().then(function(){
+  // Global discovery retries are shared; only the current location may query or paint results.
+  flight.promise=resolveRiskLayers().then(function(){
     if(!fresh()) return null;
-    var missing=function(){return Promise.resolve(null);};
-    return Promise.all([RISK_READY.spc?spcQuery(RISK_LAYERS.spc[0]):missing(),RISK_READY.spc?spcQuery(RISK_LAYERS.spc[1]):missing(),RISK_READY.spc?spcQuery(RISK_LAYERS.spc[2]):missing(),
-            RISK_READY.ero?eroQuery(RISK_LAYERS.ero[0]):missing(),RISK_READY.ero?eroQuery(RISK_LAYERS.ero[1]):missing(),RISK_READY.ero?eroQuery(RISK_LAYERS.ero[2]):missing(),
-            RISK_READY.fire?fireQuery(RISK_LAYERS.fireCat[0]):missing(),RISK_READY.fire?fireQuery(RISK_LAYERS.fireCat[1]):missing(),RISK_READY.fire?fireDay3Query():missing(),
-            RISK_READY.wssi?wssiQuery(RISK_LAYERS.wssi[0]):missing(),RISK_READY.wssi?wssiQuery(RISK_LAYERS.wssi[1]):missing(),
-            fetchSpcThreats()]);
+    var missing=function(){return Promise.resolve(null);}, requestSignal=flight.controller.signal;
+    return Promise.all([RISK_READY.spc?spcQuery(RISK_LAYERS.spc[0],requestSignal):missing(),RISK_READY.spc?spcQuery(RISK_LAYERS.spc[1],requestSignal):missing(),RISK_READY.spc?spcQuery(RISK_LAYERS.spc[2],requestSignal):missing(),
+            RISK_READY.ero?eroQuery(RISK_LAYERS.ero[0],requestSignal):missing(),RISK_READY.ero?eroQuery(RISK_LAYERS.ero[1],requestSignal):missing(),RISK_READY.ero?eroQuery(RISK_LAYERS.ero[2],requestSignal):missing(),
+            RISK_READY.fire?fireQuery(RISK_LAYERS.fireCat[0],requestSignal):missing(),RISK_READY.fire?fireQuery(RISK_LAYERS.fireCat[1],requestSignal):missing(),RISK_READY.fire?fireDay3Query(requestSignal):missing(),
+            RISK_READY.wssi?wssiQuery(RISK_LAYERS.wssi[0],requestSignal):missing(),RISK_READY.wssi?wssiQuery(RISK_LAYERS.wssi[1],requestSignal):missing(),
+            fetchSpcThreats(requestSignal)]);
   }).then(function(r){
     if(!r) return;             // stale generation — nothing to paint
     if(!fresh()) return;   // user moved while this was in flight
@@ -846,7 +855,11 @@ function loadSpc(){
     callRisk=null;                                           // never let a stale outlook keep a pill alive
     renderSpcThreats(null);
     if(typeof renderTheCall==="function") renderTheCall();
+  }).finally(function(){
+    signal.removeEventListener("abort",abort);
+    if(_spcLoad===flight) _spcLoad=null;
   });
+  return flight.promise;
 }
 
 function loadMcd(){
@@ -1382,27 +1395,27 @@ function loadAFD(){
   });
 }
 
-function pointQuery(base,layer,fields){
+function pointQuery(base,layer,fields,signal){
   // every one of these is a point query against `current` — cancellable by definition
   return getJSON(base+layer+"/query?geometry="+current.lon+","+current.lat
     +"&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects"
-    +"&outFields="+(fields||"*")+"&returnGeometry=false&f=json", null, locSignal()).then(function(d){
+    +"&outFields="+(fields||"*")+"&returnGeometry=false&f=json", null, signal||locSignal()).then(function(d){
       if(!d||d.error||!Array.isArray(d.features)) throw new Error("Invalid ArcGIS point response");
       return d;
     });
 }
 
-function spcQuery(layer){
-  return pointQuery(SPC_URL,layer,"dn").then(function(d){
+function spcQuery(layer,signal){
+  return pointQuery(SPC_URL,layer,"dn",signal).then(function(d){
     var maxdn=0;
     (d.features||[]).forEach(function(f){var dn=f.attributes&&f.attributes.dn;if(dn&&dn>maxdn)maxdn=dn;});
     return maxdn;
   }).catch(function(){return null;});
 }
 
-function eroQuery(layer){
+function eroQuery(layer,signal){
   // Field names vary across NOAA services; scan all string attributes for category keywords
-  return pointQuery(ERO_URL,layer,"*").then(function(d){
+  return pointQuery(ERO_URL,layer,"*",signal).then(function(d){
     var rank=0;
     (d.features||[]).forEach(function(f){
       var at=f.attributes||{};
@@ -1421,9 +1434,9 @@ function eroQuery(layer){
 /* WSSI "Overall Impact" polygons carry a string `impact` field: WINTER WEATHER AREA (snow on
    the map, nothing to act on — the TSTM of winter), then MINOR/MODERATE/MAJOR/EXTREME. Nested
    polygons can all cover one point, so the strongest wins, same as spcQuery. */
-function wssiQuery(layer){
+function wssiQuery(layer,signal){
   var RANK={minor:1,moderate:2,major:3,extreme:4};
-  return pointQuery(WSSI_URL,layer,"impact").then(function(d){
+  return pointQuery(WSSI_URL,layer,"impact",signal).then(function(d){
     var rank=0;
     (d.features||[]).forEach(function(f){
       var v=String((f.attributes||{}).impact||"").toLowerCase();
@@ -1433,8 +1446,8 @@ function wssiQuery(layer){
   }).catch(function(){return null;});   // a failed query cannot certify zero impact
 }
 
-function fireQuery(layer){
-  return pointQuery(FIRE_URL,layer,"dn").then(function(d){
+function fireQuery(layer,signal){
+  return pointQuery(FIRE_URL,layer,"dn",signal).then(function(d){
     var maxdn=0;
     (d.features||[]).forEach(function(f){var dn=f.attributes&&f.attributes.dn;if(dn&&dn>maxdn)maxdn=dn;});
     return maxdn;
@@ -1445,9 +1458,9 @@ function fireQuery(layer){
    FRACTION (winds/low-RH: 0.40=Marginal, 0.70=Critical · dry t-storm: 0.10=Marginal, 0.40=Critical).
    Convert onto the categorical 5/8 scale so the pill renderer treats all three days alike.
    (Previously this queried layer 6 — a GROUP layer that always 400s — so day 3 showed "No Fire Risk" forever.) */
-function fireDay3Query(){
+function fireDay3Query(signal){
   function probMax(layer){
-    return pointQuery(FIRE_URL,layer,"dn").then(function(d){
+    return pointQuery(FIRE_URL,layer,"dn",signal).then(function(d){
       var mx=0;
       (d.features||[]).forEach(function(f){ var dn=+(f.attributes&&f.attributes.dn)||0; if(dn>mx) mx=dn; });
       return mx;
@@ -1460,22 +1473,25 @@ function fireDay3Query(){
   });
 }
 
-function fetchSpcThreats(){
-  var nowMs=Date.now();
+function fetchSpcThreats(signal){
+  var guard=locGuard(), nowMs=Date.now();
+  signal=signal||locSignal();
+  function fresh(){return guard()&&!signal.aborted;}
   return Promise.all([1,2].map(function(day){
     if(!RISK_READY.spc||!RISK_READY.threats) return Promise.resolve(null);
     // The categorical product sets the expected issuance; each threat layer must match it.
-    return getJSON(SPC_URL+RISK_LAYERS.spc[day-1]+"/query?where=1%3D1&outFields=valid,expire,issue&returnGeometry=false&resultRecordCount=1&f=json",null,locSignal())
+    return getJSON(SPC_URL+RISK_LAYERS.spc[day-1]+"/query?where=1%3D1&outFields=valid,expire,issue&returnGeometry=false&resultRecordCount=1&f=json",null,signal)
       .then(function(d){
-        if(!d||d.error||!Array.isArray(d.features)||!d.features.length) return null;
+        if(!fresh()||!d||d.error||!Array.isArray(d.features)||!d.features.length) return null;
         var period=spcOutlookPeriod(d.features[0].attributes,day,nowMs); if(!period) return null;
         return Promise.all(["tornado","wind","hail"].map(function(kind){
           var layer=SPC_THREAT_LAYERS[day-1][kind];
-          return pointQuery(SPC_URL,layer,"dn,valid,expire,issue").then(function(data){
+          return pointQuery(SPC_URL,layer,"dn,valid,expire,issue",signal).then(function(data){
+            if(!fresh()) return null;
             if(data.features.length) return spcThreatProbability(data,period);
             // Distinct timestamps also reject a layer mixing products during an update.
             // A globally empty layer cannot prove its issuance and stays unavailable.
-            return getJSON(SPC_URL+layer+"/query?where=1%3D1&outFields=valid,expire,issue&returnDistinctValues=true&returnGeometry=false&f=json",null,locSignal())
+            return getJSON(SPC_URL+layer+"/query?where=1%3D1&outFields=valid,expire,issue&returnDistinctValues=true&returnGeometry=false&f=json",null,signal)
               .then(function(product){return spcThreatProbability(data,period,product);});
           }).catch(function(){return null;});
         })).then(function(values){return {period:period,values:values};});

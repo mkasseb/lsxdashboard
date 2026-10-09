@@ -243,6 +243,15 @@ tornadoes and `<5%` for wind/hail, never zero risk. The explanation says probabi
 within 25 miles and displays the actual outlook windows in Central time. New event totals and
 threat probabilities are fetched live instead of restored from rendered snapshots.
 
+SPC named-layer discovery shares one request sequence across callers and locations. A transient
+failure gets up to two automatic retries after 2 and 5 seconds; an exhausted sequence waits at
+least 60 seconds before another caller can start one. HTTP/ArcGIS access denials and other
+permanent client errors do not retry automatically. Retry waits pause while hidden and cancel
+on pagehide; a restored page resumes through the existing risk loader. Same-location loads
+share their point requests, and aborted or superseded locations cannot query or paint later
+continuations. The normal 30-minute risk polling cadence is unchanged. Only discovery retries;
+missing or unverified probability products, including globally empty hail, remain unavailable.
+
 ## UV and air quality are tiles beside the metric grid, not inside it
 
 They answer the same question as each other — how much is this going to cost me to be outside — so

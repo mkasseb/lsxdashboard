@@ -90,7 +90,8 @@ async function open(c, width=390) {
   if(c.storage)await page.addInitScript(storage=>Object.entries(storage).forEach(([key,value])=>localStorage.setItem(key,typeof value==='string'?value:JSON.stringify(value))),c.storage);
   if(c.geo)await page.addInitScript(geo=>Object.defineProperty(navigator,'geolocation',{value:{getCurrentPosition:success=>queueMicrotask(()=>success({coords:{latitude:geo.lat,longitude:geo.lon,accuracy:25}}))}}),c.geo);
   if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v22',snapshot),c.snapshot);
-  const errors=[],requests=[],delayedMapScripts=[],heldPoints=[];
+  const errors=[],requests=[],delayedMapScripts=[],heldPoints=[],heldSpcProducts=[];
+  let spcMetadataRequests=0;
   page.on('pageerror',e=>errors.push(e.message));
   let active=c;
   await context.route('**/*',async route=>{
@@ -187,8 +188,16 @@ async function open(c, width=390) {
         return reply(features(c.cpcAbove?[{cat:'Above Normal',prob:50}]:[]));
       }
       if(u.pathname.includes('/SPC_wx_outlks/MapServer')) {
-        if(!u.pathname.includes('/query')) return reply(SPC);
+        if(!u.pathname.includes('/query')) {
+          spcMetadataRequests++;
+          if(c.spcMetadataDenied)return reply({error:{code:403}},403);
+          if(spcMetadataRequests<=(c.spcMetadataFailures||0))return reply({error:{code:503}},503);
+          return reply(SPC);
+        }
         const id=Number(u.pathname.split('/').at(-2)),day=id<9?1:2,a=attrs(c.now,day);
+        if(c.spcHoldProducts&&[1,9].includes(id)&&!u.searchParams.has('geometry')){
+          heldSpcProducts.push({route,body:features([{...a,dn:c.spcCategory||0}])});return;
+        }
         if([1,9,17].includes(id)) return reply(features([{...a,dn:c.spcCategory||0}]));
         const k={3:0,7:1,5:2,11:0,15:1,13:2}[id];
         if(c.threatDown?.includes(id)) return reply({error:{code:500}});
@@ -213,6 +222,8 @@ async function open(c, width=390) {
   await page.goto('https://lsx-weather-test.invalid/'+(c.search||''),{waitUntil:'domcontentloaded'});
   if(!c.skipWait)await page.waitForFunction(()=>typeof refreshInFlight!=='undefined'&&refreshInFlight===null&&snapSafeSeq===locSeq);
   return {page,context,errors,requests,change:c=>{active=c;},
+    spcMetadataRequests:()=>spcMetadataRequests,
+    releaseSpcProducts:()=>Promise.all(heldSpcProducts.map(p=>p.route.fulfill({status:200,json:p.body}).catch(()=>{}))),
     releaseMapScripts:()=>Promise.all(delayedMapScripts.map(({route,asset})=>route.fulfill({contentType:asset[2],body:fs.readFileSync(require.resolve(asset[1]))}).catch(()=>{}))),
     releasePoints:id=>Promise.all(heldPoints.filter(p=>p.id===id&&!p.released).map(p=>{p.released=true;return p.route.fulfill({status:p.status,json:p.body}).catch(()=>{});}))};
 }
@@ -522,6 +533,74 @@ async function main() {
       assert.equal(await page.locator('#fresh-risk').getAttribute('data-state'),'partial');
       await expectText(page,'#fresh-risk',/Some data unavailable/);
     },320);
+    await run('SPC discovery automatically recovers without changing unknown hail',config('spc retry',{spcMetadataFailures:1,emptyThreats:[5,13],skipWait:true}),async session=>{
+      const {page}=session;await page.waitForFunction(()=>_spcDiscovery&&_spcDiscovery.resume);
+      assert.equal(session.spcMetadataRequests(),1);
+      assert(await page.evaluate(()=>loadSpc()===loadSpc()),'Repeated calls share the location flight');
+      await page.clock.runFor(2000);
+      await page.waitForFunction(()=>refreshInFlight===null&&_spcLoad===null);
+      assert.equal(session.spcMetadataRequests(),2);
+      assert.equal(await page.locator('#spc .spc-pill').filter({hasText:'No Severe Risk'}).count(),3);
+      assert.deepEqual(await page.locator('.spc-threat-value').allTextContents(),['<2%','<5%','Unavailable','<2%','<5%','Unavailable']);
+      await page.clock.runFor(10000);assert.equal(session.spcMetadataRequests(),2);
+      assert.equal(await page.evaluate(()=>_spcDiscovery),null);
+    });
+    await run('SPC discovery exhaustion stays unknown and repeated refresh cannot reset cooldown',config('spc exhausted',{spcMetadataFailures:100,skipWait:true}),async session=>{
+      const {page}=session;await page.waitForFunction(()=>_spcDiscovery&&_spcDiscovery.resume);
+      await page.clock.runFor(2000);await page.waitForFunction(()=>_spcDiscovery&&_spcDiscovery.resume);
+      assert.equal(session.spcMetadataRequests(),2);
+      await page.clock.runFor(5000);await page.waitForFunction(()=>refreshInFlight===null&&_spcLoad===null);
+      assert.equal(session.spcMetadataRequests(),3);
+      assert.equal(await page.locator('#spc .spc-pill').filter({hasText:'Unavailable'}).count(),3);
+      assert.deepEqual(await page.locator('.spc-threat-value').allTextContents(),Array(6).fill('Unavailable'));
+      await page.evaluate(()=>Promise.all([loadSpc(),loadSpc(),loadSpc()]));
+      await page.clock.runFor(10000);await page.evaluate(()=>loadSpc());
+      assert.equal(session.spcMetadataRequests(),3);
+      assert.equal(await page.evaluate(()=>_spcDiscovery),null);
+    });
+    await run('SPC discovery retry serves only the latest selected location',config('spc location retry',{spcMetadataFailures:1,skipWait:true,locations:{'-90.5,38.5':config('new point',{spcCategory:6})}}),async session=>{
+      const {page}=session;await page.waitForFunction(()=>_spcDiscovery&&_spcDiscovery.resume);
+      await page.evaluate(()=>setLocation({name:'New town, MO',lat:38.5,lon:-90.5,station:'KSUS'}));
+      await page.clock.runFor(2000);await page.waitForFunction(()=>_spcLoad===null&&callRisk&&callRisk.spc[0]===6);
+      assert.equal(session.spcMetadataRequests(),2);await expectText(page,'#spcLoc',/New town/);
+      const queries=session.requests.filter(url=>url.includes('/SPC_wx_outlks/')&&url.includes('geometry='));
+      assert(queries.length>0&&queries.every(url=>new URL(url).searchParams.get('geometry')==='-90.5,38.5'));
+    });
+    await run('SPC discovery discards old product continuations after a location switch',config('spc held product',{spcHoldProducts:true,skipWait:true}),async session=>{
+      const {page}=session;
+      await page.waitForFunction(()=>RISK_READY.spc&&_spcLoad&&smart.hourly.length);
+      await page.waitForTimeout(100);
+      session.change(config('new point',{spcCategory:6}));
+      await page.evaluate(()=>{locAbort.abort=function(){};setLocation({name:'New town, MO',lat:38.5,lon:-90.5,station:'KSUS'});});
+      await page.waitForFunction(()=>_spcLoad===null&&callRisk&&callRisk.spc[0]===6);
+      const count=session.requests.filter(url=>url.includes('/SPC_wx_outlks/')&&url.includes('geometry=')).length;
+      await session.releaseSpcProducts();await page.waitForFunction(()=>refreshInFlight===null);
+      assert.equal(session.requests.filter(url=>url.includes('/SPC_wx_outlks/')&&url.includes('geometry=')).length,count);
+      assert.equal(await page.evaluate(()=>callRisk.spc[0]),6);await expectText(page,'#spcLoc',/New town/);
+    });
+    await run('SPC discovery pagehide cancels timers and restored page retries once',config('spc pagehide',{spcMetadataFailures:1,skipWait:true}),async session=>{
+      const {page}=session;await page.waitForFunction(()=>_spcDiscovery&&_spcDiscovery.resume);
+      await page.evaluate(()=>{window.dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true}));window.dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true}));});
+      await page.waitForFunction(()=>refreshInFlight===null);
+      await page.clock.runFor(10000);assert.equal(session.spcMetadataRequests(),1);
+      await page.evaluate(()=>window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true})));
+      await page.waitForFunction(()=>_spcLoad===null&&callRisk);
+      assert.equal(session.spcMetadataRequests(),2);
+      assert.equal(await page.locator('#spc .spc-pill').filter({hasText:'No Severe Risk'}).count(),3);
+    });
+    await run('SPC discovery retry pauses while hidden without adding a second timer',config('spc hidden',{spcMetadataFailures:1,skipWait:true}),async session=>{
+      const {page}=session;await page.waitForFunction(()=>_spcDiscovery&&_spcDiscovery.resume);
+      await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));});
+      await page.clock.runFor(10000);assert.equal(session.spcMetadataRequests(),1);
+      await page.evaluate(()=>{delete document.hidden;document.dispatchEvent(new Event('visibilitychange'));document.dispatchEvent(new Event('visibilitychange'));});
+      await page.clock.runFor(2000);await page.waitForFunction(()=>refreshInFlight===null&&_spcLoad===null);
+      assert.equal(session.spcMetadataRequests(),2);
+    });
+    await run('SPC discovery access denial stays unknown without automatic retries',config('spc denied',{spcMetadataDenied:true}),async session=>{
+      const {page}=session;await page.clock.runFor(10000);assert.equal(session.spcMetadataRequests(),1);
+      assert.equal(await page.locator('#spc .spc-pill').filter({hasText:'Unavailable'}).count(),3);
+      assert.deepEqual(await page.locator('.spc-threat-value').allTextContents(),Array(6).fill('Unavailable'));
+    });
     await run('grid outage leaves hourly forecasts usable',config('grid outage',{gridDown:true}),async({page})=>{
       await expectText(page,'#precipEvents',/unavailable/);await durations(page);await expectText(page,'#hourlyDetail',/Gusts unavailable/);
     });
