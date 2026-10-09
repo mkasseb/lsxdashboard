@@ -9,6 +9,33 @@ const prod=recording.products[0],endpoint='**/products/11111111-1111-1111-1111-1
 const expected=['Near-record warmth and predominantly dry weather is forecast into early next week.','The remnants of Tropical Cyclone Isaias bring slightly "cooler" temperatures Saturday and Sunday due to clouds, as well as chances of light rain in southeast Missouri and southwest Illinois.'];
 async function replace(p,product){await p.unroute(endpoint);await p.route(endpoint,r=>r.fulfill({json:product}));await p.evaluate(()=>loadAFD());}
 async function currentMessages(p){return p.locator('#callRow li').allTextContents();}
+async function doubleText(p){
+ await p.evaluate(()=>{
+  const nodes=[...document.querySelectorAll('#callCard, #callCard *, #currentCard, #currentCard *')];
+  const sizes=nodes.map(e=>{const c=getComputedStyle(e);return {e,size:parseFloat(c.fontSize),line:parseFloat(c.lineHeight)};});
+  sizes.forEach(({e,size,line})=>{e.style.fontSize=size*2+'px';if(Number.isFinite(line))e.style.lineHeight=line*2+'px';});
+ });
+}
+async function nowTextGeometry(p){
+ return p.evaluate(()=>{
+  const owners=[...document.querySelectorAll('#currentCard .cc-item, #currentCard .cc-uv:not(:empty), #currentCard .aqi-mini:not(:empty)')];
+  const groups=owners.map(e=>{
+   const box=e.getBoundingClientRect(),fragments=[],walk=document.createTreeWalker(e,NodeFilter.SHOW_TEXT);
+   for(let node;node=walk.nextNode();){
+    if(!node.textContent.trim())continue;
+    const range=document.createRange();range.selectNodeContents(node);
+    for(const r of range.getClientRects())if(r.width&&r.height)fragments.push({text:node.textContent.trim(),left:r.left,top:r.top,right:r.right,bottom:r.bottom});
+   }
+   return {label:e.classList.contains('cc-item')?e.querySelector('.k').textContent:e.className,box:box.toJSON(),fragments};
+  });
+  const overflow=groups.flatMap(g=>g.fragments.filter(r=>r.left<g.box.left-1||r.right>g.box.right+1||r.top<g.box.top-1||r.bottom>g.box.bottom+1).map(r=>({owner:g.label,box:g.box,fragment:r})));
+  const collisions=[];
+  for(let i=0;i<groups.length;i++)for(let j=i+1;j<groups.length;j++)for(const a of groups[i].fragments)for(const b of groups[j].fragments){
+   if(Math.min(a.right,b.right)-Math.max(a.left,b.left)>1&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1)collisions.push({owners:[groups[i].label,groups[j].label],a,b});
+  }
+  return {owners:groups.length,overflow,collisions};
+ });
+}
 async function sourceTarget(source){
  await source.scrollIntoViewIfNeeded();
  // DOMRect.height avoids Firefox protocol quads losing precision when subtracting coordinates.
@@ -63,11 +90,7 @@ async function main(){
    try{
     const source=p.locator('#briefWhy > summary');
     for(const scale of [1,2]){
-     if(scale===2)await p.evaluate(()=>{
-      const nodes=[...document.querySelectorAll('#callCard, #callCard *, #currentCard, #currentCard *')];
-      const sizes=nodes.map(e=>{const c=getComputedStyle(e);return {e,size:parseFloat(c.fontSize),line:parseFloat(c.lineHeight)};});
-      sizes.forEach(({e,size,line})=>{e.style.fontSize=size*2+'px';if(Number.isFinite(line))e.style.lineHeight=line*2+'px';});
-     });
+     if(scale===2)await doubleText(p);
      assert.deepEqual(await currentMessages(p),longMessages,'Every long message and qualifier remains in original order');
      assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No horizontal overflow at '+width+'px with text scale '+scale);
      const geometry=await p.evaluate(()=>{
@@ -82,6 +105,32 @@ async function main(){
      if(out){await p.evaluate(()=>window.scrollTo(0,0));await p.screenshot({path:path.join(out,engine+'-'+width+'-long-text-'+scale+'.png'),fullPage:true});}
     }
     assert.deepEqual(s.errors,[]);results.push({width,test:'Five long messages and 200% text retain wording, natural height, source focus and no clipping',status:'passed'});
+   }finally{await s.context.close();}
+  }
+  // The daytime fixture must render BOTH exposure tiles; document width alone cannot catch
+  // a nowrap clause extending through the gap into its neighboring tile.
+  for(const width of [320,681,700,720,740,767,768,1101,1120,1180,1280]){
+   const s=await open(config('Now-strip text containment',{uv:4,aqi:35,touch:width<500}),width),p=s.page,measurements=[];
+   try{
+    assert.equal(await p.locator('#ccUv .ex-b').count(),2,'Peak time and sunburn clauses must both be exercised');
+    assert.match(await p.locator('#ccUv').textContent(),/sunburn/);assert.match(await p.locator('#aqiMini').textContent(),/35.*Good/);
+    for(const scale of [1,2]){
+     if(scale===2)await doubleText(p);
+     for(const theme of ['light','dark']){
+      await p.evaluate(t=>applyTheme(t),theme);const geometry=await nowTextGeometry(p),label=JSON.stringify({width,scale,theme});
+      assert.equal(geometry.owners,8,'All six metrics and both exposure tiles remain visible');
+      assert.deepEqual(geometry.overflow,[],'Now text stays in its own metric/tile '+label);
+      assert.deepEqual(geometry.collisions,[],'Now metrics/tiles do not overlap '+label);
+      assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'Document fits '+label);
+      measurements.push({scale,theme,...geometry});
+      if(out&&scale===2&&theme==='light'&&[681,767,1101,1280].includes(width)){
+       await p.evaluate(()=>{const n=document.createElement('p');n.id='nowQaLabel';n.textContent='QA: controlled daytime weather; 200% text; both UV and AQI';n.style.cssText='font:12px system-ui;margin:0 0 8px';document.getElementById('currentCard').prepend(n);});
+       await p.locator('#currentCard').screenshot({path:path.join(out,engine+'-now-'+width+'-text-2.png'),style:'.jump-wrap,.skip{visibility:hidden !important}'});
+       await p.evaluate(()=>document.getElementById('nowQaLabel').remove());
+      }
+     }
+    }
+    assert.deepEqual(s.errors,[]);results.push({width,test:'Daytime Now metrics and UV/AQI descendants fit their own tiles at 100% and 200% text',measurements,status:'passed'});
    }finally{await s.context.close();}
   }
   const s=await open(config('NWS failure and race fixtures',{now,afdProduct:prod,aqi:35}),390),p=s.page;

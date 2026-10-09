@@ -1724,6 +1724,8 @@ body{transition:none}
 #currentCard .cc-item{display:flex;align-items:baseline;justify-content:space-between;gap:6px;flex-wrap:wrap}
 #currentCard .cc-item .v{margin:0}
 #currentCard .cc-expo{margin-top:8px}
+/* Enlarged text must stay in its exposure tile; whole nowrap clauses can cross into AQI. */
+#currentCard .cc-expo .ex-b{white-space:normal}
 #currentCard .stn{margin-top:8px}
 #callCard .brief-planning{margin-top:10px;padding-top:8px}
 #callCard .brief-section-title{margin:4px 0}

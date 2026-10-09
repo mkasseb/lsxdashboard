@@ -199,6 +199,9 @@ Each hero card uses its own natural height. On desktop, observations, the daily 
 readings share a horizontal strip; the complete regional message list uses the row below. A short
 list no longer inherits the observations' height, and long bullets or larger text grow normally.
 No measured offsets, fixed message heights or clipping connect this band to the planning grid.
+Exposure clauses wrap within their own tiles. Daytime browser fixtures render both UV and AQI
+and check every metric/tile text fragment at 200% size, including the 681px and 1101px breakpoints;
+document overflow alone cannot detect a UV clause extending into its neighboring AQI tile.
 
 ## The 24-hour chart is never nested inside `#current`
 
