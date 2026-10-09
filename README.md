@@ -751,6 +751,12 @@ or the main deployment through the existing push event, without extraction, publ
 or schedule changes. Saved LSX and outside points also exercise actual live membership/alert lookups.
 Controlled missing-section checks are reported separately from live weather; expired static NBM
 guidance is accepted only when correctly withheld, without rewriting its timestamps.
+On the custom domain, Cloudflare can insert its JS-detection bootstrap into HTML. Comparison accepts
+only the exact captured bootstrap template immediately before `</body>`, with its ray ID bound to
+the response header and a canonical base64 decimal timestamp. All remaining application bytes must
+match the release exactly; unknown bootstrap shapes or application changes still fail. Assets and
+NBM files remain raw-byte comparisons. The browser receives the original response, including the
+Cloudflare script. Recorded hosted captures and negative controls run in `tools/hosted-html-tests.js`.
 
 ### Optional forecast temperature context
 

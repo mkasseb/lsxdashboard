@@ -4,9 +4,10 @@
 // Static model data may expire in a preview; retain its real timestamps and verify withholding.
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict'),cp=require('node:child_process');
 const {chromium,request}=require('playwright');
+const {applicationHtml}=require('./hosted-html');
 const root=path.join(__dirname,'..'),out=process.argv[2]||'/tmp/nws-hosted',sha=process.env.EXPECTED_SHA,target=process.env.NWS_VERIFY_TARGET||'preview';
 let origin=process.env.PREVIEW_URL||(target==='production'?'https://lsxdashboard.com':undefined);
-const audit={startedAt:new Date().toISOString(),commit:sha,target,origin,tls:'Default certificate validation; no bypass',assets:[],live:[],controlled:[],runtimeErrors:[],networkFailures:[]};
+const audit={startedAt:new Date().toISOString(),commit:sha,verifierCommit:process.env.NWS_VERIFIER_SHA||sha,target,origin,tls:'Default certificate validation; no bypass',assets:[],live:[],controlled:[],runtimeErrors:[],networkFailures:[]};
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 async function main(){
  assert(/^[a-f0-9]{40}$/.test(sha||''));
@@ -30,13 +31,19 @@ async function main(){
  try{
   const html=fs.readFileSync(path.join(root,'index.html'),'utf8'),files=['index.html',...Array.from(html.matchAll(/(?:src|href)="\/?(assets\/[^"?]+)\?v=[a-f0-9]+/g),m=>m[1]),'data/nbm-range.json','data/nbm-hourly.json','data/nbm-receipt.json','data/nbm-hourly-receipt.json','data/nbm-publication.json'],deadline=Date.now()+180000;
   for(const file of [...new Set(files)]){
-   const expected=cp.execFileSync('git',['show',sha+':'+file],{cwd:root,maxBuffer:40*1024*1024});let r,bytes;
+   const expected=cp.execFileSync('git',['show',sha+':'+file],{cwd:root,maxBuffer:40*1024*1024});let r,bytes,comparison;
    do{
     r=await api.get(origin+'/'+file+(target==='production'?'?verify='+sha:''));assert(r.ok(),file+' HTTP '+r.status());bytes=await r.body();
-    if(hash(bytes)===hash(expected)||target==='preview'||Date.now()>=deadline)break;
+    comparison=file==='index.html'&&target==='production'?applicationHtml(bytes,r.headers()['cf-ray']):{bytes,injection:null};
+    if(hash(comparison.bytes)===hash(expected)||target==='preview'||Date.now()>=deadline)break;
     await new Promise(resolve=>setTimeout(resolve,10000));
    }while(Date.now()<deadline);
-   assert.equal(hash(bytes),hash(expected),file+' differs from exact commit');audit.assets.push({file,sha256:hash(bytes),cacheControl:r.headers()['cache-control']});
+   if(hash(comparison.bytes)!==hash(expected)){
+    fs.writeFileSync(path.join(out,'unexpected-'+file.replace(/\//g,'-')),bytes);
+    audit.unexpectedAsset={file,rawHash:hash(bytes),comparisonHash:hash(comparison.bytes),expectedHash:hash(expected)};
+   }
+   assert.equal(hash(comparison.bytes),hash(expected),file+' differs from exact commit');audit.assets.push({file,sha256:hash(comparison.bytes),rawSha256:hash(bytes),injection:comparison.injection,cacheControl:r.headers()['cache-control']});
+   if(file==='index.html')fs.writeFileSync(path.join(out,'served-index.html'),bytes);
    if(file==='data/nbm-range.json')dailyModel=JSON.parse(bytes);if(file==='data/nbm-hourly.json')hourlyModel=JSON.parse(bytes);
   }
  }finally{await api.dispose();}
@@ -93,9 +100,9 @@ async function main(){
    }finally{await context.close();}
   }
   {
-   for(const saved of [{name:'Saved Wentzville, MO',lat:38.81,lon:-90.86,cwa:'LSX'},{name:'Saved Chicago',lat:41.88,lon:-87.63,cwa:'LOT'}]){
-    const context=await browser.newContext({viewport:{width:390,height:1000},timezoneId:'America/Chicago'}),p=await context.newPage(),lookup=[];
-    p.on('pageerror',e=>audit.runtimeErrors.push({test:'Live saved startup',message:e.message}));
+   for(const width of [390,1440])for(const saved of [{name:'Saved Wentzville, MO',lat:38.81,lon:-90.86,cwa:'LSX'},{name:'Saved Chicago',lat:41.88,lon:-87.63,cwa:'LOT'}]){
+    const context=await browser.newContext({viewport:{width,height:1000},timezoneId:'America/Chicago'}),p=await context.newPage(),lookup=[];
+    p.on('pageerror',e=>audit.runtimeErrors.push({width,test:'Live saved startup',message:e.message}));
     await p.addInitScript(saved=>localStorage.setItem('lsxLoc',JSON.stringify({name:saved.name,lat:saved.lat,lon:saved.lon,precision:'representative'})),saved);
     const endpoint='/points/'+saved.lat.toFixed(4)+','+saved.lon.toFixed(4);
     p.on('response',r=>{if(new URL(r.url()).pathname===endpoint&&r.ok())lookup.push(r.json());});
@@ -107,7 +114,7 @@ async function main(){
      assert.equal(active.cwa,'LSX');assert.equal(active.alerts,'ready');assert.equal(active.office,'LSX');
      if(saved.cwa==='LSX'){assert.equal(active.location.lat,saved.lat);assert.equal(active.location.lon,saved.lon);assert.equal(active.location.name,saved.name);}
      else{assert.equal(active.location.name,'Lake St. Louis, MO');assert.match(active.feedback,/outside.*LSX/);}
-     audit.live.push({test:'Saved startup with unmodified live '+saved.cwa+' membership',saved,active});
+     audit.live.push({width,test:'Saved startup with unmodified live '+saved.cwa+' membership',saved,active});
     }finally{await context.close();}
    }
   }
@@ -115,4 +122,4 @@ async function main(){
  assert.deepEqual(audit.runtimeErrors,[]);audit.result='passed';
 }
 fs.mkdirSync(out,{recursive:true});
-main().catch(e=>{audit.result='failed';audit.error=e.stack;console.error(e);process.exitCode=1;}).finally(()=>{audit.finishedAt=new Date().toISOString();fs.writeFileSync(path.join(out,'verification.json'),JSON.stringify(audit,null,2));console.log(JSON.stringify({result:audit.result,target,origin,commit:sha,assets:audit.assets,live:audit.live,controlled:audit.controlled}));console.log(audit.result+' hosted '+target+' '+origin+' at '+sha);});
+main().catch(e=>{audit.result='failed';audit.error=e.stack;console.error(e);process.exitCode=1;}).finally(()=>{audit.finishedAt=new Date().toISOString();fs.writeFileSync(path.join(out,'verification.json'),JSON.stringify(audit,null,2));console.log(JSON.stringify({result:audit.result,target,origin,commit:sha,verifierCommit:audit.verifierCommit,assets:audit.assets,live:audit.live,controlled:audit.controlled}));console.log(audit.result+' hosted '+target+' '+origin+' at '+sha);});
