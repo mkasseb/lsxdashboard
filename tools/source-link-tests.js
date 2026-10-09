@@ -8,6 +8,8 @@ const playwright=require('playwright');
 const {open,config,setBrowser}=require('./weather-stress-tests');
 const engine=process.env.WEATHER_BROWSER||'chromium';
 const cpc='https://www.cpc.ncep.noaa.gov/products/';
+// Firefox's protocol can report a CSS 44px box as 43.99997px after scrolling.
+const minTargetHeight=44-0.001;
 const expected=[
  ['#cpc a:nth-child(1)',cpc+'predictions/610day/','CPC 6–10 Day Temperature outlook'],
  ['#cpc a:nth-child(2)',cpc+'predictions/610day/','CPC 6–10 Day Precipitation outlook'],
@@ -29,7 +31,7 @@ async function resources(page,touch=false){
  const more=page.locator('#moreWeatherResources'),summary=more.locator('summary');
  assert.equal(await more.evaluate(e=>e.open),false,'Extra resources start collapsed');
  assert(await more.locator('a').first().isHidden(),'Collapsed links are outside the focus order');
- assert((await summary.boundingBox()).height>=44,'44px disclosure target');
+ assert((await summary.boundingBox()).height>=minTargetHeight,'44px disclosure target');
  for(const key of ['Enter','Space','Enter']){
   if(touch)await summary.tap();else{await summary.focus();await summary.press(key);}
  }
@@ -65,7 +67,7 @@ async function contracts(page){
   assert.equal(await a.locator('a,button,input,summary,[role="button"]').count(),0,'No nested controls');
   assert.equal(await a.evaluate(e=>!!e.parentElement.closest('a,button,summary,[role="button"]')),false);
   const box=await a.boundingBox();
-  if(!box||box.height<44){
+  if(!box||box.height<minTargetHeight){
    const evidence=await a.evaluate(e=>({height:getComputedStyle(e).height,minHeight:getComputedStyle(e).minHeight,
     ancestors:Array.from((function*(n){for(;n;n=n.parentElement)yield n;})(e)).map(n=>({tag:n.tagName,id:n.id,transform:getComputedStyle(n).transform}))}));
    assert.fail('44px touch target: '+selector+' '+JSON.stringify({box,evidence}));
