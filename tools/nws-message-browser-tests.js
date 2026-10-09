@@ -10,9 +10,11 @@ const expected=['Near-record warmth and predominantly dry weather is forecast in
 async function replace(p,product){await p.unroute(endpoint);await p.route(endpoint,r=>r.fulfill({json:product}));await p.evaluate(()=>loadAFD());}
 async function currentMessages(p){return p.locator('#callRow li').allTextContents();}
 async function sourceTarget(source){
+ await source.scrollIntoViewIfNeeded();
  // DOMRect.height avoids Firefox protocol quads losing precision when subtracting coordinates.
- const geometry=await source.evaluate(e=>{const c=getComputedStyle(e),r=e.getBoundingClientRect();return {rect:r.toJSON(),height:c.height,minHeight:c.minHeight,display:c.display,padding:c.padding,lineHeight:c.lineHeight,open:e.parentElement.open};});
- assert(geometry.rect.height>=44&&parseFloat(geometry.height)>=44,'Source tap target: '+JSON.stringify(geometry));
+ const geometry=await source.evaluate(e=>{const c=getComputedStyle(e),r=e.getBoundingClientRect();const hitAt=y=>{const hit=document.elementFromPoint(r.x+r.width/2,y);return hit===e||e.contains(hit);};return {rect:r.toJSON(),height:c.height,minHeight:c.minHeight,display:c.display,padding:c.padding,lineHeight:c.lineHeight,open:e.parentElement.open,topHit:hitAt(r.top+2),bottomHit:hitAt(r.bottom-2)};});
+ assert(geometry.rect.height>=44&&geometry.rect.width>=44&&parseFloat(geometry.height)>=44&&geometry.topHit&&geometry.bottomHit,'Source tap target: '+JSON.stringify(geometry));
+ return geometry.rect;
 }
 async function fallback(p,reason){
  assert.equal(await p.locator('#keyMessagesTitle').innerText(),'NWS Local Forecast');
@@ -32,7 +34,14 @@ async function main(){
     assert.match(await p.locator('#keyMessagesMeta').innerText(),/Regional outlook.*NWS St Louis MO \(LSX\)/);
     assert.match(await p.locator('#keyMessagesStatus').innerText(),/AFD issued Oct 8, 6:02 PM CDT/);
     assert.equal(new URL(await p.locator('#keyDiscussionLink').getAttribute('href')).searchParams.get('issuedby'),'LSX');
-    const source=p.locator('#briefWhy > summary');await sourceTarget(source);if(width<500)await source.tap();else{await source.focus();await source.press('Enter');}
+    const source=p.locator('#briefWhy > summary');
+    // Verify the interactive surface near both vertical edges, including native toggling.
+    for(const edge of ['top','bottom']){
+     const rect=await sourceTarget(source),wasOpen=await p.locator('#briefWhy').evaluate(e=>e.open),position={x:rect.width/2,y:edge==='top'?2:rect.height-2};
+     if(width<500)await source.tap({position});else await source.click({position});
+     assert.equal(await p.locator('#briefWhy').evaluate(e=>e.open),!wasOpen,edge+' edge toggles the native disclosure');
+    }
+    await sourceTarget(source);if(width<500)await source.tap();else{await source.focus();await source.press('Enter');}
     assert(await p.locator('#briefWhy').evaluate(e=>e.open));assert.match(await p.locator('#briefEvidence').textContent(),/revision time is not supplied/);
     await source.focus();await p.evaluate(()=>loadAFD());assert(await source.evaluate(e=>e===document.activeElement));assert(await p.locator('#briefWhy').evaluate(e=>e.open));
     await sourceTarget(source);
