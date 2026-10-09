@@ -4,7 +4,7 @@
 const assert=require('node:assert/strict'),fs=require('fs'),path=require('path');
 const playwright=require('playwright');
 const {open,config,setBrowser}=require('./weather-stress-tests');
-const cards=['alertsCard','currentCard','callCard','h24Card','radarCard','forecastCard','riversCard','aqiCard','afdCard','riskCard','hazardsCard','obsCard','droughtCard','climateCard','cpcCard','linksCard'];
+const cards=['alertsCard','currentCard','callCard','h24Card','radarCard','forecastCard','riversCard','aqiCard','afdCard','riskCard','hazardsCard','obsCard','droughtCard','climateCard','cpcCard'];
 const engine=process.env.WEATHER_BROWSER||'chromium';
 const out=process.env.REDESIGN_ARTIFACTS;
 async function main(){
@@ -16,6 +16,8 @@ async function main(){
    await p.evaluate(t=>applyTheme(t),theme);
    await p.waitForFunction(()=>document.querySelectorAll('#radar .leaflet-tile-loaded').length>0);
    for(const id of cards)assert.equal(await p.locator('#'+id).count(),1,id+' retained once');
+   assert.equal(await p.locator('#linksCard').count(),0,'Standalone deep-dive card retired');
+   assert.equal(await p.locator('#moreWeatherResources').count(),1);
    assert.equal(await p.locator('#compactView').count(),0);
    assert.equal(await p.locator('#hourlyOptions button').count(),3);
    assert.equal(await p.locator('#rsTabs button').count(),2);
@@ -41,6 +43,15 @@ async function main(){
     await p.evaluate(id=>{document.querySelector('#jumpNav a[href="#'+id+'"]').click();document.getElementById(id).scrollIntoView();},id);
     await p.waitForFunction(id=>document.querySelector('#jumpNav a[aria-current="location"]')?.getAttribute('href')==='#'+id,id).catch(async e=>{console.error(JSON.stringify({width,theme,id,geometry:await p.evaluate(()=>({scroll:scrollY,bar:document.querySelector('.jump-wrap').getBoundingClientRect().bottom,links:[...document.querySelectorAll('#jumpNav a')].map(l=>({href:l.hash,active:l.getAttribute('aria-current'),top:document.querySelector(l.hash).getBoundingClientRect().top}))}))}));throw e;});
    }
+   // Context arriving after a clamped final-section scroll must not select an earlier section.
+   await p.evaluate(()=>{
+    window.scrollTo(0,document.documentElement.scrollHeight);
+    const growth=document.createElement('div');growth.id='late-context-growth';growth.style.height='24px';document.body.append(growth);
+    window.dispatchEvent(new Event('resize'));
+   });
+   await p.clock.runFor(100);
+   assert.equal(await p.locator('#jumpNav a[aria-current="location"]').getAttribute('href'),'#climateCard');
+   await p.evaluate(()=>document.getElementById('late-context-growth').remove());
    const rivers=await p.locator('#rivers .rlink').evaluateAll(rows=>rows.map(row=>({w:row.clientWidth,prose:row.querySelector('.rsub')?.getBoundingClientRect().width,now:row.querySelector('.rmeta')?.getBoundingClientRect().top,forecast:row.querySelector('.rsub')?.getBoundingClientRect().top})));
    for(const row of rivers){assert(row.prose>=row.w*.7,'River detail must use the row width: '+JSON.stringify(row));assert(row.now<row.forecast,'Now precedes forecast details');}
    assert.match(await p.locator('#rivers').innerText(),/Now/);assert.match(await p.locator('#rivers').innerText(),/Forecast peak in window/);

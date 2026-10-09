@@ -17,8 +17,30 @@ const expected=[
  ['#droughtCard .dr-tier:nth-of-type(2) > a',cpc+'expert_assessment/mdo_summary.php','Month ahead — CPC monthly drought outlook'],
  ['#droughtCard .dr-tier:nth-of-type(3) > a',cpc+'expert_assessment/sdo_summary.php','Season (3 mo) — CPC seasonal drought outlook'],
  ['#hazards .hz-row:nth-child(1) a','https://www.wpc.ncep.noaa.gov/threats/threats.php','WPC Days 3–7 hazards outlook'],
- ['#hazards .hz-row:nth-child(2) a',cpc+'predictions/threats/threats.php','CPC Days 8–14 hazards outlook']
+ ['#hazards .hz-row:nth-child(2) a',cpc+'predictions/threats/threats.php','CPC Days 8–14 hazards outlook'],
+ ['#h24Card .resource-links a','https://www.wpc.ncep.noaa.gov/qpf/qpf2.shtml','WPC Precipitation (QPF)'],
+ ['#radarCard .resource-links a','https://map.blitzortung.org/#7/38.7/-90.4','Live Lightning — Blitzortung community network'],
+ ['#riskCard .resource-links a','https://www.spc.noaa.gov/exper/mesoanalysis/','SPC Mesoanalysis'],
+ ['#climateCard .resource-links a','https://www.weather.gov/lsx/climate','Climate and Records — NWS St. Louis'],
+ ['#moreWeatherResources a:nth-child(1)','https://www.weather.gov/lsx/winter','Winter Weather — NWS St. Louis'],
+ ['#moreWeatherResources a:nth-child(2)','https://aviationweather.gov/gfa/#obs','Aviation Weather — Aviation Weather Center']
 ];
+async function resources(page,touch=false){
+ const more=page.locator('#moreWeatherResources'),summary=more.locator('summary');
+ assert.equal(await more.evaluate(e=>e.open),false,'Extra resources start collapsed');
+ assert(await more.locator('a').first().isHidden(),'Collapsed links are outside the focus order');
+ assert((await summary.boundingBox()).height>=44,'44px disclosure target');
+ for(const key of ['Enter','Space','Enter']){
+  if(touch)await summary.tap();else{await summary.focus();await summary.press(key);}
+ }
+ assert(await more.evaluate(e=>e.open),'Native touch/keyboard disclosure opens');
+ assert.equal(await page.locator('#linksCard,.quicklinks').count(),0);
+ assert.equal(await page.locator('a[href*="StateDroughtMonitor.aspx?MO"]').count(),0,'No Missouri-only drought shortcut for Illinois');
+ for(const [selector,url]of expected.slice(9))assert.equal(await page.locator('a[href="'+url+'"]').count(),1,selector+' destination appears once');
+ assert.equal(await page.locator('#h24Card .precip-details #precipEvents').count(),1,'WPC stays beside precipitation details');
+ assert(await page.locator('#afdDiscussionLink').isVisible(),'Forecast discussion retains its contextual destination');
+ assert.equal(await page.locator('#riversCard h2 a').getAttribute('href'),'https://water.noaa.gov/','Flood map retains its contextual destination');
+}
 async function contracts(page){
  // Measure resting hit targets after the finite card entrance, not transformed
  // intermediate animation coordinates. Keep the full 44px requirement.
@@ -76,6 +98,7 @@ async function main(){
     // New tabs are intercepted independently of the dashboard's API fixture routing.
     await s.context.route('**/*',route=>route.request().isNavigationRequest()&&route.request().url()!=='https://lsx-weather-test.invalid/'?route.fulfill({contentType:'text/html',body:'<!doctype html><title>Official source navigation fixture</title>'}):route.fallback());
     await p.evaluate(t=>applyTheme(t),theme);
+    await resources(p,touch);
     await contracts(p);
     for(const [selector,url] of expected)await activate(p,s.context,selector,url,touch);
     for(const id of ['cpcCard','droughtCard']){
@@ -89,15 +112,18 @@ async function main(){
     await p.locator('#riskHelp summary').click();
     await p.evaluate(()=>Promise.all([loadCpc(),loadHazards(),loadDrought(),loadSpc()]));
     assert(await p.locator('#riskHelp').evaluate(e=>e.open),'Risk disclosure survives refresh');
+    assert(await p.locator('#moreWeatherResources').evaluate(e=>e.open),'Extra resources survive feed refresh');
     await contracts(p);
     assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No horizontal overflow');
     if(process.env.SOURCE_LINK_ARTIFACTS){
      fs.mkdirSync(process.env.SOURCE_LINK_ARTIFACTS,{recursive:true});
-     for(const id of ['cpcCard','droughtCard','hazardsCard'])await p.locator('#'+id).screenshot({path:path.join(process.env.SOURCE_LINK_ARTIFACTS,engine+'-'+width+'-'+theme+'-'+id+'.png')});
+     for(const id of ['cpcCard','droughtCard','hazardsCard','h24Card','radarCard','riskCard','climateCard','moreWeatherResources'])await p.locator('#'+id).screenshot({path:path.join(process.env.SOURCE_LINK_ARTIFACTS,engine+'-'+width+'-'+theme+'-'+id+'.png')});
     }
     s.change(config('source outage',{offline:true}));
-    await p.evaluate(()=>Promise.all([loadCpc(),loadHazards(),loadDrought()]));
+    await p.evaluate(()=>Promise.all([loadCpc(),loadHazards(),loadDrought(),loadSpc(),loadForecast(),loadAFD()]));
     await contracts(p);
+    assert(await p.locator('#moreWeatherResources').evaluate(e=>e.open),'Extra resources survive outages');
+    assert(await p.locator('#afdDiscussionLink').isVisible(),'Official discussion stays available during an outage');
     assert.equal(await p.locator('#cpc .cpc-pill').filter({hasText:'Unavailable'}).count(),4);
     assert.match(await p.locator('#hazards').innerText(),/Hazards data unavailable/);
     assert.deepEqual(s.errors,[]);
@@ -110,6 +136,7 @@ async function main(){
   const cached=await open(config('restored links',{now:JSON.parse(snapshot).t+60000,snapshot,skipWait:true,cpcDelay:5000}));
   try{
    await cached.page.waitForFunction(()=>snapRestored);
+   await resources(cached.page);
    await contracts(cached.page);
    assert.equal(await cached.page.evaluate(()=>feedChecks.cpc.saved),true);
    console.log('PASS saved source-link markup');

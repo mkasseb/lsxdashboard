@@ -1093,7 +1093,7 @@ async function main() {
     },1280);
     for(const width of [320,390,1280])await run('individual context touch and layout '+width,config('individual context',{touch:true,aqi:35}),async({page})=>{
       assert.equal(await page.locator('#compactView').count(),0);
-      for(const id of ['afdCard','obsCard','climateCard','droughtCard','cpcCard','linksCard']){
+      for(const id of ['afdCard','obsCard','climateCard','droughtCard','cpcCard']){
         const toggle=page.locator('#'+id+' .context-toggle'),body=page.locator('#'+id+'Body');
         assert.equal(await toggle.getAttribute('aria-controls'),id+'Body');
         assert.equal(await toggle.getAttribute('aria-expanded'),'true');
@@ -1119,7 +1119,7 @@ async function main() {
       await page.evaluate(()=>saveSnapshot());
       await page.reload();await page.waitForFunction(()=>!!document.querySelector('#climateCard .context-toggle'));
       assert.equal(await page.locator('#compactView').count(),0);
-      for(const id of ['afdCard','obsCard','climateCard','droughtCard','cpcCard','linksCard']){
+      for(const id of ['afdCard','obsCard','climateCard','droughtCard','cpcCard']){
         assert.equal(await page.locator('#'+id+' .context-toggle').getAttribute('aria-expanded'),'true');
         assert(await page.locator('#'+id+'Body').isVisible());
       }

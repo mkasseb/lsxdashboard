@@ -4358,7 +4358,7 @@ function layoutMasonry(){
   // would force a synchronous reflow for every card instead of one for the whole batch
   data.forEach(function(d){ d.h=d.c.offsetHeight; });
   // Pass 2: order for packing.
-  //  Importance tiers come FIRST (so critical outlooks stay high and Deep-Dive Links stays at the bottom),
+  //  Importance tiers come FIRST so critical outlooks stay high,
   //  then within a tier we pack tallest-first (desktop/tablet) for an even bottom, or natural order (mobile).
   // Explicit widget hierarchy: lower rank = more important = packed higher.
   //  (Alerts/Pulse/Current/Radar/Hourly are fixed heroes above this masonry.)
@@ -4370,8 +4370,7 @@ function layoutMasonry(){
       obsCard:4,        // station plot — current regional obs
       droughtCard:6,    // drought outlook
       climateCard:7,    // climate vs normal
-      cpcCard:8,        // week-ahead leanings
-      linksCard:10      // deep-dive links — reference, lowest
+      cpcCard:8         // week-ahead leanings
     };
     return (RANK[id]!=null) ? RANK[id] : 50;
   }
@@ -4537,7 +4536,11 @@ scheduleMasonry();
       if(visible.length)active=visible[visible.length-1];
     }
     var chosen=candidates.find(function(item){return item.link===clicked;});
-    if(chosen&&active&&Math.abs(chosen.box.top-active.box.top)<=4)active=chosen;
+    // A short final section cannot align with the bar. Later context growth can also move
+    // the document bottom after scrolling; retain the requested section while it is fully visible.
+    if(chosen&&active&&(Math.abs(chosen.box.top-active.box.top)<=4||
+      chosen.box.top>edge&&chosen.box.bottom<=window.innerHeight&&
+      chosen.box.top+window.scrollY-edge>document.documentElement.scrollHeight-window.innerHeight))active=chosen;
     links.forEach(function(link){if(active&&link===active.link)link.setAttribute('aria-current','location');else link.removeAttribute('aria-current');});
   }
   function schedule(){if(!queued){queued=true;requestAnimationFrame(update);}}
