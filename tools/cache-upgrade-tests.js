@@ -31,7 +31,10 @@ const server=http.createServer((req,res)=>{
   }
   if(p.startsWith('/data/')&&quartileMode){
     res.setHeader('Content-Type','application/json');res.setHeader('Cache-Control','public, max-age=14400');
-    res.end(priming?cp.execFileSync('git',['show',quartileLegacy+':'+p.slice(1)],{cwd:root,maxBuffer:10*1024*1024}):fs.readFileSync(path.join(root,p)));return;
+    // Simulate an old response surviving the app rollout. WebKit may evict these
+    // large bodies and re-request them; both cache reuse and revalidation must
+    // withhold the same legacy bytes. Chromium/Firefox still exercise cache reuse.
+    res.end(cp.execFileSync('git',['show',quartileLegacy+':'+p.slice(1)],{cwd:root,maxBuffer:10*1024*1024}));return;
   }
   if(p.startsWith('/external/')){res.writeHead(503,{'Content-Type':'application/json'}).end(JSON.stringify({error:'Controlled ancillary outage'}));return;}
   const vendor=vendors.find(([part])=>p==='/vendor/'+part);
@@ -93,16 +96,17 @@ const server=http.createServer((req,res)=>{
     await page.evaluate(()=>localStorage.setItem('lsxSnap_v21','legacy P10/P90 snapshot sentinel'));
     priming=false;requests=[];
     await page.goto(base+'/',{waitUntil:'domcontentloaded'});
-    await page.waitForFunction(()=>typeof SNAP_KEY!=='undefined'&&SNAP_KEY==='lsxSnap_v22');
+    await page.waitForFunction(()=>document.readyState==='complete'&&typeof SNAP_KEY!=='undefined'&&SNAP_KEY==='lsxSnap_v22'&&typeof NbmRange!=='undefined'&&typeof NbmHourly!=='undefined');
     const retained=await page.evaluate(async()=>{
       const d=await(await fetch('/data/nbm-range.json')).json(),h=await(await fetch('/data/nbm-hourly.json')).json(),p={lat:38.8,lon:-90.79};
       return {dailySchema:d.schema,hourlySchema:h.schema,daily:NbmRange.validate(d,p,Date.parse(d.retrievedAt)).status,hourly:NbmHourly.validate(h,p,Date.parse(h.retrievedAt)).status,oldSnapshot:localStorage.getItem('lsxSnap_v21')};
     });
     assert.deepEqual(retained,{dailySchema:2,hourlySchema:1,daily:'unavailable',hourly:'unavailable',oldSnapshot:null});
-    assert.equal(requests.filter(p=>p.startsWith('/data/nbm-')).length,0,'Actual browser HTTP cache retains old payloads during upgrade');
+    const dataRequests=requests.filter(p=>p.startsWith('/data/nbm-')).length;
+    if(engine!=='webkit')assert.equal(dataRequests,0,'Actual browser HTTP cache retains old payloads during upgrade');
     assert.equal(await page.locator('.nbm-inline,.nbm-hourly-band,#nbmBriefNote').count(),0);
     assert.deepEqual(errors,[]);
-    console.log('PASS real cached P10/P90 data withheld by new quartile schemas; v21 snapshot discarded; versioned assets loaded');
+    console.log('PASS old P10/P90 data withheld by new quartile schemas; v21 snapshot discarded; versioned assets loaded; '+dataRequests+' data requests after cache priming');
   }finally{await context.close();}
   }finally{await browser.close();server.close();}
 
