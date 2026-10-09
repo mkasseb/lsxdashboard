@@ -12,8 +12,8 @@ async function currentMessages(p){return p.locator('#callRow li').allTextContent
 async function sourceTarget(source){
  await source.scrollIntoViewIfNeeded();
  // DOMRect.height avoids Firefox protocol quads losing precision when subtracting coordinates.
- const geometry=await source.evaluate(e=>{const c=getComputedStyle(e),r=e.getBoundingClientRect();const hitAt=y=>{const hit=document.elementFromPoint(r.x+r.width/2,y);return hit===e||e.contains(hit);};return {rect:r.toJSON(),height:c.height,minHeight:c.minHeight,display:c.display,padding:c.padding,lineHeight:c.lineHeight,open:e.parentElement.open,topHit:hitAt(r.top+2),bottomHit:hitAt(r.bottom-2)};});
- assert(geometry.rect.height>=44&&geometry.rect.width>=44&&parseFloat(geometry.height)>=44&&geometry.topHit&&geometry.bottomHit,'Source tap target: '+JSON.stringify(geometry));
+ const geometry=await source.evaluate(e=>{const c=getComputedStyle(e),r=e.getBoundingClientRect();const hitAt=y=>{const hit=document.elementFromPoint(r.x+r.width/2,y);return hit===e||e.contains(hit);};return {rect:r.toJSON(),height:c.height,minHeight:c.minHeight,display:c.display,padding:c.padding,lineHeight:c.lineHeight,open:e.parentElement.open,topHit:hitAt(r.top+2),centerHit:hitAt(r.top+r.height/2),bottomHit:hitAt(r.bottom-2)};});
+ assert(geometry.rect.height>=44&&geometry.rect.width>=44&&parseFloat(geometry.height)>=44&&geometry.topHit&&geometry.centerHit&&geometry.bottomHit,'Source tap target: '+JSON.stringify(geometry));
  return geometry.rect;
 }
 async function fallback(p,reason){
