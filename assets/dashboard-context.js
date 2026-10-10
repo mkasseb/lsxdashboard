@@ -10,7 +10,7 @@ function requestContext(key){
   return job;
 }
 function initContextView(){
-  var ids=["afdCard","obsCard","climateCard","droughtCard","cpcCard","linksCard"];
+  var ids=["afdCard","obsCard","climateCard","droughtCard","cpcCard"];
   function expand(card,on){
     var body=card.querySelector('.context-body'), button=card.querySelector('.context-toggle');
     body.hidden=!on; button.setAttribute('aria-expanded',String(on));

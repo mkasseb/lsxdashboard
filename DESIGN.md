@@ -654,3 +654,13 @@ layout would move a risk disclosure between pointerdown and pointerup. Retry exp
 and restores the same button after failure; successful recovery restores the full rendered map.
 
 The forecast now observes its own size and content to fit row dates because it no longer lives in masonry. Navigation resolves active sections from current geometry after scroll, resize, disclosure and masonry layout, with a clicked target breaking ties for side-by-side sections. River display labels separate observed Now from forecast peak-in-window or falling trend; arithmetic and freshness gates are unchanged. Snapshot v20 retires older unlabeled river markup. Every local asset remains content-versioned through `tools/version_assets.py --write`.
+
+Reference links now sit beneath their related content: SPC Mesoanalysis in Risk Outlook, WPC QPF
+under precipitation amounts, community lightning beside radar, and climate/records in Climate vs
+Normal. A native, initially collapsed More weather resources disclosure holds winter and aviation
+links outside masonry. The separate Deep-Dive Links card and its duplicate discussion, drought and
+flood shortcuts are retired; their existing contextual destinations remain. The national drought
+map covers Missouri and Illinois. Static links stay outside feed-rendered and snapshot-restored
+fragments, so refreshes and outages preserve them without a new snapshot schema. A requested final
+navigation section stays active when it is fully visible but too close to the document end to align
+with the sticky bar, including after late context growth.

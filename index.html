@@ -52,7 +52,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css"
   integrity="sha384-uTttxo/aOKbdE5RlD/SPzSDoDmNvGlUYPjONi2MN/b7c9HPSvW07OIuyP7uL6jxK" crossorigin="anonymous"
   media="print" onload="this.media='all'">
-<link rel="stylesheet" href="/assets/dashboard.css?v=735d660f20d2315a">
+<link rel="stylesheet" href="/assets/dashboard.css?v=d4fc4442f43b93ba">
 </head>
 <body>
 <!-- First focusable thing on the page, and deliberately ahead of the sprite so it stays that way.
@@ -111,7 +111,6 @@
   <symbol id="i-play" viewBox="0 0 24 24"><path d="M6 3.5l14 8.5-14 8.5z" fill="currentColor" stroke-linejoin="round"/></symbol>
   <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 4h3v16H7zM14 4h3v16h-3z" fill="currentColor"/></symbol>
   <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3.5" y="10.5" width="17" height="11" rx="2"/><path d="M7.5 10.5V7a4.5 4.5 0 0 1 9 0v3.5"/></symbol>
-  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8"/></symbol>
   <symbol id="i-plane" viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></symbol>
   <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9z"/></symbol>
   <symbol id="i-theme-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></symbol>
@@ -264,7 +263,12 @@
         <button type="button" data-hours="72" aria-pressed="false" disabled>72 hours</button>
       </div>
     </div>
-    <div class="precip-events" id="precipEvents"><div class="loading">Loading precipitation amounts…</div></div>
+    <div class="precip-details">
+      <div class="precip-events" id="precipEvents"><div class="loading">Loading precipitation amounts…</div></div>
+      <div class="resource-links">
+        <a class="source-link" href="https://www.wpc.ncep.noaa.gov/qpf/qpf2.shtml" target="_blank" rel="noopener noreferrer" aria-label="WPC Precipitation (QPF) (opens in a new tab)"><svg class="ic" aria-hidden="true"><use href="#i-rain"/></svg><abbr title="Weather Prediction Center">WPC</abbr> Precip (<abbr title="Quantitative Precipitation Forecast — how much rain or melted snow is expected, not just whether">QPF</abbr>) <span aria-hidden="true">↗</span></a>
+      </div>
+    </div>
     <div id="hourly24"><div class="loading">Loading hourly…</div></div>
   </section>
 <section class="card hero" id="radarCard">
@@ -328,6 +332,10 @@
       <div class="rs-wkey" id="rsWarnKey"></div>
     </div>
     <div class="imgcap" id="rsCap"><span></span><span></span></div>
+    <div class="resource-links">
+      <a class="source-link" href="https://map.blitzortung.org/#7/38.7/-90.4" target="_blank" rel="noopener noreferrer" aria-label="Live Lightning — Blitzortung community network (opens in a new tab)"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg>Live Lightning <span aria-hidden="true">↗</span></a>
+      <span class="resource-note">Blitzortung community network</span>
+    </div>
   </section>
 <section class="card" id="forecastCard">
       <h2>7-Day Forecast</h2>
@@ -370,6 +378,9 @@
           <dt>Outlooks and warnings</dt><dd>Outlooks support planning. An official NWS warning calls for action now; follow its instructions.</dd>
         </dl>
       </details>
+      <div class="resource-links">
+        <a class="source-link" href="https://www.spc.noaa.gov/exper/mesoanalysis/" target="_blank" rel="noopener noreferrer" aria-label="SPC Mesoanalysis (opens in a new tab)"><svg class="ic" aria-hidden="true"><use href="#i-stats"/></svg><abbr title="Storm Prediction Center">SPC</abbr> Mesoanalysis <span aria-hidden="true">↗</span></a>
+      </div>
       <div class="imgcap"><span id="spcLoc">SPC &middot; WPC</span><span>storm &middot; flood</span></div>
     </section>
 <section class="card" id="hazardsCard">
@@ -410,6 +421,9 @@
       <div id="cnGrid" class="cn-grid"><div class="loading">Loading departures…</div></div>
       <div id="cnSrc" class="cn-src"></div>
       <div id="cnCtx" class="cn-ctx"></div>
+      <div class="resource-links">
+        <a class="source-link" href="https://www.weather.gov/lsx/climate" target="_blank" rel="noopener noreferrer" aria-label="Climate and Records — NWS St. Louis (opens in a new tab)"><svg class="ic" aria-hidden="true"><use href="#i-record"/></svg>Climate &amp; Records <span aria-hidden="true">↗</span></a>
+      </div>
       <div class="imgcap"><span>Station: <span id="cnStation">…</span></span><span title="The 30-year averages NOAA compares today against, recomputed each decade">1991–2020 normals</span></div>
     </section>
 <section class="card" id="cpcCard">
@@ -419,21 +433,14 @@
       <div id="cpc"><div class="loading">Loading outlooks…</div></div>
       <div class="imgcap"><span>Climate Prediction Center</span><span>6–14 days out</span></div>
     </section>
-<section class="card" id="linksCard">
-      <h2>Deep-Dive Links</h2>
-      <div class="quicklinks">
-        <a href="https://forecast.weather.gov/product.php?site=LSX&issuedby=LSX&product=AFD&format=CI&glossary=1" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-doc"/></svg>Forecast Discussion (<abbr title="Area Forecast Discussion — the forecasters’ own written reasoning">AFD</abbr>)</a>
-        <a href="https://www.spc.noaa.gov/exper/mesoanalysis/" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-stats"/></svg>SPC Mesoanalysis</a>
-        <a href="https://www.wpc.ncep.noaa.gov/qpf/qpf2.shtml" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-rain"/></svg><abbr title="Weather Prediction Center">WPC</abbr> Precip (<abbr title="Quantitative Precipitation Forecast — how much rain or melted snow is expected, not just whether">QPF</abbr>)</a>
-        <a href="https://map.blitzortung.org/#7/38.7/-90.4" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-bolt"/></svg>Live Lightning</a>
-        <a href="https://droughtmonitor.unl.edu/CurrentMap/StateDroughtMonitor.aspx?MO" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-drought"/></svg>Drought Monitor</a>
-        <a href="https://www.weather.gov/lsx/climate" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-record"/></svg>Climate &amp; Records</a>
-        <a href="https://aviationweather.gov/gfa/#obs" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-plane"/></svg>Aviation Weather</a>
-        <a href="https://www.weather.gov/lsx/winter" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-snow"/></svg>Winter Weather</a>
-        <a href="https://water.noaa.gov/#@=-90.3,38.6,7" target="_blank" rel="noopener"><svg class="ic" aria-hidden="true"><use href="#i-flood"/></svg>Flood Map</a>
-      </div>
-    </section>
 </div>
+<details class="disclosure weather-resources" id="moreWeatherResources">
+  <summary>More weather resources</summary>
+  <div class="resource-links">
+    <a class="source-link" href="https://www.weather.gov/lsx/winter" target="_blank" rel="noopener noreferrer" aria-label="Winter Weather — NWS St. Louis (opens in a new tab)"><svg class="ic" aria-hidden="true"><use href="#i-snow"/></svg>Winter Weather <span aria-hidden="true">↗</span></a>
+    <a class="source-link" href="https://aviationweather.gov/gfa/#obs" target="_blank" rel="noopener noreferrer" aria-label="Aviation Weather — Aviation Weather Center (opens in a new tab)"><svg class="ic" aria-hidden="true"><use href="#i-plane"/></svg>Aviation Weather <span aria-hidden="true">↗</span></a>
+  </div>
+</details>
 </div>
 </main>
 
@@ -458,9 +465,9 @@
 <script src="/assets/weather-core.js?v=0e0c0cd0b390374b"></script>
 <script src="/assets/weather-feeds.js?v=562060750b28584e"></script>
 <script src="/assets/forecast-view.js?v=146a61b5b05d825c"></script>
-<script src="/assets/dashboard-context.js?v=9e972fd51f4d5fd2"></script>
+<script src="/assets/dashboard-context.js?v=3d30e05144907aea"></script>
 <script src="/assets/forecast-range.js?v=ca5cb17676704f1d"></script>
 <script src="/assets/hourly-range.js?v=47ef09063f33ca6c"></script>
-<script src="/assets/dashboard.js?v=04160375569b9349"></script>
+<script src="/assets/dashboard.js?v=cf11c45563205cb5"></script>
 </body>
 </html>

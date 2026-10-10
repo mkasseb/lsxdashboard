@@ -115,7 +115,7 @@ jobs:
   nws-hosted-preview:
     # Read-only hosted verification. Existing push trigger; no extraction or publication.
     name: ${{ (github.head_ref == 'codex/nws-production-verifier' || github.event_name == 'push') && 'nws-hosted-production' || 'nws-hosted-preview' }}
-    if: ((github.head_ref == 'codex/nws-key-messages' || github.head_ref == 'codex/nws-production-verifier' || github.head_ref == 'codex/nbm-middle-50' || github.head_ref == 'codex/spc-discovery-retries') && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: ((github.head_ref == 'codex/nws-key-messages' || github.head_ref == 'codex/nws-production-verifier' || github.head_ref == 'codex/nbm-middle-50' || github.head_ref == 'codex/spc-discovery-retries' || github.head_ref == 'codex/contextual-weather-resources') && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -146,6 +146,11 @@ jobs:
           git worktree add --detach "$RUNNER_TEMP/nws-release" "$EXPECTED_SHA"
           cp tools/nws-preview-tests.js tools/hosted-html.js "$RUNNER_TEMP/nws-release/tools/"
           NODE_PATH="$RUNNER_TEMP/nws-browser/node_modules" node "$RUNNER_TEMP/nws-release/tools/nws-preview-tests.js" "$RUNNER_TEMP/nws-hosted"
+      - name: Verify contextual resources on the immutable hosted preview
+        if: github.head_ref == 'codex/contextual-weather-resources'
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: NODE_PATH="$RUNNER_TEMP/nws-browser/node_modules" node tools/weather-resources-preview-tests.js "$RUNNER_TEMP/nws-hosted/resources"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

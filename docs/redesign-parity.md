@@ -28,7 +28,7 @@ All rows below are implemented with original IDs and controls retained. The old 
 | droughtCard/drNow/drMonth/drSeason | Retained lower context | Current/monthly/seasonal data and official links |
 | climateCard/cnToday/cnGrid/cnSrc/cnCtx/cnStation | Retained lower context | Normals, records, rankings, precipitation/dry streaks, sample gates, forecast date alignment and midnight retirement |
 | cpcCard/cpc | Retained lower context | Every outlook horizon, confidence, provenance and links |
-| linksCard and footer | Retained lower reference area | Every deep-dive, licensing and official source link; lastUpdate |
+| Contextual resource links, moreWeatherResources and footer | Links within the related cards; collapsed additional resources below context | SPC Mesoanalysis, WPC QPF, community lightning, climate/records, winter and aviation; existing discussion, national drought and NWPS destinations; licensing and lastUpdate |
 | snapBar and per-feed FEEDS states | Same relevant surfaces | Saved snapshot TTL, partial/full outage, timeouts, source timestamps separate from check times; bump SNAP_KEY if fragment shape changes |
 | Six versioned JS/CSS assets and _headers | Existing repository workflow | Run tools/version_assets.py for edits, check hash/version integrity, real HTTP-cache old-to-new upgrade regression |
 | Accessibility and individual disclosures | Across every layout | Semantic headings/landmarks, native DOM hooks, tab order aligned with visual order, independent disclosure persistence; do not add global Compact context control |

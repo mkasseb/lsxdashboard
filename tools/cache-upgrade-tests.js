@@ -65,9 +65,10 @@ const server=http.createServer((req,res)=>{
       priming=false;requests=[];
       await page.goto(base+'/',{waitUntil:'domcontentloaded'});
       if(baseline){
-        await page.waitForFunction(()=>document.querySelectorAll('.context-toggle').length===6);
+        // Cached legacy initialization reaches five retained cards, then the retired linksCard.
+        await page.waitForFunction(()=>document.querySelectorAll('.context-toggle').length===5);
         await page.waitForTimeout(100);
-        assert(errors.some(e=>/addEventListener|compact/.test(e)),JSON.stringify({errors,requests,diagnostics:await page.locator('.map-diagnostics').count()}));
+        assert(errors.some(e=>/querySelector|addEventListener|compact/.test(e)),JSON.stringify({errors,requests,diagnostics:await page.locator('.map-diagnostics').count()}));
         assert.equal(await page.locator('.map-diagnostics').count(),0);
         assert.equal(await page.locator('#radar').innerHTML(),'');
         assert.equal(requests.filter(p=>p.startsWith('/assets/')&&names.includes(path.basename(new URL(p,base).pathname))).length,0,'old assets reused without network');
@@ -80,7 +81,7 @@ const server=http.createServer((req,res)=>{
         assert.equal(await page.locator('.map-diagnostics').count(),1);
         assert.equal(await page.locator('#radar .leaflet-map-pane').count(),1);
         assert.equal(await page.locator('#radar .leaflet-control-zoom').count(),1);
-        assert.equal(await page.locator('.context-toggle').count(),6);
+        assert.equal(await page.locator('.context-toggle').count(),5);
         console.log('PASS versioned upgrade: all current assets fetched, no handler crash, rendered radar tiles/controls and diagnostics');
       }
     }finally{await context.close();}
