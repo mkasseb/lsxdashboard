@@ -5,16 +5,18 @@ import fcntl
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 import hashlib
+import http.client
 import importlib.util
 import json
-import math
 import os
 from pathlib import Path
 import resource
+import re
 import subprocess
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 
@@ -27,25 +29,96 @@ PERIOD_COUNT = 18  # Nine days of native windows: buffers a <=24h-old cycle arou
 SCHEMA = 3
 VALIDATOR = 'regional-quartiles-v2'
 NS = {'s': 'http://s3.amazonaws.com/doc/2006-03-01/'}
+LIMITS = dict(requests=100, downloadBytes=150_000_000, elapsedSeconds=600)
+MAX_INVENTORY_PAGES = 4
 
 
 class Pending(Exception):
     """A published cycle is not complete yet; eligible for bounded retry/fallback."""
 
 
+class BudgetExceeded(RuntimeError):
+    """The remaining complete work cannot be admitted within this invocation's limits."""
+
+
 class Client:
-    def __init__(self):
+    def __init__(self, attempts=3, delay=15, sleep=time.sleep):
         self.bytes = 0
         self.requests = 0
         self.started = time.monotonic()
+        self.attempts, self.delay, self.sleep = attempts, delay, sleep
+        self.reserved_requests = self.reserved_bytes = 0
+        self.versions = {}
+        self.candidates, self.notes, self.events = [], [], []
+        self.context = {}
+        self.counts = {p: dict(requests=0, downloadBytes=0, completed=0, retries=0)
+                       for p in ('discovery', 'inventory', 'index', 'grib')}
 
-    def get(self, url, headers=None, limit=2_000_000):
-        if time.monotonic()-self.started > 600 or self.bytes+limit > 150_000_000 or self.requests >= 100:
-            raise RuntimeError('Refresh resource budget exceeded')
+    def check(self, requests=0, download_bytes=0, required=False, wait=0):
+        held_requests = max(0, self.reserved_requests-int(required))
+        held_bytes = max(0, self.reserved_bytes-(download_bytes if required else 0))
+        if (self.requests+requests+held_requests > LIMITS['requests'] or
+                self.bytes+download_bytes+held_bytes > LIMITS['downloadBytes'] or
+                time.monotonic()-self.started+wait >= LIMITS['elapsedSeconds']):
+            raise BudgetExceeded(f'Refresh resource budget cannot admit work: requests={self.requests}, '
+                                 f'bytes={self.bytes}, reservedRequests={self.reserved_requests}, '
+                                 f'reservedBytes={self.reserved_bytes}')
+
+    def reserve(self, requests, download_bytes=0):
+        self.reserved_requests, self.reserved_bytes = requests, download_bytes
+        self.check()
+
+    def note(self, action, error=None):
+        event = dict(self.context, action=action, requests=self.requests, downloadBytes=self.bytes,
+                     reservedRequests=self.reserved_requests, reservedBytes=self.reserved_bytes)
+        if error is not None:
+            event.update(error=f'{type(error).__name__}: {error}')
+        self.events.append(event)
+        self.notes.append(f"{event.get('candidate', '')} {event.get('phase', '')} {action}: "
+                          f"{event.get('url', '')} {event.get('error', '')}".strip())
+
+    def step(self, run, phase, url, load, required=False, completed_bytes=0):
+        # Keep completed indexes and decoded ranges in their enclosing loops. Only
+        # this failing step repeats; a candidate is never rebuilt from its beginning.
+        for attempt in range(1, self.attempts+1):
+            self.context = dict(candidate=run, phase=phase, url=url, attempt=attempt)
+            try:
+                result = load()
+            except Exception as error:
+                self.note('failed', error)
+                transient = isinstance(error, (Pending, urllib.error.URLError, TimeoutError, ConnectionError, http.client.IncompleteRead))
+                if isinstance(error, urllib.error.HTTPError):
+                    transient = error.code in (429, 500, 502, 503, 504) or (error.code == 404 and phase in ('index', 'grib'))
+                if not transient or attempt == self.attempts:
+                    raise
+                self.check(requests=1, required=required, wait=self.delay)
+                self.note('retry')
+                self.counts[phase]['retries'] += 1
+                self.sleep(self.delay)
+            else:
+                if required:
+                    self.reserved_requests -= 1
+                    self.reserved_bytes -= completed_bytes
+                self.counts[phase]['completed'] += 1
+                return result
+
+    def get(self, url, headers=None, limit=2_000_000, required=False):
+        self.context.update(url=url, byteRange=(headers or {}).get('Range'))
+        self.check(requests=1, download_bytes=limit, required=required)
+        if self.bytes+limit+1 > LIMITS['downloadBytes']:
+            raise BudgetExceeded('No byte-budget headroom for bounded response read')
         self.requests += 1
+        count = self.counts[self.context['phase']]
+        count['requests'] += 1
         with urllib.request.urlopen(urllib.request.Request(url, headers=headers or {}), timeout=20) as r:
-            body = r.read(limit+1)
+            try:
+                body = r.read(limit+1)
+            except http.client.IncompleteRead as error:
+                self.bytes += len(error.partial)
+                count['downloadBytes'] += len(error.partial)
+                raise
             self.bytes += len(body)
+            count['downloadBytes'] += len(body)
             if len(body) > limit:
                 raise ValueError('Response exceeds bounded download')
             return body, r.status, {k.lower(): v for k, v in r.headers.items()}
@@ -54,14 +127,23 @@ class Client:
 def discover(client, now):
     # Inspect QMD publication, never infer QMD readiness from core's newer cycle.
     candidates = []
+    client.reserve(PERIOD_COUNT*4)  # Eighteen indexes and 54 native messages.
     for offset in range(24):
         cycle = now.replace(minute=0, second=0, microsecond=0)-timedelta(hours=offset)
         stamp = cycle.strftime('%Y%m%d%H')
         prefix = f'blend.{stamp[:8]}/{stamp[8:]}/qmd/'
-        body, _, _ = client.get(nbm.BASE+'?list-type=2&max-keys=1&prefix='+prefix)
-        root = ET.fromstring(body)
-        if root.findtext('s:KeyCount', namespaces=NS) != '0':
+        url = nbm.BASE+'?'+urllib.parse.urlencode(dict(**{'list-type': 2, 'max-keys': 1}, prefix=prefix))
+        def load():
+            body, status, _ = client.get(url, limit=10_000)
+            root = ET.fromstring(body)
+            count = root.findtext('s:KeyCount', namespaces=NS)
+            if (status != 200 or count not in ('0', '1') or
+                    root.findtext('s:Prefix', namespaces=NS) != prefix or len(root.findall('s:Contents', NS)) != int(count)):
+                raise ValueError('Malformed QMD discovery response')
+            return count == '1'
+        if client.step(stamp, 'discovery', url, load):
             candidates.append(stamp)
+            client.candidates = candidates.copy()
         if len(candidates) == 2:
             break
     return candidates
@@ -75,49 +157,119 @@ def hours_for(run):
     return [int((first-cycle).total_seconds()/3600)+12*i for i in range(PERIOD_COUNT)]
 
 
+def source_urls(run):
+    return [nbm.BASE+f'blend.{run[:8]}/{run[8:]}/qmd/blend.t{run[8:]}z.qmd.f{hour:03}.co.grib2'
+            for hour in hours_for(run)]
+
+
+def inventory(client, run):
+    """Read exact native-window keys, following bounded S3 continuation tokens."""
+    needed = {url[len(nbm.BASE):]+suffix for url in source_urls(run) for suffix in ('', '.idx')}
+    prefix = f'blend.{run[:8]}/{run[8:]}/qmd/'
+    cycle = datetime.strptime(run, '%Y%m%d%H').replace(tzinfo=UTC)
+    versions, tokens = {}, set()
+    query = {'list-type': 2, 'max-keys': 1000, 'prefix': prefix,
+             'start-after': min(needed).removesuffix('.co.grib2')}
+    for _ in range(MAX_INVENTORY_PAGES):
+        url = nbm.BASE+'?'+urllib.parse.urlencode(query)
+        body, status, _ = client.step(run, 'inventory', url, lambda: client.get(url, limit=1_000_000))
+        root = ET.fromstring(body)
+        truncated = root.findtext('s:IsTruncated', namespaces=NS)
+        contents = root.findall('s:Contents', NS)
+        if (status != 200 or root.findtext('s:Prefix', namespaces=NS) != prefix or truncated not in ('true', 'false') or
+                root.findtext('s:KeyCount', namespaces=NS) != str(len(contents)) or len(contents) > 1000):
+            raise ValueError('Malformed QMD readiness inventory')
+        for item in contents:
+            key = item.findtext('s:Key', namespaces=NS)
+            if not key or not key.startswith(prefix):
+                raise ValueError('Unexpected QMD inventory key')
+            if key not in needed:
+                continue
+            etag = item.findtext('s:ETag', namespaces=NS)
+            published = datetime.fromisoformat(item.findtext('s:LastModified', namespaces=NS).replace('Z', '+00:00'))
+            size = int(item.findtext('s:Size', namespaces=NS))
+            if (key in versions or not etag or not re.fullmatch(r'"[^"\r\n]+"', etag) or
+                    not cycle <= published <= datetime.now(UTC) or not 0 < size <= 2_000_000_000):
+                raise ValueError('Invalid or duplicate QMD source version')
+            versions[key] = dict(etag=etag, published=published, size=size)
+        if needed.issubset(versions):
+            client.versions.update({nbm.BASE+key: value for key, value in versions.items()})
+            return
+        if truncated == 'false':
+            raise Pending(f'{run}: QMD inventory missing {len(needed-versions.keys())} required native-window keys')
+        token = root.findtext('s:NextContinuationToken', namespaces=NS)
+        if not token or token in tokens:
+            raise ValueError('Missing or repeated QMD inventory continuation token')
+        tokens.add(token)
+        query.pop('start-after', None)
+        query['continuation-token'] = token
+    raise Pending(f'{run}: required QMD keys not confirmed within {MAX_INVENTORY_PAGES} inventory pages')
+
+
+def read_source(client, url, limit, byte_range=None):
+    version = client.versions[url]
+    headers = {'If-Match': version['etag']}
+    if byte_range:
+        headers['Range'] = 'bytes='+byte_range
+    try:
+        body, status, found = client.get(url, headers, limit, required=True)
+    except urllib.error.HTTPError as error:
+        if error.code == 412:
+            raise ValueError('QMD source version changed since readiness inventory') from error
+        raise
+    if found.get('etag') != version['etag'] or parsedate_to_datetime(found.get('last-modified', '')) != version['published']:
+        raise ValueError('QMD response disagrees with inventoried source version')
+    if byte_range:
+        if status != 206 or found.get('content-range') != f"bytes {byte_range}/{version['size']}" or len(body) != limit:
+            raise ValueError('Exact GRIB byte range not honored')
+    elif status != 200 or len(body) != version['size']:
+        raise ValueError('Index response disagrees with inventoried size')
+    return body, status, found
+
+
 def plan(client, run):
     result = []
-    for hour in hours_for(run):
-        url = nbm.BASE+f'blend.{run[:8]}/{run[8:]}/qmd/blend.t{run[8:]}z.qmd.f{hour:03}.co.grib2'
-        try:
-            body, _, _ = client.get(url+'.idx')
-        except urllib.error.HTTPError as error:
-            if error.code == 404:
-                raise Pending(f'{run} f{hour:03} index not published') from error
-            raise
-        try:
-            rows = nbm.select_rows(body.decode(), run, hour)
-        except nbm.IncompletePercentiles as error:
-            raise Pending(str(error)) from error
-        if len(rows) != 3:
-            raise Pending(f'{run} f{hour:03} percentile group not complete')
+    for hour, url in zip(hours_for(run), source_urls(run)):
+        def load():
+            body, _, _ = read_source(client, url+'.idx', min(2_000_000, client.versions[url+'.idx']['size']))
+            try:
+                rows = nbm.select_rows(body.decode(), run, hour)
+            except nbm.IncompletePercentiles as error:
+                raise Pending(str(error)) from error
+            if len(rows) != 3:
+                raise Pending(f'{run} f{hour:03} percentile group not complete')
+            if any(not 0 < row['stop']-row['offset']+1 <= 8_000_000 or
+                   not 0 <= row['offset'] <= row['stop'] < client.versions[url]['size'] for row in rows):
+                raise ValueError('Unexpected GRIB message range')
+            return rows
+        rows = client.step(run, 'index', url+'.idx', load, required=True)
         result.append((url, sorted(rows, key=lambda row: row['percentile'])))
+    client.reserve(PERIOD_COUNT*3, sum(row['stop']-row['offset']+1 for _, rows in result for row in rows))
     return result
 
 
 def choose_plan(client, candidates, attempts=3, delay=15, sleep=time.sleep, build=None):
     if not candidates:
         raise Pending('No published QMD cycle within the last 24 hours')
-    notes = []
-    def load(run):
-        planned = plan(client, run)
-        return build(client, run, planned) if build else planned
-    for i in range(attempts):
+    client.attempts, client.delay, client.sleep = attempts, delay, sleep
+    client.candidates = candidates.copy()
+    for run in candidates:
+        client.context = dict(candidate=run, phase='admission', url=None)
         try:
-            return candidates[0], load(candidates[0]), notes
-        except (Pending, urllib.error.URLError, TimeoutError) as error:
-            # Access denials and other non-transient HTTP errors are never hidden by fallback.
+            client.reserve(PERIOD_COUNT*4)
+            inventory(client, run)
+            planned = plan(client, run)
+            data = build(client, run, planned) if build else planned
+            return run, data, client.notes
+        except (Pending, BudgetExceeded, urllib.error.URLError, TimeoutError, ConnectionError, http.client.IncompleteRead) as error:
+            # A changed version, invalid data or access denial fails closed.
             if isinstance(error, urllib.error.HTTPError) and error.code not in (404, 429, 500, 502, 503, 504):
                 raise
-            notes.append(str(error))
-            if i+1 < attempts:
-                sleep(delay)
-    for run in candidates[1:]:
-        try:
-            return run, load(run), notes
-        except Pending as error:
-            notes.append(str(error))
-    raise Pending('; '.join(notes))
+            client.note('candidate-unavailable', error)
+            client.reserved_requests = client.reserved_bytes = 0
+            if run != candidates[-1]:
+                client.note('fallback')
+    raise Pending('No complete daily source cycle; '+'; '.join(client.notes))
 
 
 def region(client, run, planned):
@@ -133,14 +285,8 @@ def region(client, run, planned):
             a, b = row['offset'], row['stop']
             if not 0 < b-a+1 <= 8_000_000:
                 raise ValueError('Unexpected GRIB message size')
-            try:
-                body, status, headers = client.get(url, {'Range': f'bytes={a}-{b}'}, b-a+1)
-            except urllib.error.HTTPError as error:
-                if error.code == 404:
-                    raise Pending('GRIB object not yet published') from error
-                raise
-            if status != 206 or not headers.get('content-range', '').startswith(f'bytes {a}-{b}/') or len(body) != b-a+1:
-                raise ValueError('Exact GRIB byte range not honored')
+            body, status, headers = client.step(run, 'grib', url,
+                lambda: read_source(client, url, b-a+1, f'{a}-{b}'), required=True, completed_bytes=b-a+1)
             if body[:4] != b'GRIB' or body[-4:] != b'7777' or int.from_bytes(body[8:16], 'big') != len(body):
                 raise ValueError('Invalid GRIB message boundary')
             g = e.codes_new_from_message(body)
@@ -197,7 +343,7 @@ if(s[n].validate(d,{lat:38.8,lon:-90.79},Date.parse(d.retrievedAt)).status!=='re
 
 
 def retained_unchanged(client, directory, run, planned):
-    """Reuse only a complete prior validated output with intact receipt and unchanged objects."""
+    """Reuse validated bytes only when indexes and inventoried source versions still match."""
     target, receipt_path = directory/'nbm-range.json', directory/'nbm-receipt.json'
     try:
         if target.stat().st_size > 2_000_000:
@@ -218,15 +364,9 @@ def retained_unchanged(client, directory, run, planned):
         if len(members) != 3 or any(m.get('url') != url or m.get('byteRange') != f"{row['offset']}-{row['stop']}" or
                                    m.get('percentile') != row['percentile'] for m, row in zip(members, rows)):
             return None
-        try:
-            body, status, headers = client.get(url, {'Range': 'bytes=0-0'}, 1)
-        except urllib.error.HTTPError as error:
-            if error.code == 404:
-                raise Pending('Previously indexed GRIB object unavailable') from error
-            raise
-        if status != 206 or len(body) != 1 or not headers.get('content-range', '').startswith('bytes 0-0/'):
-            raise ValueError('Source version probe did not honor byte range')
-        if not headers.get('etag') or any(m.get('etag') != headers['etag'] for m in members):
+        version = client.versions.get(url)
+        if not version or any(m.get('etag') != version['etag'] or
+                              parsedate_to_datetime(m['publishedAt']) != version['published'] for m in members):
             return None
     return data
 
@@ -268,37 +408,33 @@ def publish_local(directory, data):
 
 
 def refresh_locked(directory, run=None, attempts=3, delay=15):
-    client = Client()
+    client = Client(attempts, delay)
     try:
         now = datetime.now(UTC)
         if run and not timedelta(0) <= now-datetime.strptime(run, '%Y%m%d%H').replace(tzinfo=UTC) < timedelta(hours=24):
             raise ValueError('Explicit run must be within the last 24 hours')
-        candidates = [run] if run else None
-        for attempt in range(attempts):
-            if candidates is not None:
-                break
-            try:
-                candidates = discover(client, now)
-            except (urllib.error.URLError, TimeoutError) as error:
-                if isinstance(error, urllib.error.HTTPError) and error.code not in (429, 500, 502, 503, 504):
-                    raise
-                if attempt+1 == attempts:
-                    raise
-                time.sleep(delay)
+        candidates = [run] if run else discover(client, now)
+        client.candidates = candidates.copy()
         def build(client, candidate, planned):
             retained = retained_unchanged(client, directory, candidate, planned)
+            if retained is not None:
+                client.reserve(0)
             return (retained, False) if retained is not None else (region(client, candidate, planned), True)
         selected, (data, changed), notes = choose_plan(client, candidates, attempts, delay, build=build)
         if datetime.now(UTC)-datetime.fromisoformat(data['run'].replace('Z', '+00:00')) >= timedelta(hours=24):
             raise ValueError('Cycle became stale during extraction')
+        client.check()
         size = publish_local(directory, data) if changed else (directory/'nbm-range.json').stat().st_size
         report = dict(status=('ready' if changed else 'unchanged') if selected == candidates[0] else 'fallback',
                       changed=changed, dataRun=data['run'],
-                      candidateRuns=candidates, publicationNotes=notes, cells=len(data['cells']), periods=len(data['periods']),
+                      cells=len(data['cells']), periods=len(data['periods']),
                       outputBytes=size, coverage=COVERAGE)
     except Exception as error:
+        client.note('aborted', error)
         report = dict(status='failed', error=f'{type(error).__name__}: {error}', retainedPrevious=(directory/'nbm-range.json').exists())
-    report.update(checkedAt=nbm.iso(datetime.now(UTC)), downloadBytes=client.bytes, requests=client.requests,
+    report.update(candidateRuns=client.candidates, publicationNotes=client.notes, diagnostics=client.events,
+                  lastOperation=client.context, phaseCounts=client.counts,
+                  checkedAt=nbm.iso(datetime.now(UTC)), downloadBytes=client.bytes, requests=client.requests,
                   elapsedSeconds=round(time.monotonic()-client.started, 3), peakRssMiB=round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024, 2))
     atomic(directory/'nbm-status.json', report)
     return report
