@@ -285,13 +285,16 @@ The 24-hour limit is dashboard policy, not a NOAA SLA.
 
 Local writes use a flushed temporary file and atomic replacement, with a writer lock and rejection
 of cycle rollback. A failed extraction leaves previous data bytes and retrieval/source timestamps
-unchanged and emits `nbm-status.json` with a nonzero process/job result. Status includes fallback
-notes, bytes, requests, elapsed time and peak RSS. Two distinct cycle snapshots are retained under
+unchanged and emits `nbm-status.json` with a nonzero process/job result. Status preserves discovered
+candidates, retry/fallback notes, the triggering candidate/phase/URL/range/attempt, per-phase request,
+byte and completion counts, elapsed time and peak RSS on success and failure. Two distinct cycle snapshots are retained under
 `history/`; GRIB downloads are not stored. Runtime JSON, receipt, status, lock and history are Git-ignored.
 
 An unchanged-source gate reuses retained output only when its validation receipt matches the bytes,
-validator version and cycle, the current index ranges match, and eighteen one-byte probes confirm unchanged
-source ETags. Structural consumer validation also runs before reuse. The `regional-quartiles-v2` receipt identity rejects legacy data and receipts even for the same source cycle. A missing receipt, old schema or source revision requires native extraction. An unchanged result reports
+validator version and cycle, the current validated index ranges match, and the readiness inventory
+confirms unchanged GRIB ETags and publication times for all eighteen windows. Structural consumer
+validation also runs before reuse. Version probes no longer consume re-extraction capacity when a
+late window has changed. The `regional-quartiles-v2` receipt identity rejects legacy data and receipts even for the same source cycle. A missing receipt, old schema or source revision requires native extraction. An unchanged result reports
 `changed:false` without rewriting data, receipt, history or retrieval time. `nbm-status.json` still
 records the check; the publisher gates on `changed` and never commits status timestamps.
 The receipt is local integrity evidence, not a signature or a replacement for source validation.
@@ -621,6 +624,25 @@ hourly limits remain 180 requests/30 MB/600 seconds, 4 MB output, two request at
 one-second subset pacing. Failed/timed-out products cannot reuse a previous successful status.
 Known resource use is reported even on producer failure; killed-process totals are explicitly
 marked `resourceUsageIncomplete`, and their unreported work is not claimed as zero.
+
+Daily readiness requires the exact eighteen native-window CONUS GRIB keys and their indexes.
+The bounded [S3 inventory](https://docs.aws.amazon.com/AmazonS3/latest/API/API_ListObjectsV2.html)
+starts at the first required forecast hour and follows at most four pages of 1,000 keys, stopping
+once every required key is present even if unrelated later keys remain truncated. Missing required
+keys skip that candidate before index/range extraction; malformed metadata or pagination fails closed.
+Inventory is an admission check, not a substitute for index or decoded GRIB validation. Indexes and
+ranges use [If-Match](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html) and must agree
+with inventoried ETags, publication times and sizes. A changed source version fails the invocation.
+
+Daily discovery, inventory pages, indexes and ranges retry only the failing step, at most three
+attempts with 15-second waits inside the existing invocation budget. Completed indexes and decoded
+messages stay in the current candidate's local work; they are not fetched again on a later transient
+failure. There is no persistent download cache or whole-cycle restart. Candidate and fallback
+admission reserve eighteen index requests and 54 range requests; once indexes are validated, the
+remaining 54 range requests and their exact total bytes are reserved. Retry and inventory overhead
+must fit around that remaining work. If a late failure leaves insufficient capacity for another
+complete candidate, fallback is declined before further network work and last-good data is retained.
+These reservations do not guarantee recovery under every outage within the unchanged limits.
 
 Hourly readiness now requires every exact CONUS f001–f048 file in the bounded S3 inventory.
 A listing may be truncated after those files because it contains other regions; all 48 required
