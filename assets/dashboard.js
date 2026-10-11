@@ -21,6 +21,7 @@ function feedUpdate(key,status,issued){
   freshnessCheck();
 }
 function freshnessCheck(){
+  if(typeof renderForecastRecords==="function") renderForecastRecords();
   var now=Date.now(), total=0, counts={deferred:0,ready:0,partial:0,unavailable:0,stale:0,saved:0,loading:0};
   Object.keys(FEEDS).forEach(function(k){
     var cfg=FEEDS[k]; if(cfg.tracked===false) return;
@@ -2166,15 +2167,10 @@ function climAllOK(c,showSnow){
 
 
 /* ============ CLIMATE CONTEXT — records, rankings, streaks ============
-   Five keyless ACIS queries, cached for up to 12 hours as small DERIVED facts (~10 KB)
-   rather than raw history:
-     1. today and tomorrow across every year of record (two queries) → date-matched records + percentiles
-     2. monthly totals across every year          → "already wetter than N of M Julys"
-     3. the last two years of dailies             → dry streaks, "warmest since"
-     4. normals for the week ahead                → per-day departures in the 7-day detail
-   A pre-POR start date (1850) is fine — ACIS pads with "M", which we filter. Everything here
-   degrades to silence: a number we can't verify is never shown. */
-var CTX_KEY="lsxCtx_v4";
+   Up to seven visible calendar dates plus today/tomorrow, one observation per year per
+   date; three existing monthly/recent/normals queries. At most three requests in flight,
+   each with the existing 20s deadline. Only derived facts enter the 12-hour cache. */
+var CTX_KEY="lsxCtx_v5";
 var ctx={ready:false, recHi:null, recLo:null, recPcp:null, doyHi:[], doyLo:[],
          monWet:[], monWarm:[], monMtd:null, monMean:null, monName:"", years:0,
          dry:null, hist:null, normWeek:{}, recStation:""};
@@ -2250,7 +2246,7 @@ function shortStn(n){   // "ST LOUIS LAMBERT INTL AIRPORT" → "St Louis Lambert
 function renderContext(){
   var el=document.getElementById("cnCtx");
   if(!el) return;
-  if(!ctx.ready){ el.innerHTML=""; return; }
+  if(!ctx.ready){ el.innerHTML=""; if(typeof renderForecastRecords==="function") renderForecastRecords(); return; }
   var L=[];
   function line(ico,html,cls){ L.push('<div class="cx'+(cls?" "+cls:"")+'"><span class="cxi">'+ic(ico)+'</span><span>'+html+'</span></div>'); }
   var record=contextRecord(climate.fcHiDate)||contextRecord(ctx.recordDate)||ctx;
@@ -2304,7 +2300,7 @@ function renderContext(){
   el.innerHTML=L.join("");
   renderCurrentCtx(); renderVsNormal();
   // per-day normals arrive after the 7-day is already on screen → repaint it once
-  if(Object.keys(ctx.normWeek||{}).length && typeof loadForecast==="function" && loadForecast._paint) loadForecast._paint();
+  if(typeof loadForecast==="function" && loadForecast._paint) loadForecast._paint();
   if(typeof renderTheCall==="function") renderTheCall();
   if(typeof scheduleMasonry==="function") scheduleMasonry();
 }
@@ -3837,8 +3833,9 @@ function renderTheCall(){
 // v19: time-scaled hourly gaps, dated climate comparisons and verified gauge timestamps.
 // v21: CPC tiles and hazards periods now contain official source anchors.
 // v22: native P25/P50/P75 labels and removal of tail-based threshold commentary.
-var SNAP_KEY="lsxSnap_v22", snapRestored=false;
-try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13","lsxSnap_v14","lsxSnap_v15","lsxSnap_v16","lsxSnap_v17","lsxSnap_v18","lsxSnap_v19","lsxSnap_v20","lsxSnap_v21"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
+// v23: airport record rows are revalidated independently of saved NWS markup.
+var SNAP_KEY="lsxSnap_v23", snapRestored=false;
+try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13","lsxSnap_v14","lsxSnap_v15","lsxSnap_v16","lsxSnap_v17","lsxSnap_v18","lsxSnap_v19","lsxSnap_v20","lsxSnap_v21","lsxSnap_v22"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
 var SNAP_PARTS=Object.keys(FEEDS).reduce(function(parts,k){return parts.concat((FEEDS[k].snapshot||[]).map(function(p){return Object.assign({feed:k},p);}));},[]);
 function saveSnapshot(){
   // Mid-transition the DOM still shows the OLD place while `current` is already the new one --
@@ -3861,7 +3858,7 @@ function saveSnapshot(){
     var snapshotEl=el;
     if(p.id==="daily"){
       snapshotEl=el.cloneNode(true);
-      snapshotEl.querySelectorAll(".nbm-inline,.nbm-period-detail").forEach(function(node){node.remove();});
+      snapshotEl.querySelectorAll(".nbm-inline,.nbm-period-detail,.record-inline,.record-detail").forEach(function(node){node.remove();});
     }
     var h=snapshotEl.innerHTML;
     if(!h||/class="loading"/.test(h)) return;   // never cache a spinner

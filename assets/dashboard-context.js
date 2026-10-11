@@ -35,8 +35,9 @@ function initContextView(){
     var link=e.target.closest('a');if(!link)return;
     var card=document.querySelector(link.getAttribute('href'));
     if(card&&card.querySelector('.context-body')) expand(card,true);
+    if(card&&card.id==='forecastCard') requestContext('context');
   });
-  var cards={obsCard:'stations',climateCard:'context'};
+  var cards={obsCard:'stations',climateCard:'context',forecastCard:'context'};
   if(!('IntersectionObserver' in window)){
     Object.keys(cards).forEach(function(id){requestContext(cards[id]);});return;
   }
@@ -44,7 +45,7 @@ function initContextView(){
     entries.forEach(function(entry){
       if(!entry.isIntersecting)return;
       var body=entry.target.querySelector('.context-body');
-      if(body&&!body.hidden){requestContext(cards[entry.target.id]);observer.unobserve(entry.target);}
+      if(!body||!body.hidden){requestContext(cards[entry.target.id]);observer.unobserve(entry.target);}
     });
   },{rootMargin:'300px'});
   Object.keys(cards).forEach(function(id){observer.observe(document.getElementById(id));});

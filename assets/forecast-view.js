@@ -74,6 +74,7 @@ loadForecast._paint=function(){
   daily.innerHTML=paintDays();
   var items=daily.querySelectorAll(".day-item");
   if(typeof NbmRange!=="undefined") NbmRange.forecast(days);
+  renderForecastRecords(true);
   open.forEach(function(i){ if(items[i]) setOpen(items[i],items[i].querySelector(".day"),true); });   // keep expanded rows expanded
   // …and keep the keyboard where it was. This repaint fires on its own schedule (whenever
   // the climate normals land), and restoring the open rows but not the focus dumped a
@@ -111,9 +112,8 @@ function paintDays(){ return days.map(function(d){
   // The date beside the name: "Friday" is ambiguous by day five of a seven-day list, and
   // NWS sometimes swaps a holiday name in ("Independence Day") that says even less about
   // where in the week it falls. Visually it's the muted "8/1"; a screen reader gets the
-  // month spelled out instead, since "8 slash 1" is noise. Shown only where the column
-  // can hold it — fitDayDates() measures after paint; see the .dnd rule for why no
-  // media query can make that call.
+  // month spelled out instead, since "8 slash 1" is noise. fitDayDates() measures
+  // after paint; narrow rows stack the date beneath the name so it stays visible.
   var md=mMonth!=null?'<span class="dnd" aria-hidden="true">'+(mMonth+1)+"/"+mDay+'</span>'
             +'<span class="sr">, '+MONTHS[mMonth]+" "+mDay+'</span>':'';
   return '<div class="day-item">'
@@ -170,4 +170,91 @@ function paintDays(){ return days.map(function(d){
   +'</div>';
 }).join(""); }
 loadForecast._paint();
+if(typeof ensureForecastRecordDates==="function") ensureForecastRecordDates();
+}
+
+/* Optional observed station context has its own date, location and freshness gates.
+   It never supplies an NWS temperature, NBM range, alert or planning decision. */
+function forecastRecordFor(date){
+  if(!ctx||!ctx.ready||ctx.location!==locationKey(current)||ctx.recordAsOf!==ctxTodayKey()) return null;
+  var r=ctx.recordsByDate&&ctx.recordsByDate[date];
+  if(!r||r.recordDate!==date||r.asOf!==ctxTodayKey()||r.location!==locationKey(current)
+    ||typeof r.checkedAt!=="number"||Date.now()<r.checkedAt||Date.now()-r.checkedAt>FEEDS.context.age
+    ||!r.source||!ctx.recordSource||r.source.sid!==ctx.recordSource.sid||!recordStationMatches(ctx.recordSource.sid,r.source)) return null;
+  return r;
+}
+function forecastRecordYears(record,compact){
+  var years=record.years||[record.y];
+  return compact&&years.length>2?years[0]+" +"+(years.length-1):years.join(", ");
+}
+function forecastRecordCoverage(source,col){
+  var range=source&&source.valid_daterange&&source.valid_daterange[col];
+  return range&&recordDateKey(range[0])&&recordDateKey(range[1])?range:null;
+}
+function renderForecastRecords(force){
+  var daily=document.getElementById("daily"),station=document.getElementById("forecastRecordStation"),body=document.getElementById("forecastRecordSourceBody");
+  if(!daily||!station||!body||typeof ctx==="undefined"||typeof smart==="undefined") return;
+  var same=ctx.location===locationKey(current)&&ctx.recordAsOf===ctxTodayKey(),source=same?ctx.recordSource:null;
+  var rows=[].slice.call(daily.querySelectorAll(".day-item")),markup=[],details=[],counts=[];
+  (smart.days||[]).slice(0,7).forEach(function(day){
+    var period=day.day||day.night,date=forecastCalendarKey(period);
+    if(!date){
+      markup.push('<span class="record-label">Records</span> <span>Calendar date unavailable</span>');
+      details.push('<h3>Daily records unavailable</h3><p>This forecast period does not supply a usable calendar date.</p>');
+      counts.push('<li>Calendar date unavailable</li>');return;
+    }
+    var md=fmtMD(calendarDate(date)),r=forecastRecordFor(date),min=calendarRecordMinimum(date);
+    if(r) source=r.source; // actual returned station metadata, not a guessed station name
+    var hi=r&&r.hiCount>=min?r.recHi:null,lo=r&&r.loCount>=min?r.recLo:null;
+    function value(label,record){return '<span class="record-value">'+label+' '+(record?'<b>'+esc(String(record.v))+'°</b> <span class="record-years">('+esc(forecastRecordYears(record,true))+')</span>':'unavailable')+'</span>';}
+    markup.push('<span class="record-label">Records<span class="sr"> for '+esc(md)+'</span></span> '
+      +(hi||lo?value("High",hi)+'<span class="record-dot" aria-hidden="true">·</span>'+value("Low",lo)
+        :'<span>'+esc(md)+' records unavailable</span>'));
+    function observation(label,record,count,range){
+      return '<p>'+label+': '+(record?'<b>'+esc(String(record.v))+'°F</b> ('+esc(forecastRecordYears(record,false))+')':'unavailable')
+        +(r?' · '+count+' usable '+esc(md)+' observations'+(range&&range[0]?' from '+range[0].slice(0,4)+'–'+range[1].slice(0,4):''):'')+'.</p>';
+    }
+    var detail='<h3>Daily records for '+esc(md)+'</h3>'
+      +observation('Highest daily high',hi,r?r.hiCount:0,r&&r.hiPeriod)
+      +observation('Lowest daily low',lo,r?r.loCount:0,r&&r.loPeriod);
+    if(r){
+      detail+='<p>'+esc(r.source.name)+' · checked '+esc(weatherTime(r.checkedAt,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}))+' CT. Missing observations are omitted.'
+        +((!hi||!lo)?' At least '+min+' observed dates are required for each record.':'')+'</p>';
+    }
+    if(day.night){
+      detail+='<p>NWS overnight low: '+esc(weatherTime(day.night.startTime,{month:"short",day:"numeric",hour:"numeric",timeZoneName:"short"}))+' – '
+        +esc(weatherTime(day.night.endTime,{month:"short",day:"numeric",hour:"numeric",timeZoneName:"short"}))+'. It can occur the following morning; records match the row’s calendar date.</p>';
+    }
+    if(date.slice(5)==="02-29") detail+='<p>Only observed February 29 dates are used. February 28 substitutions from annual date stepping are excluded.</p>';
+    details.push(detail);
+    counts.push('<li>'+esc(md)+': '+(r?'high '+r.hiCount+' / low '+r.loCount+' usable dates; checked '+esc(weatherTime(r.checkedAt,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}))+' CT':'records unavailable')+'</li>');
+  });
+  var id=source&&Array.isArray(source.sids)?source.sids.filter(function(s){return / 5$/.test(s);})[0]:null;
+  id=id?id.split(" ")[0]:source&&source.sid;
+  var hp=forecastRecordCoverage(source,0),lp=forecastRecordCoverage(source,1);
+  var since=hp&&lp&&hp[0].slice(0,4)===lp[0].slice(0,4)?' · since '+hp[0].slice(0,4):'';
+  var stationText=source?'Daily records: '+shortStn(source.name||source.sid)+(id?' ('+id+')':'')+since:'Daily records: station data unavailable';
+  var sourceHtml='<p>Observed daily maximum highs and minimum lows in °F from RCC ACIS. These are this station’s calendar-date records; station observations do not describe the selected location’s exact GPS point. The airport series is kept separate from NWS area records.</p>';
+  if(source){
+    sourceHtml+='<p><b>'+esc(source.name||source.sid)+'</b> · '+esc(id||source.sid)+'. '
+      +(hp?'Daily high archive: '+hp[0]+' to '+hp[1]+'. ':'Daily high period of record unavailable. ')
+      +(lp?'Daily low archive: '+lp[0]+' to '+lp[1]+'.':'Daily low period of record unavailable.')+'</p>';
+    if(same&&ctx.recordSelection!=="legacy airport") sourceHtml+='<p>Using the '+esc(ctx.recordSelection||"selected station")+' series; legacy airport lookup did not supply a deeper series.</p>';
+  }
+  sourceHtml+='<p>Only completed dates before '+esc(ctxTodayKey())+' are included. Archive spans can contain gaps. All tied record years appear in each day’s details; records are withheld when checks are over 12 hours old.</p><ul>'+counts.join("")+'</ul>'
+    +'<p>'+officialSourceLink("https://www.rcc-acis.org/ACISWSdoc.html","ACIS source documentation","ACIS source documentation ↗")+'</p>'
+    +'<p>'+officialSourceLink("https://www.weather.gov/lsx/climate","NWS LSX climate and area records","NWS LSX climate &amp; area records ↗")+'</p>';
+  var signature=JSON.stringify([locSeq,stationText,sourceHtml,markup,details,rows.length]);
+  if(!force&&renderForecastRecords.signature===signature) return;
+  renderForecastRecords.signature=signature;
+  station.textContent=stationText;
+  if(body.innerHTML!==sourceHtml) body.innerHTML=sourceHtml;
+  rows.forEach(function(row,index){
+    if(!markup[index]) return;
+    var line=row.querySelector('.record-inline'),detail=row.querySelector('.record-detail');
+    if(!line){line=document.createElement('div');line.className='record-inline';(row.querySelector('.nbm-inline')||row.querySelector('.day')).after(line);}
+    if(line.innerHTML!==markup[index]) line.innerHTML=markup[index];
+    if(!detail){detail=document.createElement('div');detail.className='record-detail';row.querySelector('.day-detail').appendChild(detail);}
+    if(detail.innerHTML!==details[index]) detail.innerHTML=details[index];
+  });
 }

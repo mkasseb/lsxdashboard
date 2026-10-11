@@ -21,6 +21,7 @@ jobs:
           node-version: '22'
       - run: python3 tools/check.py
       - run: node tools/logic-tests.js
+      - run: node tools/daily-record-tests.js
       - run: node tools/spc-discovery-tests.js
       - run: node tools/nws-message-tests.js
       - run: node tools/hosted-html-tests.js
@@ -97,6 +98,10 @@ jobs:
         if: matrix.browser == 'chromium'
         run: |
           NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" NBM_ARTIFACTS="$RUNNER_TEMP/redesign/nbm" node tools/nbm-browser-tests.js
+      - name: Verify seven-day observed station records and failure isolation
+        env:
+          WEATHER_BROWSER: ${{ matrix.browser }}
+        run: NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" RECORD_ARTIFACTS="$RUNNER_TEMP/redesign/records" node tools/daily-record-browser-tests.js
       - name: Verify hourly NBM band and isolation
         if: matrix.browser == 'chromium'
         run: NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" NBM_ARTIFACTS="$RUNNER_TEMP/redesign/nbm-hourly" node tools/nbm-hourly-browser-tests.js
@@ -115,7 +120,7 @@ jobs:
   nws-hosted-preview:
     # Read-only hosted verification. Existing push trigger; no extraction or publication.
     name: ${{ (github.head_ref == 'codex/nws-production-verifier' || github.event_name == 'push') && 'nws-hosted-production' || 'nws-hosted-preview' }}
-    if: ((github.head_ref == 'codex/nws-key-messages' || github.head_ref == 'codex/nws-production-verifier' || github.head_ref == 'codex/nbm-middle-50' || github.head_ref == 'codex/spc-discovery-retries' || github.head_ref == 'codex/contextual-weather-resources') && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: ((github.head_ref == 'codex/nws-key-messages' || github.head_ref == 'codex/nws-production-verifier' || github.head_ref == 'codex/nbm-middle-50' || github.head_ref == 'codex/spc-discovery-retries' || github.head_ref == 'codex/contextual-weather-resources' || github.head_ref == 'codex/seven-day-records') && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -131,7 +136,7 @@ jobs:
           npm install --prefix "$RUNNER_TEMP/nws-browser" playwright@1.62.1
           node "$RUNNER_TEMP/nws-browser/node_modules/playwright/cli.js" install --with-deps chromium
       - name: Verify exact deployment with live feeds and normal TLS
-        if: github.head_ref != 'codex/nws-production-verifier'
+        if: github.head_ref != 'codex/nws-production-verifier' && github.head_ref != 'codex/seven-day-records'
         env:
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           NWS_VERIFY_TARGET: ${{ github.event_name == 'push' && 'production' || 'preview' }}
@@ -151,6 +156,11 @@ jobs:
         env:
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
         run: NODE_PATH="$RUNNER_TEMP/nws-browser/node_modules" node tools/weather-resources-preview-tests.js "$RUNNER_TEMP/nws-hosted/resources"
+      - name: Verify exact hosted preview and live calendar-date station records
+        if: github.head_ref == 'codex/seven-day-records'
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: NODE_PATH="$RUNNER_TEMP/nws-browser/node_modules" node tools/daily-record-preview-tests.js "$RUNNER_TEMP/nws-hosted/records"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

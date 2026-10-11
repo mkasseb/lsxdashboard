@@ -89,7 +89,7 @@ async function open(c, width=390) {
   });
   if(c.storage)await page.addInitScript(storage=>Object.entries(storage).forEach(([key,value])=>localStorage.setItem(key,typeof value==='string'?value:JSON.stringify(value))),c.storage);
   if(c.geo)await page.addInitScript(geo=>Object.defineProperty(navigator,'geolocation',{value:{getCurrentPosition:success=>queueMicrotask(()=>success({coords:{latitude:geo.lat,longitude:geo.lon,accuracy:25}}))}}),c.geo);
-  if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v22',snapshot),c.snapshot);
+  if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v23',snapshot),c.snapshot);
   const errors=[],requests=[],delayedMapScripts=[],heldPoints=[],heldSpcProducts=[];
   let spcMetadataRequests=0;
   page.on('pageerror',e=>errors.push(e.message));
@@ -134,12 +134,12 @@ async function open(c, width=390) {
 
     if(c.climateFixture&&u.hostname==='data.rcc-acis.org'){
       const params=JSON.parse(new URLSearchParams(req.postData()||'').get('params')||'{}');
-      if(u.pathname.endsWith('StnMeta'))return reply({meta:[{sids:['KSTL 3'],name:'St Louis',ll:[-90.37,38.75],valid_daterange:[['1850-01-01','2026-09-30']]}]});
+      if(u.pathname.endsWith('StnMeta'))return reply({meta:[{sids:['KSTL 3'],name:'St Louis',ll:[-90.37,38.75],valid_daterange:Array(3).fill(['1850-01-01','2026-09-30'])}]});
       if(c.datedRecords&&/^185[02]-/.test(String(params.sdate))){
         assert.equal(new Date(params.sdate+'T12:00:00Z').toISOString().slice(0,10),params.sdate,'ACIS start date must be valid, including leap day');
-        const today=stamp(c.now).slice(0,10),date=params.edate;
-        if(c.tomorrowRecordsDown&&date!==today)return reply({error:'record outage'},503);
-        return reply({data:Array.from({length:40},(_,i)=>[(date.endsWith('02-29')?1868+i*4:1970+i)+date.slice(4),date===today?90:100,20,0])});
+        const today=stamp(c.now).slice(0,10),date=params.edate,todayDate=date.slice(5)===today.slice(5);
+        if(c.tomorrowRecordsDown&&!todayDate)return reply({error:'record outage'},503);
+        return reply({meta:{sids:['KSTL 3'],name:'St Louis',ll:[-90.37,38.75],valid_daterange:Array(3).fill(['1850-01-01','2026-09-30'])},data:Array.from({length:40},(_,i)=>[(date.endsWith('02-29')?Array.from({length:200},(_,j)=>1852+j).filter(y=>new Date(y+'-02-29T12:00:00Z').toISOString().slice(5,10)==='02-29')[i]:1970+i)+date.slice(4),todayDate?90:100,20,0])});
       }
       if(params.sdate==='por')return reply({data:[['2025-09',3,72],['2026-09',2,71]]});
       return reply({data:[['2026-09-30',75,50,0],['2026-10-01',74,49,0]]});
@@ -765,7 +765,7 @@ async function main() {
       const checkedAt=base-H;
       await page.evaluate(checkedAt=>{
         stopSchedule();
-        const cached={...ctx,ready:true,recHi:{v:90,y:'2020'}};
+        const cached={...ctx,ready:true,recHi:{v:90,y:'2020'},recordAsOf:ctxTodayKey(),location:locationKey(current),recordSource:ctx.recordSource||{sid:'KSTL'},attemptedDates:forecastRecordDates(smart.days,ctxTodayKey())};
         localStorage.setItem(CTX_KEY,JSON.stringify({key:'KSTL|KSTL|'+ctxTodayKey(),ctx:cached,status:'partial',checkedAt}));
         return loadClimateContext();
       },checkedAt);
@@ -868,7 +868,7 @@ async function main() {
       await page.clock.setSystemTime(new Date('2026-10-01T05:01:00Z'));
       await page.evaluate(()=>runDue());
       await page.waitForFunction(()=>ctx.ready&&ctx.recordDate==='2026-10-01');
-      assert.deepEqual(await page.evaluate(()=>Object.keys(ctx.recordsByDate)),['2026-10-01','2026-10-02']);
+      assert.deepEqual(await page.evaluate(()=>Object.keys(ctx.recordsByDate)),await page.evaluate(()=>forecastRecordDates(smart.days,ctxTodayKey())));
       assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem(CTX_KEY)).key.split('|').at(-1)),'2026-10-01');
     });
     await run('calendar rollover retires the old climate context before refreshing',config('midnight climate'),async({page})=>{

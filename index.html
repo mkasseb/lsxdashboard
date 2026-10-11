@@ -52,7 +52,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css"
   integrity="sha384-uTttxo/aOKbdE5RlD/SPzSDoDmNvGlUYPjONi2MN/b7c9HPSvW07OIuyP7uL6jxK" crossorigin="anonymous"
   media="print" onload="this.media='all'">
-<link rel="stylesheet" href="/assets/dashboard.css?v=d4fc4442f43b93ba">
+<link rel="stylesheet" href="/assets/dashboard.css?v=d0043f792deadd96">
 </head>
 <body>
 <!-- First focusable thing on the page, and deliberately ahead of the sprite so it stays that way.
@@ -339,7 +339,13 @@
   </section>
 <section class="card" id="forecastCard">
       <h2>7-Day Forecast</h2>
+      <p class="record-station" id="forecastRecordStation">Daily records: station data unavailable</p>
       <div class="daily" id="daily"><div class="loading">Loading forecast…</div></div>
+      <p class="record-calendar-note">Records match each row’s calendar date. Forecast lows are overnight.</p>
+      <details class="record-source" id="forecastRecordSource">
+        <summary>Record source &amp; dates</summary>
+        <div id="forecastRecordSourceBody">Station records load when this section approaches.</div>
+      </details>
     </section>
 </div>
 <div class="railhead"><span class="rail-t">Around your area</span><span class="rail-s">Local conditions, outlooks &amp; official forecast context</span></div>
@@ -462,12 +468,12 @@
   integrity="sha384-5+cfbwT0iiub6VsQAdn6yz16nr6sDiQoHx6tm4O8OVYXHYOxcffFmCJBL0dgdvGp" crossorigin="anonymous"></script>
 <script type="application/json" data-map-src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"
   integrity="sha384-tXYNKOHx4T02jMP7YYCtBxPIv1B5gaA5mcVPBzqMp6d7VzWzxJgI2aWF/nJLrQdS" crossorigin="anonymous"></script>
-<script src="/assets/weather-core.js?v=0e0c0cd0b390374b"></script>
-<script src="/assets/weather-feeds.js?v=562060750b28584e"></script>
-<script src="/assets/forecast-view.js?v=146a61b5b05d825c"></script>
-<script src="/assets/dashboard-context.js?v=3d30e05144907aea"></script>
+<script src="/assets/weather-core.js?v=5e5b8df9e7bb5a14"></script>
+<script src="/assets/weather-feeds.js?v=dcf861084ccff650"></script>
+<script src="/assets/forecast-view.js?v=03f9947f4eac3330"></script>
+<script src="/assets/dashboard-context.js?v=7f4070d2c491c984"></script>
 <script src="/assets/forecast-range.js?v=ca5cb17676704f1d"></script>
 <script src="/assets/hourly-range.js?v=47ef09063f33ca6c"></script>
-<script src="/assets/dashboard.js?v=cf11c45563205cb5"></script>
+<script src="/assets/dashboard.js?v=fb04020d2df69824"></script>
 </body>
 </html>
