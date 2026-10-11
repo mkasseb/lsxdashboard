@@ -108,5 +108,10 @@ concurrency, cache reuse/expiry and location/date/request races. `tools/daily-re
 checks served assets at 320, 390 and 1440 pixels in Chicago and Tokyo browser timezones, both
 themes, visible calendar dates, focus/disclosure retention, partial/wrong-station/timeout isolation,
 per-record expiry, visible cache timestamps and snapshot exclusion. Browser outage scenarios are
-controlled; they do not prove future upstream availability. Hosted preview verification uses
+controlled; they do not prove future upstream availability. The browser placement replay pins
+the authentic October 11 06Z NBM publication from main `e9463d9` and its retrieval clock in
+`nbm-daily-records-20261011-recorded.json.gz` (uncompressed SHA-256
+`cbc9a23f8294d1b01115ff46df69846e35d5e405a8c6c6849f685847f0fc7e20`). Source values and metadata
+are unchanged; this uses the existing published file without another extraction. Future model
+publications cannot alter this replay. Hosted preview verification uses
 normal TLS and compares served assets with the exact PR commit before checking live records.

@@ -2,7 +2,10 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),playwright=require('playwright');
 const {open,config,setBrowser}=require('./weather-stress-tests'),fixture=require('./fixtures/weather/daily-records-recorded.json');
-const now=Date.parse('2026-10-11T14:58:20Z'),model=JSON.parse(fs.readFileSync(path.join(__dirname,'../data/nbm-range.json'))),out=process.env.RECORD_ARTIFACTS;
+// Replay the captured model and its real retrieval clock; later publications must not
+// turn this deterministic records/placement test into a future or expired NBM check.
+const model=JSON.parse(require('node:zlib').gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-daily-records-20261011-recorded.json.gz'))));
+const now=Date.parse(model.retrievedAt),out=process.env.RECORD_ARTIFACTS;
 const expected=[[94,30],[88,31],[89,33],[89,30],[89,30],[89,32],[91,29]];
 const params=r=>JSON.parse(new URLSearchParams(r.postData()||'').get('params')||'{}');
 async function primary(p){return p.evaluate(()=>({days:JSON.stringify(smart.days),rows:[...document.querySelectorAll('#daily .day')].map(x=>x.textContent),nbm:[...document.querySelectorAll('.nbm-inline')].map(x=>x.textContent),brief:document.getElementById('callRow').textContent}));}
@@ -89,7 +92,7 @@ async function main(){
     release();delete control.hang;assert.match(await p.locator('.record-inline').nth(3).innerText(),/unavailable/);assert.equal(await p.locator('.nbm-inline').count(),7);
     // Expiry is per-record; restoring a later saved-view timestamp cannot renew it.
     await p.evaluate(()=>{localStorage.removeItem(CTX_KEY);return loadClimateContext();});
-    const beforeAge=await p.evaluate(()=>ctx.recordsByDate['2026-10-11'].checkedAt),lastCheck=await p.evaluate(()=>Math.max(...Object.values(ctx.recordsByDate).map(r=>r.checkedAt))); 
+    const beforeAge=await p.evaluate(()=>ctx.recordsByDate['2026-10-11'].checkedAt),lastCheck=await p.evaluate(()=>Math.max(...Object.values(ctx.recordsByDate).map(r=>r.checkedAt)));
     await p.clock.setFixedTime(new Date(beforeAge+12*3600000+1));await p.evaluate(()=>freshnessCheck());assert.equal(await p.locator('.record-inline').first().locator('b').count(),0);
     await p.clock.setFixedTime(new Date(lastCheck+12*3600000+1));await p.evaluate(()=>freshnessCheck());assert.equal(await p.locator('.record-inline b').count(),0);
     assert.equal(await p.evaluate(()=>ctx.recordsByDate['2026-10-11'].checkedAt),beforeAge);
