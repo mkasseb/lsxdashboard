@@ -9,6 +9,51 @@ const root=path.join(__dirname,'..'),out=process.argv[2]||'/tmp/nws-hosted',sha=
 let origin=process.env.PREVIEW_URL||(target==='production'?'https://lsxdashboard.com':undefined);
 const audit={startedAt:new Date().toISOString(),commit:sha,verifierCommit:process.env.NWS_VERIFIER_SHA||sha,target,origin,tls:'Default certificate validation; no bypass',assets:[],live:[],controlled:[],runtimeErrors:[],networkFailures:[]};
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
+audit.records=[];audit.recordResponses=[];
+function independentRecord(payload,date,asOf,col,max){
+ const values=new Map();
+ for(const row of payload.data||[]){
+  const key=row[0],raw=row[col];
+  if(typeof key!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(key)||key.slice(5)!==date.slice(5)||key>=asOf)continue;
+  if(new Date(key+'T12:00:00Z').toISOString().slice(0,10)!==key||!/^[+-]?\d+(?:\.\d+)?$/.test(String(raw)))continue;
+  const value=Number(raw);if(Number.isFinite(value))values.set(key,value);
+ }
+ const all=[...values.values()],best=all.length?(max?Math.max(...all):Math.min(...all)):null;
+ return {value:best,count:all.length,years:[...values].filter(([,value])=>value===best).map(([key])=>key.slice(0,4)).sort()};
+}
+async function verifyRecords(p,width,responses,pending){
+ await p.locator('#forecastCard').scrollIntoViewIfNeeded();await p.evaluate(()=>requestContext('context'));
+ await p.waitForFunction(()=>feedRequested('context')&&['ready','partial','unavailable'].includes(feedChecks.context.status),null,{timeout:125000});await Promise.all(pending);
+ const state=await p.evaluate(()=>({current,asOf:ctxTodayKey(),days:smart.days.map(d=>({date:forecastCalendarKey(d.day||d.night),night:d.night&&{start:d.night.startTime,end:d.night.endTime}})),context:ctx,check:feedChecks.context,source:document.getElementById('forecastRecordStation').textContent,modelRows:document.querySelectorAll('#daily .nbm-inline').length}));
+ assert.equal(state.days.length,7);assert.equal(await p.locator('#daily .record-inline').count(),7);
+ audit.recordResponses.push(...responses);const facts=[],unavailable=[];
+ for(const [index,day]of state.days.entries()){
+  const line=p.locator('#daily .record-inline').nth(index),r=state.context.recordsByDate?.[day.date],shown=[];
+  if(!r){assert.equal(await line.locator('b').count(),0);assert.match(await line.innerText(),/unavailable/);unavailable.push(day.date);continue;}
+  const raw=responses.find(x=>x.status===200&&x.params.sid===r.source.sid&&x.params.sdate.slice(5)===day.date.slice(5)&&x.payload.meta?.sids?.some(s=>s.split(' ')[0]===r.source.sid.split(' ')[0]));
+  assert(raw,'Capture actual matching-station response for '+day.date);
+  const min=day.date.slice(5)==='02-29'?10:30,qualified=state.context.ready&&r.asOf===state.asOf&&r.recordDate===day.date&&Date.now()>=r.checkedAt&&Date.now()-r.checkedAt<=12*3600000;
+  for(const [col,key,count]of [[1,'recHi','hiCount'],[2,'recLo','loCount']]){
+   const expected=independentRecord(raw.payload,day.date,state.asOf,col,col===1);assert.equal(r[count],expected.count);
+   if(r[key]){assert.equal(r[key].v,expected.value);assert.deepEqual(r[key].years,expected.years);}
+   if(qualified&&expected.count>=min&&r[key]){
+    shown.push(String(expected.value)+'°');const years=expected.years.length>2?expected.years[0]+' +'+(expected.years.length-1):expected.years.join(', ');
+    assert((await line.textContent()).includes('('+years+')'),'Display all compact tied years for '+day.date);
+   }
+  }
+  assert.deepEqual(await line.locator('b').allTextContents(),shown);
+  assert(await line.evaluate(e=>e.previousElementSibling===e.parentElement.querySelector('.nbm-inline')),'Records follow the same day NBM range');
+  const detail=await p.locator('#daily .record-detail').nth(index).textContent();
+  for(const key of ['recHi','recLo'])if(r[key])assert(detail.includes('('+r[key].years.join(', ')+')'),'Day details retain every tied year');
+  if(day.night)assert(detail.includes('following morning; records match the row’s calendar date'));
+  if(shown.length!==2)unavailable.push(day.date);
+  facts.push({date:day.date,station:r.source,high:r.recHi,low:r.recLo,hiCount:r.hiCount,loCount:r.loCount,checkedAt:r.checkedAt,displayedTemperatures:shown.length});
+ }
+ const sourceDetail=await p.locator('#forecastRecordSourceBody').textContent();
+ audit.records.push({width,timezone:width===390?'America/Chicago':'Asia/Tokyo',location:state.current,asOf:state.asOf,source:state.source,sourceDetail,check:state.check,modelRows:state.modelRows,days:state.days,records:facts,unavailable});
+ fs.writeFileSync(path.join(out,'live-record-responses.json'),JSON.stringify(audit.recordResponses,null,2));
+ assert.match(state.source,/St\.? Louis Lambert.*KSTL.*since 1930/);assert.match(sourceDetail,/Daily high archive: 1930-/);assert.match(sourceDetail,/Daily low archive: 1930-/);assert.match(sourceDetail,/exact GPS point/);
+}
 async function main(){
  assert(/^[a-f0-9]{40}$/.test(sha||''));
  assert(['preview','production'].includes(target));
@@ -50,10 +95,14 @@ async function main(){
  const browser=await chromium.launch(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']}:{});
  try{
   for(const width of [390,1440]){
-   const context=await browser.newContext({viewport:{width,height:1000},timezoneId:width===390?'America/Chicago':'Asia/Tokyo'}),p=await context.newPage(),products=[],pending=[];
+   const context=await browser.newContext({viewport:{width,height:1000},timezoneId:width===390?'America/Chicago':'Asia/Tokyo'}),p=await context.newPage(),products=[],pending=[],recordResponses=[],recordPending=[];
    p.on('pageerror',e=>audit.runtimeErrors.push({width,message:e.message}));
    p.on('requestfailed',r=>audit.networkFailures.push({width,url:r.url().split('?')[0],error:r.failure()?.errorText}));
    p.on('response',r=>{if(/^https:\/\/api\.weather\.gov\/products\/[a-f0-9-]+$/i.test(r.url())&&r.ok())pending.push(r.json().then(d=>products.push(d)).catch(()=>{}));});
+   p.on('response',r=>{if(r.url()==='https://data.rcc-acis.org/StnData'){
+    const params=JSON.parse(new URLSearchParams(r.request().postData()||'').get('params')||'{}');
+    if(Array.isArray(params.elems?.[0]?.interval))recordPending.push(r.json().then(payload=>recordResponses.push({params,status:r.status(),payload})).catch(()=>{}));
+   }});
    try{
     const response=await p.goto(origin+'/?preview-verification='+sha,{waitUntil:'domcontentloaded',timeout:60000});assert(response.ok());
     await p.waitForFunction(()=>typeof refreshInFlight!=='undefined'&&refreshInFlight===null&&nwsMessages&&feedChecks.daily.status!=='loading'&&feedChecks.nbmHourly.status!=='loading',null,{timeout:90000});
@@ -78,14 +127,21 @@ async function main(){
      }else assert((await p.locator(key==='daily'?'.nbm-inline':'.nbm-hourly-band').count())>0,'Valid '+key+' guidance still renders');
     }
     audit.live.push({width,test:'Untouched daily/hourly NBM integration',daily:{status:models.daily.status,run:dailyModel.run,ageHours:(Date.now()-Date.parse(dailyModel.run))/3600000},hourly:{status:models.hourly.status,run:hourlyModel.run,ageHours:(Date.now()-Date.parse(hourlyModel.run))/3600000}});
+    await verifyRecords(p,width,recordResponses,recordPending);
     const hero=await p.locator('#callRow').textContent();await p.locator('#nbmHourlyToggle').uncheck();assert.equal(await p.locator('.nbm-hourly-band').count(),0);assert.equal(await p.locator('#callRow').textContent(),hero);await p.locator('#nbmHourlyToggle').check();
     const source=p.locator('#briefWhy > summary');await source.focus();await source.press('Enter');assert(await p.locator('#briefWhy').evaluate(e=>e.open));assert((await source.boundingBox()).height>=44);
     await p.evaluate(()=>loadAFD());assert(await source.evaluate(e=>e===document.activeElement));assert(await p.locator('#briefWhy').evaluate(e=>e.open));await source.press('Enter');
     for(const theme of ['light','dark']){
      await p.evaluate(t=>applyTheme(t),theme);assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+     assert(await p.locator('#daily .day').evaluateAll(rows=>rows.every(r=>r.getBoundingClientRect().height>=44)));
+     assert(await p.locator('#daily .dnd').evaluateAll(dates=>dates.length===7&&dates.every(r=>r.getBoundingClientRect().height>0)));
+     await p.locator('#forecastCard').screenshot({path:path.join(out,'live-'+width+'-'+theme+'-records.png'),style:'.jump-wrap,.skip{visibility:hidden !important}'});
      await p.locator('#callCard').screenshot({path:path.join(out,'live-'+width+'-'+theme+'-messages.png'),style:'.jump-wrap,.skip{visibility:hidden !important}'});
      await p.evaluate(()=>window.scrollTo(0,0));await p.screenshot({path:path.join(out,'live-'+width+'-'+theme+'-page.png'),fullPage:true});
     }
+    await p.locator('#daily .day').nth(1).click();await p.locator('#forecastCard').screenshot({path:path.join(out,'live-'+width+'-record-detail.png'),style:'.jump-wrap,.skip{visibility:hidden !important}'});
+    await p.locator('#forecastRecordSource > summary').click();await p.locator('#forecastCard').screenshot({path:path.join(out,'live-'+width+'-record-source.png'),style:'.jump-wrap,.skip{visibility:hidden !important}'});
+    const recordCheck=audit.records.at(-1);assert.deepEqual(recordCheck.unavailable,[],'All seven live high/low records required');assert.equal(recordCheck.records.length,7);assert.equal(recordCheck.modelRows,7);
     // Real point switching runs before any controlled response routing.
     await p.evaluate(()=>{setLocation({name:'Wentzville, MO',lat:38.81,lon:-90.86,station:null,precision:'representative'},{save:false});setLocation({name:'Belleville, IL',lat:38.52,lon:-89.98,station:null,precision:'representative'},{save:false});});
     await p.waitForFunction(()=>snapSafeSeq===locSeq&&nwsMessages?.status==='ready',null,{timeout:90000});
