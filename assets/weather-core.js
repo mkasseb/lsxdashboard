@@ -1550,3 +1550,78 @@ function alertEvidenceEnd(properties){
     .filter(function(t){return isFinite(t)&&t>0;});
   return times.length?Math.min.apply(null,times):0;
 }
+
+/* Calendar-date records are observed daily maxt/mint, never normals or forecast extrema.
+   ACIS annual stepping substitutes Feb 28 in non-leap years: retain literal dates only. */
+function recordDateKey(value){
+  if(typeof value!=="string"||!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  var date=calendarDate(value);
+  return isFinite(date.getTime())&&date.toISOString().slice(0,10)===value?value:null;
+}
+function forecastRecordDates(days,today){
+  var dates=[];
+  function add(date){if(recordDateKey(date)&&dates.indexOf(date)<0) dates.push(date);}
+  // Use the row's start date, including Tonight/holiday rows and a missing night tail.
+  (days||[]).slice(0,7).forEach(function(d){add(forecastCalendarKey(d.day||d.night));});
+  if(!dates.length) for(var i=0;i<7;i++) add(new Date(calendarDate(today).getTime()+i*86400000).toISOString().slice(0,10));
+  // The climate card also needs today/tomorrow; at most nine distinct one-date queries.
+  add(today); add(new Date(calendarDate(today).getTime()+86400000).toISOString().slice(0,10));
+  return dates.sort();
+}
+function forecastCalendarKey(period){
+  if(!period) return null;
+  var wall=nwsWallTime(period.startTime);
+  if(wall&&recordDateKey(wall.key)) return wall.key;
+  // validatedForecast also accepts parseable timestamps without the usual uppercase T.
+  // A missing optional date must never throw into, or reorder, the primary weather rows.
+  var time=Date.parse(period.startTime);
+  return isFinite(time)?weatherParts(time).key:null;
+}
+function calendarRecordRequest(sid,date,today){
+  if(!recordDateKey(date)||!recordDateKey(today)) return null;
+  var md=date.slice(5), year=Number(today.slice(0,4)), end=year+"-"+md;
+  // Only completed local dates; today's daily extrema can still change. Jan rows at a
+  // December rollover include the completed January of this year, not a future January.
+  while(!recordDateKey(end)||end>=today){year--;end=year+"-"+md;}
+  return {sid:sid,sdate:(md==="02-29"?"1852-":"1850-")+md,edate:end,
+    meta:["name","sids","ll","valid_daterange"],
+    elems:[{name:"maxt",interval:[1,0,0],duration:1,reduce:"max"},
+           {name:"mint",interval:[1,0,0],duration:1,reduce:"min"},
+           {name:"pcpn",interval:[1,0,0],duration:1,reduce:"sum"}]};
+}
+function recordStationMatches(sid,meta){
+  if(!meta||!Array.isArray(meta.sids)) return false;
+  var parts=String(sid).split(" "), id=parts[0], type=parts[1];
+  // A typed ID must match its type; an untyped ACIS alias must appear verbatim.
+  return meta.sids.some(function(value){var p=String(value).split(" ");return p[0]===id&&(!type||p[1]===type);});
+}
+function calendarRecordFacts(rows,date,today){
+  var byDate={}, md=date.slice(5);
+  (rows||[]).forEach(function(row){
+    if(!Array.isArray(row)||!recordDateKey(row[0])||row[0].slice(5)!==md||row[0]>=today||row[0]<"1850-01-01") return;
+    // Conflicting duplicate observations cannot manufacture an extreme or a second sample.
+    if(Object.prototype.hasOwnProperty.call(byDate,row[0])){
+      if(JSON.stringify(byDate[row[0]])!==JSON.stringify(row)) byDate[row[0]]=null;
+    }else byDate[row[0]]=row;
+  });
+  function column(col,max,temperature){
+    var best=null, sorted=[], first=null, last=null;
+    Object.keys(byDate).sort().forEach(function(key){
+      var row=byDate[key]; if(!row) return;
+      var raw=row[col], v=null;
+      if(typeof raw==="number"&&isFinite(raw)) v=raw;
+      else if(typeof raw==="string"&&/^[+-]?\d+(?:\.\d+)?$/.test(raw.trim())) v=Number(raw);
+      else if(!temperature&&raw==="T") v=0;
+      if(v==null||!isFinite(v)) return; // M, blank, trace temperatures and malformed values
+      var year=key.slice(0,4); sorted.push(v); first=first||key; last=key;
+      if(!best||(max?v>best.v:v<best.v)) best={v:v,y:year,years:[year]};
+      else if(v===best.v) best.years.push(year);
+    });
+    sorted.sort(function(a,b){return a-b;});
+    return {best:best,sorted:sorted,count:sorted.length,first:first,last:last};
+  }
+  var hi=column(1,true,true),lo=column(2,false,true),pc=column(3,true,false);
+  return {recordDate:date,recHi:hi.best,recLo:lo.best,recPcp:pc.best,doyHi:hi.sorted,doyLo:lo.sorted,
+    years:hi.count,hiCount:hi.count,loCount:lo.count,hiPeriod:[hi.first,hi.last],loPeriod:[lo.first,lo.last]};
+}
+function calendarRecordMinimum(date){ return date.slice(5)==="02-29"?10:30; }

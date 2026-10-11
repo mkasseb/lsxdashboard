@@ -25,7 +25,9 @@ const expected=[
  ['#riskCard .resource-links a','https://www.spc.noaa.gov/exper/mesoanalysis/','SPC Mesoanalysis'],
  ['#climateCard .resource-links a','https://www.weather.gov/lsx/climate','Climate and Records — NWS St. Louis'],
  ['#moreWeatherResources a:nth-child(1)','https://www.weather.gov/lsx/winter','Winter Weather — NWS St. Louis'],
- ['#moreWeatherResources a:nth-child(2)','https://aviationweather.gov/gfa/#obs','Aviation Weather — Aviation Weather Center']
+ ['#moreWeatherResources a:nth-child(2)','https://aviationweather.gov/gfa/#obs','Aviation Weather — Aviation Weather Center'],
+ ['#forecastRecordSourceBody a[href="https://www.rcc-acis.org/ACISWSdoc.html"]', 'https://www.rcc-acis.org/ACISWSdoc.html','ACIS source documentation'],
+ ['#forecastRecordSourceBody a[href="https://www.weather.gov/lsx/climate"]','https://www.weather.gov/lsx/climate','NWS LSX climate and area records']
 ];
 async function resources(page,touch=false){
  const more=page.locator('#moreWeatherResources'),summary=more.locator('summary');
@@ -38,7 +40,8 @@ async function resources(page,touch=false){
  assert(await more.evaluate(e=>e.open),'Native touch/keyboard disclosure opens');
  assert.equal(await page.locator('#linksCard,.quicklinks').count(),0);
  assert.equal(await page.locator('a[href*="StateDroughtMonitor.aspx?MO"]').count(),0,'No Missouri-only drought shortcut for Illinois');
- for(const [selector,url]of expected.slice(9))assert.equal(await page.locator('a[href="'+url+'"]').count(),1,selector+' destination appears once');
+ for(const [selector,url]of expected.slice(9))assert.equal(await page.locator('a[href="'+url+'"]').count(),url==='https://www.weather.gov/lsx/climate'?2:1,selector+' appears only in its related context');
+ const recordSummary=page.locator('#forecastRecordSource > summary');assert((await recordSummary.boundingBox()).height>=minTargetHeight);if(touch)await recordSummary.tap();else{await recordSummary.focus();await recordSummary.press('Enter');}
  assert.equal(await page.locator('#h24Card .precip-details #precipEvents').count(),1,'WPC stays beside precipitation details');
  assert(await page.locator('#afdDiscussionLink').isVisible(),'Forecast discussion retains its contextual destination');
  assert.equal(await page.locator('#riversCard h2 a').getAttribute('href'),'https://water.noaa.gov/','Flood map retains its contextual destination');

@@ -28,7 +28,7 @@ async function main(){
    if(width>1000){assert(Math.abs(boxes.h24Card.y-boxes.radarCard.y)<2);assert(boxes.h24Card.right<=boxes.radarCard.x);assert(Math.abs(boxes.forecastCard.y-boxes.h24Card.bottom-16)<2,'No dead band above Week');assert(Math.abs(boxes.forecastCard.x-boxes.h24Card.x)<2);assert(Math.abs(boxes.forecastCard.right-boxes.h24Card.right)<2);assert(Math.abs(boxes.forecastCard.bottom-boxes.radarCard.bottom)<2,'Radar must fill the full forecast column');}
    else {assert(boxes.radarCard.y>=boxes.h24Card.bottom);assert(boxes.forecastCard.y>=boxes.radarCard.bottom);}
    const radarSize=await p.locator('#radar').boundingBox(),loadedTiles=await p.locator('#radar .leaflet-tile-loaded').count();if(width>1000)assert(radarSize.height>600,'Successful map must render at full column height, not fallback height');
-   const rowHeights=await p.locator('#daily .day').evaluateAll(rows=>rows.map(r=>r.getBoundingClientRect().height));assert(rowHeights.every(h=>h>=44&&h<=56),'Compact rows keep 44px touch targets');
+   const rowHeights=await p.locator('#daily .day').evaluateAll(rows=>rows.map(r=>r.getBoundingClientRect().height));const rowMax=await p.locator('#daily').evaluate(e=>e.classList.contains('no-dnd')?76:56);assert(rowHeights.every(h=>h>=44&&h<=rowMax),'Compact rows keep 44px targets and room for stacked calendar dates: '+rowHeights);
    if(width<=680)assert(boxes.callCard.y>=boxes.currentCard.bottom);
    await p.locator('#daily .day').first().click();assert.equal(await p.locator('#daily .day').first().getAttribute('aria-expanded'),'true');
    await p.locator('#daily .day').first().press('Enter');assert.equal(await p.locator('#daily .day').first().getAttribute('aria-expanded'),'false');

@@ -808,3 +808,18 @@ NWS wording/state, location changes, stale withholding and phone/desktop/200% te
 validation and limits. The immutable preview retains actual source timestamps and expires at
 October 10 00Z; that expiry is distinct from production refresh failure. This draft does not merge,
 activate production refreshes, change permissions, or create services/credentials.
+
+## Seven-day station records
+
+Each forecast row includes observed calendar-date record high/low temperatures below the optional
+NBM model range. Station/POR attribution and check times appear in **Record source & dates**, with
+all tied years and usable-date counts in the expanded day. Forecast lows are overnight; records
+refer to the row’s calendar date. Missing dates remain unavailable without affecting NWS or NBM.
+
+See [daily record semantics, verification and source limitations](docs/daily-records.md).
+
+```bash
+node tools/daily-record-tests.js
+NODE_PATH=/tmp/lsx-browser-tests/node_modules CHROMIUM_PATH=/usr/bin/chromium \
+  node tools/daily-record-browser-tests.js
+```
