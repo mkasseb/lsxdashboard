@@ -158,7 +158,9 @@ The full design rationale — what each decision replaced, and why — lives in
   a combined Now / NWS Key Messages hero, hourly planning, radar and seven-day forecast, then local
   context. Desktop uses a 60% hourly/seven-day column and a 40% radar/risk/river column; phones read
   hourly, radar, then seven-day, with risk and rivers in their original context positions. Every
-  existing card and individual disclosure remains available.
+  existing card and individual disclosure remains available. Lower context starts at the shorter
+  column's bottom and reserves the other column's occupied space, so a tall river card cannot
+  hold back the lower cards across the whole page.
 - **Radar is a peek, not the product.** Its desktop viewport is bounded independently of forecast
   height (350px through 1240px, 380px above); mobile keeps its existing sizing and fullscreen fills
   the viewport. The same map and explored camera survive responsive placement;

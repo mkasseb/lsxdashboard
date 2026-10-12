@@ -1775,7 +1775,15 @@ body{transition:none}
 .daily.no-dnd .dn>span:first-child{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .daily.no-dnd .dnd{display:block;margin:2px 0 0;font-size:11px}
 @media(min-width:1001px){
-  .planning-grid.desktop-planning{grid-template-columns:minmax(0,3fr) minmax(0,2fr);grid-template-rows:auto;gap:18px}
+  .planning-grid.desktop-planning{display:block;position:relative}
+  .desktop-planning .planning-column{position:absolute;top:0}
+  .desktop-planning .planning-primary{left:0;width:calc(60% - 10.8px)}
+  .desktop-planning .planning-support{left:calc(60% + 7.2px);width:calc(40% - 7.2px)}
+  .planning-grid.desktop-planning>.railhead{position:absolute;margin:0;pointer-events:auto}
+  /* The lower pack overlaps only unused planning space. Its transparent container must
+     let clicks reach rivers still occupying the other column. */
+  .planning-grid.desktop-planning>.masonry{position:absolute;left:0;width:100%;pointer-events:none}
+  .planning-grid.desktop-planning>.masonry>.card{pointer-events:auto}
   .desktop-planning .planning-column>.card{position:relative;left:auto;top:auto;width:auto;flex:0 0 auto;grid-column:auto;grid-row:auto}
   .hourly-title-mobile{display:none}.hourly-title-desktop{display:inline}
   .forecast-primary-source{display:inline;font-size:12px;font-weight:400;color:var(--muted)}

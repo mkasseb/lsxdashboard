@@ -4340,6 +4340,7 @@ function layoutMasonry(){
   // Preserve the pressed target until its native click/toggle has completed.
   if(masonryPointerActive)return;
   var m=document.querySelector(".masonry"); if(!m) return;
+  if(layoutPlanningContext(m,tier))return;
   var GAP=16, w=m.clientWidth;
   var cols = w<=680 ? 1 : (w<=1100 ? 2 : 3);
   var colW = Math.floor((w-GAP*(cols-1))/cols);

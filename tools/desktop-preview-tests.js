@@ -4,6 +4,7 @@
 // Keep the actual weather, timestamps and map layers, with default TLS and no response fixtures.
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
 const {chromium}=require('playwright');
+const {planningGapGeometry,assertPlanningGap}=require('./planning-gap-contract');
 const root=path.join(__dirname,'..'),out=process.argv[2]||'/tmp/desktop-hosted',sha=process.env.EXPECTED_SHA;
 const audit={startedAt:new Date().toISOString(),commit:sha,tls:'Default certificate validation; no bypass',live:[],runtimeErrors:[],networkFailures:[]};
 async function geometry(page){return page.evaluate(()=>{
@@ -46,6 +47,7 @@ async function main(){
   await settled(page);
   await page.locator('#forecastCard').scrollIntoViewIfNeeded();await page.evaluate(()=>requestContext('context'));
   await page.waitForFunction(()=>['ready','partial','unavailable'].includes(feedChecks.context.status),null,{timeout:125000});
+  await page.evaluate(()=>requestContext('stations'));await page.waitForFunction(()=>stnMap&&['ready','partial','unavailable'].includes(feedChecks.stations.status),null,{timeout:90000});
   await page.evaluate(()=>{window.previewCards=['h24Card','forecastCard','radarCard','riskCard','riversCard'].map(id=>document.getElementById(id));window.previewMap=rvMap;window.previewDays=JSON.stringify(smart.days);});
   for(const width of [1180,1440,1920,390,768,1000,1001]){
    await page.setViewportSize({width,height:1000});await settled(page);const g=await geometry(page);verifyGeometry(g);
@@ -55,6 +57,7 @@ async function main(){
    const primary=await page.locator('#daily .day').allTextContents(),records=await page.locator('.record-inline').allTextContents();
    for(const theme of ['light','dark']){
     await page.evaluate(t=>applyTheme(t),theme);await settled(page);verifyGeometry(await geometry(page));
+    if(width>1000)assertPlanningGap(await page.evaluate(planningGapGeometry));
     assert.deepEqual(await page.locator('#daily .day').allTextContents(),primary);assert.deepEqual(await page.locator('.record-inline').allTextContents(),records);
     if([1180,1440,1920,390,768].includes(width)){
      await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:path.join(out,`live-${width}-${theme}-page.png`),fullPage:true});
@@ -65,6 +68,18 @@ async function main(){
    audit.live.push({width,geometry:g,records,station:await page.locator('#forecastRecordStation').textContent(),checks:await page.evaluate(()=>Object.fromEntries(Object.entries(feedChecks).map(([key,value])=>[key,value.status]))),mapDiagnostics:await page.evaluate(()=>mapDiagnosticsText())});
   }
   await page.setViewportSize({width:1440,height:1000});await settled(page);
+  audit.gapStates=[];
+  async function checkGapState(state){await settled(page);const g=await page.evaluate(planningGapGeometry);audit.gapStates.push({state,...assertPlanningGap(g),geometry:g});await page.locator('.planning-grid').screenshot({path:path.join(out,'live-gap-'+state+'.png'),style:'.jump-wrap,.skip{visibility:hidden !important}'});}
+  await checkGapState('loaded');
+  await page.locator('#riskHelp > summary').click();await checkGapState('risk-expanded');
+  const lastPin=page.locator('#rivers [data-pin-gauge]').last(),pinId=await lastPin.getAttribute('data-pin-gauge');await lastPin.scrollIntoViewIfNeeded();
+  assert(await lastPin.evaluate(e=>{const r=e.getBoundingClientRect();return e.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}),'Lower river controls remain reachable through unused packing space');
+  await lastPin.click();assert.equal(await page.locator(`[data-pin-gauge="${pinId}"]`).getAttribute('aria-pressed'),'true');await page.locator(`[data-pin-gauge="${pinId}"]`).click();
+  await page.locator('#riskHelp > summary').click();
+  for(const day of await page.locator('#daily .day').all())await day.click();await page.locator('#forecastRecordSource > summary').click();await checkGapState('forecast-expanded');
+  for(const day of await page.locator('#daily .day').all())await day.click();await page.locator('#forecastRecordSource > summary').click();
+  for(const toggle of await page.locator('.context-toggle').all())await toggle.click();await checkGapState('context-collapsed');
+  for(const toggle of await page.locator('.context-toggle').all())await toggle.click();await checkGapState('context-expanded');
   const day=page.locator('#daily .day').first();await day.focus();await day.press('Enter');assert.equal(await day.getAttribute('aria-expanded'),'true');
   const risk=page.locator('#riskHelp > summary');await risk.focus();await risk.press('Enter');assert(await page.locator('#riskHelp').evaluate(e=>e.open));
   await page.setViewportSize({width:390,height:844});await settled(page);assert(await risk.evaluate(e=>e===document.activeElement));

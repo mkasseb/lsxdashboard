@@ -67,6 +67,11 @@ function initPlanningLayout(){
     card.parentNode.insertBefore(slot,card);homes.push({card:card,slot:slot,column:group.column});
   });});
   planning.appendChild(main);planning.appendChild(support);
+  // The desktop band owns its lower cards too, so no shared grid row can hold them back.
+  [document.querySelector('.railhead'),document.querySelector('.masonry')].forEach(function(element){
+    var slot=document.createComment(element.className+' mobile position');
+    element.parentNode.insertBefore(slot,element);homes.push({card:element,slot:slot,column:planning});
+  });
   var query=window.matchMedia('(min-width:1001px)'),wide=null,pressed=false;
   function sync(){
     // Keep a fullscreen dialog's inert ancestry until Close/Escape has restored it.
@@ -96,5 +101,72 @@ function initPlanningLayout(){
   document.addEventListener('pointerup',release,true);
   document.addEventListener('pointercancel',release,true);
   window.addEventListener('blur',release);
+  // A forecast/detail/feed can change the occupied space above the lower cards.
+  if(window.ResizeObserver){var sizes=new ResizeObserver(scheduleMasonry);sizes.observe(main);sizes.observe(support);}
+  if(window.MutationObserver){
+    var changes=new MutationObserver(function(records){
+      // Forecast rows expand through a class. Ignore map/date-fit class churn.
+      if(records.some(function(r){return r.type!=='attributes'||r.attributeName!=='class'||r.target.classList.contains('day-item');}))layoutMasonry();
+    });
+    [main,support].forEach(function(column){changes.observe(column,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['open','hidden','class']});});
+  }
   sync();
+}
+
+/* Fill the space below each planning column without covering its remaining cards.
+   Keep the existing mobile packer, card nodes, priority tiers and visual DOM order. */
+function layoutPlanningContext(m,rank){
+  var planning=document.querySelector('.planning-grid'),heading=document.querySelector('.railhead');
+  if(!planning||!heading)return false;
+  if(!planning.classList.contains('desktop-planning')||!window.matchMedia('(min-width:1001px)').matches){
+    planning.style.removeProperty('height');
+    [heading,m].forEach(function(element){['top','left','width'].forEach(function(prop){element.style.removeProperty(prop);});});
+    return false;
+  }
+  if(radarFull)return true; // Background geometry stays fixed until the modal closes.
+  fitDayDates();
+  var primary=planning.querySelector('.planning-primary').getBoundingClientRect();
+  var support=planning.querySelector('.planning-support').getBoundingClientRect();
+  var short=primary.bottom<=support.bottom?primary:support,origin=planning.getBoundingClientRect();
+  heading.style.top=(short.bottom-origin.top+24)+'px';
+  heading.style.width=short.width+'px';heading.style.left=(short.left-origin.left)+'px';
+  var masonryTop=heading.getBoundingClientRect().bottom-origin.top+16;
+  m.style.top=masonryTop+'px';
+  // Wide screens retain three context lanes; narrower desktops use two readable lanes.
+  var lanes=window.matchMedia('(min-width:1241px)').matches?
+    [{left:0,width:(primary.width-16)/2,bottom:primary.bottom},{left:(primary.width+16)/2,width:(primary.width-16)/2,bottom:primary.bottom},{left:support.left-origin.left,width:support.width,bottom:support.bottom}]:
+    [{left:0,width:primary.width,bottom:primary.bottom},{left:support.left-origin.left,width:support.width,bottom:support.bottom}];
+  var top=m.getBoundingClientRect().top;
+  var occupied=lanes.map(function(lane){return Math.max(0,lane.bottom+16-top);});
+  var cards=[].slice.call(m.children).filter(function(card){return card.classList.contains('card');});
+  if(_mObs)_mObs.disconnect();
+  m.classList.add('mready');
+  var data=cards.map(function(card,index){
+    var span=card.classList.contains('wide')?Math.min(2,lanes.length):1;
+    var widths=[],heights=[];
+    // Heights depend on the actual lane width, including wrapped prose/disclosures.
+    for(var start=0;start+span<=lanes.length;start++){
+      var end=lanes[start+span-1],width=end.left+end.width-lanes[start].left;
+      widths.push(width);card.style.width=width+'px';heights.push(card.offsetHeight);
+    }
+    return {c:card,span:span,widths:widths,heights:heights,h:Math.max.apply(null,heights),index:index};
+  });
+  data.sort(function(a,b){return rank(a.c.id)-rank(b.c.id)||b.h-a.h||a.index-b.index;});
+  data.forEach(function(d){
+    var best=0,bestTop=Infinity;
+    for(var start=0;start+d.span<=lanes.length;start++){
+      var candidate=Math.max.apply(null,occupied.slice(start,start+d.span));
+      if(candidate<bestTop-.5){best=start;bestTop=candidate;}
+    }
+    d.left=lanes[best].left;d.top=bestTop;
+    d.c.style.width=d.widths[best]+'px';d.c.style.left=d.left+'px';d.c.style.top=d.top+'px';
+    if(d.heights[best])for(var col=best;col<best+d.span;col++)occupied[col]=bestTop+d.heights[best]+16;
+  });
+  var station=document.getElementById('stnmap');
+  if(stnMap&&station.clientWidth&&station.clientHeight){var size=stnMap.getSize();if(size.x!==station.clientWidth||size.y!==station.clientHeight)stnMap.invalidateSize({animate:false});}
+  m.style.height=Math.max.apply(null,occupied)+'px';
+  planning.style.height=(masonryTop+Math.max.apply(null,occupied))+'px';
+  reorderMasonryDOM(m,data);if(_mObs)_mObs.observe(m,_mObsOpts);
+  document.dispatchEvent(new Event('lsxlayout'));
+  return true;
 }
