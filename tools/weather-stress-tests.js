@@ -1076,7 +1076,7 @@ async function main() {
       assert.deepEqual(overlaps,[],'Feed growth must not leave overlapping hit targets until the next frame');
     },1280);
     await run('individual context repack preserves a pressed disclosure',config('pressed disclosure'),async({page})=>{
-      const summary=page.locator('#riskHelp summary');
+      const summary=page.locator('#climateCard .context-toggle');
       // Resize inside the real pointerdown, after the masonry capture guard runs.
       // Locator click resolves a stable hit target; split raw coordinates can miss
       // the disclosure when unrelated startup layout finishes before pointerdown.
@@ -1087,9 +1087,9 @@ async function main() {
       await summary.click();
       assert.equal(await page.evaluate(()=>window.pressedDisclosureGuard),true,
         'The real disclosure pointerdown must activate the repack guard before resize');
-      await page.waitForFunction(()=>document.getElementById('riskHelp').open);
+      await page.waitForFunction(()=>document.getElementById('climateCardBody').hidden);
       await page.evaluate(()=>{document.querySelector('.masonry').style.width='';layoutMasonry();});
-      await noCardOverlap(page);await expectText(page,'#riskHelp',/category rank, not a probability/);
+      await noCardOverlap(page);assert.equal(await summary.getAttribute('aria-expanded'),'false');
     },1280);
     for(const width of [320,390,1280])await run('individual context touch and layout '+width,config('individual context',{touch:true,aqi:35}),async({page})=>{
       assert.equal(await page.locator('#compactView').count(),0);

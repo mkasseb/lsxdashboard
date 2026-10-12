@@ -2582,7 +2582,9 @@ function initStationMap(style){
   stnMap=L.map(el,{zoomControl:true,attributionControl:true,scrollWheelZoom:false,minZoom:5,maxZoom:10}).setView([_cLat,_cLon],7);
   stnMap.attributionControl.setPrefix(false);
   var stnBounds=L.latLngBounds(STN_LIST.map(function(s){ return [s.lat,s.lon]; }));
-  function fitStations(){ if(stnMap) stnMap.fitBounds(stnBounds,{padding:[30,26]}); }
+  // Initial/settled framing is geometry, not a gesture. A same-zoom animated pan can
+  // outlive a failed GL initialization and interrupt Leaflet's partial-map teardown.
+  function fitStations(){ if(stnMap) stnMap.fitBounds(stnBounds,{padding:[30,26],animate:false}); }
   fitStations();
   stnBase=L.maplibreGL({style:mapStylePart(style,"all"),attributionControl:false}).addTo(stnMap);
   stnMap.attributionControl.addAttribution('&copy; <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>');
@@ -2935,6 +2937,7 @@ function setRadarFull(on){
     radarFullPrevFocus=null;
   }
   if(rvMap){ rvMap.invalidateSize(); setTimeout(function(){ if(rvMap) rvMap.invalidateSize(); },260); }
+  document.dispatchEvent(new Event('radarfullscreenchange'));
   if(typeof scheduleMasonry==="function") scheduleMasonry();
 }
 document.addEventListener("click",function(e){
@@ -4339,6 +4342,7 @@ function layoutMasonry(){
   // Preserve the pressed target until its native click/toggle has completed.
   if(masonryPointerActive)return;
   var m=document.querySelector(".masonry"); if(!m) return;
+  if(layoutPlanningContext(m,tier))return;
   var GAP=16, w=m.clientWidth;
   var cols = w<=680 ? 1 : (w<=1100 ? 2 : 3);
   var colW = Math.floor((w-GAP*(cols-1))/cols);
@@ -4504,7 +4508,15 @@ var _mObs=null, _mObsOpts={childList:true,subtree:true,characterData:true,attrib
     // Pack feed/disclosure growth in the mutation checkpoint. Deferring to another frame
     // leaves absolutely positioned cards overlapping briefly and can send pointerdown
     // to a different card than pointerup, even while the intended summary is visible.
-    if(window.MutationObserver){ _mObs=new MutationObserver(layoutMasonry); _mObs.observe(m,_mObsOpts); }
+    if(window.MutationObserver){
+      _mObs=new MutationObserver(function(records){
+        // GL resize toggles decorative classes inside the fixed map viewport. Packing
+        // during that resize delivery changes shallower card sizes again in WebKit.
+        // Real card sizes still have their ResizeObserver; content/disclosures pack now.
+        if(records.some(function(r){return r.type!=="attributes"||r.attributeName!=="class"||!r.target.closest(".leaflet-pane,.leaflet-control-container");}))layoutMasonry();
+      });
+      _mObs.observe(m,_mObsOpts);
+    }
   }
 })();
 scheduleMasonry();

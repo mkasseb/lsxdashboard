@@ -52,7 +52,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css"
   integrity="sha384-uTttxo/aOKbdE5RlD/SPzSDoDmNvGlUYPjONi2MN/b7c9HPSvW07OIuyP7uL6jxK" crossorigin="anonymous"
   media="print" onload="this.media='all'">
-<link rel="stylesheet" href="/assets/dashboard.css?v=d0043f792deadd96">
+<link rel="stylesheet" href="/assets/dashboard.css?v=d4dcb2432872549c">
 </head>
 <body>
 <!-- First focusable thing on the page, and deliberately ahead of the sprite so it stays that way.
@@ -255,7 +255,7 @@
 <div class="planning-grid">
 <section class="card " id="h24Card">
     <div class="hourly-head">
-      <h2>Plan your day <span class="hourly-location" id="h24loc"></span></h2>
+      <h2><span class="hourly-title-mobile">Plan your day</span><span class="hourly-title-desktop">Hourly forecast</span> <span class="hourly-location" id="h24loc"></span></h2>
       <span class="hourly-duration" id="h24Title">Next 24 hours</span>
       <div class="hourly-options" id="hourlyOptions" role="group" aria-label="Hourly forecast duration">
         <button type="button" data-hours="24" aria-pressed="true" disabled>24 hours</button>
@@ -338,7 +338,7 @@
     </div>
   </section>
 <section class="card" id="forecastCard">
-      <h2>7-Day Forecast</h2>
+      <h2>7-Day Forecast <span class="forecast-primary-source">Official NWS forecast</span></h2>
       <p class="record-station" id="forecastRecordStation">Daily records: station data unavailable</p>
       <div class="daily" id="daily"><div class="loading">Loading forecast…</div></div>
       <p class="record-calendar-note">Records match each row’s calendar date. Forecast lows are overnight.</p>
@@ -471,9 +471,9 @@
 <script src="/assets/weather-core.js?v=5e5b8df9e7bb5a14"></script>
 <script src="/assets/weather-feeds.js?v=dcf861084ccff650"></script>
 <script src="/assets/forecast-view.js?v=03f9947f4eac3330"></script>
-<script src="/assets/dashboard-context.js?v=7f4070d2c491c984"></script>
+<script src="/assets/dashboard-context.js?v=91467027b18ea8fe"></script>
 <script src="/assets/forecast-range.js?v=ca5cb17676704f1d"></script>
 <script src="/assets/hourly-range.js?v=47ef09063f33ca6c"></script>
-<script src="/assets/dashboard.js?v=fb04020d2df69824"></script>
+<script src="/assets/dashboard.js?v=c20aff855e0c45f1"></script>
 </body>
 </html>

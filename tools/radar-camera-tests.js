@@ -31,12 +31,12 @@ function sameCamera(a,b){assert.equal(b.zoom,a.zoom);assert(Math.hypot(b.offset[
 try{for(const width of [1180,1440,1920]){
  const s=await open(config('radar camera',{maps:true,geo:{lat:38.4328,lon:-90.3776},storage:{lsxLoc:{name:'Lake St. Louis, MO',lat:38.8,lon:-90.79,precision:'representative'}}}),width),p=s.page,steps=[];
  try{
-  await settled(p);centered(await geometry(p));steps.push({state:'saved location startup',...await geometry(p)});
+  await settled(p);centered(await geometry(p));const inlineHeight=(await geometry(p)).size[1];assert(Math.abs(inlineHeight-(width<=1240?350:380))<2);steps.push({state:'saved location startup',...await geometry(p)});
   // Preserve the same forced asynchronous geolocation boundary as the browser API.
   await p.evaluate(()=>{navigator.geolocation.getCurrentPosition=cb=>{window.cameraGeo=cb;};document.getElementById('h24Card').style.minHeight='1200px';});await settled(p);
   await p.locator('#geoBtn').click();await p.waitForFunction(()=>!!window.cameraGeo);
   await p.evaluate(()=>window.cameraGeo({coords:{latitude:38.4328,longitude:-90.3776,accuracy:25}}));
-  await p.waitForFunction(()=>current.lat===38.4328&&snapSafeSeq===locSeq);await settled(p);centered(await geometry(p));steps.push({state:'asynchronous geolocation and forecast resize',...await geometry(p)});
+  await p.waitForFunction(()=>current.lat===38.4328&&snapSafeSeq===locSeq);await settled(p);centered(await geometry(p));assert.equal((await geometry(p)).size[1],inlineHeight,'Forecast growth cannot stretch the inline map');steps.push({state:'asynchronous geolocation and forecast resize',...await geometry(p)});
   // City search/favorites use this same verified-location entry point.
   await p.evaluate(async()=>{
    await chooseVerifiedLocation({name:'Columbia, MO',lat:38.9517,lon:-92.3341,station:null,precision:'representative'},{save:true});
@@ -54,7 +54,22 @@ try{for(const width of [1180,1440,1920]){
   await p.evaluate(()=>{document.getElementById('h24Card').style.minHeight='1400px';});await settled(p);sameCamera(chosen,await geometry(p));
   await p.setViewportSize({width:width===1180?1440:1180,height:900});await settled(p);sameCamera(chosen,await geometry(p));
   await p.evaluate(()=>{window.scrollTo(0,radar.getBoundingClientRect().top+scrollY+250);});await settled(p);sameCamera(chosen,await geometry(p));steps.push({state:'user pan/zoom survives content resize, viewport resize and scroll',...await geometry(p)});
-  await p.evaluate(()=>setRadarFull(true));await settled(p);sameCamera(chosen,await geometry(p));await p.evaluate(()=>setRadarFull(false));await settled(p);sameCamera(chosen,await geometry(p));
+  await p.evaluate(()=>{window.cameraMap=rvMap;});
+  for(const responsiveWidth of [390,1000,1001,width]){
+   await p.setViewportSize({width:responsiveWidth,height:900});await settled(p);sameCamera(chosen,await geometry(p));assert(await p.evaluate(()=>cameraMap===rvMap));
+  }
+  steps.push({state:'same map and explored camera across desktop/mobile breakpoint',...await geometry(p)});
+  await p.locator('#rsFull').click();await settled(p);sameCamera(chosen,await geometry(p));
+  assert.equal(await p.locator('#radarCard').getAttribute('aria-modal'),'true');
+  await p.setViewportSize({width:390,height:844});await settled(p);sameCamera(chosen,await geometry(p));
+  assert(await p.locator('header').evaluate(el=>el.inert),'Background stays inert through fullscreen resize');
+  assert(await p.locator('#radarCard').evaluate(el=>!el.closest('[inert]')),'Fullscreen dialog cannot gain an inert ancestor');
+  await p.keyboard.press('Tab');assert(await p.evaluate(()=>radarCard.contains(document.activeElement)));
+  await p.keyboard.press('Escape');await settled(p);sameCamera(chosen,await geometry(p));
+  assert.equal(await p.evaluate(()=>document.activeElement.id),'rsFull');assert(!(await p.locator('header').evaluate(el=>el.inert)));
+  assert(await p.locator('#radarCard').evaluate(el=>el.parentElement.classList.contains('planning-grid')),'Closing applies the pending mobile placement');
+  await p.setViewportSize({width,height:900});await settled(p);sameCamera(chosen,await geometry(p));
+  assert.equal((await geometry(p)).size[1],inlineHeight);steps.push({state:'fullscreen breakpoint resize, Escape and focus restoration',...await geometry(p)});
   assert.deepEqual(s.errors,[]);report.push({width,steps});console.log('PASS '+engine+' radar camera '+width);
  }finally{await s.context.close();}
 }
