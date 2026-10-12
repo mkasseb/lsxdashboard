@@ -16,15 +16,15 @@ All rows below are implemented with original IDs and controls retained. The old 
 | currentCard/current/ccStation, callCard/callRow/callHorizon | Coherent Now and Bottom Line hero | All current readings, station and age; generated guidance labels; unchanged thresholds and advice |
 | briefPlanning, briefWhy, briefEvidence, briefStatus | Individual hero disclosures | Later-week content, source evidence and missing-source cues; independent open states across refresh |
 | h24Card, hourlyOptions, precipEvents, hourly24 | Beside radar desktop; above radar mobile | 24/48/72 switches, chart/slider keyboard/touch, selected timestamp and focus retention, gaps, amounts and event horizons |
-| radarCard, rsTabs, rsFull, rsRadar, radar, radarPlay/Slider, rsLegend/rsWarnKey/rsCap | Generous radar pane | Actual rendered tiles/panes, layer toggles, pan/zoom/touch lock, playback/scrub, legends, fullscreen focus/Escape, diagnostics and official link |
+| radarCard, rsTabs, rsFull, rsRadar, radar, radarPlay/Slider, rsLegend/rsWarnKey/rsCap | Bounded radar above Risk/Rivers desktop; original mobile placement | Actual rendered tiles/panes, layer toggles, pan/zoom/touch lock, playback/scrub, legends, fullscreen focus/Escape, diagnostics and official link |
 | Radar/station map bootstrap and per-layer recovery | Existing map surfaces | Initial failure, bounded startup, retry, late scripts/styles, WebGL fallback, tile outage, stale/pending source cues |
-| forecastCard/daily | Compact seven-day below hourly; full-height radar beside both | All daytime/nighttime periods, details and links; no horizon reduction or clipped content |
+| forecastCard/daily | Compact seven-day below hourly in 60% desktop column | All daytime/nighttime periods, NBM ranges and station records, details and links; no horizon reduction or clipped content |
 | aqiCard/aqi | Lower local context | AQI/UV values, guidance, attribution, ages, unavailable state and AirNow link |
 | afdCard/afd | Lower official discussion | All NWS-authored content, individual disclosures and full discussion link; generated-vs-NWS distinction |
-| riskCard/spc/spcThreats/riskHelp | Retained lower context | Storm/flood/fire, tornado/wind/hail, every period and explanation, touch/keyboard behavior, attribution |
+| riskCard/spc/spcThreats/riskHelp | Below radar desktop; original mobile context | Storm/flood/fire, tornado/wind/hail, every period and explanation, touch/keyboard behavior, attribution |
 | hazardsCard/hazards/hazIssued | Retained lower context | All days 3–14 hazards, issue ages and official link |
 | obsCard/stnTools/stnmap/stnEx/stnAge | Retained lower context | Temp/feels/dew/wind modes, station detail, map controls, source ages and recovery |
-| riversCard/rivers/qpf7 | Lower river context | Distinct Now and Forecast peak labels without computation changes; flood thresholds, freshness, trends, forecast window/crest distinction, pins and NWPS links |
+| riversCard/rivers/qpf7 | Below Risk desktop; original mobile context | Distinct Now and Forecast peak labels without computation changes; all gauges, flood thresholds, freshness, trends, forecast window/crest distinction, pins and NWPS links |
 | droughtCard/drNow/drMonth/drSeason | Retained lower context | Current/monthly/seasonal data and official links |
 | climateCard/cnToday/cnGrid/cnSrc/cnCtx/cnStation | Retained lower context | Normals, records, rankings, precipitation/dry streaks, sample gates, forecast date alignment and midnight retirement |
 | cpcCard/cpc | Retained lower context | Every outlook horizon, confidence, provenance and links |
@@ -55,6 +55,8 @@ All rows below are implemented with original IDs and controls retained. The old 
 - Active navigation now accounts for the anchor scroll margin and side-by-side target ties, and updates after masonry/disclosure changes.
 
 ## Deliberate differences from the illustrative concepts
+
+The October 12 compact desktop design supersedes the earlier full-height radar geometry described below. Desktop now uses independent 60/40 columns with hourly above seven-day, and radar above Risk Outlook and all river gauges. The rendered inline map is 350px at 1180px and 380px at 1440/1920px. Successful maps and compact retry panels stay in the support column; mobile card order and sizing remain unchanged. `tools/redesign-tests.js` checks both themes, 320–1920px, failures/retries and state/focus across 1000/1001px. `tools/radar-camera-tests.js` also crosses that breakpoint with a deliberately panned map, and resizes fullscreen before Escape to verify camera, inert state and focus restoration. Hosted preview evidence uses real feeds and map layers, separately from the labelled deterministic QA images.
 
 - All observation metrics, UV/AQI exposure guidance and associated source freshness remain visible. The hero is taller than the simplified mockup, especially on phones.
 - All seven original navigation destinations, search, favorites/sharing, refresh and theme controls remain. The header uses compact rows rather than removing destinations to match a four-item sample navigation.

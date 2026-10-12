@@ -156,9 +156,12 @@ The full design rationale — what each decision replaced, and why — lives in
   Type carries the hierarchy through the `--fs-*`/`--r-*`/`--sp-*` scales.
 - **The page is ordered by what a visitor came for.** Alerts and active mesoscale discussions,
   a combined Now / NWS Key Messages hero, hourly planning, radar and seven-day forecast, then local
-  context. Hourly and a compact seven-day card stack beside a full-height radar; phones read hourly,
-  radar, then seven-day. Every existing card and individual disclosure remains available.
-- **Radar is a peek, not the product.** The map's height is an aspect ratio, never leftover space;
+  context. Desktop uses a 60% hourly/seven-day column and a 40% radar/risk/river column; phones read
+  hourly, radar, then seven-day, with risk and rivers in their original context positions. Every
+  existing card and individual disclosure remains available.
+- **Radar is a peek, not the product.** Its desktop viewport is bounded independently of forecast
+  height (350px through 1240px, 380px above); mobile keeps its existing sizing and fullscreen fills
+  the viewport. The same map and explored camera survive responsive placement;
   radar and satellite stack on one Leaflet map; the loop targets a 60-minute span, not a sweep
   count; and a dead tile layer is detected per layer so it can never read as clear skies.
 - **Every loader owns its failure.** Each degrades to an official link or to silence; one dead

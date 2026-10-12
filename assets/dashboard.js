@@ -2935,6 +2935,7 @@ function setRadarFull(on){
     radarFullPrevFocus=null;
   }
   if(rvMap){ rvMap.invalidateSize(); setTimeout(function(){ if(rvMap) rvMap.invalidateSize(); },260); }
+  document.dispatchEvent(new Event('radarfullscreenchange'));
   if(typeof scheduleMasonry==="function") scheduleMasonry();
 }
 document.addEventListener("click",function(e){

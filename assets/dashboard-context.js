@@ -10,6 +10,7 @@ function requestContext(key){
   return job;
 }
 function initContextView(){
+  initPlanningLayout();
   var ids=["afdCard","obsCard","climateCard","droughtCard","cpcCard"];
   function expand(card,on){
     var body=card.querySelector('.context-body'), button=card.querySelector('.context-toggle');
@@ -49,4 +50,51 @@ function initContextView(){
     });
   },{rootMargin:'300px'});
   Object.keys(cards).forEach(function(id){observer.observe(document.getElementById(id));});
+}
+
+/* Reuse the same cards in independent desktop columns; keep the original mobile DOM homes.
+   Reparenting retains disclosures, map instances, source state and event handlers. */
+function initPlanningLayout(){
+  var planning=document.querySelector('.planning-grid');
+  if(!planning||planning.querySelector('.planning-column')||!window.matchMedia)return;
+  var main=document.createElement('div'),support=document.createElement('div');
+  main.className='planning-column planning-primary';
+  support.className='planning-column planning-support';
+  var groups=[{column:main,ids:['h24Card','forecastCard']},{column:support,ids:['radarCard','riskCard','riversCard']}];
+  var homes=[];
+  groups.forEach(function(group){group.ids.forEach(function(id){
+    var card=document.getElementById(id),slot=document.createComment(id+' mobile position');
+    card.parentNode.insertBefore(slot,card);homes.push({card:card,slot:slot,column:group.column});
+  });});
+  planning.appendChild(main);planning.appendChild(support);
+  var query=window.matchMedia('(min-width:1001px)'),wide=null,pressed=false;
+  function sync(){
+    // Keep a fullscreen dialog's inert ancestry until Close/Escape has restored it.
+    // A native click also finishes before a breakpoint move can detach its pressed target.
+    if(pressed||masonryPointerActive||(typeof radarFull!=='undefined'&&radarFull)||wide===query.matches)return;
+    wide=query.matches;
+    var focused=document.activeElement;
+    if(_mObs)_mObs.disconnect();
+    homes.forEach(function(home){
+      if(wide)home.column.appendChild(home.card);
+      else home.slot.parentNode.insertBefore(home.card,home.slot.nextSibling);
+      ['left','top','width'].forEach(function(prop){home.card.style.removeProperty(prop);});
+    });
+    planning.classList.toggle('desktop-planning',wide);
+    if(focused&&focused.isConnected&&document.activeElement!==focused)focused.focus({preventScroll:true});
+    layoutMasonry();renderHourly24();
+    // A pack can leave DOM order unchanged and return without restoring this observer.
+    if(_mObs){var masonry=document.querySelector('.masonry');if(masonry)_mObs.observe(masonry,_mObsOpts);}
+  }
+  if(query.addEventListener)query.addEventListener('change',sync);
+  else if(query.addListener)query.addListener(sync);
+  document.addEventListener('radarfullscreenchange',sync);
+  document.addEventListener('pointerdown',function(e){
+    pressed=homes.some(function(home){return home.card.contains(e.target);});
+  },true);
+  function release(){requestAnimationFrame(function(){pressed=false;sync();});}
+  document.addEventListener('pointerup',release,true);
+  document.addEventListener('pointercancel',release,true);
+  window.addEventListener('blur',release);
+  sync();
 }

@@ -120,7 +120,7 @@ jobs:
   nws-hosted-preview:
     # Read-only hosted verification. Existing push trigger; no extraction or publication.
     name: ${{ (github.head_ref == 'codex/nws-production-verifier' || github.event_name == 'push') && 'nws-hosted-production' || 'nws-hosted-preview' }}
-    if: ((github.head_ref == 'codex/nws-key-messages' || github.head_ref == 'codex/nws-production-verifier' || github.head_ref == 'codex/nbm-middle-50' || github.head_ref == 'codex/spc-discovery-retries' || github.head_ref == 'codex/contextual-weather-resources' || github.head_ref == 'codex/seven-day-records') && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: ((github.head_ref == 'codex/nws-key-messages' || github.head_ref == 'codex/nws-production-verifier' || github.head_ref == 'codex/nbm-middle-50' || github.head_ref == 'codex/spc-discovery-retries' || github.head_ref == 'codex/contextual-weather-resources' || github.head_ref == 'codex/seven-day-records' || github.head_ref == 'codex/compact-desktop-layout') && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -161,6 +161,11 @@ jobs:
         env:
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
         run: NODE_PATH="$RUNNER_TEMP/nws-browser/node_modules" node tools/daily-record-preview-tests.js "$RUNNER_TEMP/nws-hosted/records"
+      - name: Verify compact desktop layout on the exact live preview
+        if: github.head_ref == 'codex/compact-desktop-layout'
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: NODE_PATH="$RUNNER_TEMP/nws-browser/node_modules" node tools/desktop-preview-tests.js "$RUNNER_TEMP/nws-hosted/desktop"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

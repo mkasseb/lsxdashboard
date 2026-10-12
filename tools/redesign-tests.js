@@ -21,13 +21,22 @@ async function main(){
    assert.equal(await p.locator('#compactView').count(),0);
    assert.equal(await p.locator('#hourlyOptions button').count(),3);
    assert.equal(await p.locator('#rsTabs button').count(),2);
-   const boxes=await p.evaluate(()=>Object.fromEntries(['currentCard','callCard','h24Card','radarCard','forecastCard'].map(id=>{const r=document.getElementById(id).getBoundingClientRect();return[id,{x:r.x,y:r.y,right:r.right,bottom:r.bottom}];})));
+   const boxes=await p.evaluate(()=>Object.fromEntries(['currentCard','callCard','h24Card','radarCard','forecastCard','riskCard','riversCard'].map(id=>{const r=document.getElementById(id).getBoundingClientRect();return[id,{x:r.x,y:r.y,right:r.right,bottom:r.bottom}];})));
    assert(Math.abs(boxes.currentCard.bottom-boxes.callCard.y)<2,'Messages follow the compact observations at their natural height');
    const messageGap=await p.evaluate(()=>document.getElementById('callCard').getBoundingClientRect().bottom-document.getElementById('briefWhy').getBoundingClientRect().bottom);
    assert(messageGap>=12&&messageGap<=22,'Messages have only normal bottom padding: '+messageGap);
-   if(width>1000){assert(Math.abs(boxes.h24Card.y-boxes.radarCard.y)<2);assert(boxes.h24Card.right<=boxes.radarCard.x);assert(Math.abs(boxes.forecastCard.y-boxes.h24Card.bottom-16)<2,'No dead band above Week');assert(Math.abs(boxes.forecastCard.x-boxes.h24Card.x)<2);assert(Math.abs(boxes.forecastCard.right-boxes.h24Card.right)<2);assert(Math.abs(boxes.forecastCard.bottom-boxes.radarCard.bottom)<2,'Radar must fill the full forecast column');}
+   if(width>1000){
+    assert(Math.abs(boxes.h24Card.y-boxes.radarCard.y)<2);assert(boxes.h24Card.right<=boxes.radarCard.x);
+    assert(Math.abs(boxes.forecastCard.y-boxes.h24Card.bottom-18)<2,'Hourly precedes Week without a dead band');
+    assert(Math.abs(boxes.forecastCard.x-boxes.h24Card.x)<2);assert(Math.abs(boxes.forecastCard.right-boxes.h24Card.right)<2);
+    assert(Math.abs(boxes.riskCard.y-boxes.radarCard.bottom-18)<2);assert(Math.abs(boxes.riversCard.y-boxes.riskCard.bottom-18)<2,'Supporting cards flow directly below radar');
+    assert.deepEqual(await p.locator('.planning-primary>.card').evaluateAll(rows=>rows.map(r=>r.id)),['h24Card','forecastCard']);
+    assert.deepEqual(await p.locator('.planning-support>.card').evaluateAll(rows=>rows.map(r=>r.id)),['radarCard','riskCard','riversCard']);
+    const mainWidth=boxes.h24Card.right-boxes.h24Card.x,supportWidth=boxes.radarCard.right-boxes.radarCard.x;
+    assert(Math.abs(mainWidth/(mainWidth+supportWidth)-.6)<.01,'Approved 60/40 columns');
+   }
    else {assert(boxes.radarCard.y>=boxes.h24Card.bottom);assert(boxes.forecastCard.y>=boxes.radarCard.bottom);}
-   const radarSize=await p.locator('#radar').boundingBox(),loadedTiles=await p.locator('#radar .leaflet-tile-loaded').count();if(width>1000)assert(radarSize.height>600,'Successful map must render at full column height, not fallback height');
+   const radarSize=await p.locator('#radar').boundingBox(),loadedTiles=await p.locator('#radar .leaflet-tile-loaded').count();if(width>1000)assert(Math.abs(radarSize.height-(width<=1240?350:380))<2,'Radar stays bounded independently of forecast height');
    const rowHeights=await p.locator('#daily .day').evaluateAll(rows=>rows.map(r=>r.getBoundingClientRect().height));const rowMax=await p.locator('#daily').evaluate(e=>e.classList.contains('no-dnd')?76:56);assert(rowHeights.every(h=>h>=44&&h<=rowMax),'Compact rows keep 44px targets and room for stacked calendar dates: '+rowHeights);
    if(width<=680)assert(boxes.callCard.y>=boxes.currentCard.bottom);
    await p.locator('#daily .day').first().click();assert.equal(await p.locator('#daily .day').first().getAttribute('aria-expanded'),'true');
@@ -72,7 +81,7 @@ async function main(){
     await p.screenshot({path:path.join(out,engine+'-'+width+'-'+theme+'.png'),fullPage:true});
     await p.screenshot({path:path.join(out,engine+'-'+width+'-'+theme+'-first-screen.png')});
    }
-   if(width>1000){s.change(config('forecast outage',{maps:true,hourlyDown:true,dailyDown:true}));await p.evaluate(()=>loadForecast());const mapBox=await p.locator('#radar').boundingBox();assert(mapBox.height>=277.5,'Working radar keeps its 280px framed minimum when forecasts are unavailable: '+JSON.stringify(mapBox));}
+   if(width>1000){s.change(config('forecast outage',{maps:true,hourlyDown:true,dailyDown:true}));await p.evaluate(()=>loadForecast());const mapBox=await p.locator('#radar').boundingBox();assert(Math.abs(mapBox.height-radarSize.height)<2,'A forecast outage cannot resize or blank a working map');}
    report.push({width,theme,status:'passed',planning:boxes,renderedMap:radarSize,loadedTiles,forecastRowHeights:rowHeights});console.log('PASS '+engine+' '+width+' '+theme);
   }finally{await s.context.close();}
  }
@@ -86,8 +95,8 @@ async function main(){
    const boxes=await p.evaluate(()=>Object.fromEntries(['h24Card','radarCard','forecastCard'].map(id=>{const r=document.getElementById(id).getBoundingClientRect();return[id,{x:r.x,y:r.y,right:r.right,bottom:r.bottom}];})));
    if(width>1000){
     assert(Math.abs(boxes.h24Card.y-boxes.radarCard.y)<2);
-    assert(Math.abs(boxes.forecastCard.x-boxes.radarCard.x)<2);
-    assert(boxes.forecastCard.y-boxes.radarCard.bottom<=96,'Failure state must not leave a large band above Week');
+    assert(Math.abs(boxes.forecastCard.x-boxes.h24Card.x)<2);
+    assert(Math.abs(boxes.forecastCard.y-boxes.h24Card.bottom-18)<2,'Map failure leaves the forecast column in place');
     assert(boxes.radarCard.bottom-boxes.radarCard.y<400,'Failure panel stays compact');
    }else {assert(boxes.radarCard.y>=boxes.h24Card.bottom);assert(boxes.forecastCard.y>=boxes.radarCard.bottom);}
    assert(await p.locator('#radar a[href="https://radar.weather.gov/station/KLSX/standard"]').isVisible());
@@ -99,12 +108,35 @@ async function main(){
    }
    s.change({...scenario,mapLibrariesDown:false});await p.locator('#radar [data-retry-maps]').click();
    await p.waitForFunction(()=>document.querySelectorAll('#radar .leaflet-tile-loaded').length>0);
-   if(width>1000)await p.waitForFunction(()=>Math.abs(document.getElementById('radarCard').getBoundingClientRect().bottom-document.getElementById('forecastCard').getBoundingClientRect().bottom)<2);
+   if(width>1000)await p.waitForFunction(()=>{const h=radar.getBoundingClientRect().height;return h>=349&&h<=381;});
    assert.equal(await p.locator('#radar .leaflet-map-pane').count(),1);assert.equal(await p.locator('#radar .leaflet-map-pane').evaluate(e=>getComputedStyle(e).position),'absolute');assert(await p.locator('#radar .leaflet-control-zoom').isVisible());assert(await p.locator('#radar .leaflet-tile-loaded').first().isVisible());assert.equal(await p.locator('#radar [data-retry-maps]').count(),0);
    assert.deepEqual(s.errors,[]);
    report.push({width,theme,mapState:'failure and retry',status:'passed',failurePlanning:boxes,recoveredMap:await p.locator('#radar').boundingBox(),recoveredTiles:await p.locator('#radar .leaflet-tile-loaded').count()});console.log('PASS '+engine+' '+width+' '+theme+' failure/retry');
   }finally{await s.context.close();}
  }
+ // Crossing the desktop breakpoint must retain the same cards, controls, state and focus.
+ const responsive=await open(config('responsive planning',{maps:true,river:[20,25,22]}),1440),p=responsive.page;
+ try{
+  await p.waitForFunction(()=>rvMap&&document.querySelector('#radar .leaflet-tile-loaded'));
+  await p.locator('#daily .day').first().click();await p.locator('#riskHelp summary').click();
+  await p.locator('#afdCard .context-toggle').click();
+  await p.evaluate(()=>{window.layoutRefs={map:rvMap,cards:['h24Card','forecastCard','radarCard','riskCard','riversCard'].map(id=>document.getElementById(id)),days:JSON.stringify(smart.days)};});
+  for(const width of [390,768,1000,1001,1180,1920,1440]){
+   await p.locator('#riskHelp summary').focus();await p.setViewportSize({width,height:900});
+   await p.waitForFunction(w=>document.querySelector('.planning-grid').classList.contains('desktop-planning')===(w>1000),width);
+   assert(await p.evaluate(()=>layoutRefs.map===rvMap&&layoutRefs.cards.every(card=>card===document.getElementById(card.id))),'No widget or map instance is replaced');
+   assert.equal(await p.evaluate(()=>JSON.stringify(smart.days)),await p.evaluate(()=>layoutRefs.days));
+   assert.equal(await p.locator('#daily .day').first().getAttribute('aria-expanded'),'true');
+   assert(await p.locator('#riskHelp').evaluate(e=>e.open));assert(await p.locator('#afdCardBody').isHidden());
+   assert(await p.locator('#riskHelp summary').evaluate(e=>e===document.activeElement),'Moved disclosure retains keyboard focus');
+   if(width<=1000){
+    assert.deepEqual(await p.locator('.planning-grid>.card').evaluateAll(rows=>rows.map(r=>r.id)),['h24Card','radarCard','forecastCard']);
+    assert(await p.locator('#riversCard').evaluate(e=>e.parentElement.classList.contains('masonry')));assert(await p.locator('#riskCard').evaluate(e=>e.parentElement.classList.contains('masonry')));
+   }
+   assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  }
+  assert.deepEqual(responsive.errors,[]);report.push({state:'Responsive card identity, focus and disclosure preservation',status:'passed'});console.log('PASS '+engine+' responsive planning');
+ }finally{await responsive.context.close();}
  }finally{await browser.close();}
  if(out)fs.writeFileSync(path.join(out,engine+'-layout-report.json'),JSON.stringify(report,null,2));
  console.log(report.length+' layout/interaction cases passed');
