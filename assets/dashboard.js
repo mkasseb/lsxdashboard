@@ -2582,7 +2582,9 @@ function initStationMap(style){
   stnMap=L.map(el,{zoomControl:true,attributionControl:true,scrollWheelZoom:false,minZoom:5,maxZoom:10}).setView([_cLat,_cLon],7);
   stnMap.attributionControl.setPrefix(false);
   var stnBounds=L.latLngBounds(STN_LIST.map(function(s){ return [s.lat,s.lon]; }));
-  function fitStations(){ if(stnMap) stnMap.fitBounds(stnBounds,{padding:[30,26]}); }
+  // Initial/settled framing is geometry, not a gesture. A same-zoom animated pan can
+  // outlive a failed GL initialization and interrupt Leaflet's partial-map teardown.
+  function fitStations(){ if(stnMap) stnMap.fitBounds(stnBounds,{padding:[30,26],animate:false}); }
   fitStations();
   stnBase=L.maplibreGL({style:mapStylePart(style,"all"),attributionControl:false}).addTo(stnMap);
   stnMap.attributionControl.addAttribution('&copy; <a href="https://openmaptiles.org" target="_blank" rel="noopener">OpenMapTiles</a> Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>');
