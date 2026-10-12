@@ -121,7 +121,8 @@ async function main(){
   await p.locator('#daily .day').first().click();await p.locator('#riskHelp summary').click();
   await p.locator('#afdCard .context-toggle').click();
   await p.evaluate(()=>{window.layoutRefs={map:rvMap,cards:['h24Card','forecastCard','radarCard','riskCard','riversCard'].map(id=>document.getElementById(id)),days:JSON.stringify(smart.days)};});
-  for(const width of [390,768,1000,1001,1180,1920,1440]){
+  // Repeated native resizes expose late map-class mutations during observer delivery.
+  for(let pass=0;pass<3;pass++)for(const width of [390,768,1000,1001,1180,1920,1440]){
    await p.locator('#riskHelp summary').focus();await p.setViewportSize({width,height:900});
    await p.waitForFunction(w=>document.querySelector('.planning-grid').classList.contains('desktop-planning')===(w>1000),width);
    assert(await p.evaluate(()=>layoutRefs.map===rvMap&&layoutRefs.cards.every(card=>card===document.getElementById(card.id))),'No widget or map instance is replaced');

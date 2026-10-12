@@ -4508,7 +4508,15 @@ var _mObs=null, _mObsOpts={childList:true,subtree:true,characterData:true,attrib
     // Pack feed/disclosure growth in the mutation checkpoint. Deferring to another frame
     // leaves absolutely positioned cards overlapping briefly and can send pointerdown
     // to a different card than pointerup, even while the intended summary is visible.
-    if(window.MutationObserver){ _mObs=new MutationObserver(layoutMasonry); _mObs.observe(m,_mObsOpts); }
+    if(window.MutationObserver){
+      _mObs=new MutationObserver(function(records){
+        // GL resize toggles decorative classes inside the fixed map viewport. Packing
+        // during that resize delivery changes shallower card sizes again in WebKit.
+        // Real card sizes still have their ResizeObserver; content/disclosures pack now.
+        if(records.some(function(r){return r.type!=="attributes"||r.attributeName!=="class"||!r.target.closest(".leaflet-pane,.leaflet-control-container");}))layoutMasonry();
+      });
+      _mObs.observe(m,_mObsOpts);
+    }
   }
 })();
 scheduleMasonry();
