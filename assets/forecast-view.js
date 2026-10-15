@@ -66,20 +66,25 @@ function factsFor(d){
 // Stored as a repaintable closure: climate context (per-day normals) usually lands AFTER the
 // forecast, and renderContext calls this again so the "vs Normal" cell can appear.
 loadForecast._paint=function(){
-  var open=[], focused=-1;
+  var open=[], focused=-1,focusDate=null,rangeFocus=typeof NbmRange!=="undefined"?NbmRange.captureView():null;
   [].slice.call(daily.querySelectorAll(".day-item")).forEach(function(it,i){
-    if(it.classList.contains("open")) open.push(i);
-    if(it.contains(document.activeElement)) focused=i;
+    if(it.classList.contains("open")) open.push(it.dataset.forecastDate||i);
+    if(it.contains(document.activeElement)){focused=i;focusDate=it.dataset.forecastDate;}
   });
   daily.innerHTML=paintDays();
   var items=daily.querySelectorAll(".day-item");
   if(typeof NbmRange!=="undefined") NbmRange.forecast(days);
   renderForecastRecords(true);
-  open.forEach(function(i){ if(items[i]) setOpen(items[i],items[i].querySelector(".day"),true); });   // keep expanded rows expanded
+  open.forEach(function(key){var item=typeof key==="number"?items[key]:[].slice.call(items).find(function(it){return it.dataset.forecastDate===key;});if(item)setOpen(item,item.querySelector(".day"),true);});
   // …and keep the keyboard where it was. This repaint fires on its own schedule (whenever
   // the climate normals land), and restoring the open rows but not the focus dumped a
-  // keyboard user onto <body> mid-tab. Same courtesy, same index.
-  if(focused>=0&&items[focused]) items[focused].querySelector(".day").focus();
+  // keyboard user onto <body> mid-tab. Follow the NWS date across row shifts and
+  // restore a surviving model disclosure only after its outer day is visible.
+  var focusItem=focusDate?[].slice.call(items).find(function(it){return it.dataset.forecastDate===focusDate;}):items[focused];
+  if(!(typeof NbmRange!=="undefined"&&NbmRange.restoreViewFocus(rangeFocus))&&focused>=0){
+    focusItem=focusItem||items[Math.min(focused,items.length-1)];
+    if(focusItem)focusItem.querySelector(".day").focus({preventScroll:true});
+  }
   // No fitDayDates() here: this innerHTML write is itself a mutation the masonry observer
   // will see, and the repack it schedules ends in exactly that call — with the card at its
   // final width, which a measurement taken now wouldn't have.
@@ -116,7 +121,7 @@ function paintDays(){ return days.map(function(d){
   // after paint; narrow rows stack the date beneath the name so it stays visible.
   var md=mMonth!=null?'<span class="dnd" aria-hidden="true">'+(mMonth+1)+"/"+mDay+'</span>'
             +'<span class="sr">, '+MONTHS[mMonth]+" "+mDay+'</span>':'';
-  return '<div class="day-item">'
+  return '<div class="day-item" data-forecast-date="'+esc(forecastCalendarKey(main)||"")+'">'
     +'<button class="day" type="button" aria-expanded="false" title="'+esc(main.shortForecast)+'">'
       +'<div><div class="dn"><span aria-hidden="true">'+esc(compactDayName(d.name))+'</span>'
         +'<span class="sr">'+esc(d.name)+'</span>'+md+'</div>'

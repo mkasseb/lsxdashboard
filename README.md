@@ -214,9 +214,15 @@ in [`DESIGN.md`](DESIGN.md#adding-a-card-adding-a-loader).
 ## Supplemental NBM temperature range
 
 Supplemental NBM ranges appear alongside official NWS day/night entries in the forecast card.
-Expand an entry to compare the NWS temperature and exact interval with native NOAA NBM P25/P50/P75
-values and the native 18-hour interval. **NBM model range** spans P25–P75 alongside the official NWS high/low. A single shared note explains the
-18-hour windows; individual rows keep only the ranges. Exact interval differences remain in expanded details.
+**NBM model range** spans P25–P75 alongside the official NWS high/low. Expand a day for the unchanged
+NWS Day/Night forecast, a short explanation of the middle 50% (outcomes outside remain possible),
+and a period-mismatch note only where the matched intervals differ. **Timing & model details** is a
+native keyboard-accessible disclosure for the NWS temperature and exact interval, native NOAA
+NBM P25/P50/P75 values (P50 is the median), and the model's 18-hour interval. Missing model sides are
+explicit and do not suppress a usable side. Unavailable guidance leaves the official forecast usable.
+Disclosure state follows the location and NWS intervals across model refreshes and forecast repaints;
+new dates and locations do not inherit state by row index. All model annotations remain inside the
+existing snapshot-exclusion boundary, so the NWS snapshot schema and lifetime are unchanged.
 The collapsed **About NBM ranges & unmatched windows** section explains the percentiles,
 source age, nearest cell, coverage, and windows that cannot be paired. `/?nbm=0` disables guidance.
 

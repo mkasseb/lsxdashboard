@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
-const {chromium}=require('playwright');
+const playwright=require('playwright');
 const {open,config,setBrowser}=require('./weather-stress-tests');
 const fixture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-quartile-point-recorded.json')));
 const regional=JSON.parse(require('node:zlib').gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-quartile-daily-short-recorded.json.gz'))));
@@ -12,8 +12,11 @@ const modelRoute='**/data/nbm-range.json';
 async function nws(page,f=capture.forecast){await page.evaluate(f=>{renderDailyForecast(f,null);feedUpdate('daily','ready',f.properties.updateTime);},f);}
 async function model(page,data=regional){await page.unroute(modelRoute);await page.route(modelRoute,r=>r.fulfill({json:data}));await page.evaluate(()=>loadNbmRange());}
 async function primary(page){return page.evaluate(()=>({days:JSON.stringify(smart.days),call:document.getElementById('callCard').innerText,rows:Array.from(document.querySelectorAll('#daily .day'),x=>x.textContent),detail:Array.from(document.querySelectorAll('#daily .dd-text'),x=>x.textContent)}));}
+async function expandDay(page,index=0){const day=page.locator('#daily .day').nth(index);if(await day.getAttribute('aria-expanded')!=='true')await day.click();}
+async function expandTiming(page,index=0){await expandDay(page,index);const timing=page.locator('.nbm-timing').nth(index),summary=timing.locator('summary');await summary.focus();if(!await timing.evaluate(e=>e.open))await summary.press('Enter');}
 async function main(){
- const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});setBrowser(browser);
+ const engine=process.env.WEATHER_BROWSER||'chromium';
+ const browser=await playwright[engine].launch({headless:engine!=='firefox',...(engine==='chromium'?{executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']}: {})});setBrowser(browser);
  try{
   for(const width of [320,390,1440])for(const timezone of ['America/Chicago','Asia/Tokyo']){
    const s=await open(config('Recorded authentic NWS and NBM',{now,timezone}),width),p=s.page;
@@ -29,12 +32,31 @@ async function main(){
     assert.match(await p.locator('#nbmWindowHelp').innerText(),/18-hour windows/);
     const day=p.locator('#daily .day').first();await day.focus();await day.press('Enter');
     assert.equal(await day.getAttribute('aria-expanded'),'true');
-    assert.match(await p.locator('.nbm-period-detail').first().innerText(),/NWS high.*Oct 9.*CDT/);
-    assert.match(await p.locator('.nbm-period-detail').first().innerText(),/Different interval \(18 hours\).*Oct 10, 1:00 AM CDT/);
+    const timing=p.locator('.nbm-timing').first(),timingSummary=timing.locator('summary');
+    assert.match(await p.locator('.nbm-period-detail').first().innerText(),/middle 50%.*Higher or lower outcomes remain possible/);
+    assert.match(await p.locator('.nbm-period-detail').first().innerText(),/different 18-hour periods/);
+    assert(!/P25|P50|P75|NWS high|CDT/.test(await p.locator('.nbm-period-detail').first().innerText()),'Technical comparison stays hidden initially');
+    assert.equal(await p.locator('.nbm-comparison').first().isVisible(),false);
+    assert.equal(await p.locator('.nbm-period-detail h3').count(),0,'No redundant temperature guidance heading');
+    for(const theme of ['dark','light']){
+     await p.evaluate(t=>{applyTheme(t);layoutMasonry();},theme);await p.clock.runFor(500);
+     assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+     if(process.env.NBM_ARTIFACTS){fs.mkdirSync(process.env.NBM_ARTIFACTS,{recursive:true});await p.locator('#forecastCard').screenshot({style:'.jump-wrap,.skip{visibility:hidden !important}',path:path.join(process.env.NBM_ARTIFACTS,`recorded-simple-${width}-${timezone.replace('/','-')}-${theme}.png`)});}
+    }
     await p.evaluate(()=>loadNbmRange());
     assert.equal(await day.getAttribute('aria-expanded'),'true');assert(await day.evaluate(e=>e===document.activeElement));
     await p.evaluate(()=>loadForecast._paint());assert.equal(await p.locator('#daily .day').first().getAttribute('aria-expanded'),'true');
     assert(await p.locator('#daily .day').first().evaluate(e=>e===document.activeElement));
+    await timingSummary.focus();await timingSummary.press('Enter');
+    assert(await timing.evaluate(e=>e.open));assert(await p.locator('.nbm-comparison').first().isVisible());
+    assert.match(await timing.innerText(),/NWS high.*Oct 9.*CDT/);
+    assert.match(await timing.innerText(),/Different interval \(18 hours\).*Oct 10, 1:00 AM CDT/);
+    assert.match(await timing.innerText(),/median \(P50\)/);
+    await model(p);assert(await timing.evaluate(e=>e.open));assert(await timingSummary.evaluate(e=>e===document.activeElement));
+    await p.evaluate(()=>loadForecast._paint());assert(await timing.evaluate(e=>e.open));assert(await timingSummary.evaluate(e=>e===document.activeElement));
+    await timingSummary.press('Space');assert.equal(await timing.evaluate(e=>e.open),false);
+    assert.equal(await p.locator('.nbm-comparison').first().isVisible(),false);
+    await timingSummary.press('Enter');
     const summary=p.locator('#nbmInfo summary');await summary.focus();await summary.press('Enter');
     assert.match(await p.locator('#nbmInfoBody').innerText(),/P25 to P75, the middle 50%.*25%.*25% above.*outside remain possible/);
     await p.evaluate(()=>loadNbmRange());assert(await summary.evaluate(e=>e===document.activeElement));
@@ -70,7 +92,37 @@ async function main(){
     await nws(p,zeroNws);await model(p,zeroModel);
     assert.match(await p.locator('.nbm-inline').first().innerText(),/High 0–0°F/);
     assert.match(await p.locator('.nbm-period-detail').first().textContent(),/NWS high 0°F/);
-    assert.match(await p.locator('.nbm-period-detail').first().textContent(),/P50 0°F/);
+    assert.match(await p.locator('.nbm-period-detail').first().textContent(),/median \(P50\) 0°F/);
+    // A single missing native side is explicit; it cannot erase the other valid side.
+    const partial=structuredClone(fixture);partial.periods=partial.periods.filter(x=>x.kind!=='TMIN');partial.missingHours=[24];
+    await nws(p);await model(p,partial);await expandDay(p);
+    assert.match(await p.locator('.nbm-inline').first().innerText(),/High [\s\S]*Low unavailable/);
+    assert.match(await p.locator('.nbm-period-detail').first().textContent(),/Low model range unavailable/);
+    assert.equal(await p.locator('.nbm-comparison .nbm-official').filter({hasText:'NWS low'}).count(),0);
+    // Exact and mixed intervals use the actual align() result for the visible period note.
+    const exact=structuredClone(capture.forecast);
+    for(const n of exact.properties.periods){const m=fixture.periods.find(x=>x.kind===(n.isDaytime?'TMAX':'TMIN')&&Math.abs(Date.parse(x.start)-Date.parse(n.startTime))<2*3600000);if(m){n.startTime=m.start;n.endTime=m.end;}}
+    await nws(p,exact);await model(p,fixture);await expandDay(p);
+    assert.equal(await p.locator('.nbm-period-note').count(),0,'Identical intervals do not claim a mismatch');
+    assert.match(await p.locator('.nbm-window-note').first().textContent(),/Same interval/);
+    exact.properties.periods.find(x=>!x.isDaytime).endTime=capture.forecast.properties.periods.find(x=>!x.isDaytime).endTime;
+    await nws(p,exact);
+    assert.match(await p.locator('.nbm-period-note').first().textContent(),/Some NBM periods differ/);
+    await nws(p);await model(p);
+    // State follows a surviving calendar date when its row moves, never the index.
+    await expandTiming(p,1);
+    const second=p.locator('.nbm-timing').nth(1);
+    const movedDate=await second.getAttribute('data-nbm-date'),shifted=structuredClone(capture.forecast);shifted.properties.periods=shifted.properties.periods.slice(2);
+    await nws(p,shifted);
+    assert.equal(await p.locator('.nbm-timing').first().getAttribute('data-nbm-date'),movedDate);
+    assert(await p.locator('.nbm-timing').first().evaluate(e=>e.open));assert(await p.locator('.nbm-timing summary').first().evaluate(e=>e===document.activeElement));
+    await nws(p);await model(p);
+    // Losing a focused model window returns focus to the surviving NWS day button.
+    await expandTiming(p);
+    await model(p,{...fixture,run:'2000-01-01T00:00:00Z'});
+    assert.equal(await p.locator('.nbm-timing').count(),0);assert(await p.locator('#daily .day').first().evaluate(e=>e===document.activeElement));
+    assert.match(await p.locator('.nbm-range-note').first().innerText(),/unavailable/);
+    await model(p);assert.equal(await timing.evaluate(e=>e.open),true,'A transient model outage retains view preference for the same NWS intervals');
     // Model before official periods: unpaired until an independently loaded forecast arrives.
     await p.evaluate(()=>{NbmRange.forecast([]);document.getElementById('daily').innerHTML='';});await model(p);
     assert.equal(await p.locator('.nbm-inline').count(),0);assert.equal(await p.locator('#nbmInfoBody li').count(),6);
@@ -103,7 +155,10 @@ async function main(){
     assert.equal(await p.locator('.nbm-inline').count(),7);assert.equal(await p.locator('.nbm-comparison').count(),14);
     assert.equal(await p.locator('.nbm-inline .nbm-window-note').count(),0);
     const last=p.locator('#daily .day').last();await last.focus();await last.press('Enter');
-    assert.match(await p.locator('.nbm-period-detail').last().innerText(),/Different interval \(18 hours\)/);
+    assert.equal(await p.locator('.nbm-timing').last().evaluate(e=>e.open),false,'New dates/location do not inherit a previous disclosure');
+    await p.locator('.nbm-timing summary').last().focus();await p.locator('.nbm-timing summary').last().press('Enter');
+    assert.match(await p.locator('.nbm-timing').last().innerText(),/Different interval \(18 hours\)/);
+    await last.focus();
     await last.press('Enter');assert.equal(await last.getAttribute('aria-expanded'),'false');
     for(const theme of ['dark','light']){
      await p.evaluate(t=>{applyTheme(t);layoutMasonry();},theme);await p.clock.runFor(500);

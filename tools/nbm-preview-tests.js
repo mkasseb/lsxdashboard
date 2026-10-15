@@ -55,9 +55,9 @@ async function compare(page,data){
   const a=NbmRange.align(smart.days,r.periods||[],Date.now());
   return {location:{name:current.name,lat:current.lat,lon:current.lon},nwsStatus:feedChecks.daily.status,sourceAgeHours:(Date.now()-Date.parse(data.run))/3600000,status:r.status,cell:r.cell,official:smart.days,matches:a.matches.map(m=>({
    official:'NWS '+(m.part==='day'?'high ':'low ')+m.nws.temperature+'°F · '+NbmRange.local(m.nws.startTime)+' – '+NbmRange.local(m.nws.endTime),
-   model:'NBM '+(m.part==='day'?'maximum':'minimum')+' · P25 '+Math.round(m.nbm.p25)+'°F · P50 '+Math.round(m.nbm.p50)+'°F · P75 '+Math.round(m.nbm.p75)+'°F',
+   model:'NBM '+(m.part==='day'?'maximum':'minimum')+' · P25 '+Math.round(m.nbm.p25)+'°F · median (P50) '+Math.round(m.nbm.p50)+'°F · P75 '+Math.round(m.nbm.p75)+'°F',
    interval:(m.exact?'Same interval: ':'Different interval (18 hours): ')+NbmRange.local(m.nbm.start)+' – '+NbmRange.local(m.nbm.end)
-  })),actual:Array.from(document.querySelectorAll('.nbm-comparison'),r=>({official:r.children[0].textContent,model:r.children[1].textContent,interval:r.children[2].textContent}))};
+  })),actual:Array.from(document.querySelectorAll('.nbm-comparison'),r=>({official:r.querySelector('.nbm-official').textContent,model:r.querySelector('.nbm-model').textContent,interval:r.querySelector('.nbm-window-note').textContent}))};
  },data);
  assert(['ready','partial'].includes(result.nwsStatus),'Live NWS forecast must load');
  assert.deepEqual(result.actual,result.matches,'Rendered comparison matches selected live NWS and native NBM windows');

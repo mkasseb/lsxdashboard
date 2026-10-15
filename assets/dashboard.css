@@ -1599,6 +1599,9 @@
 .nbm-label{font-weight:700}.nbm-band{white-space:nowrap}.nbm-window-note{color:var(--muted);font-size:.75rem}
 .nbm-period-detail{padding:10px 0;border-top:1px solid var(--border)}
 .nbm-period-detail h3,#nbmInfo h3{font-size:.85rem;margin:0 0 8px}
+.nbm-range-note,.nbm-period-note{font-size:.78rem;line-height:1.5;color:var(--muted);margin:0 0 7px}
+.nbm-timing summary{min-height:44px;display:flex;align-items:center;cursor:pointer;color:var(--accent);font-size:.8rem;font-weight:600}
+.nbm-timing summary::before{content:'▸';margin-right:6px}.nbm-timing[open] summary::before{content:'▾'}
 .nbm-comparison{margin-bottom:12px}.nbm-comparison p{margin:4px 0;font-size:.8rem;line-height:1.45;overflow-wrap:anywhere}
 .nbm-official{font-weight:600}
 #nbmInfo{border-top:1px solid var(--border);margin-top:10px;padding-top:8px;color:var(--muted);font-size:.78rem;line-height:1.45}
