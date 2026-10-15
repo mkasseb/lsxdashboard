@@ -214,13 +214,14 @@ function renderForecastRecords(force){
   var daily=document.getElementById("daily"),station=document.getElementById("forecastRecordStation"),normalStation=document.getElementById("forecastNormalStation"),body=document.getElementById("forecastRecordSourceBody");
   if(!daily||!station||!normalStation||!body||typeof ctx==="undefined"||typeof smart==="undefined") return;
   removeLegacyNormalComparisons(daily);
+  // Retire prior collapsed climate markup even before a restored forecast has day data.
+  daily.querySelectorAll('.record-inline,.normal-inline').forEach(function(line){line.remove();});
   var same=ctx.location===locationKey(current)&&ctx.recordAsOf===ctxTodayKey(),source=same?ctx.recordSource:null;
   var normalSource=same&&ctx.normalPeriod==="1991-2020"?ctx.normalSource:null;
-  var rows=[].slice.call(daily.querySelectorAll(".day-item")),markup=[],details=[],normalDetails=[],comparisons=[],counts=[];
+  var rows=[].slice.call(daily.querySelectorAll(".day-item")),details=[],normalDetails=[],comparisons=[],counts=[];
   (smart.days||[]).slice(0,7).forEach(function(day){
     var period=day.day||day.night,date=forecastCalendarKey(period);
     if(!date){
-      markup.push('<span class="normal-label">Normal</span> <span>Calendar date unavailable</span>');
       normalDetails.push('<h3>Daily normals unavailable</h3><p>This forecast period does not supply a usable calendar date.</p>');
       comparisons.push("");
       details.push('<h3>Daily records unavailable</h3><p>This forecast period does not supply a usable calendar date.</p>');
@@ -231,10 +232,6 @@ function renderForecastRecords(force){
     if(n) normalSource=n.source;
     comparisons.push(forecastNormalComparison(day,n));
     var hi=r&&r.hiCount>=min?r.recHi:null,lo=r&&r.loCount>=min?r.recLo:null;
-    function normalValue(label,value){return '<span class="normal-value">'+label+' '+(value!=null?'<b>'+esc(String(Math.round(value)))+'°</b>':'unavailable')+'</span>';}
-    markup.push('<span class="normal-label">Normal<span class="sr"> for '+esc(md)+'</span></span> '
-      +(n?normalValue("High",n.hi)+'<span class="normal-dot" aria-hidden="true">·</span>'+normalValue("Low",n.lo)
-        :'<span>'+esc(md)+' normals unavailable</span>'));
     normalDetails.push('<h3>Daily normals for '+esc(md)+'</h3><p>'
       +'Normal high: '+(n&&n.hi!=null?'<b>'+esc(String(n.hi))+'°F</b>':'unavailable')
       +' · normal low: '+(n&&n.lo!=null?'<b>'+esc(String(n.lo))+'°F</b>':'unavailable')+'.</p>'
@@ -267,7 +264,7 @@ function renderForecastRecords(force){
   var normalStationText=normalSource?'Normals: '+shortStn(normalSource.name||normalSource.sid)+(normalId?' ('+normalId+')':'')+' · 1991–2020':'Normals: 1991–2020 · station data unavailable';
   var sourceHtml='<p>Normal daily high and low temperatures in °F are NOAA NCEI’s 1991–2020 calendar-date normals, supplied by RCC ACIS. They are a climate baseline, separate from the NWS forecast, NBM range and historical extremes. '
     +(normalSource?'Normal station: <b>'+esc(normalSource.name||normalSource.sid)+'</b> ('+esc(normalId||normalSource.sid)+'). ':'Normal station data unavailable. ')
-    +'Rows round normals to the nearest degree; day details retain the supplied tenths. Normals and records use each row’s local calendar date; an NWS overnight low can occur the next morning. Station climate does not describe the selected location’s exact GPS point. Missing values and checks over 12 hours old are withheld.</p>'
+    +'Day details retain the supplied tenths; the forecast comparison rounds normals to the nearest degree. Normals and records use each row’s local calendar date; an NWS overnight low can occur the next morning. Station climate does not describe the selected location’s exact GPS point. Missing values and checks over 12 hours old are withheld.</p>'
     +'<p>'+officialSourceLink("https://www.ncei.noaa.gov/products/land-based-station/us-climate-normals","NOAA climate normals and 1991–2020 baseline","NOAA climate normals ↗")+'</p>'
     +'<p>Observed daily maximum highs and minimum lows in °F from RCC ACIS appear in the expanded day details. These are this station’s calendar-date records; station observations do not describe the selected location’s exact GPS point. The airport series is kept separate from NWS area records.</p>';
   if(source){
@@ -279,22 +276,19 @@ function renderForecastRecords(force){
   sourceHtml+='<p>Only completed dates before '+esc(ctxTodayKey())+' are included. Archive spans can contain gaps. All tied record years appear in each day’s details; records are withheld when checks are over 12 hours old.</p><ul>'+counts.join("")+'</ul>'
     +'<p>'+officialSourceLink("https://www.rcc-acis.org/ACISWSdoc.html","ACIS source documentation","ACIS source documentation ↗")+'</p>'
     +'<p>'+officialSourceLink("https://www.weather.gov/lsx/climate","NWS LSX climate and area records","NWS LSX climate &amp; area records ↗")+'</p>';
-  var signature=JSON.stringify([locSeq,stationText,normalStationText,sourceHtml,markup,details,normalDetails,comparisons,rows.length]);
+  var signature=JSON.stringify([locSeq,stationText,normalStationText,sourceHtml,details,normalDetails,comparisons,rows.length]);
   if(!force&&renderForecastRecords.signature===signature) return;
   renderForecastRecords.signature=signature;
   station.textContent=stationText;
   normalStation.textContent=normalStationText;
   if(body.innerHTML!==sourceHtml) body.innerHTML=sourceHtml;
   rows.forEach(function(row,index){
-    if(!markup[index]) return;
-    var old=row.querySelector('.record-inline');if(old) old.remove();
-    var line=row.querySelector('.normal-inline'),detail=row.querySelector('.record-detail'),normalDetail=row.querySelector('.normal-detail'),comparison=row.querySelector('.normal-comparison');
+    if(!normalDetails[index]) return;
+    var detail=row.querySelector('.record-detail'),normalDetail=row.querySelector('.normal-detail'),comparison=row.querySelector('.normal-comparison');
     if(comparisons[index]){
       if(!comparison){comparison=document.createElement('div');comparison.className='dd-item normal-comparison';row.querySelector('.dd-grid').appendChild(comparison);}
       if(comparison.innerHTML!==comparisons[index]) comparison.innerHTML=comparisons[index];
     }else if(comparison) comparison.remove();
-    if(!line){line=document.createElement('div');line.className='normal-inline';(row.querySelector('.nbm-inline')||row.querySelector('.day')).after(line);}
-    if(line.innerHTML!==markup[index]) line.innerHTML=markup[index];
     if(!normalDetail){normalDetail=document.createElement('div');normalDetail.className='normal-detail';row.querySelector('.day-detail').appendChild(normalDetail);}
     if(normalDetail.innerHTML!==normalDetails[index]) normalDetail.innerHTML=normalDetails[index];
     if(!detail){detail=document.createElement('div');detail.className='record-detail';row.querySelector('.day-detail').appendChild(detail);}

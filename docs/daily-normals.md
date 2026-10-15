@@ -1,8 +1,9 @@
 # Seven-day daily normals
 
-The collapsed forecast rows show the normal high and low for their calendar date directly below
-NBM guidance. Expanding a day shows its supplied normal values, station, baseline and check time,
-then the observed record high and low with **every tied year**. The NWS forecast remains primary;
+Collapsed forecast rows show the official NWS forecast and optional NBM guidance. Expanding a day
+shows its calendar-date normal high and low, station, baseline and check time, then the observed
+record high and low with **every tied year**. Both climate sources stay inside the expanded details.
+The NWS forecast remains primary;
 NBM quartiles, source windows and freshness rules are unchanged.
 
 ## Verified source and station
@@ -10,7 +11,8 @@ NBM quartiles, source windows and freshness rules are unchanged.
 The existing weekly ACIS normal feed is reused. The
 [ACIS documentation](https://www.rcc-acis.org/ACISWSdoc.html) defines `maxt`/`mint` as Fahrenheit and
 `normal: "91"` as NOAA NCEI's **1991–2020** normal product (`"1"` is its documented alias). Requests
-pin `91` and `prec: 1`, retaining supplied tenths in cached facts and expanded details; compact rows
+pin `91` and `prec: 1`, retaining supplied tenths in cached facts and expanded details;
+expanded forecast comparisons
 round to whole degrees. Normals are official adjusted climatological values, not historical record
 extrema or a dashboard average of a small observation sample. Record coverage thresholds do not
 apply to normal values.
@@ -63,6 +65,8 @@ only missing record and normal dates and preserves original check times. Values 
 12 hours, after local midnight or a location change, or for future check timestamps. Old responses
 cannot update newer location/date/request state. Normals and records are removed from saved NWS
 HTML along with model context; a later snapshot timestamp cannot renew optional climate facts.
+Legacy collapsed normal and record rows
+are retired even before restored NWS forecast data arrives.
 
 ## Validation
 

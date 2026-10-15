@@ -52,13 +52,14 @@ async function main(){
   for(const width of [1180,1440,1920,390,768,1000,1001]){
    await page.setViewportSize({width,height:1000});await settled(page);const g=await geometry(page);verifyGeometry(g);
    assert(await page.evaluate(()=>previewMap===rvMap&&previewCards.every(card=>card===document.getElementById(card.id))&&previewDays===JSON.stringify(smart.days)),'Responsive placement preserves actual cards, map and forecast');
-   assert.equal(await page.locator('#daily .normal-inline').count(),7);
-   assert(await page.locator('.normal-inline').evaluateAll(rows=>rows.every(e=>e.previousElementSibling.classList.contains('nbm-inline')||e.previousElementSibling.classList.contains('day'))),'Each normal row stays beneath its own NBM or NWS row');
-   const primary=await page.locator('#daily .day').allTextContents(),normals=await page.locator('.normal-inline').allTextContents();
+   assert.equal(await page.locator('#daily .normal-inline,.record-inline').count(),0);assert.equal(await page.locator('.normal-detail,.record-detail').count(),14);
+   assert(await page.locator('.normal-detail,.record-detail').evaluateAll(details=>details.every(e=>e.closest('.day-detail'))),'Climate values remain in expanded day details');
+   assert(await page.locator('.nbm-inline').evaluateAll(rows=>rows.every(e=>e.previousElementSibling.classList.contains('day'))),'Collapsed NWS and NBM stay adjacent');
+   const primary=await page.locator('#daily .day').allTextContents(),normals=await page.locator('.normal-detail').allTextContents();
    for(const theme of ['light','dark']){
     await page.evaluate(t=>applyTheme(t),theme);await settled(page);verifyGeometry(await geometry(page));
     if(width>1000)assertPlanningGap(await page.evaluate(planningGapGeometry));
-    assert.deepEqual(await page.locator('#daily .day').allTextContents(),primary);assert.deepEqual(await page.locator('.normal-inline').allTextContents(),normals);
+    assert.deepEqual(await page.locator('#daily .day').allTextContents(),primary);assert.deepEqual(await page.locator('.normal-detail').allTextContents(),normals);
     if([1180,1440,1920,390,768].includes(width)){
      await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:path.join(out,`live-${width}-${theme}-page.png`),fullPage:true});
      if(width>1000)await page.locator('.planning-grid').screenshot({path:path.join(out,`live-${width}-${theme}-planning.png`),style:'.jump-wrap,.skip{visibility:hidden !important}'});

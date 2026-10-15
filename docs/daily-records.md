@@ -1,7 +1,8 @@
 # Seven-day observed station records
 
-Each expanded forecast day shows its calendar-date record high and low. The collapsed row now
-shows its [daily normal high and low](daily-normals.md) beneath the optional NBM range. Records are
+Each expanded forecast day shows its calendar-date record high and low alongside its
+[daily normal high and low](daily-normals.md). Collapsed rows keep the NWS forecast and optional
+NBM range. Records are
 the maximum of observed daily `maxt` and minimum of observed daily `mint` for
 that month/day at the selected climate station. They are Fahrenheit observations, separate from
 1991–2020 normals, NWS forecast temperatures and NBM quartiles. NWS remains the primary forecast.

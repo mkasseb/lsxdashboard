@@ -7,7 +7,6 @@ const {open,config,setBrowser}=require('./weather-stress-tests'),fixture=require
 const model=JSON.parse(require('node:zlib').gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-daily-records-20261011-recorded.json.gz'))));
 const now=Date.parse(model.retrievedAt),out=process.env.RECORD_ARTIFACTS;
 const normals=require('./fixtures/weather/daily-normals-recorded.json'),normalReplay=normals.requests.find(r=>r.window==='records-replay').payload;
-const normalExpected=[[72,47],[71,47],[71,46],[70,46],[70,46],[70,45],[69,45]];
 const expected=[[94,30],[88,31],[89,33],[89,30],[89,30],[89,32],[91,29]];
 const params=r=>JSON.parse(new URLSearchParams(r.postData()||'').get('params')||'{}');
 async function primary(p){return p.evaluate(()=>({days:JSON.stringify(smart.days),rows:[...document.querySelectorAll('#daily .day')].map(x=>x.textContent),nbm:[...document.querySelectorAll('.nbm-inline')].map(x=>x.textContent),brief:document.getElementById('callRow').textContent}));}
@@ -47,19 +46,23 @@ async function main(){
      renderDailyForecast(f,null);feedUpdate('daily','ready',f.properties.updateTime);
     },fixture.forecast);
     await p.evaluate(()=>loadClimateContext());await p.evaluate(()=>loadNbmRange());
-    assert.equal(await p.locator('#daily .day-item').count(),7);assert.equal(await p.locator('.normal-inline').count(),7);assert.equal(await p.locator('.record-inline').count(),0);assert.equal(await p.locator('.nbm-inline').count(),7);
+    assert.equal(await p.locator('#daily .day-item').count(),7);assert.equal(await p.locator('.normal-inline').count(),0);assert.equal(await p.locator('.normal-detail').count(),7);assert.equal(await p.locator('.record-inline').count(),0);assert.equal(await p.locator('.nbm-inline').count(),7);
     assert.match(await p.locator('#forecastRecordStation').textContent(),/St Louis Lambert.*KSTL.*since 1930/);
-    assert(await p.locator('.normal-inline').evaluateAll(lines=>lines.every(line=>line.previousElementSibling.classList.contains('nbm-inline'))),'Every normal row is directly below its NBM range');
+    assert(await p.locator('.normal-detail,.record-detail').evaluateAll(details=>details.every(detail=>detail.closest('.day-detail'))),'Both climate sources stay in day details');
+    assert.equal(await p.locator('.normal-detail').first().isVisible(),false);assert.equal(await p.locator('#forecastNormalStation').isVisible(),false);
+    assert(await p.locator('.nbm-inline').evaluateAll(lines=>lines.every(line=>line.previousElementSibling.classList.contains('day'))),'NWS and NBM stay adjacent in collapsed rows');
     for(let i=0;i<7;i++){
-     assert.match(await p.locator('.normal-inline').nth(i).textContent(),new RegExp(`High ${normalExpected[i][0]}°.*Low ${normalExpected[i][1]}°`,'s'));
+     assert.deepEqual(await p.locator('.normal-detail').nth(i).locator('b').allTextContents(),normalReplay.data[i].slice(1,3).map(v=>Number(v)+'°F'));
      assert.match(await p.locator('.record-detail').nth(i).textContent(),new RegExp(`Highest daily high: ${expected[i][0]}°F.*Lowest daily low: ${expected[i][1]}°F`,'s'));
     }
     assert.match(await p.locator('#forecastNormalStation').textContent(),/Spirit.*KSUS.*1991–2020/);
     assert.match(await p.locator('.normal-detail').first().textContent(),/71\.6°F.*46\.9°F.*1991–2020.*SPIRIT.*KSUS/s);
     assert.equal(await p.locator('.normal-comparison').count(),7);assert.match(await p.locator('.normal-comparison').first().textContent(),/vs Normal \(72°\/47°\)/);
     assert.match(await p.locator('.record-detail').nth(1).textContent(),/1947, 2024/);
+    assert.equal(await p.locator('.normal-detail').nth(1).isVisible(),false);assert.equal(await p.locator('.record-detail').nth(1).isVisible(),false);
     const official=await primary(p),day=p.locator('#daily .day').nth(1);await day.focus();await day.press('Enter');
     assert.match(await p.locator('.record-detail').nth(1).textContent(),/1947, 2024/);
+    assert.equal(await p.locator('.normal-detail').nth(1).isVisible(),true);assert.equal(await p.locator('.record-detail').nth(1).isVisible(),true);
     assert.match(await p.locator('.record-detail').nth(1).textContent(),/Oct 12, 6 PM.*Oct 13, 6 AM.*following morning/s);
     assert(await day.evaluate(e=>e===document.activeElement));
     const count=calls.length,checked=await p.evaluate(()=>ctx.recordsByDate['2026-10-11'].checkedAt);
@@ -90,16 +93,20 @@ async function main(){
      assert(await p.locator('#daily .day').evaluateAll(rows=>rows.every(row=>row.getBoundingClientRect().height>=44)));
      assert(await p.locator('#daily .dnd').evaluateAll(dates=>dates.length===7&&dates.every(date=>date.getBoundingClientRect().height>0)),'Each visible row keeps its calendar date, including holidays on phones');
      if(out){fs.mkdirSync(out,{recursive:true});await p.locator('#forecastCard').screenshot({path:path.join(out,`records-${width}-${timezone.replace('/','-')}-${theme}.png`),style:'.jump-wrap,.skip{visibility:hidden !important}'});}
+     await day.press('Enter');assert.equal(await p.locator('.normal-detail').nth(1).isVisible(),true);assert.equal(await p.locator('.record-detail').nth(1).isVisible(),true);
+     if(out)await p.locator('#forecastCard').screenshot({path:path.join(out,`records-${width}-${timezone.replace('/','-')}-${theme}-expanded.png`),style:'.jump-wrap,.skip{visibility:hidden !important}'});
+     await day.press('Enter');assert.equal(await p.locator('.normal-detail').nth(1).isVisible(),false);
     }
     await p.evaluate(()=>{document.documentElement.style.fontSize='200%';layoutMasonry();});await p.clock.runFor(500);assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));await p.evaluate(()=>{document.documentElement.style.fontSize='';layoutMasonry();});
     await p.evaluate(()=>{
      document.querySelector('#daily .dd-grid').insertAdjacentHTML('beforeend','<div class="dd-item"><div class="k">vs Normal (999°/888°)</div><div class="v">+777°</div></div>');
+     document.querySelector('#daily .day').insertAdjacentHTML('afterend','<div class="normal-inline">Normal high 999°</div>');
      snapSafeSeq=locSeq;saveSnapshot();
     });
     const saved=await p.evaluate(()=>JSON.parse(localStorage.getItem(SNAP_KEY)).parts.daily);assert(!/record-inline|record-detail|normal-inline|normal-detail|normal-comparison|vs Normal|nbm-/.test(saved),'Supplemental and legacy comparison values cannot enter saved NWS HTML');
     const legacy=await p.evaluate(()=>{
      const days=smart.days;smart.days=[];renderForecastRecords();
-     const stale=[...document.querySelectorAll('#daily .dd-item')].filter(e=>e.textContent.includes('999°')).length;
+     const stale=[...document.querySelectorAll('#daily .dd-item,.normal-inline')].filter(e=>e.textContent.includes('999°')).length;
      smart.days=days;renderForecastRecords(true);return stale;
     });assert.equal(legacy,0,'Old untagged comparisons retire even before restored NWS rows have smart.days');
     control.fail='10-14';await p.evaluate(()=>{localStorage.removeItem(CTX_KEY);return loadClimateContext();});
@@ -108,13 +115,13 @@ async function main(){
     delete control.fail;control.lowMissing='10-15';await p.evaluate(()=>{localStorage.removeItem(CTX_KEY);return loadClimateContext();});
     assert.match(await p.locator('.record-detail').nth(4).textContent(),/Highest daily high: 89°.*Lowest daily low: unavailable/s);delete control.lowMissing;
     control.wrongStation=true;await p.evaluate(()=>{localStorage.removeItem(CTX_KEY);return loadClimateContext();});
-    assert.equal(await p.locator('.record-detail b').count(),0,'A response for another station cannot produce records');assert.equal(await p.locator('.normal-inline b').count(),14,'Record failures leave normals available');assert.deepEqual(await primary(p),official);delete control.wrongStation;
+    assert.equal(await p.locator('.record-detail b').count(),0,'A response for another station cannot produce records');assert.equal(await p.locator('.normal-detail b').count(),14,'Record failures leave normals available');assert.deepEqual(await primary(p),official);delete control.wrongStation;
     // Normal outages, missing sides and mismatched stations stay separate from records/NBM.
     for(const controlKey of ['normalFail','normalLowMissing','normalWrongStation']){
      control[controlKey]=true;await p.evaluate(()=>{localStorage.removeItem(CTX_KEY);return loadClimateContext();});
-     const line=p.locator('.normal-inline').first();
-     if(controlKey==='normalLowMissing')assert.match(await line.textContent(),/High 72°.*Low unavailable/s);
-     else {assert.equal(await p.locator('.normal-inline b').count(),0);assert.equal(await p.locator('.normal-comparison').count(),0);assert.match(await line.textContent(),/normals unavailable/);}
+     const line=p.locator('.normal-detail').first();
+     if(controlKey==='normalLowMissing')assert.match(await line.textContent(),/Normal high: 71\.6°F.*normal low: unavailable/s);
+     else {assert.equal(await p.locator('.normal-detail b').count(),0);assert.equal(await p.locator('.normal-comparison').count(),0);assert.match(await line.textContent(),/Normal high: unavailable.*normal low: unavailable/s);}
      assert.equal(await p.locator('.record-detail b').count(),14);assert.deepEqual(await primary(p),official);delete control[controlKey];
     }
     control.normalHang=true;release=null;
@@ -127,7 +134,7 @@ async function main(){
     // deadline; advancing earlier would expire their intercepted responses too.
     await p.waitForFunction(()=>normalRecordSettled===7);
     assert.deepEqual(await primary(p),official);await p.clock.runFor(20001);await p.evaluate(()=>window.normalJob);
-    release();delete control.normalHang;await p.evaluate(()=>{acisPost=normalPostOriginal;});assert.equal(await p.locator('.normal-inline b').count(),0);assert.equal(await p.locator('.record-detail b').count(),14);assert.deepEqual(await primary(p),official,'Normal timeout leaves NWS/NBM and records intact');
+    release();delete control.normalHang;await p.evaluate(()=>{acisPost=normalPostOriginal;});assert.equal(await p.locator('.normal-detail b').count(),0);assert.equal(await p.locator('.record-detail b').count(),14);assert.deepEqual(await primary(p),official,'Normal timeout leaves NWS/NBM and records intact');
     // The real request deadline is independent of the forecast and model loaders.
     control.hang='10-14';release=null;
     await p.evaluate(()=>{localStorage.removeItem(CTX_KEY);window.recordJob=loadClimateContext();});
@@ -137,14 +144,14 @@ async function main(){
     // Expiry is per-record; restoring a later saved-view timestamp cannot renew it.
     await p.evaluate(()=>{localStorage.removeItem(CTX_KEY);return loadClimateContext();});
     const beforeAge=await p.evaluate(()=>ctx.recordsByDate['2026-10-11'].checkedAt),lastCheck=await p.evaluate(()=>Math.max(...Object.values(ctx.recordsByDate).map(r=>r.checkedAt)));
-    await p.clock.setFixedTime(new Date(beforeAge+12*3600000+1));await p.evaluate(()=>freshnessCheck());assert.equal(await p.locator('.record-detail').first().locator('b').count(),0);assert.equal(await p.locator('.normal-inline').first().locator('b').count(),0);
-    await p.clock.setFixedTime(new Date(lastCheck+12*3600000+1));await p.evaluate(()=>freshnessCheck());assert.equal(await p.locator('.record-detail b').count(),0);assert.equal(await p.locator('.normal-inline b').count(),0);assert.equal(await p.locator('.normal-comparison').count(),0,'Expired normal comparisons cannot survive in expanded details');
+    await p.clock.setFixedTime(new Date(beforeAge+12*3600000+1));await p.evaluate(()=>freshnessCheck());assert.equal(await p.locator('.record-detail').first().locator('b').count(),0);assert.equal(await p.locator('.normal-detail').first().locator('b').count(),0);
+    await p.clock.setFixedTime(new Date(lastCheck+12*3600000+1));await p.evaluate(()=>freshnessCheck());assert.equal(await p.locator('.record-detail b').count(),0);assert.equal(await p.locator('.normal-detail b').count(),0);assert.equal(await p.locator('.normal-comparison').count(),0,'Expired normal comparisons cannot survive in expanded details');
     assert.equal(await p.evaluate(()=>ctx.recordsByDate['2026-10-11'].checkedAt),beforeAge);
     // An old location response must not label or fill the new location's forecast.
     await p.clock.setFixedTime(new Date(now));control.hang='10-11';release=null;
     await p.evaluate(()=>{localStorage.removeItem(CTX_KEY);window.recordJob=loadClimateContext();});while(!release)await new Promise(r=>setTimeout(r,5));
     await p.evaluate(()=>{locSeq++;current={...current,lat:38.95,lon:-91};resetLocationState();clearLocationUI();});
-    release();await p.evaluate(()=>window.recordJob);assert.equal(await p.locator('.record-detail b').count(),0);assert(!/Lambert/.test(await p.locator('#forecastRecordStation').textContent()));assert.equal(await p.locator('.normal-inline b').count(),0);assert(!/Spirit/.test(await p.locator('#forecastNormalStation').textContent()));
+    release();await p.evaluate(()=>window.recordJob);assert.equal(await p.locator('.record-detail b').count(),0);assert(!/Lambert/.test(await p.locator('#forecastRecordStation').textContent()));assert.equal(await p.locator('.normal-detail b').count(),0);assert(!/Spirit/.test(await p.locator('#forecastNormalStation').textContent()));
     assert.deepEqual(session.errors,[]);console.log('PASS daily normals and expanded records '+width+' '+timezone+' both themes, partial/timeout/stale/wrong-station isolation, cache provenance and location race');
    }finally{if(release)release();await session.context.close();}
   }
@@ -163,12 +170,12 @@ async function main(){
     });
     await p.evaluate(()=>{stopSchedule();_climStationCache={};_deepCache={};localStorage.removeItem(CTX_KEY);return loadClimateContext();});
     assert.deepEqual(await p.evaluate(()=>smart.days.map(d=>forecastCalendarKey(d.day||d.night))),dates,'Literal row dates survive leap and year rollover in a Tokyo browser');
-    for(const [i,row]of captured.payload.data.entries())assert.deepEqual(await p.locator('.normal-inline').nth(i).locator('b').allTextContents(),row.slice(1,3).map(v=>Math.round(Number(v))+'°'));
+    for(const [i,row]of captured.payload.data.entries())assert.deepEqual(await p.locator('.normal-detail').nth(i).locator('b').allTextContents(),row.slice(1,3).map(v=>Number(v)+'°F'));
     if(window==='leap'){
      assert.match(await p.locator('.normal-detail').nth(2).textContent(),/estimates the February 29.*supplied February 29 entry/s);
      assert.match(await p.locator('.record-detail').nth(2).textContent(),/Only observed February 29 dates/);
      missingLeap=true;await p.evaluate(()=>{localStorage.removeItem(CTX_KEY);return loadClimateContext();});
-     assert.match(await p.locator('.normal-inline').nth(2).textContent(),/Feb 29 normals unavailable/);assert.equal(await p.locator('.normal-inline').nth(2).locator('b').count(),0,'A missing leap date cannot borrow February 28 or March 1');assert.equal(await p.locator('.normal-inline b').count(),12);
+     assert.match(await p.locator('.normal-detail').nth(2).textContent(),/Daily normals for Feb 29.*Normal high: unavailable/s);assert.equal(await p.locator('.normal-detail').nth(2).locator('b').count(),0,'A missing leap date cannot borrow February 28 or March 1');assert.equal(await p.locator('.normal-detail b').count(),12);
     }
     assert.deepEqual(session.errors,[]);console.log('PASS recorded normals '+window+' literal dates'+(window==='leap'?' and missing leap entry':'')+' in Tokyo browser');
    }finally{await session.context.close();}

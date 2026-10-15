@@ -53,21 +53,24 @@ async function main(){
     await p.waitForFunction(()=>typeof refreshInFlight!=='undefined'&&refreshInFlight===null&&feedChecks.daily.status!=='loading',null,{timeout:90000});
     await p.locator('#forecastCard').scrollIntoViewIfNeeded();await p.evaluate(()=>requestContext('context'));
     await p.waitForFunction(()=>feedRequested('context')&&['ready','partial','unavailable'].includes(feedChecks.context.status),null,{timeout:125000});await Promise.all(pending);
-    const state=await p.evaluate(()=>({current,asOf:ctxTodayKey(),days:smart.days.map(d=>({date:forecastCalendarKey(d.day||d.night),night:d.night&&{start:d.night.startTime,end:d.night.endTime}})),context:ctx,checks:{daily:feedChecks.daily,context:feedChecks.context,model:feedChecks.nbmRange},source:document.getElementById('forecastRecordStation').textContent,rows:[...document.querySelectorAll('.normal-inline')].map(x=>x.textContent),normalSource:document.getElementById('forecastNormalStation').textContent,modelRows:document.querySelectorAll('.nbm-inline').length}));
+    const state=await p.evaluate(()=>({current,asOf:ctxTodayKey(),days:smart.days.map(d=>({date:forecastCalendarKey(d.day||d.night),night:d.night&&{start:d.night.startTime,end:d.night.endTime}})),context:ctx,checks:{daily:feedChecks.daily,context:feedChecks.context,model:feedChecks.nbmRange},source:document.getElementById('forecastRecordStation').textContent,rows:[...document.querySelectorAll('#daily .day-item')].map(x=>x.textContent),normalSource:document.getElementById('forecastNormalStation').textContent,modelRows:document.querySelectorAll('.nbm-inline').length}));
     assert.equal(state.checks.daily.status,'ready','Live official NWS forecast required');assert.equal(state.days.length,7);assert.equal(state.rows.length,7);
+    assert.equal(await p.locator('.normal-inline,.record-inline').count(),0,'Collapsed rows have no climate lines');
+    assert.equal(await p.locator('.normal-detail,.record-detail').count(),14);assert.equal(await p.locator('.normal-detail').first().isVisible(),false);assert.equal(await p.locator('#forecastNormalStation').isVisible(),false);
+    assert(await p.locator('.nbm-inline').evaluateAll(rows=>rows.every(e=>e.previousElementSibling.classList.contains('day'))),'Collapsed NWS/NBM remain adjacent');
     verifiedResponses.push(...responses);
     const facts=[],unavailable=[],normalFacts=[],normalUnavailable=[];
     for(const [index,day] of state.days.entries()){
      const line=p.locator('#daily .record-detail').nth(index),r=state.context.recordsByDate?.[day.date],shown=[];
-     const normalLine=p.locator('#daily .normal-inline').nth(index),normal=state.context.normWeek?.[day.date];
-     assert(await normalLine.evaluate(e=>e.previousElementSibling===e.parentElement.querySelector('.nbm-inline')||!e.parentElement.querySelector('.nbm-inline')&&e.previousElementSibling.classList.contains('day')),'Normal remains below this row’s NBM range');
+     const normalLine=p.locator('#daily .normal-detail').nth(index),normal=state.context.normWeek?.[day.date];
+     assert(await normalLine.evaluate(e=>e.closest('.day-detail')!==null),'Normal values remain in expanded day details');
      const qualifiedNormal=normal&&state.context.ready&&state.context.normalPeriod==='1991-2020'&&normal.normalPeriod==='1991-2020'&&normal.date===day.date&&normal.asOf===state.asOf&&normal.location===state.context.location&&Date.now()>=normal.checkedAt&&Date.now()-normal.checkedAt<=12*3600000;
      if(qualifiedNormal){
       const raw=[...verifiedResponses].reverse().find(x=>x.status===200&&x.params.sid===normal.source.sid&&x.params.elems?.[0]?.normal==='91'&&x.params.sdate<=day.date&&x.params.edate>=day.date&&x.payload.meta?.sids?.some(s=>s.split(' ')[0]===normal.source.sid.split(' ')[0]));
       assert(raw,'Actual matching-station normal response required');assert.equal(raw.params.elems[0].prec,1);
       const values=raw.payload.data.filter(row=>row[0]===day.date);assert.equal(values.length,1,'Exactly one literal requested normal date');
       const expected=values[0].slice(1,3).map(v=>/^[+-]?\d+(?:\.\d+)?$/.test(String(v))&&Number.isFinite(Number(v))?Number(v):null);
-      assert.deepEqual([normal.hi,normal.lo],expected);assert.deepEqual(await normalLine.locator('b').allTextContents(),expected.filter(v=>v!=null).map(v=>Math.round(v)+'°'));
+      assert.deepEqual([normal.hi,normal.lo],expected);assert.deepEqual(await normalLine.locator('b').allTextContents(),expected.filter(v=>v!=null).map(v=>v+'°F'));
       const detail=await p.locator('.normal-detail').nth(index).textContent();assert(detail.includes('1991–2020'));assert(detail.includes(normal.source.name));
       for(const v of expected.filter(v=>v!=null))assert(detail.includes(v+'°F'));
       normalFacts.push({date:day.date,station:normal.source,normalPeriod:normal.normalPeriod,hi:normal.hi,lo:normal.lo,checkedAt:normal.checkedAt});
@@ -98,12 +101,15 @@ async function main(){
     if(unavailable.length)audit.sourceFailures.push({width,message:'Some live calendar-date records safely withheld',dates:unavailable,status:state.checks.context.status});
     cached=await p.evaluate(()=>localStorage.getItem(CTX_KEY));
     for(const theme of ['dark','light']){
-     await p.evaluate(t=>applyTheme(t),theme);assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+     await p.evaluate(t=>applyTheme(t),theme);await p.waitForTimeout(700);assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
      assert(await p.locator('#daily .day').evaluateAll(rows=>rows.every(r=>r.getBoundingClientRect().height>=44)));
      assert(await p.locator('#daily .dnd').evaluateAll(dates=>dates.length===7&&dates.every(r=>r.getBoundingClientRect().height>0)));
      await p.locator('#forecastCard').screenshot({path:path.join(out,`live-${width}-${theme}.png`),style:'.jump-wrap,.skip{visibility:hidden !important}'});
+     const day=p.locator('#daily .day').nth(1);await day.click();await p.waitForTimeout(700);
+     assert.equal(await p.locator('.normal-detail').nth(1).isVisible(),true);assert.equal(await p.locator('.record-detail').nth(1).isVisible(),true);
+     await p.locator('#forecastCard').screenshot({path:path.join(out,`live-${width}-${theme}-expanded.png`),style:'.jump-wrap,.skip{visibility:hidden !important}'});
+     await day.click();assert.equal(await p.locator('.normal-detail').nth(1).isVisible(),false);
     }
-    await p.locator('#daily .day').nth(1).click();await p.locator('#forecastCard').screenshot({path:path.join(out,`live-${width}-detail.png`),style:'.jump-wrap,.skip{visibility:hidden !important}'});
     audit.live.push({width,timezone:width===390?'Asia/Tokyo':'America/Chicago',location:state.current,asOf:state.asOf,source:state.source,normalSource:state.normalSource,normalFacts,checks:state.checks,days:state.days,modelRows:state.modelRows,records:facts});
    }finally{await context.close();}
   }

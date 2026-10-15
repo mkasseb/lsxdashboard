@@ -27,7 +27,8 @@ async function main(){
     assert(await p.evaluate(()=>gapMaps.radar===rvMap&&gapMaps.station===stnMap),'Map instances survive repacking');
     assert.equal(await p.evaluate(()=>JSON.stringify(smart.days)),original.days);assert.equal(await p.locator('#rivers .river-row').count(),original.gauges);
     const camera=await p.evaluate(before=>({zoom:stnMap.getZoom(),error:stnMap.project(stnMap.getCenter()).distanceTo(stnMap.project(before.center))}),stationCamera);assert.equal(camera.zoom,stationCamera.zoom);assert(camera.error<2,'Station resize preserves the explored camera within native pixel rounding');
-    const modelRows=await p.locator('.nbm-inline').count();if(modelRows)assert(await p.locator('.normal-inline').evaluateAll(rows=>rows.every(e=>e.previousElementSibling.classList.contains('nbm-inline'))));
+    assert.equal(await p.locator('.normal-inline,.record-inline').count(),0,'Collapsed rows contain no climate line');assert.equal(await p.locator('.normal-detail,.record-detail').count(),14);
+    const modelRows=await p.locator('.nbm-inline').count();if(modelRows)assert(await p.locator('.nbm-inline').evaluateAll(rows=>rows.every(e=>e.previousElementSibling.classList.contains('day'))));
     states.push({state,gaps,geometry});
     if(out&&capture){fs.mkdirSync(out,{recursive:true});await p.evaluate(()=>scrollTo(0,0));await p.screenshot({path:path.join(out,`${engine}-gap-${width}-${theme}-${state}.png`),fullPage:true});}
    }
