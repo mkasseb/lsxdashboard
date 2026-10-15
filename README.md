@@ -214,9 +214,24 @@ in [`DESIGN.md`](DESIGN.md#adding-a-card-adding-a-loader).
 ## Supplemental NBM temperature range
 
 Supplemental NBM ranges appear alongside official NWS day/night entries in the forecast card.
-Expand an entry to compare the NWS temperature and exact interval with native NOAA NBM P25/P50/P75
-values and the native 18-hour interval. **NBM model range** spans P25–P75 alongside the official NWS high/low. A single shared note explains the
-18-hour windows; individual rows keep only the ranges. Exact interval differences remain in expanded details.
+**NBM model range** spans P25–P75 alongside the official NWS high/low. Expand a day for the unchanged
+NWS Day/Night forecast, a short explanation of the middle 50% (outcomes outside remain possible),
+and a period-mismatch note only where the matched intervals differ. **Timing & model details** is a
+native keyboard-accessible disclosure for the NWS temperature and exact interval, native NOAA
+NBM P25/P50/P75 values (P50 is the median), and the model's 18-hour interval. Missing model sides are
+explicit and do not suppress a usable side. Unavailable guidance leaves the official forecast usable.
+Ranges remain visible with every day collapsed. When no range can be shown, the same compact
+position displays an unavailable reason (including expired data); values older than 24 hours
+remain withheld. An immutable preview can be refreshed from already-published main data without
+running extraction, changing schedules or altering source/retrieval timestamps.
+Disclosure state follows the location and NWS intervals across model refreshes and forecast repaints;
+new dates and locations do not inherit state by row index. All model annotations remain inside the
+existing snapshot-exclusion boundary, so the NWS snapshot schema and lifetime are unchanged.
+For an in-flight native mouse/touch/keyboard activation, usable guidance for the same NWS periods
+repaints after the native click. Full NWS packages publish with their rows, and the latest update
+wins over context-only repaints. Changed dates/periods, location resets and unusable model sources
+bypass this hold; missed release events recover when the native pressed state has ended.
+While a full NWS package waits, its daily snapshot is withheld until the new rows paint.
 The collapsed **About NBM ranges & unmatched windows** section explains the percentiles,
 source age, nearest cell, coverage, and windows that cannot be paired. `/?nbm=0` disables guidance.
 

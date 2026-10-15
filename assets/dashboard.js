@@ -3860,9 +3860,12 @@ function saveSnapshot(){
     if(p.id==="hourly24"&&el.querySelector(".nbm-hourly-band,.nbm-hourly-detail"))return;
     var snapshotEl=el;
     if(p.id==="daily"){
+      // A newer checked NWS package is waiting for a native activation to finish.
+      // Do not renew the still-visible older rows with its new check timestamp.
+      if(typeof NbmRange!=="undefined"&&NbmRange.forecastPending())return;
       snapshotEl=el.cloneNode(true);
       removeLegacyNormalComparisons(snapshotEl);
-      snapshotEl.querySelectorAll(".nbm-inline,.nbm-period-detail,.record-inline,.record-detail,.normal-inline,.normal-detail,.normal-comparison").forEach(function(node){node.remove();});
+      snapshotEl.querySelectorAll(".nbm-inline,.nbm-unavailable,.nbm-period-detail,.record-inline,.record-detail,.normal-inline,.normal-detail,.normal-comparison").forEach(function(node){node.remove();});
     }
     var h=snapshotEl.innerHTML;
     if(!h||/class="loading"/.test(h)) return;   // never cache a spinner

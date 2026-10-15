@@ -99,10 +99,11 @@ jobs:
           WEATHER_BROWSER: ${{ matrix.browser }}
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" REDESIGN_ARTIFACTS="$RUNNER_TEMP/redesign/gaps" xvfb-run -a node tools/planning-gap-tests.js
-      - name: Verify optional NBM range prototype
-        if: matrix.browser == 'chromium'
+      - name: Verify NBM ranges, native details and refresh focus
+        env:
+          WEATHER_BROWSER: ${{ matrix.browser }}
         run: |
-          NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" NBM_ARTIFACTS="$RUNNER_TEMP/redesign/nbm" node tools/nbm-browser-tests.js
+          NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" NBM_ARTIFACTS="$RUNNER_TEMP/redesign/nbm" xvfb-run -a node tools/nbm-browser-tests.js
       - name: Verify seven-day normals, expanded station records and failure isolation
         env:
           WEATHER_BROWSER: ${{ matrix.browser }}
@@ -125,7 +126,7 @@ jobs:
   nws-hosted-preview:
     # Read-only hosted verification. Existing push trigger; no extraction or publication.
     name: ${{ (github.head_ref == 'codex/nws-production-verifier' || github.event_name == 'push') && 'nws-hosted-production' || 'nws-hosted-preview' }}
-    if: ((github.head_ref == 'codex/nws-key-messages' || github.head_ref == 'codex/nws-production-verifier' || github.head_ref == 'codex/nbm-middle-50' || github.head_ref == 'codex/spc-discovery-retries' || github.head_ref == 'codex/contextual-weather-resources' || github.head_ref == 'codex/seven-day-records' || github.head_ref == 'codex/compact-desktop-layout' || github.head_ref == 'codex/seven-day-normals') && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: ((github.head_ref == 'codex/nws-key-messages' || github.head_ref == 'codex/nws-production-verifier' || github.head_ref == 'codex/nbm-middle-50' || github.head_ref == 'codex/spc-discovery-retries' || github.head_ref == 'codex/contextual-weather-resources' || github.head_ref == 'codex/seven-day-records' || github.head_ref == 'codex/compact-desktop-layout' || github.head_ref == 'codex/seven-day-normals' || github.head_ref == 'codex/simplify-temperature-guidance') && github.event.pull_request.head.repo.full_name == github.repository) || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -162,15 +163,20 @@ jobs:
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
         run: NODE_PATH="$RUNNER_TEMP/nws-browser/node_modules" node tools/weather-resources-preview-tests.js "$RUNNER_TEMP/nws-hosted/resources"
       - name: Verify exact hosted preview and live calendar-date normals and records
-        if: github.head_ref == 'codex/seven-day-records' || github.head_ref == 'codex/seven-day-normals'
+        if: github.head_ref == 'codex/seven-day-records' || github.head_ref == 'codex/seven-day-normals' || github.head_ref == 'codex/simplify-temperature-guidance'
         env:
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
         run: NODE_PATH="$RUNNER_TEMP/nws-browser/node_modules" node tools/daily-record-preview-tests.js "$RUNNER_TEMP/nws-hosted/records"
       - name: Verify compact desktop layout on the exact live preview
-        if: github.head_ref == 'codex/compact-desktop-layout' || github.head_ref == 'codex/seven-day-normals'
+        if: github.head_ref == 'codex/compact-desktop-layout' || github.head_ref == 'codex/seven-day-normals' || github.head_ref == 'codex/simplify-temperature-guidance'
         env:
           EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
         run: NODE_PATH="$RUNNER_TEMP/nws-browser/node_modules" node tools/desktop-preview-tests.js "$RUNNER_TEMP/nws-hosted/desktop"
+      - name: Verify simplified guidance on the exact live preview
+        if: github.head_ref == 'codex/simplify-temperature-guidance'
+        env:
+          EXPECTED_SHA: ${{ github.event.pull_request.head.sha }}
+        run: NODE_PATH="$RUNNER_TEMP/nws-browser/node_modules" node tools/temperature-guidance-preview-tests.js "$RUNNER_TEMP/nws-hosted/guidance"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

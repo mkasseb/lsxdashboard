@@ -49,7 +49,7 @@ async function main(){
       const a=r.periods?NbmRange.align(smart.days,r.periods,Date.now()):{matches:[]};
       return {status:r.status,comparisons:a.matches.map(m=>({
        official:'NWS '+(m.part==='day'?'high ':'low ')+m.nws.temperature+'°F · '+NbmRange.local(m.nws.startTime)+' – '+NbmRange.local(m.nws.endTime),
-       model:'NBM '+(m.part==='day'?'maximum':'minimum')+' · P25 '+Math.round(m.nbm.p25)+'°F · P50 '+Math.round(m.nbm.p50)+'°F · P75 '+Math.round(m.nbm.p75)+'°F',
+       model:'NBM '+(m.part==='day'?'maximum':'minimum')+' · P25 '+Math.round(m.nbm.p25)+'°F · median (P50) '+Math.round(m.nbm.p50)+'°F · P75 '+Math.round(m.nbm.p75)+'°F',
        interval:(m.exact?'Same interval: ':'Different interval (18 hours): ')+NbmRange.local(m.nbm.start)+' – '+NbmRange.local(m.nbm.end)
       })),cell:r.cell};
      },{data,point});
@@ -64,10 +64,12 @@ async function main(){
       const v=hourlyExpected[i];assert((await page.locator('#hourlyDetail').innerText()).includes('NBM model range '+Math.round(v.p25)+'–'+Math.round(v.p75)+'°F · middle estimate '+Math.round(v.p50)+'°F'));
      }
      assert.equal(expected.status,'ready');assert(expected.comparisons.length>0,'Live NWS and NBM must have usable comparisons');
-     assert.deepEqual(await page.locator('.nbm-comparison').evaluateAll(rows=>rows.map(row=>({official:row.children[0].textContent,model:row.children[1].textContent,interval:row.children[2].textContent}))),expected.comparisons);
+     assert.deepEqual(await page.locator('.nbm-comparison').evaluateAll(rows=>rows.map(row=>({official:row.querySelector('.nbm-official').textContent,model:row.querySelector('.nbm-model').textContent,interval:row.querySelector('.nbm-window-note').textContent}))),expected.comparisons);
      for(const day of await page.locator('#daily .day-item').all()){
       if(await day.locator('.nbm-inline').count()&&await day.locator('.day').getAttribute('aria-expanded')!=='true')await day.locator('.day').click();
      }
+     assert.equal(await page.locator('.nbm-comparison').first().isVisible(),false,'Technical guidance starts collapsed');
+     for(const summary of await page.locator('.nbm-timing summary').all())await summary.click();
      assert.match(await page.locator('#nbmStatus').innerText(),/QMD cycle/);
      assert((await page.locator('#nbmInfoBody').innerText()).includes(expected.cell.lat.toFixed(3)+', '+expected.cell.lon.toFixed(3)));
      assert(await page.locator('.nbm-comparison').first().isVisible());
