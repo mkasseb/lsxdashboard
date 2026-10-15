@@ -223,6 +223,11 @@ explicit and do not suppress a usable side. Unavailable guidance leaves the offi
 Disclosure state follows the location and NWS intervals across model refreshes and forecast repaints;
 new dates and locations do not inherit state by row index. All model annotations remain inside the
 existing snapshot-exclusion boundary, so the NWS snapshot schema and lifetime are unchanged.
+For an in-flight native mouse/touch/keyboard activation, usable guidance for the same NWS periods
+repaints after the native click. Full NWS packages publish with their rows, and the latest update
+wins over context-only repaints. Changed dates/periods, location resets and unusable model sources
+bypass this hold; missed release events recover when the native pressed state has ended.
+While a full NWS package waits, its daily snapshot is withheld until the new rows paint.
 The collapsed **About NBM ranges & unmatched windows** section explains the percentiles,
 source age, nearest cell, coverage, and windows that cannot be paired. `/?nbm=0` disables guidance.
 

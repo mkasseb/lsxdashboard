@@ -12,6 +12,9 @@ var ps=f.properties.periods.slice(0,15);
    dropped from the card: Tonight plus six full days, and the seventh day arrives whole in
    the morning. The Bottom Line keeps the final period because its seven-day scope needs it. */
 var weekDays=pairForecastPeriods(ps),days=weekDays.slice(0,7);
+// Publish a new NWS package together with its rows after an in-flight native
+// activation, so ancillary climate renders cannot pair new days with old DOM.
+if(typeof NbmRange!=="undefined"&&NbmRange.deferPaint(function(){renderDailyForecast(f,h);renderContext();renderTheCall();},days,true))return;
 smart.weekDays=weekDays;
 smart.days=days;
 renderHeroToday(); // today's high/low is now known — fill the hero's range bar
@@ -66,6 +69,7 @@ function factsFor(d){
 // Stored as a repaintable closure: climate context (per-day normals) usually lands AFTER the
 // forecast, and renderContext calls this again so the "vs Normal" cell can appear.
 loadForecast._paint=function(){
+  if(typeof NbmRange!=="undefined"&&NbmRange.deferPaint(loadForecast._paint,days))return;
   var open=[], focused=-1,focusDate=null,rangeFocus=typeof NbmRange!=="undefined"?NbmRange.captureView():null;
   [].slice.call(daily.querySelectorAll(".day-item")).forEach(function(it,i){
     if(it.classList.contains("open")) open.push(it.dataset.forecastDate||i);

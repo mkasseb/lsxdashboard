@@ -171,6 +171,7 @@ async function main(){
   const s=await open(config('NBM opt-out',{now,search:'?nbm=0'}),390);
   assert.equal(await s.page.locator('#nbmInfo,.nbm-inline,#nbmRangeCard').count(),0);
   assert.equal(await s.page.evaluate(()=>Object.hasOwn(FEEDS,'nbmRange')),false);await s.context.close();
+  await require('./guidance-activation-tests')(engine);
  }finally{await browser.close();}
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});

@@ -53,8 +53,9 @@ async function main(){
     assert.equal(await item.locator('.nbm-period-note').count(),different?1:0);
     if(different)assert.match(await item.locator('.nbm-period-note').innerText(),different===matches.length?/different 18-hour periods/:/Some NBM periods differ/);
     assert.equal(await item.locator('.nbm-comparison').first().isVisible(),false);
-    await summary.waitFor({state:'visible'});
-    const target=await summary.boundingBox();assert(target&&target.height>=44,'Visible summary has a 44px target at row '+row+' / '+width);
+    // Climate can repaint between separate locator reads. Find and measure the
+    // current control atomically in the page, retrying until native layout is ready.
+    await page.waitForFunction(row=>{const s=document.querySelectorAll('#daily .day-item')[row]?.querySelector('.nbm-timing > summary');return s&&s.getClientRects().length>0&&s.getBoundingClientRect().height>=44;},row);
     await summary.focus();await summary.press('Enter');assert(await timing.evaluate(e=>e.open));
     assert.deepEqual(await item.locator('.nbm-comparison').evaluateAll(rows=>rows.map(r=>({official:r.querySelector('.nbm-official').textContent,model:r.querySelector('.nbm-model').textContent,interval:r.querySelector('.nbm-window-note').textContent}))),matches.map(({official,model,interval})=>({official,model,interval})));
     assert(await item.locator('.nbm-comparison').first().isVisible());
