@@ -775,7 +775,9 @@ advice is never labeled NWS Key Messages. Local active warnings remain above the
 and take precedence; the regional bullets keep their geographic qualifiers.
 
 The lower **NWS Forecast Details** card retains short-term/synopsis reasoning without repeating the
-hero bullets. NWS Key Messages and its fallback remain independent of native daily/hourly NBM quartiles.
+hero bullets. Multi-paragraph details show the first paragraph with a native **Read more** / **Show less**
+disclosure for the rest; single-paragraph details stay fully visible. An unchanged refresh preserves
+the disclosure's open state and keyboard focus. NWS Key Messages and its fallback remain independent of native daily/hourly NBM quartiles.
 The former optional P10/P90 threshold commentary has been removed; quartiles do not inherit those tail heuristics. Stable disclosures preserve keyboard focus and open state; unchanged live-status
 text is not rewritten on unrelated feed checks.
 
