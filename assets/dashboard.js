@@ -2982,8 +2982,19 @@ function renderAFD(sec, issued){
   }else{
     var paras=sec.text.split(/\n\s*\n/).map(function(p){return esc(p.replace(/\s*\n\s*/g," ").trim());}).filter(Boolean);
     inner=paras.map(function(p){return '<p>'+p+'</p>';}).join("");
+    if(paras.length>1){
+      inner='<p>'+paras[0]+'</p><details class="disclosure afd-more"><summary>'
+        +'<span class="afd-read-more">Read more</span><span class="afd-show-less">Show less</span></summary>'
+        +paras.slice(1).map(function(p){return '<p>'+p+'</p>';}).join("")+'</details>';
+    }
   }
   var meta=sec.label+' · NWS '+(nwsMessages&&nwsMessages.officeName||nwsDiscussionOffice)+(issued?' · AFD issued '+timeAgo(issued):'');
+  // An unchanged refresh only updates the credit, preserving disclosure state and focus.
+  if(el.querySelector('.afd-body')&&el._afdContent===inner){
+    el.querySelector('.afd-meta').textContent=meta;
+    return;
+  }
+  el._afdContent=inner;
   el.innerHTML='<div class="afd-body">'+inner+'</div><div class="afd-meta">'+esc(meta)+'</div>';
 }
 

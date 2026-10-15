@@ -1522,15 +1522,13 @@
   #afdCard .afd-body{font-size:var(--fs-lg);line-height:1.65;color:var(--text)}
   #afdCard .afd-body p{margin:0 0 10px}
   #afdCard .afd-body p:last-child{margin-bottom:0}
+  #afdCard .afd-more{margin-top:10px}
+  .afd-more .afd-show-less,.afd-more[open] .afd-read-more{display:none}
+  .afd-more[open] .afd-show-less{display:inline}
   .afd-list{margin:0;padding-left:20px}
   .afd-list li{margin:0 0 10px;line-height:1.6;font-size:var(--fs-lg)}
   .afd-list li:last-child{margin-bottom:0}
   .afd-meta{font-size:var(--fs-sm);color:var(--muted);margin-top:12px;padding-top:10px;border-top:1px solid var(--border)}
-  /* ===== Why there is no clamp here =====
-     The Pulse now follows Current Conditions and the 24-hour chart, so its full forecaster-written
-     context no longer delays either current product. Clamping it here would only cut the reasoning
-     off immediately before the 7-day forecast it is meant to explain. Recent LSX products measured
-     151–365px (median 304), a reasonable briefing at this point in the reading order. */
   /* ===== Responsive overrides (kept last so they win over base rules) ===== */
   @media(max-width:480px){
     /* Was `html,body`. The <body> half silently disabled position:sticky at exactly the width
