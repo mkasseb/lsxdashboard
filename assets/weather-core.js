@@ -1595,6 +1595,40 @@ function recordStationMatches(sid,meta){
   // A typed ID must match its type; an untyped ACIS alias must appear verbatim.
   return meta.sids.some(function(value){var p=String(value).split(" ");return p[0]===id&&(!type||p[1]===type);});
 }
+/* NCEI daily normals are a separate ACIS product. Pin the 1991–2020 baseline;
+   ask only for needed dates, with no archive extraction or inferred averages. */
+function calendarNormalRequests(sid,dates){
+  var keys=(dates||[]).filter(function(date,index,all){return recordDateKey(date)&&all.indexOf(date)===index;}).sort().slice(0,9),groups=[];
+  keys.forEach(function(date){
+    var group=groups[groups.length-1],previous=group&&group[group.length-1];
+    if(!previous||calendarDate(date)-calendarDate(previous)!==86400000){group=[];groups.push(group);}
+    group.push(date);
+  });
+  return groups.map(function(group){return {sid:sid,sdate:group[0],edate:group[group.length-1],
+    // valid_daterange describes observations and is not requested for normal elements.
+    meta:["name","sids","ll"],elems:[{name:"maxt",normal:"91",prec:1},{name:"mint",normal:"91",prec:1}]};});
+}
+function calendarNormalFacts(payload,dates,sid){
+  if(!payload||payload.error||!Array.isArray(payload.data)||!recordStationMatches(sid,payload.meta)) return {};
+  var rows={},facts={};
+  payload.data.forEach(function(row){
+    if(!Array.isArray(row)||!recordDateKey(row[0])||dates.indexOf(row[0])<0) return;
+    if(Object.prototype.hasOwnProperty.call(rows,row[0])){
+      if(JSON.stringify(rows[row[0]])!==JSON.stringify(row)) rows[row[0]]=null;
+    }else rows[row[0]]=row;
+  });
+  function temperature(raw){
+    if(typeof raw==="number"&&isFinite(raw)) return raw;
+    var n=typeof raw==="string"&&/^[+-]?\d+(?:\.\d+)?$/.test(raw.trim())?Number(raw):null;
+    return n!=null&&isFinite(n)?n:null;
+  }
+  Object.keys(rows).forEach(function(date){
+    var row=rows[date];if(!row) return;
+    var hi=temperature(row[1]),lo=temperature(row[2]);
+    if(hi!=null||lo!=null) facts[date]={date:date,hi:hi,lo:lo,normalPeriod:"1991-2020"};
+  });
+  return facts;
+}
 function calendarRecordFacts(rows,date,today){
   var byDate={}, md=date.slice(5);
   (rows||[]).forEach(function(row){

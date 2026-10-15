@@ -154,17 +154,6 @@ function paintDays(){ return days.map(function(d){
           return '<div class="dd-item"><div class="k">UV Index</div>'
             +'<div class="v"><span class="lvcol" style="color:'+dl.c+'">'+dr+" "+dl.t+'</span></div></div>';
         })()
-        +(function(){   // how this day sits against the 1991–2020 normal for that date
-          var nw=_dk&&ctx.normWeek?ctx.normWeek[_dk]:null;
-          if(!nw||(nw.hi==null&&nw.lo==null)) return "";
-          function dp(v,n){
-            if(v==null||n==null) return '<span class="cn-na">—</span>';
-            var d=Math.round(v-n), s=(d>0?"+":"")+d+"°";
-            return '<span class="'+(Math.abs(d)<1?"cn-flat":(d>0?"cn-warm":"cn-cool"))+'">'+s+'</span>';
-          }
-          return '<div class="dd-item"><div class="k">vs Normal ('+Math.round(nw.hi)+"°/"+Math.round(nw.lo)+'°)</div>'
-            +'<div class="v">'+dp(hi,nw.hi)+" / "+dp(lo,nw.lo)+'</div></div>';
-        })()
       +'</div>'
     +'</div>'
   +'</div>';
@@ -175,6 +164,14 @@ if(typeof ensureForecastRecordDates==="function") ensureForecastRecordDates();
 
 /* Optional observed station context has its own date, location and freshness gates.
    It never supplies an NWS temperature, NBM range, alert or planning decision. */
+function forecastNormalFor(date){
+  if(!ctx||!ctx.ready||ctx.location!==locationKey(current)||ctx.recordAsOf!==ctxTodayKey()||ctx.normalPeriod!=="1991-2020") return null;
+  var n=ctx.normWeek&&ctx.normWeek[date];
+  if(!n||n.date!==date||n.asOf!==ctxTodayKey()||n.location!==locationKey(current)||n.normalPeriod!=="1991-2020"
+    ||typeof n.checkedAt!=="number"||Date.now()<n.checkedAt||Date.now()-n.checkedAt>FEEDS.context.age
+    ||!n.source||!ctx.normalSource||n.source.sid!==ctx.normalSource.sid||!recordStationMatches(ctx.normalSource.sid,n.source)) return null;
+  return n;
+}
 function forecastRecordFor(date){
   if(!ctx||!ctx.ready||ctx.location!==locationKey(current)||ctx.recordAsOf!==ctxTodayKey()) return null;
   var r=ctx.recordsByDate&&ctx.recordsByDate[date];
@@ -191,25 +188,56 @@ function forecastRecordCoverage(source,col){
   var range=source&&source.valid_daterange&&source.valid_daterange[col];
   return range&&recordDateKey(range[0])&&recordDateKey(range[1])?range:null;
 }
+function forecastStationId(source){
+  var id=source&&Array.isArray(source.sids)?source.sids.filter(function(s){return / 5$/.test(s);})[0]:null;
+  return id?id.split(" ")[0]:source&&source.sid;
+}
+function removeLegacyNormalComparisons(root){
+  // v23 saved NWS rows may contain old, untagged climate baselines. Retire them
+  // even before smart.days exists; they have no separate date/station/check provenance.
+  root.querySelectorAll('.dd-grid .dd-item').forEach(function(item){
+    var key=item.querySelector('.k');
+    if(!item.classList.contains('normal-comparison')&&key&&/^vs Normal \(/.test(key.textContent)) item.remove();
+  });
+}
+function forecastNormalComparison(day,n){
+  if(!n) return "";
+  function departure(value,normal){
+    if(value==null||normal==null) return '<span class="cn-na">—</span>';
+    var d=Math.round(value-normal),s=(d>0?"+":"")+d+"°";
+    return '<span class="'+(d===0?"cn-flat":(d>0?"cn-warm":"cn-cool"))+'">'+s+'</span>';
+  }
+  return '<div class="k">vs Normal ('+(n.hi==null?'—':Math.round(n.hi)+'°')+"/"+(n.lo==null?'—':Math.round(n.lo)+'°')+')</div>'
+    +'<div class="v">'+departure(day.day&&day.day.temperature,n.hi)+" / "+departure(day.night&&day.night.temperature,n.lo)+'</div>';
+}
 function renderForecastRecords(force){
-  var daily=document.getElementById("daily"),station=document.getElementById("forecastRecordStation"),body=document.getElementById("forecastRecordSourceBody");
-  if(!daily||!station||!body||typeof ctx==="undefined"||typeof smart==="undefined") return;
+  var daily=document.getElementById("daily"),station=document.getElementById("forecastRecordStation"),normalStation=document.getElementById("forecastNormalStation"),body=document.getElementById("forecastRecordSourceBody");
+  if(!daily||!station||!normalStation||!body||typeof ctx==="undefined"||typeof smart==="undefined") return;
+  removeLegacyNormalComparisons(daily);
+  // Retire prior collapsed climate markup even before a restored forecast has day data.
+  daily.querySelectorAll('.record-inline,.normal-inline').forEach(function(line){line.remove();});
   var same=ctx.location===locationKey(current)&&ctx.recordAsOf===ctxTodayKey(),source=same?ctx.recordSource:null;
-  var rows=[].slice.call(daily.querySelectorAll(".day-item")),markup=[],details=[],counts=[];
+  var normalSource=same&&ctx.normalPeriod==="1991-2020"?ctx.normalSource:null;
+  var rows=[].slice.call(daily.querySelectorAll(".day-item")),details=[],normalDetails=[],comparisons=[],counts=[];
   (smart.days||[]).slice(0,7).forEach(function(day){
     var period=day.day||day.night,date=forecastCalendarKey(period);
     if(!date){
-      markup.push('<span class="record-label">Records</span> <span>Calendar date unavailable</span>');
+      normalDetails.push('<h3>Daily normals unavailable</h3><p>This forecast period does not supply a usable calendar date.</p>');
+      comparisons.push("");
       details.push('<h3>Daily records unavailable</h3><p>This forecast period does not supply a usable calendar date.</p>');
       counts.push('<li>Calendar date unavailable</li>');return;
     }
-    var md=fmtMD(calendarDate(date)),r=forecastRecordFor(date),min=calendarRecordMinimum(date);
+    var md=fmtMD(calendarDate(date)),r=forecastRecordFor(date),n=forecastNormalFor(date),min=calendarRecordMinimum(date);
     if(r) source=r.source; // actual returned station metadata, not a guessed station name
+    if(n) normalSource=n.source;
+    comparisons.push(forecastNormalComparison(day,n));
     var hi=r&&r.hiCount>=min?r.recHi:null,lo=r&&r.loCount>=min?r.recLo:null;
-    function value(label,record){return '<span class="record-value">'+label+' '+(record?'<b>'+esc(String(record.v))+'°</b> <span class="record-years">('+esc(forecastRecordYears(record,true))+')</span>':'unavailable')+'</span>';}
-    markup.push('<span class="record-label">Records<span class="sr"> for '+esc(md)+'</span></span> '
-      +(hi||lo?value("High",hi)+'<span class="record-dot" aria-hidden="true">·</span>'+value("Low",lo)
-        :'<span>'+esc(md)+' records unavailable</span>'));
+    normalDetails.push('<h3>Daily normals for '+esc(md)+'</h3><p>'
+      +'Normal high: '+(n&&n.hi!=null?'<b>'+esc(String(n.hi))+'°F</b>':'unavailable')
+      +' · normal low: '+(n&&n.lo!=null?'<b>'+esc(String(n.lo))+'°F</b>':'unavailable')+'.</p>'
+      +'<p>NOAA NCEI 1991–2020 normals via RCC ACIS'
+      +(n?' · '+esc(n.source.name)+' ('+esc(forecastStationId(n.source))+') · checked '+esc(weatherTime(n.checkedAt,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}))+' CT':' · station data unavailable for this date')+'.</p>'
+      +(date.slice(5)==="02-29"?'<p>NOAA estimates the February 29 temperature normal from February 28 and March 1. The supplied February 29 entry is used; a missing entry stays unavailable.</p>':''));
     function observation(label,record,count,range){
       return '<p>'+label+': '+(record?'<b>'+esc(String(record.v))+'°F</b> ('+esc(forecastRecordYears(record,false))+')':'unavailable')
         +(r?' · '+count+' usable '+esc(md)+' observations'+(range&&range[0]?' from '+range[0].slice(0,4)+'–'+range[1].slice(0,4):''):'')+'.</p>';
@@ -218,23 +246,27 @@ function renderForecastRecords(force){
       +observation('Highest daily high',hi,r?r.hiCount:0,r&&r.hiPeriod)
       +observation('Lowest daily low',lo,r?r.loCount:0,r&&r.loPeriod);
     if(r){
-      detail+='<p>'+esc(r.source.name)+' · checked '+esc(weatherTime(r.checkedAt,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}))+' CT. Missing observations are omitted.'
+      detail+='<p>'+esc(r.source.name)+' ('+esc(forecastStationId(r.source))+') · checked '+esc(weatherTime(r.checkedAt,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}))+' CT. Missing observations are omitted.'
         +((!hi||!lo)?' At least '+min+' observed dates are required for each record.':'')+'</p>';
     }
     if(day.night){
       detail+='<p>NWS overnight low: '+esc(weatherTime(day.night.startTime,{month:"short",day:"numeric",hour:"numeric",timeZoneName:"short"}))+' – '
-        +esc(weatherTime(day.night.endTime,{month:"short",day:"numeric",hour:"numeric",timeZoneName:"short"}))+'. It can occur the following morning; records match the row’s calendar date.</p>';
+        +esc(weatherTime(day.night.endTime,{month:"short",day:"numeric",hour:"numeric",timeZoneName:"short"}))+'. It can occur the following morning; normals and records match the row’s calendar date.</p>';
     }
     if(date.slice(5)==="02-29") detail+='<p>Only observed February 29 dates are used. February 28 substitutions from annual date stepping are excluded.</p>';
     details.push(detail);
-    counts.push('<li>'+esc(md)+': '+(r?'high '+r.hiCount+' / low '+r.loCount+' usable dates; checked '+esc(weatherTime(r.checkedAt,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}))+' CT':'records unavailable')+'</li>');
+    counts.push('<li>'+esc(md)+': normals '+(n?'checked '+esc(weatherTime(n.checkedAt,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}))+' CT':'unavailable')+'; records '+(r?'high '+r.hiCount+' / low '+r.loCount+' usable dates; checked '+esc(weatherTime(r.checkedAt,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}))+' CT':'unavailable')+'</li>');
   });
-  var id=source&&Array.isArray(source.sids)?source.sids.filter(function(s){return / 5$/.test(s);})[0]:null;
-  id=id?id.split(" ")[0]:source&&source.sid;
+  var id=forecastStationId(source),normalId=forecastStationId(normalSource);
   var hp=forecastRecordCoverage(source,0),lp=forecastRecordCoverage(source,1);
   var since=hp&&lp&&hp[0].slice(0,4)===lp[0].slice(0,4)?' · since '+hp[0].slice(0,4):'';
   var stationText=source?'Daily records: '+shortStn(source.name||source.sid)+(id?' ('+id+')':'')+since:'Daily records: station data unavailable';
-  var sourceHtml='<p>Observed daily maximum highs and minimum lows in °F from RCC ACIS. These are this station’s calendar-date records; station observations do not describe the selected location’s exact GPS point. The airport series is kept separate from NWS area records.</p>';
+  var normalStationText=normalSource?'Normals: '+shortStn(normalSource.name||normalSource.sid)+(normalId?' ('+normalId+')':'')+' · 1991–2020':'Normals: 1991–2020 · station data unavailable';
+  var sourceHtml='<p>Normal daily high and low temperatures in °F are NOAA NCEI’s 1991–2020 calendar-date normals, supplied by RCC ACIS. They are a climate baseline, separate from the NWS forecast, NBM range and historical extremes. '
+    +(normalSource?'Normal station: <b>'+esc(normalSource.name||normalSource.sid)+'</b> ('+esc(normalId||normalSource.sid)+'). ':'Normal station data unavailable. ')
+    +'Day details retain the supplied tenths; the forecast comparison rounds normals to the nearest degree. Normals and records use each row’s local calendar date; an NWS overnight low can occur the next morning. Station climate does not describe the selected location’s exact GPS point. Missing values and checks over 12 hours old are withheld.</p>'
+    +'<p>'+officialSourceLink("https://www.ncei.noaa.gov/products/land-based-station/us-climate-normals","NOAA climate normals and 1991–2020 baseline","NOAA climate normals ↗")+'</p>'
+    +'<p>Observed daily maximum highs and minimum lows in °F from RCC ACIS appear in the expanded day details. These are this station’s calendar-date records; station observations do not describe the selected location’s exact GPS point. The airport series is kept separate from NWS area records.</p>';
   if(source){
     sourceHtml+='<p><b>'+esc(source.name||source.sid)+'</b> · '+esc(id||source.sid)+'. '
       +(hp?'Daily high archive: '+hp[0]+' to '+hp[1]+'. ':'Daily high period of record unavailable. ')
@@ -244,16 +276,21 @@ function renderForecastRecords(force){
   sourceHtml+='<p>Only completed dates before '+esc(ctxTodayKey())+' are included. Archive spans can contain gaps. All tied record years appear in each day’s details; records are withheld when checks are over 12 hours old.</p><ul>'+counts.join("")+'</ul>'
     +'<p>'+officialSourceLink("https://www.rcc-acis.org/ACISWSdoc.html","ACIS source documentation","ACIS source documentation ↗")+'</p>'
     +'<p>'+officialSourceLink("https://www.weather.gov/lsx/climate","NWS LSX climate and area records","NWS LSX climate &amp; area records ↗")+'</p>';
-  var signature=JSON.stringify([locSeq,stationText,sourceHtml,markup,details,rows.length]);
+  var signature=JSON.stringify([locSeq,stationText,normalStationText,sourceHtml,details,normalDetails,comparisons,rows.length]);
   if(!force&&renderForecastRecords.signature===signature) return;
   renderForecastRecords.signature=signature;
   station.textContent=stationText;
+  normalStation.textContent=normalStationText;
   if(body.innerHTML!==sourceHtml) body.innerHTML=sourceHtml;
   rows.forEach(function(row,index){
-    if(!markup[index]) return;
-    var line=row.querySelector('.record-inline'),detail=row.querySelector('.record-detail');
-    if(!line){line=document.createElement('div');line.className='record-inline';(row.querySelector('.nbm-inline')||row.querySelector('.day')).after(line);}
-    if(line.innerHTML!==markup[index]) line.innerHTML=markup[index];
+    if(!normalDetails[index]) return;
+    var detail=row.querySelector('.record-detail'),normalDetail=row.querySelector('.normal-detail'),comparison=row.querySelector('.normal-comparison');
+    if(comparisons[index]){
+      if(!comparison){comparison=document.createElement('div');comparison.className='dd-item normal-comparison';row.querySelector('.dd-grid').appendChild(comparison);}
+      if(comparison.innerHTML!==comparisons[index]) comparison.innerHTML=comparisons[index];
+    }else if(comparison) comparison.remove();
+    if(!normalDetail){normalDetail=document.createElement('div');normalDetail.className='normal-detail';row.querySelector('.day-detail').appendChild(normalDetail);}
+    if(normalDetail.innerHTML!==normalDetails[index]) normalDetail.innerHTML=normalDetails[index];
     if(!detail){detail=document.createElement('div');detail.className='record-detail';row.querySelector('.day-detail').appendChild(detail);}
     if(detail.innerHTML!==details[index]) detail.innerHTML=details[index];
   });

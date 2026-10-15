@@ -97,6 +97,7 @@ NAV_ONLY = {
     "https://www.geonames.org",
     "https://www.openstreetmap.org",
     "https://www.rcc-acis.org",
+    "https://www.ncei.noaa.gov",
     "https://www.spc.noaa.gov",
     "https://www.star.nesdis.noaa.gov",
     "https://www.weather.gov",

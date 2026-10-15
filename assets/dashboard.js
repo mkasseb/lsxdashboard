@@ -2129,7 +2129,7 @@ function renderVsNormal(){
     var cls=Math.abs(d)<1?"cn-flat":(d>0?"cn-warm":"cn-cool");
     return ' <span class="'+cls+'">('+s+')</span>';
   }
-  var hiNormal=ctx.normWeek[climate.fcHiDate], loNormal=ctx.normWeek[climate.fcLoDate];
+  var hiNormal=forecastNormalFor(climate.fcHiDate), loNormal=forecastNormalFor(climate.fcLoDate);
   var normHi=hiNormal?hiNormal.hi:(climate.normDate===climate.fcHiDate?climate.normHi:null);
   var normLo=loNormal?loNormal.lo:(climate.normDate===climate.fcLoDate?climate.normLo:null);
   var hi = climate.fcHi!=null ? '<b>'+climate.fcHi+'°</b>'+dep(climate.fcHi,normHi) : '—';
@@ -2168,9 +2168,9 @@ function climAllOK(c,showSnow){
 
 /* ============ CLIMATE CONTEXT — records, rankings, streaks ============
    Up to seven visible calendar dates plus today/tomorrow, one observation per year per
-   date; three existing monthly/recent/normals queries. At most three requests in flight,
+   date; existing monthly/recent queries and bounded normal date ranges. At most three requests in flight,
    each with the existing 20s deadline. Only derived facts enter the 12-hour cache. */
-var CTX_KEY="lsxCtx_v5";
+var CTX_KEY="lsxCtx_v6";
 var ctx={ready:false, recHi:null, recLo:null, recPcp:null, doyHi:[], doyLo:[],
          monWet:[], monWarm:[], monMtd:null, monMean:null, monName:"", years:0,
          dry:null, hist:null, normWeek:{}, recStation:""};
@@ -3861,7 +3861,8 @@ function saveSnapshot(){
     var snapshotEl=el;
     if(p.id==="daily"){
       snapshotEl=el.cloneNode(true);
-      snapshotEl.querySelectorAll(".nbm-inline,.nbm-period-detail,.record-inline,.record-detail").forEach(function(node){node.remove();});
+      removeLegacyNormalComparisons(snapshotEl);
+      snapshotEl.querySelectorAll(".nbm-inline,.nbm-period-detail,.record-inline,.record-detail,.normal-inline,.normal-detail,.normal-comparison").forEach(function(node){node.remove();});
     }
     var h=snapshotEl.innerHTML;
     if(!h||/class="loading"/.test(h)) return;   // never cache a spinner
@@ -4530,7 +4531,7 @@ scheduleMasonry();
 
 /* Active navigation follows rendered geometry, including independent disclosures and repacking. */
 (function(){
-  var nav=document.getElementById("jumpNav"), bar=nav.parentElement, queued=false, clicked=null;
+  var nav=document.getElementById("jumpNav"), bar=nav.parentElement, queued=false, clicked=null, clickedView=null;
   var links=[].slice.call(nav.querySelectorAll('a'));
   function update(){
     queued=false;
@@ -4544,12 +4545,22 @@ scheduleMasonry();
       var visible=candidates.filter(function(item){return item.box.top<window.innerHeight&&item.box.bottom>edge;});
       if(visible.length)active=visible[visible.length-1];
     }
+    // Native anchor jumps settle before this frame. Retire their intent before
+    // evaluating geometry after a real scroll or viewport change, so an old click
+    // cannot re-arm merely because its section becomes clamped again later.
+    if(clickedView&&(Math.abs(window.scrollY-clickedView.y)>1||
+      window.innerWidth!==clickedView.width||window.innerHeight!==clickedView.height)){
+      clicked=null;clickedView=null;
+    }
     var chosen=candidates.find(function(item){return item.link===clicked;});
-    // A short final section cannot align with the bar. Later context growth can also move
-    // the document bottom after scrolling; retain the requested section while it is fully visible.
+    var fullyVisible=chosen&&chosen.box.top>edge&&chosen.box.bottom<=window.innerHeight;
+    var clamped=fullyVisible&&chosen.box.top+window.scrollY-edge>document.documentElement.scrollHeight-window.innerHeight;
+    if(chosen&&!clickedView)clickedView={y:window.scrollY,width:window.innerWidth,height:window.innerHeight,clamped:!!clamped};
+    if(clickedView){if(clamped)clickedView.clamped=true;else if(!fullyVisible)clickedView.clamped=false;}
+    // Late content can permit further scrolling without moving a fully visible
+    // target. Preserve the initial clamped choice until the viewport actually moves.
     if(chosen&&active&&(Math.abs(chosen.box.top-active.box.top)<=4||
-      chosen.box.top>edge&&chosen.box.bottom<=window.innerHeight&&
-      chosen.box.top+window.scrollY-edge>document.documentElement.scrollHeight-window.innerHeight))active=chosen;
+      fullyVisible&&clickedView.clamped))active=chosen;
     links.forEach(function(link){if(active&&link===active.link)link.setAttribute('aria-current','location');else link.removeAttribute('aria-current');});
   }
   function schedule(){if(!queued){queued=true;requestAnimationFrame(update);}}
@@ -4558,6 +4569,6 @@ scheduleMasonry();
   if(window.ResizeObserver)new ResizeObserver(schedule).observe(document.getElementById('main'));
   document.addEventListener('lsxlayout',schedule);
   document.addEventListener('toggle',schedule,true);
-  nav.addEventListener('click',function(e){clicked=e.target.closest('a');schedule();});
+  nav.addEventListener('click',function(e){clicked=e.target.closest('a');clickedView=null;schedule();});
   schedule();
 })();

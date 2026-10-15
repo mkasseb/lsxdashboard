@@ -9,7 +9,7 @@ const engine=process.env.WEATHER_BROWSER||'chromium';
 const out=process.env.REDESIGN_ARTIFACTS;
 async function main(){
  const browser=await playwright[engine].launch({headless:engine!=='firefox',...(engine==='chromium'?{executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox','--enable-unsafe-swiftshader']}: {})});setBrowser(browser);
- const report=[];
+ const report=[];let clampedCases=0,releasedCases=0;
  try{for(const width of [320,390,768,1024,1180,1440,1920])for(const theme of ['dark','light']){
   const s=await open(config('layout fixture',{maps:true,touch:width<768,aqi:32,uv:4,river:[20,25,22]}),width),p=s.page;
   try{
@@ -53,13 +53,45 @@ async function main(){
     await p.waitForFunction(id=>document.querySelector('#jumpNav a[aria-current="location"]')?.getAttribute('href')==='#'+id,id).catch(async e=>{console.error(JSON.stringify({width,theme,id,geometry:await p.evaluate(()=>({scroll:scrollY,bar:document.querySelector('.jump-wrap').getBoundingClientRect().bottom,links:[...document.querySelectorAll('#jumpNav a')].map(l=>({href:l.hash,active:l.getAttribute('aria-current'),top:document.querySelector(l.hash).getBoundingClientRect().top}))}))}));throw e;});
    }
    // Context arriving after a clamped final-section scroll must not select an earlier section.
-   await p.evaluate(()=>{
+   const navBeforeGrowth=await p.evaluate(()=>{
     window.scrollTo(0,document.documentElement.scrollHeight);
+    const card=document.getElementById('climateCard').getBoundingClientRect();
+    const edge=Math.max(document.querySelector('.jump-wrap').getBoundingClientRect().bottom+16,parseFloat(getComputedStyle(document.getElementById('currentCard')).scrollMarginTop)+2);
+    const state={scroll:scrollY,top:card.top,bottom:card.bottom,edge,clamped:card.top>edge&&card.bottom<=innerHeight&&card.top+scrollY-edge>document.documentElement.scrollHeight-innerHeight};
     const growth=document.createElement('div');growth.id='late-context-growth';growth.style.height='24px';document.body.append(growth);
     window.dispatchEvent(new Event('resize'));
+    return state;
    });
+   if(navBeforeGrowth.clamped)clampedCases++;
    await p.clock.runFor(100);
    assert.equal(await p.locator('#jumpNav a[aria-current="location"]').getAttribute('href'),'#climateCard');
+   // Keep the original 24px-growth assertion above. Browser font metrics can leave
+   // a larger clamp gap; extend only this test spacer enough to permit alignment,
+   // then prove an actual scroll releases intent while the target stays visible.
+   const growthPermitsAlignment=await p.evaluate(()=>{
+    const bar=document.querySelector('.jump-wrap'),card=document.getElementById('climateCard').getBoundingClientRect();
+    const edge=Math.max(bar.getBoundingClientRect().bottom+16,parseFloat(getComputedStyle(document.getElementById('currentCard')).scrollMarginTop)+2);
+    const target=card.top+scrollY-edge,maxScroll=document.documentElement.scrollHeight-innerHeight;
+    if(card.top>edge&&card.bottom<=innerHeight&&target>maxScroll){
+     const growth=document.getElementById('late-context-growth');growth.style.height=(parseFloat(growth.style.height)+Math.ceil(target-maxScroll)+2)+'px';
+     window.dispatchEvent(new Event('resize'));
+    }
+    return card.top>edge&&card.bottom<=innerHeight&&card.top+scrollY-edge<=document.documentElement.scrollHeight-innerHeight;
+   });
+   if(growthPermitsAlignment){
+    await p.clock.runFor(100);
+    assert.equal(await p.locator('#jumpNav a[aria-current="location"]').getAttribute('href'),'#climateCard','Extra test growth cannot move the unchanged visible navigation target');
+    await p.evaluate(()=>scrollBy({top:-24,behavior:'instant'}));await p.clock.runFor(100);
+    // Native scroll delivery can follow the test-clock advance; await the actual
+    // navigation update instead of assuming it ran in that synthetic time slice.
+    await p.waitForFunction(()=>{const link=document.querySelector('#jumpNav a[aria-current="location"]');return link&&link.hash!=='#climateCard';},null,{timeout:5000});
+    const active=await p.evaluate(()=>{
+     const link=document.querySelector('#jumpNav a[aria-current="location"]'),box=document.querySelector(link.hash).getBoundingClientRect();
+     return {id:link.hash,top:box.top,edge:Math.max(document.querySelector('.jump-wrap').getBoundingClientRect().bottom+16,parseFloat(getComputedStyle(document.getElementById('currentCard')).scrollMarginTop)+2)};
+    });
+    assert.notEqual(active.id,'#climateCard','Actual scrolling releases retained jump intent');assert(active.top<=active.edge+4,'Active section returns to the viewport edge');
+    releasedCases++;
+   }
    await p.evaluate(()=>document.getElementById('late-context-growth').remove());
    const rivers=await p.locator('#rivers .rlink').evaluateAll(rows=>rows.map(row=>({w:row.clientWidth,prose:row.querySelector('.rsub')?.getBoundingClientRect().width,now:row.querySelector('.rmeta')?.getBoundingClientRect().top,forecast:row.querySelector('.rsub')?.getBoundingClientRect().top})));
    for(const row of rivers){assert(row.prose>=row.w*.7,'River detail must use the row width: '+JSON.stringify(row));assert(row.now<row.forecast,'Now precedes forecast details');}
@@ -82,7 +114,7 @@ async function main(){
     await p.screenshot({path:path.join(out,engine+'-'+width+'-'+theme+'-first-screen.png')});
    }
    if(width>1000){s.change(config('forecast outage',{maps:true,hourlyDown:true,dailyDown:true}));await p.evaluate(()=>loadForecast());const mapBox=await p.locator('#radar').boundingBox();assert(Math.abs(mapBox.height-radarSize.height)<2,'A forecast outage cannot resize or blank a working map');}
-   report.push({width,theme,status:'passed',planning:boxes,renderedMap:radarSize,loadedTiles,forecastRowHeights:rowHeights});console.log('PASS '+engine+' '+width+' '+theme);
+   report.push({width,theme,status:'passed',planning:boxes,renderedMap:radarSize,loadedTiles,forecastRowHeights:rowHeights,navBeforeGrowth,growthPermitsAlignment});console.log('PASS '+engine+' '+width+' '+theme);
   }finally{await s.context.close();}
  }
  // A short fallback must not stand in for a fully rendered map during layout review.
@@ -139,6 +171,8 @@ async function main(){
   assert.deepEqual(responsive.errors,[]);report.push({state:'Responsive card identity, focus and disclosure preservation',status:'passed'});console.log('PASS '+engine+' responsive planning');
  }finally{await responsive.context.close();}
  }finally{await browser.close();}
+ assert(clampedCases>0,'At least one fixture must exercise an initially clamped visible target');
+ assert(releasedCases>0,'At least one fixture must release retained intent after actual scrolling');
  if(out)fs.writeFileSync(path.join(out,engine+'-layout-report.json'),JSON.stringify(report,null,2));
  console.log(report.length+' layout/interaction cases passed');
 }

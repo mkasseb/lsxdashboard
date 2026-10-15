@@ -1137,7 +1137,7 @@ function loadClimateContext(){
   loadClimateContext.requestKey=pointKey+"|"+requestDate+"|"+dates.join(",");
   var generation=loadClimateContext.generation=(loadClimateContext.generation||0)+1;
   function fresh(){return locationFresh()&&generation===loadClimateContext.generation&&requestDate===ctxTodayKey();}
-  try{["lsxCtx_v1","lsxCtx_v2","lsxCtx_v3","lsxCtx_v4"].forEach(function(k){localStorage.removeItem(k);});}catch(e){}
+  try{["lsxCtx_v1","lsxCtx_v2","lsxCtx_v3","lsxCtx_v4","lsxCtx_v5"].forEach(function(k){localStorage.removeItem(k);});}catch(e){}
   return Promise.all([climStation(current.lat,current.lon),deepStation(current.lat,current.lon)]).then(function(sts){
     // Preserve the selected airport series. Normals/monthly/recent data remain on the nearest
     // climate station. An area/ThreadEx series is never substituted for airport observations.
@@ -1148,30 +1148,36 @@ function loadClimateContext(){
       var c=JSON.parse(localStorage.getItem(CTX_KEY)||"null");
       if(c&&c.key===key&&c.ctx&&c.ctx.ready&&c.ctx.recordAsOf===requestDate&&c.ctx.location===pointKey
         &&c.ctx.recordSource&&c.ctx.recordSource.sid===rec.sid
+        &&c.ctx.normalSource&&c.ctx.normalSource.sid===st.sid&&c.ctx.normalPeriod==="1991-2020"
+        &&Array.isArray(c.ctx.normalAttemptedDates)
         &&typeof c.checkedAt==="number"&&Date.now()>=c.checkedAt&&Date.now()-c.checkedAt<=FEEDS.context.age
         &&(c.status==="ready"||c.status==="partial")) cached=c;
     }catch(e){}
-    if(cached&&dates.every(function(date){return (cached.ctx.attemptedDates||[]).indexOf(date)>=0;})){
+    if(cached&&dates.every(function(date){return (cached.ctx.attemptedDates||[]).indexOf(date)>=0&&cached.ctx.normalAttemptedDates.indexOf(date)>=0;})){
       ctx=cached.ctx;
       feedChecks.context={status:cached.status,successAt:cached.checkedAt,issuedAt:0,saved:false};
       delete savedParts.cnCtx; freshnessCheck(); renderContext(); return;
     }
     var now=weatherParts(),y=now.year,mm=("0"+(now.month+1)).slice(-2),dd=("0"+now.day).slice(-2),today=requestDate;
-    var wkEndStr=new Date(calendarDate(today).getTime()+6*86400000).toISOString().slice(0,10);
     var histStart=(y-2)+"-"+mm+"-"+(mm==="02"&&dd==="29"?"28":dd);
     var nctx=cached?cached.ctx:{ready:false,recordDate:today,recHi:null,recLo:null,recPcp:null,doyHi:[],doyLo:[],
       monWet:[],monWarm:[],monMtd:null,monMean:null,monName:MONTHS[now.month],years:0,dry:null,hist:null,normWeek:{},
       recStation:rec.sid!==st.sid?(rec.name||rec.sid):"",recordsByDate:{},attemptedDates:[],
-      recordAsOf:today,location:pointKey,recordSource:rec,recordSelection:deep?"legacy airport":(rec.lookupFailed?"fallback airport":"nearest climate station")};
+      recordAsOf:today,location:pointKey,recordSource:rec,recordSelection:deep?"legacy airport":(rec.lookupFailed?"fallback airport":"nearest climate station"),
+      normalSource:st,normalPeriod:"1991-2020",normalAttemptedDates:[]};
     // Cache facts, never raw history. Adding a newly issued row reuses already checked dates
     // and ancillary climate facts without renewing their check time.
     var missing=dates.filter(function(date){return nctx.attemptedDates.indexOf(date)<0;}),tasks=[];
     if(!cached) tasks=[
       function(){return acisPost("StnData",{sid:st.sid,sdate:"por",edate:"por",
         elems:[{name:"pcpn",interval:"mly",duration:"mly",reduce:"sum"},{name:"avgt",interval:"mly",duration:"mly",reduce:"mean"}]});},
-      function(){return acisPost("StnData",{sid:st.sid,sdate:histStart,edate:today,elems:[{name:"maxt"},{name:"mint"},{name:"pcpn"}]});},
-      function(){return acisPost("StnData",{sid:st.sid,sdate:today,edate:wkEndStr,elems:[{name:"maxt",normal:"1"},{name:"mint",normal:"1"}]});}
+      function(){return acisPost("StnData",{sid:st.sid,sdate:histStart,edate:today,elems:[{name:"maxt"},{name:"mint"},{name:"pcpn"}]});}
     ];
+    var normalMissing=dates.filter(function(date){return nctx.normalAttemptedDates.indexOf(date)<0;});
+    var normalRequests=calendarNormalRequests(st.sid,normalMissing),normalOffset=tasks.length;
+    normalRequests.forEach(function(params){tasks.push(function(){return acisPost("StnData",params).then(function(value){
+      return {payload:value,checkedAt:Date.now()};
+    });});});
     var recordOffset=tasks.length;
     missing.forEach(function(date){tasks.push(function(){return acisPost("StnData",calendarRecordRequest(rec.sid,date,today)).then(function(value){
       return {payload:value,checkedAt:Date.now()};
@@ -1179,6 +1185,18 @@ function loadClimateContext(){
     return acisContextQueries(tasks,fresh).then(function(rs){
       if(!fresh()) return;
       function data(i){var r=rs[i],v=r&&r.status==="fulfilled"&&r.value;return v&&!v.error&&Array.isArray(v.data)?v.data:null;}
+      normalMissing.forEach(function(date){nctx.normalAttemptedDates.push(date);});
+      normalRequests.forEach(function(params,index){
+        var r=rs[normalOffset+index],v=r&&r.status==="fulfilled"&&r.value,p=v&&v.payload;
+        var requested=normalMissing.filter(function(date){return date>=params.sdate&&date<=params.edate;});
+        var facts=calendarNormalFacts(p,requested,st.sid);
+        Object.keys(facts).forEach(function(date){
+          var normal=facts[date];
+          normal.checkedAt=v.checkedAt;normal.location=pointKey;normal.asOf=today;
+          normal.source={sid:st.sid,name:p.meta.name||st.name||st.sid,sids:p.meta.sids,ll:p.meta.ll};
+          nctx.normWeek[date]=normal;
+        });
+      });
       missing.forEach(function(date,index){
         nctx.attemptedDates.push(date);
         var r=rs[recordOffset+index],v=r&&r.status==="fulfilled"&&r.value,p=v&&v.payload;
@@ -1220,19 +1238,13 @@ function loadClimateContext(){
           }
           if(lastRain) nctx.dry={days:days, date:lastRain.date, amt:lastRain.amt};
         }
-        // 4 — normals for the week ahead
-        var nw=data(2);
-        if(nw) nw.forEach(function(r){
-          var h=acisNum(r[1]), l=acisNum(r[2]);
-          if(h!=null||l!=null) nctx.normWeek[r[0]]={hi:h, lo:l};
-        });
-
-        nctx.ancillaryComplete=[0,1,2].every(function(i){var rows=data(i);return rows&&rows.length;});
+        nctx.ancillaryComplete=[0,1].every(function(i){var rows=data(i);return rows&&rows.length;});
       }
-      nctx.attemptedDates.sort();
+      nctx.attemptedDates.sort();nctx.normalAttemptedDates.sort();
       nctx.ready=!!(Object.keys(nctx.recordsByDate).length||nctx.monWet.length||nctx.hist||Object.keys(nctx.normWeek).length);
       var complete=nctx.ancillaryComplete&&dates.every(function(date){
-        var r=nctx.recordsByDate[date],min=calendarRecordMinimum(date);return r&&r.hiCount>=min&&r.loCount>=min;
+        var r=nctx.recordsByDate[date],min=calendarRecordMinimum(date),normal=nctx.normWeek[date];
+        return r&&r.hiCount>=min&&r.loCount>=min&&normal&&normal.hi!=null&&normal.lo!=null;
       });
       ctx=nctx;
       feedUpdate("context",ctx.ready?(complete?"ready":"partial"):"unavailable");

@@ -52,20 +52,21 @@ async function main(){
   for(const width of [1180,1440,1920,390,768,1000,1001]){
    await page.setViewportSize({width,height:1000});await settled(page);const g=await geometry(page);verifyGeometry(g);
    assert(await page.evaluate(()=>previewMap===rvMap&&previewCards.every(card=>card===document.getElementById(card.id))&&previewDays===JSON.stringify(smart.days)),'Responsive placement preserves actual cards, map and forecast');
-   assert.equal(await page.locator('#daily .record-inline').count(),7);
-   assert(await page.locator('.record-inline').evaluateAll(rows=>rows.every(e=>e.previousElementSibling.classList.contains('nbm-inline')||e.previousElementSibling.classList.contains('day'))),'Each record row stays beneath its own NBM or NWS row');
-   const primary=await page.locator('#daily .day').allTextContents(),records=await page.locator('.record-inline').allTextContents();
+   assert.equal(await page.locator('#daily .normal-inline,.record-inline').count(),0);assert.equal(await page.locator('.normal-detail,.record-detail').count(),14);
+   assert(await page.locator('.normal-detail,.record-detail').evaluateAll(details=>details.every(e=>e.closest('.day-detail'))),'Climate values remain in expanded day details');
+   assert(await page.locator('.nbm-inline').evaluateAll(rows=>rows.every(e=>e.previousElementSibling.classList.contains('day'))),'Collapsed NWS and NBM stay adjacent');
+   const primary=await page.locator('#daily .day').allTextContents(),normals=await page.locator('.normal-detail').allTextContents();
    for(const theme of ['light','dark']){
     await page.evaluate(t=>applyTheme(t),theme);await settled(page);verifyGeometry(await geometry(page));
     if(width>1000)assertPlanningGap(await page.evaluate(planningGapGeometry));
-    assert.deepEqual(await page.locator('#daily .day').allTextContents(),primary);assert.deepEqual(await page.locator('.record-inline').allTextContents(),records);
+    assert.deepEqual(await page.locator('#daily .day').allTextContents(),primary);assert.deepEqual(await page.locator('.normal-detail').allTextContents(),normals);
     if([1180,1440,1920,390,768].includes(width)){
      await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:path.join(out,`live-${width}-${theme}-page.png`),fullPage:true});
      if(width>1000)await page.locator('.planning-grid').screenshot({path:path.join(out,`live-${width}-${theme}-planning.png`),style:'.jump-wrap,.skip{visibility:hidden !important}'});
      await page.locator('#forecastCard').screenshot({path:path.join(out,`live-${width}-${theme}-week.png`),style:'.jump-wrap,.skip{visibility:hidden !important}'});
     }
    }
-   audit.live.push({width,geometry:g,records,station:await page.locator('#forecastRecordStation').textContent(),checks:await page.evaluate(()=>Object.fromEntries(Object.entries(feedChecks).map(([key,value])=>[key,value.status]))),mapDiagnostics:await page.evaluate(()=>mapDiagnosticsText())});
+   audit.live.push({width,geometry:g,normals,station:await page.locator('#forecastNormalStation').textContent(),recordStation:await page.locator('#forecastRecordStation').textContent(),checks:await page.evaluate(()=>Object.fromEntries(Object.entries(feedChecks).map(([key,value])=>[key,value.status]))),mapDiagnostics:await page.evaluate(()=>mapDiagnosticsText())});
   }
   await page.setViewportSize({width:1440,height:1000});await settled(page);
   audit.gapStates=[];
@@ -97,7 +98,7 @@ async function main(){
   assert.equal(await page.evaluate(()=>document.activeElement.id),'rsFull');assert(!(await page.locator('header').evaluate(e=>e.inert)));verifyGeometry(await geometry(page));
   await page.setViewportSize({width:1440,height:1000});await settled(page);verifyGeometry(await geometry(page));
   audit.interactions='Native daily/risk disclosures, hourly 72-hour slider and breakpoint focus, fullscreen resize/inert/Tab/Escape/focus passed';
-  audit.sourceState=await page.evaluate(()=>({location:current,checkedAt:new Date().toISOString(),context:feedChecks.context,records:ctx.recordsByDate,forecastIssuedAt:feedChecks.daily.issuedAt,model:feedChecks.nbmRange,hourlyModel:feedChecks.nbmHourly}));
+  audit.sourceState=await page.evaluate(()=>({location:current,checkedAt:new Date().toISOString(),context:feedChecks.context,records:ctx.recordsByDate,normals:ctx.normWeek,normalSource:ctx.normalSource,forecastIssuedAt:feedChecks.daily.issuedAt,model:feedChecks.nbmRange,hourlyModel:feedChecks.nbmHourly}));
   assert.deepEqual(audit.runtimeErrors,[]);audit.result='passed';
  }finally{await context.close();await browser.close();}
 }

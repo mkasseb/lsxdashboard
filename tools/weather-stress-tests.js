@@ -135,6 +135,11 @@ async function open(c, width=390) {
     if(c.climateFixture&&u.hostname==='data.rcc-acis.org'){
       const params=JSON.parse(new URLSearchParams(req.postData()||'').get('params')||'{}');
       if(u.pathname.endsWith('StnMeta'))return reply({meta:[{sids:['KSTL 3'],name:'St Louis',ll:[-90.37,38.75],valid_daterange:Array(3).fill(['1850-01-01','2026-09-30'])}]});
+      if(params.elems?.[0]?.normal==='91'){
+        // Explicitly synthetic normals for stress scenarios; recorded normals have their own fixture.
+        const start=Date.parse(params.sdate+'T12:00:00Z'),end=Date.parse(params.edate+'T12:00:00Z');
+        return reply({meta:{sids:['KSTL 3'],name:'St Louis',ll:[-90.37,38.75]},data:Array.from({length:Math.floor((end-start)/(24*H))+1},(_,i)=>[new Date(start+i*24*H).toISOString().slice(0,10),75-i,50-i])});
+      }
       if(c.datedRecords&&/^185[02]-/.test(String(params.sdate))){
         assert.equal(new Date(params.sdate+'T12:00:00Z').toISOString().slice(0,10),params.sdate,'ACIS start date must be valid, including leap day');
         const today=stamp(c.now).slice(0,10),date=params.edate,todayDate=date.slice(5)===today.slice(5);
@@ -765,7 +770,7 @@ async function main() {
       const checkedAt=base-H;
       await page.evaluate(checkedAt=>{
         stopSchedule();
-        const cached={...ctx,ready:true,recHi:{v:90,y:'2020'},recordAsOf:ctxTodayKey(),location:locationKey(current),recordSource:ctx.recordSource||{sid:'KSTL'},attemptedDates:forecastRecordDates(smart.days,ctxTodayKey())};
+        const cached={...ctx,ready:true,recHi:{v:90,y:'2020'},recordAsOf:ctxTodayKey(),location:locationKey(current),recordSource:ctx.recordSource||{sid:'KSTL'},attemptedDates:forecastRecordDates(smart.days,ctxTodayKey()),normalSource:{sid:'KSTL'},normalPeriod:'1991-2020',normalAttemptedDates:forecastRecordDates(smart.days,ctxTodayKey())};
         localStorage.setItem(CTX_KEY,JSON.stringify({key:'KSTL|KSTL|'+ctxTodayKey(),ctx:cached,status:'partial',checkedAt}));
         return loadClimateContext();
       },checkedAt);
@@ -817,7 +822,9 @@ async function main() {
         const today=weatherParts().key,tomorrow=new Date(calendarDate(today).getTime()+86400000).toISOString().slice(0,10);
         Object.assign(climate,{normHi:75,normLo:50,normDate:today,fcHi:95,fcLo:60,fcHiDate:tomorrow,fcLoDate:tomorrow,fcHiLabel:' (tmrw)'});
         Object.assign(ctx,{ready:true,recordDate:today,years:40,recHi:{v:90,y:2020},recLo:{v:30,y:2020},doyHi:Array.from({length:40},(_,i)=>50+i)});
-        ctx.normWeek[tomorrow]={hi:85,lo:55};
+        const normalSource={sid:'KSTL',sids:['KSTL 3'],name:'St Louis'};
+        Object.assign(ctx,{location:locationKey(current),recordAsOf:today,normalPeriod:'1991-2020',normalSource});
+        ctx.normWeek[tomorrow]={date:tomorrow,hi:85,lo:55,normalPeriod:'1991-2020',source:normalSource,location:locationKey(current),asOf:today,checkedAt:Date.now()};
         renderVsNormal();renderContext();renderTheCall();
       });
       await expectText(page,'#cnToday',/95°.*\(\+10°\).*normal 85°/s);

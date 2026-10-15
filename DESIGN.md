@@ -669,4 +669,5 @@ flood shortcuts are retired; their existing contextual destinations remain. The 
 map covers Missouri and Illinois. Static links stay outside feed-rendered and snapshot-restored
 fragments, so refreshes and outages preserve them without a new snapshot schema. A requested final
 navigation section stays active when it is fully visible but too close to the document end to align
-with the sticky bar, including after late context growth.
+with the sticky bar, including after late context growth at the same viewport. Actual scrolling,
+a new section jump or a viewport dimension change retires that remembered selection.
