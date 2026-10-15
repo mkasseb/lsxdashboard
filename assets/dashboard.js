@@ -4531,7 +4531,7 @@ scheduleMasonry();
 
 /* Active navigation follows rendered geometry, including independent disclosures and repacking. */
 (function(){
-  var nav=document.getElementById("jumpNav"), bar=nav.parentElement, queued=false, clicked=null;
+  var nav=document.getElementById("jumpNav"), bar=nav.parentElement, queued=false, clicked=null, clickedView=null;
   var links=[].slice.call(nav.querySelectorAll('a'));
   function update(){
     queued=false;
@@ -4545,12 +4545,22 @@ scheduleMasonry();
       var visible=candidates.filter(function(item){return item.box.top<window.innerHeight&&item.box.bottom>edge;});
       if(visible.length)active=visible[visible.length-1];
     }
+    // Native anchor jumps settle before this frame. Retire their intent before
+    // evaluating geometry after a real scroll or viewport change, so an old click
+    // cannot re-arm merely because its section becomes clamped again later.
+    if(clickedView&&(Math.abs(window.scrollY-clickedView.y)>1||
+      window.innerWidth!==clickedView.width||window.innerHeight!==clickedView.height)){
+      clicked=null;clickedView=null;
+    }
     var chosen=candidates.find(function(item){return item.link===clicked;});
-    // A short final section cannot align with the bar. Later context growth can also move
-    // the document bottom after scrolling; retain the requested section while it is fully visible.
+    var fullyVisible=chosen&&chosen.box.top>edge&&chosen.box.bottom<=window.innerHeight;
+    var clamped=fullyVisible&&chosen.box.top+window.scrollY-edge>document.documentElement.scrollHeight-window.innerHeight;
+    if(chosen&&!clickedView)clickedView={y:window.scrollY,width:window.innerWidth,height:window.innerHeight,clamped:!!clamped};
+    if(clickedView){if(clamped)clickedView.clamped=true;else if(!fullyVisible)clickedView.clamped=false;}
+    // Late content can permit further scrolling without moving a fully visible
+    // target. Preserve the initial clamped choice until the viewport actually moves.
     if(chosen&&active&&(Math.abs(chosen.box.top-active.box.top)<=4||
-      chosen.box.top>edge&&chosen.box.bottom<=window.innerHeight&&
-      chosen.box.top+window.scrollY-edge>document.documentElement.scrollHeight-window.innerHeight))active=chosen;
+      fullyVisible&&clickedView.clamped))active=chosen;
     links.forEach(function(link){if(active&&link===active.link)link.setAttribute('aria-current','location');else link.removeAttribute('aria-current');});
   }
   function schedule(){if(!queued){queued=true;requestAnimationFrame(update);}}
@@ -4559,6 +4569,6 @@ scheduleMasonry();
   if(window.ResizeObserver)new ResizeObserver(schedule).observe(document.getElementById('main'));
   document.addEventListener('lsxlayout',schedule);
   document.addEventListener('toggle',schedule,true);
-  nav.addEventListener('click',function(e){clicked=e.target.closest('a');schedule();});
+  nav.addEventListener('click',function(e){clicked=e.target.closest('a');clickedView=null;schedule();});
   schedule();
 })();
