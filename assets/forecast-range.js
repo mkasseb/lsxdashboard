@@ -189,7 +189,7 @@ var NbmRange=(function(){
     if(canDefer(days)){pendingRender=true;return;}
     pendingRender=false;if(activation)finishActivation();
     var focus=captureView();
-    daily.querySelectorAll('.nbm-inline,.nbm-period-detail').forEach(function(el){el.remove();});
+    daily.querySelectorAll('.nbm-inline,.nbm-unavailable,.nbm-period-detail').forEach(function(el){el.remove();});
     body.replaceChildren();
     status.textContent=result.periods?'NBM model guidance · QMD cycle '+new Date(result.run).toISOString().slice(0,16).replace('T',' ')+' UTC · '+age(result.run,Date.now())+' old':result.reason;
     add('p','NWS temperatures are the official forecast. The NBM model range spans native NOAA NBM P25 to P75, the middle 50% of modeled outcomes. Roughly 25% of modeled outcomes lie below it and 25% above it; outcomes outside remain possible. This applies to each native temperature interval, not to the whole forecast staying inside. The bounds are P25 and P75; P50 is the median (middle estimate). Model values never replace the NWS forecast.',body);
@@ -206,14 +206,17 @@ var NbmRange=(function(){
       var matches=groups[index]||[],missing=['day','night'].filter(function(part){return day[part]&&time(day[part].endTime)>Date.now()&&!matches.some(function(m){return m.part===part;});});
       var detail=document.createElement('div');detail.className='nbm-period-detail';
       var grid=item.querySelector('.dd-grid');grid.before(detail);
+      var line=document.createElement('div');line.className=matches.length?'nbm-inline':'nbm-unavailable';
+      add('span','NBM model range',line,'nbm-label');
+      item.querySelector('.day').after(line);
       if(!matches.length){
+        var availability=result.status==='stale'?'Unavailable · data expired':result.periods?'Unavailable · no matching period':
+          !currentData&&failure==='Checking NBM model guidance…'?'Checking data…':'Unavailable';
+        add('span',availability,line,'nbm-band');
         add('p',result.periods?'Model range unavailable for this day: no matching model period.':'Model range unavailable. '+result.reason,detail,'nbm-range-note');return;
       }
-      var line=document.createElement('div');line.className='nbm-inline';
-      add('span','NBM model range',line,'nbm-label');
       matches.forEach(function(m){add('span',(m.part==='day'?'High ':'Low ')+bounds(m.nbm),line,'nbm-band');});
       missing.forEach(function(part){add('span',(part==='day'?'High':'Low')+' unavailable',line,'nbm-band');});
-      item.querySelector('.day').after(line);
       add('p','The range shows the middle 50% of modeled high/low outcomes. Higher or lower outcomes remain possible.',detail,'nbm-range-note');
       var different=matches.filter(function(m){return !m.exact;}).length;
       if(different)add('p',different===matches.length?'NBM uses different 18-hour periods from the NWS forecast.':'Some NBM periods differ from the NWS forecast.',detail,'nbm-period-note');

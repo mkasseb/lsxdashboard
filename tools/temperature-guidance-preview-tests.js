@@ -36,8 +36,13 @@ async function main(){
    assert.equal(await page.locator('.normal-inline,.record-inline').count(),0);assert.equal(await page.locator('.normal-detail,.record-detail').count(),14);
    assert.equal(await page.locator('.nbm-period-detail h3').count(),0);
    assert(await page.locator('.nbm-timing').evaluateAll(rows=>rows.every(e=>!e.open)),'Technical details start collapsed');
+   assert(await page.locator('#daily .day').evaluateAll(rows=>rows.every(e=>e.getAttribute('aria-expanded')==='false')));
+   assert.equal(await page.locator('#daily .nbm-inline,#daily .nbm-unavailable').count(),7);
+   assert(await page.locator('#daily .nbm-inline,#daily .nbm-unavailable').evaluateAll(rows=>rows.every(e=>e.getClientRects().length>0&&!e.closest('.day-detail')&&e.previousElementSibling.classList.contains('day'))),'Every collapsed row visibly contains model guidance or its unavailable state');
    if(!facts.matches.length){
     assert.equal(await page.locator('.nbm-inline,.nbm-timing').count(),0,'Expired/unavailable model values stay withheld');
+    assert.equal(await page.locator('.nbm-unavailable').count(),7,'Unavailable guidance remains explicit while collapsed');
+    if(facts.status==='stale')assert(await page.locator('.nbm-unavailable').evaluateAll(rows=>rows.every(e=>e.textContent.includes('data expired'))));
     const day=page.locator('#daily .day').first();await day.click();assert.match(await page.locator('.nbm-range-note').first().innerText(),/unavailable/);await day.click();
    }
    for(const row of [...new Set(facts.matches.map(m=>m.row))]){

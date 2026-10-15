@@ -220,6 +220,10 @@ and a period-mismatch note only where the matched intervals differ. **Timing & m
 native keyboard-accessible disclosure for the NWS temperature and exact interval, native NOAA
 NBM P25/P50/P75 values (P50 is the median), and the model's 18-hour interval. Missing model sides are
 explicit and do not suppress a usable side. Unavailable guidance leaves the official forecast usable.
+Ranges remain visible with every day collapsed. When no range can be shown, the same compact
+position displays an unavailable reason (including expired data); values older than 24 hours
+remain withheld. An immutable preview can be refreshed from already-published main data without
+running extraction, changing schedules or altering source/retrieval timestamps.
 Disclosure state follows the location and NWS intervals across model refreshes and forecast repaints;
 new dates and locations do not inherit state by row index. All model annotations remain inside the
 existing snapshot-exclusion boundary, so the NWS snapshot schema and lifetime are unchanged.

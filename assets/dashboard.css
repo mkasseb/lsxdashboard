@@ -1595,7 +1595,7 @@
 .context-toggle{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:7px 10px;cursor:pointer}
 .context-toggle{margin:0 0 10px}
 .context-body[hidden]{display:none}
-.nbm-inline{display:flex;flex-wrap:wrap;gap:3px 10px;padding:0 12px 9px;font-size:.76rem;line-height:1.4;color:var(--muted)}
+.nbm-inline,.nbm-unavailable{display:flex;flex-wrap:wrap;gap:3px 10px;padding:0 12px 9px;font-size:.76rem;line-height:1.4;color:var(--muted)}
 .nbm-label{font-weight:700}.nbm-band{white-space:nowrap}.nbm-window-note{color:var(--muted);font-size:.75rem}
 .nbm-period-detail{padding:10px 0;border-top:1px solid var(--border)}
 .nbm-period-detail h3,#nbmInfo h3{font-size:.85rem;margin:0 0 8px}
@@ -1787,7 +1787,7 @@ body{transition:none}
   .forecast-primary-source{display:inline;font-size:12px;font-weight:400;color:var(--muted)}
   .desktop-planning #forecastCard h2{margin-bottom:8px}
   .desktop-planning #forecastCard .day{padding-block:7px}
-  .desktop-planning #forecastCard .nbm-inline{padding:0 0 5px}
+  .desktop-planning #forecastCard .nbm-inline,.desktop-planning #forecastCard .nbm-unavailable{padding:0 0 5px}
   #forecastCard .day{grid-template-columns:minmax(90px,1.2fr) 28px 52px minmax(40px,1fr) 78px 12px;gap:8px}
   body:not(.radar-full) .desktop-planning #radarCard{align-self:auto;display:block;min-height:0}
   body:not(.radar-full) .desktop-planning #radarCard .rs-view{flex:0 0 auto;min-height:0}

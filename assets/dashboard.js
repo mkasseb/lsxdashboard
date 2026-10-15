@@ -3865,7 +3865,7 @@ function saveSnapshot(){
       if(typeof NbmRange!=="undefined"&&NbmRange.forecastPending())return;
       snapshotEl=el.cloneNode(true);
       removeLegacyNormalComparisons(snapshotEl);
-      snapshotEl.querySelectorAll(".nbm-inline,.nbm-period-detail,.record-inline,.record-detail,.normal-inline,.normal-detail,.normal-comparison").forEach(function(node){node.remove();});
+      snapshotEl.querySelectorAll(".nbm-inline,.nbm-unavailable,.nbm-period-detail,.record-inline,.record-detail,.normal-inline,.normal-detail,.normal-comparison").forEach(function(node){node.remove();});
     }
     var h=snapshotEl.innerHTML;
     if(!h||/class="loading"/.test(h)) return;   // never cache a spinner

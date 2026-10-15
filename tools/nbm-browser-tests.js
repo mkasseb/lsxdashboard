@@ -14,6 +14,28 @@ async function model(page,data=regional){await page.unroute(modelRoute);await pa
 async function primary(page){return page.evaluate(()=>({days:JSON.stringify(smart.days),call:document.getElementById('callCard').innerText,rows:Array.from(document.querySelectorAll('#daily .day'),x=>x.textContent),detail:Array.from(document.querySelectorAll('#daily .dd-text'),x=>x.textContent)}));}
 async function expandDay(page,index=0){const day=page.locator('#daily .day').nth(index);if(await day.getAttribute('aria-expanded')!=='true')await day.click();}
 async function expandTiming(page,index=0){await expandDay(page,index);const timing=page.locator('.nbm-timing').nth(index),summary=timing.locator('summary');await summary.focus();if(!await timing.evaluate(e=>e.open))await summary.press('Enter');}
+async function collapsedRows(page,state,width,timezone){
+ await page.evaluate(()=>document.querySelectorAll('#daily .day-item').forEach(row=>setOpen(row,row.querySelector('.day'),false)));
+ const count=await page.locator('#daily .day-item').count();assert.equal(count,7);
+ for(const theme of ['dark','light']){
+  await page.evaluate(t=>{applyTheme(t);layoutMasonry();},theme);await page.clock.runFor(500);
+  assert(await page.locator('#daily .day').evaluateAll(rows=>rows.every(e=>e.getAttribute('aria-expanded')==='false')));
+  assert.equal(await page.locator('#daily .nbm-inline,#daily .nbm-unavailable').count(),count);
+  assert(await page.locator('#daily .nbm-inline,#daily .nbm-unavailable').evaluateAll(lines=>lines.every(e=>e.getClientRects().length>0&&!e.closest('.day-detail')&&e.previousElementSibling.classList.contains('day'))),'Collapsed rows visibly retain the range or its unavailable reason');
+  if(state!=='fresh'){
+   assert.equal(await page.locator('.nbm-inline,.nbm-comparison').count(),0,'Unavailable data never exposes model numbers');
+   assert.equal(await page.locator('.nbm-unavailable').count(),count);
+   assert(await page.locator('.nbm-unavailable').evaluateAll((rows,expired)=>rows.every(e=>e.textContent.includes(expired?'data expired':'Unavailable')),state==='expired'));
+  }
+  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+  if(process.env.NBM_ARTIFACTS){fs.mkdirSync(process.env.NBM_ARTIFACTS,{recursive:true});await page.locator('#forecastCard').screenshot({style:'.jump-wrap,.skip{visibility:hidden!important}',path:path.join(process.env.NBM_ARTIFACTS,`recorded-collapsed-${state}-${width}-${timezone.replace('/','-')}-${theme}.png`)});}
+  const row=page.locator('#daily .day').first();await row.focus();await row.press('Enter');
+  assert.equal(await row.getAttribute('aria-expanded'),'true');
+  assert.equal(await page.locator('#daily .nbm-inline,#daily .nbm-unavailable').first().isVisible(),true);
+  assert.match(await page.locator('.nbm-period-detail').first().innerText(),state==='fresh'?/middle 50%/:/unavailable/);
+  await row.press('Enter');
+ }
+}
 async function main(){
  const engine=process.env.WEATHER_BROWSER||'chromium';
  const browser=await playwright[engine].launch({headless:engine!=='firefox',...(engine==='chromium'?{executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']}: {})});setBrowser(browser);
@@ -30,6 +52,7 @@ async function main(){
     assert.equal(await p.locator('.nbm-inline .nbm-window-note').count(),0);
     assert.equal(await p.locator('#nbmWindowHelp').count(),1);
     assert.match(await p.locator('#nbmWindowHelp').innerText(),/18-hour windows/);
+    await collapsedRows(p,'fresh',width,timezone);
     const day=p.locator('#daily .day').first();await day.focus();await day.press('Enter');
     assert.equal(await day.getAttribute('aria-expanded'),'true');
     const timing=p.locator('.nbm-timing').first(),timingSummary=timing.locator('summary');
@@ -138,6 +161,9 @@ async function main(){
     await p.route(modelRoute,r=>r.fulfill({status:503,json:{}}));await p.evaluate(()=>loadNbmRange());
     await release();await p.evaluate(()=>window.nbmPending);assert.equal(await p.locator('.nbm-inline').count(),0);
     assert.match(await p.locator('#nbmStatus').innerText(),/unavailable/);
+    await collapsedRows(p,'missing',width,timezone);
+    await p.evaluate(()=>{snapSafeSeq=locSeq;saveSnapshot();});
+    assert(!(await p.evaluate(()=>JSON.parse(localStorage.getItem(SNAP_KEY)).parts.daily)).includes('nbm-'),'Unavailable model annotations never enter saved NWS HTML');
     // Location generation reset clears both sources; previous-location responses cannot repaint.
     release=null;await p.unroute(modelRoute);await p.route(modelRoute,r=>new Promise(resolve=>{release=async()=>{await r.fulfill({json:regional});resolve();};}));
     await Promise.all([p.waitForRequest(modelRoute),p.evaluate(()=>{window.nbmPending=loadNbmRange();})]);
@@ -148,12 +174,14 @@ async function main(){
     await p.evaluate(()=>{locSeq++;current={...current,lat:38.8};resetLocationState();clearLocationUI();});await nws(p);await model(p);
     await p.clock.setFixedTime(new Date(Date.parse(regional.run)+25*3600000));await p.evaluate(()=>loadForecast._paint());
     assert.equal(await p.locator('.nbm-inline').count(),0);assert.match(await p.locator('#nbmStatus').innerText(),/24 hours old/);
+    await collapsedRows(p,'expired',width,timezone);
     // Authentic full horizon: seven rows, including the final issued night, without repeated prompts.
     await p.clock.setFixedTime(new Date(Math.max(Date.parse(full.retrievedAt),Date.parse(fullCapture.retrievedAt))));
     await nws(p,fullCapture.forecast);const officialFull=await primary(p);await model(p,full);
     assert.deepEqual(await primary(p),officialFull);
     assert.equal(await p.locator('.nbm-inline').count(),7);assert.equal(await p.locator('.nbm-comparison').count(),14);
     assert.equal(await p.locator('.nbm-inline .nbm-window-note').count(),0);
+    await collapsedRows(p,'fresh',width,timezone);
     const last=p.locator('#daily .day').last();await last.focus();await last.press('Enter');
     assert.equal(await p.locator('.nbm-timing').last().evaluate(e=>e.open),false,'New dates/location do not inherit a previous disclosure');
     await p.locator('.nbm-timing summary').last().focus();await p.locator('.nbm-timing summary').last().press('Enter');
