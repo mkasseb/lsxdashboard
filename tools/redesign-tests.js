@@ -65,14 +65,22 @@ async function main(){
    if(navBeforeGrowth.clamped)clampedCases++;
    await p.clock.runFor(100);
    assert.equal(await p.locator('#jumpNav a[aria-current="location"]').getAttribute('href'),'#climateCard');
-   // Once late growth permits alignment, an actual scroll must release the clamped
-   // jump intent even when the formerly selected card is still fully visible.
+   // Keep the original 24px-growth assertion above. Browser font metrics can leave
+   // a larger clamp gap; extend only this test spacer enough to permit alignment,
+   // then prove an actual scroll releases intent while the target stays visible.
    const growthPermitsAlignment=await p.evaluate(()=>{
     const bar=document.querySelector('.jump-wrap'),card=document.getElementById('climateCard').getBoundingClientRect();
     const edge=Math.max(bar.getBoundingClientRect().bottom+16,parseFloat(getComputedStyle(document.getElementById('currentCard')).scrollMarginTop)+2);
+    const target=card.top+scrollY-edge,maxScroll=document.documentElement.scrollHeight-innerHeight;
+    if(card.top>edge&&card.bottom<=innerHeight&&target>maxScroll){
+     const growth=document.getElementById('late-context-growth');growth.style.height=(parseFloat(growth.style.height)+Math.ceil(target-maxScroll)+2)+'px';
+     window.dispatchEvent(new Event('resize'));
+    }
     return card.top>edge&&card.bottom<=innerHeight&&card.top+scrollY-edge<=document.documentElement.scrollHeight-innerHeight;
    });
    if(growthPermitsAlignment){
+    await p.clock.runFor(100);
+    assert.equal(await p.locator('#jumpNav a[aria-current="location"]').getAttribute('href'),'#climateCard','Extra test growth cannot move the unchanged visible navigation target');
     await p.evaluate(()=>scrollBy({top:-24,behavior:'instant'}));await p.clock.runFor(100);
     const active=await p.evaluate(()=>{
      const link=document.querySelector('#jumpNav a[aria-current="location"]'),box=document.querySelector(link.hash).getBoundingClientRect();
