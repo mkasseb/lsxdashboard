@@ -82,6 +82,9 @@ async function main(){
     await p.clock.runFor(100);
     assert.equal(await p.locator('#jumpNav a[aria-current="location"]').getAttribute('href'),'#climateCard','Extra test growth cannot move the unchanged visible navigation target');
     await p.evaluate(()=>scrollBy({top:-24,behavior:'instant'}));await p.clock.runFor(100);
+    // Native scroll delivery can follow the test-clock advance; await the actual
+    // navigation update instead of assuming it ran in that synthetic time slice.
+    await p.waitForFunction(()=>{const link=document.querySelector('#jumpNav a[aria-current="location"]');return link&&link.hash!=='#climateCard';},null,{timeout:5000});
     const active=await p.evaluate(()=>{
      const link=document.querySelector('#jumpNav a[aria-current="location"]'),box=document.querySelector(link.hash).getBoundingClientRect();
      return {id:link.hash,top:box.top,edge:Math.max(document.querySelector('.jump-wrap').getBoundingClientRect().bottom+16,parseFloat(getComputedStyle(document.getElementById('currentCard')).scrollMarginTop)+2)};
