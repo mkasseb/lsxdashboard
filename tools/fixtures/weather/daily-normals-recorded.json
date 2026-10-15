@@ -1,0 +1,851 @@
+{
+  "description": "Bounded live ACIS daily NOAA NCEI 1991-2020 normals; source station identities and calendar dates retained. Other browser weather scenarios are labelled synthetic.",
+  "normalPeriod": "1991-2020",
+  "units": "degrees Fahrenheit",
+  "documentation": [
+    "https://www.rcc-acis.org/ACISWSdoc.html",
+    "https://www.ncei.noaa.gov/products/land-based-station/us-climate-normals",
+    "https://www.ncei.noaa.gov/data/normals-daily/1991-2020/doc/Normals_DLY_Documentation_1991-2020.pdf"
+  ],
+  "requests": [
+    {
+      "window": "current",
+      "params": {
+        "sid": "COU",
+        "sdate": "2026-10-15",
+        "edate": "2026-10-21",
+        "meta": [
+          "name",
+          "sids",
+          "ll"
+        ],
+        "elems": [
+          {
+            "name": "maxt",
+            "normal": "91"
+          },
+          {
+            "name": "mint",
+            "normal": "91"
+          }
+        ]
+      },
+      "url": "https://data.rcc-acis.org/StnData",
+      "retrievedAt": "2026-10-15T00:29:55.967007+00:00",
+      "status": 200,
+      "responseBytes": 374,
+      "sha256": "8366b6f55b82e5aa422c21555278b6489c1de5a99521e29ec80c5eae7277f904",
+      "payload": {
+        "meta": {
+          "ll": [
+            -92.21475,
+            38.81704
+          ],
+          "sids": [
+            "03945 1",
+            "231791 2",
+            "COU 3",
+            "72445 4",
+            "KCOU 5",
+            "USW00003945 6",
+            "COU 7",
+            "USW00003945 32"
+          ],
+          "name": "COLUMBIA REGIONAL AIRPORT"
+        },
+        "data": [
+          [
+            "2026-10-15",
+            "69",
+            "47"
+          ],
+          [
+            "2026-10-16",
+            "68",
+            "47"
+          ],
+          [
+            "2026-10-17",
+            "68",
+            "46"
+          ],
+          [
+            "2026-10-18",
+            "67",
+            "46"
+          ],
+          [
+            "2026-10-19",
+            "67",
+            "46"
+          ],
+          [
+            "2026-10-20",
+            "67",
+            "45"
+          ],
+          [
+            "2026-10-21",
+            "66",
+            "45"
+          ]
+        ]
+      }
+    },
+    {
+      "window": "leap",
+      "params": {
+        "sid": "COU",
+        "sdate": "2028-02-27",
+        "edate": "2028-03-04",
+        "meta": [
+          "name",
+          "sids",
+          "ll"
+        ],
+        "elems": [
+          {
+            "name": "maxt",
+            "normal": "91"
+          },
+          {
+            "name": "mint",
+            "normal": "91"
+          }
+        ]
+      },
+      "url": "https://data.rcc-acis.org/StnData",
+      "retrievedAt": "2026-10-15T00:29:56.267763+00:00",
+      "status": 200,
+      "responseBytes": 374,
+      "sha256": "0afb743a3d8a04c06e5a196040942f19269fd1d376091759bfd8ca2b5dd45dda",
+      "payload": {
+        "meta": {
+          "ll": [
+            -92.21475,
+            38.81704
+          ],
+          "sids": [
+            "03945 1",
+            "231791 2",
+            "COU 3",
+            "72445 4",
+            "KCOU 5",
+            "USW00003945 6",
+            "COU 7",
+            "USW00003945 32"
+          ],
+          "name": "COLUMBIA REGIONAL AIRPORT"
+        },
+        "data": [
+          [
+            "2028-02-27",
+            "50",
+            "30"
+          ],
+          [
+            "2028-02-28",
+            "50",
+            "30"
+          ],
+          [
+            "2028-02-29",
+            "50",
+            "30"
+          ],
+          [
+            "2028-03-01",
+            "50",
+            "31"
+          ],
+          [
+            "2028-03-02",
+            "51",
+            "31"
+          ],
+          [
+            "2028-03-03",
+            "51",
+            "31"
+          ],
+          [
+            "2028-03-04",
+            "51",
+            "32"
+          ]
+        ]
+      }
+    },
+    {
+      "window": "rollover",
+      "params": {
+        "sid": "COU",
+        "sdate": "2026-12-29",
+        "edate": "2027-01-04",
+        "meta": [
+          "name",
+          "sids",
+          "ll"
+        ],
+        "elems": [
+          {
+            "name": "maxt",
+            "normal": "91"
+          },
+          {
+            "name": "mint",
+            "normal": "91"
+          }
+        ]
+      },
+      "url": "https://data.rcc-acis.org/StnData",
+      "retrievedAt": "2026-10-15T00:29:56.308354+00:00",
+      "status": 200,
+      "responseBytes": 374,
+      "sha256": "65eef539babacf421e3346f11f91317362a2f90876b6215d8398432b47f170c1",
+      "payload": {
+        "meta": {
+          "ll": [
+            -92.21475,
+            38.81704
+          ],
+          "sids": [
+            "03945 1",
+            "231791 2",
+            "COU 3",
+            "72445 4",
+            "KCOU 5",
+            "USW00003945 6",
+            "COU 7",
+            "USW00003945 32"
+          ],
+          "name": "COLUMBIA REGIONAL AIRPORT"
+        },
+        "data": [
+          [
+            "2026-12-29",
+            "40",
+            "24"
+          ],
+          [
+            "2026-12-30",
+            "40",
+            "24"
+          ],
+          [
+            "2026-12-31",
+            "40",
+            "24"
+          ],
+          [
+            "2027-01-01",
+            "40",
+            "23"
+          ],
+          [
+            "2027-01-02",
+            "40",
+            "23"
+          ],
+          [
+            "2027-01-03",
+            "40",
+            "23"
+          ],
+          [
+            "2027-01-04",
+            "40",
+            "23"
+          ]
+        ]
+      }
+    },
+    {
+      "window": "current",
+      "params": {
+        "sid": "SUS",
+        "sdate": "2026-10-15",
+        "edate": "2026-10-21",
+        "meta": [
+          "name",
+          "sids",
+          "ll"
+        ],
+        "elems": [
+          {
+            "name": "maxt",
+            "normal": "91"
+          },
+          {
+            "name": "mint",
+            "normal": "91"
+          }
+        ]
+      },
+      "url": "https://data.rcc-acis.org/StnData",
+      "retrievedAt": "2026-10-15T00:29:55.666281+00:00",
+      "status": 200,
+      "responseBytes": 359,
+      "sha256": "75e1b1729e37495213c778e95d2628b01ec32e297a73d11da6f531fcfdde64fa",
+      "payload": {
+        "meta": {
+          "ll": [
+            -90.65577,
+            38.65752
+          ],
+          "sids": [
+            "03966 1",
+            "237964 2",
+            "SUS 3",
+            "KSUS 5",
+            "USW00003966 6",
+            "USW00003966 32"
+          ],
+          "name": "ST LOUIS SPIRIT OF ST LOUIS AP"
+        },
+        "data": [
+          [
+            "2026-10-15",
+            "70",
+            "46"
+          ],
+          [
+            "2026-10-16",
+            "70",
+            "45"
+          ],
+          [
+            "2026-10-17",
+            "69",
+            "45"
+          ],
+          [
+            "2026-10-18",
+            "69",
+            "44"
+          ],
+          [
+            "2026-10-19",
+            "68",
+            "44"
+          ],
+          [
+            "2026-10-20",
+            "68",
+            "44"
+          ],
+          [
+            "2026-10-21",
+            "68",
+            "43"
+          ]
+        ]
+      }
+    },
+    {
+      "window": "leap",
+      "params": {
+        "sid": "SUS",
+        "sdate": "2028-02-27",
+        "edate": "2028-03-04",
+        "meta": [
+          "name",
+          "sids",
+          "ll"
+        ],
+        "elems": [
+          {
+            "name": "maxt",
+            "normal": "91"
+          },
+          {
+            "name": "mint",
+            "normal": "91"
+          }
+        ]
+      },
+      "url": "https://data.rcc-acis.org/StnData",
+      "retrievedAt": "2026-10-15T00:29:55.667323+00:00",
+      "status": 200,
+      "responseBytes": 359,
+      "sha256": "bad2ec7bd704b125d0babd7cdaa7c33084cab928c8be4a063e82020355b44d06",
+      "payload": {
+        "meta": {
+          "ll": [
+            -90.65577,
+            38.65752
+          ],
+          "sids": [
+            "03966 1",
+            "237964 2",
+            "SUS 3",
+            "KSUS 5",
+            "USW00003966 6",
+            "USW00003966 32"
+          ],
+          "name": "ST LOUIS SPIRIT OF ST LOUIS AP"
+        },
+        "data": [
+          [
+            "2028-02-27",
+            "51",
+            "29"
+          ],
+          [
+            "2028-02-28",
+            "51",
+            "30"
+          ],
+          [
+            "2028-02-29",
+            "51",
+            "30"
+          ],
+          [
+            "2028-03-01",
+            "52",
+            "30"
+          ],
+          [
+            "2028-03-02",
+            "52",
+            "30"
+          ],
+          [
+            "2028-03-03",
+            "52",
+            "30"
+          ],
+          [
+            "2028-03-04",
+            "53",
+            "31"
+          ]
+        ]
+      }
+    },
+    {
+      "window": "rollover",
+      "params": {
+        "sid": "SUS",
+        "sdate": "2026-12-29",
+        "edate": "2027-01-04",
+        "meta": [
+          "name",
+          "sids",
+          "ll"
+        ],
+        "elems": [
+          {
+            "name": "maxt",
+            "normal": "91"
+          },
+          {
+            "name": "mint",
+            "normal": "91"
+          }
+        ]
+      },
+      "url": "https://data.rcc-acis.org/StnData",
+      "retrievedAt": "2026-10-15T00:29:55.667730+00:00",
+      "status": 200,
+      "responseBytes": 359,
+      "sha256": "d283c680fc58d1f4a2bbdb3f8b9c5e341570fec9edf0133e00ac42e7c95ba50b",
+      "payload": {
+        "meta": {
+          "ll": [
+            -90.65577,
+            38.65752
+          ],
+          "sids": [
+            "03966 1",
+            "237964 2",
+            "SUS 3",
+            "KSUS 5",
+            "USW00003966 6",
+            "USW00003966 32"
+          ],
+          "name": "ST LOUIS SPIRIT OF ST LOUIS AP"
+        },
+        "data": [
+          [
+            "2026-12-29",
+            "42",
+            "24"
+          ],
+          [
+            "2026-12-30",
+            "42",
+            "24"
+          ],
+          [
+            "2026-12-31",
+            "42",
+            "23"
+          ],
+          [
+            "2027-01-01",
+            "42",
+            "23"
+          ],
+          [
+            "2027-01-02",
+            "41",
+            "23"
+          ],
+          [
+            "2027-01-03",
+            "41",
+            "23"
+          ],
+          [
+            "2027-01-04",
+            "41",
+            "23"
+          ]
+        ]
+      }
+    },
+    {
+      "window": "current",
+      "params": {
+        "sid": "UIN",
+        "sdate": "2026-10-15",
+        "edate": "2026-10-21",
+        "meta": [
+          "name",
+          "sids",
+          "ll"
+        ],
+        "elems": [
+          {
+            "name": "maxt",
+            "normal": "91"
+          },
+          {
+            "name": "mint",
+            "normal": "91"
+          }
+        ]
+      },
+      "url": "https://data.rcc-acis.org/StnData",
+      "retrievedAt": "2026-10-15T00:29:56.426677+00:00",
+      "status": 200,
+      "responseBytes": 372,
+      "sha256": "353589aeda116db953435217fa85470730509c57e150e1d9c773805b670ad862",
+      "payload": {
+        "meta": {
+          "ll": [
+            -91.19661,
+            39.93709
+          ],
+          "sids": [
+            "93989 1",
+            "117072 2",
+            "UIN 3",
+            "72443 4",
+            "KUIN 5",
+            "USW00093989 6",
+            "UIN 7",
+            "USW00093989 32"
+          ],
+          "name": "QUINCY REGIONAL AIRPORT"
+        },
+        "data": [
+          [
+            "2026-10-15",
+            "66",
+            "45"
+          ],
+          [
+            "2026-10-16",
+            "65",
+            "45"
+          ],
+          [
+            "2026-10-17",
+            "65",
+            "44"
+          ],
+          [
+            "2026-10-18",
+            "64",
+            "44"
+          ],
+          [
+            "2026-10-19",
+            "64",
+            "44"
+          ],
+          [
+            "2026-10-20",
+            "64",
+            "43"
+          ],
+          [
+            "2026-10-21",
+            "63",
+            "43"
+          ]
+        ]
+      }
+    },
+    {
+      "window": "leap",
+      "params": {
+        "sid": "UIN",
+        "sdate": "2028-02-27",
+        "edate": "2028-03-04",
+        "meta": [
+          "name",
+          "sids",
+          "ll"
+        ],
+        "elems": [
+          {
+            "name": "maxt",
+            "normal": "91"
+          },
+          {
+            "name": "mint",
+            "normal": "91"
+          }
+        ]
+      },
+      "url": "https://data.rcc-acis.org/StnData",
+      "retrievedAt": "2026-10-15T00:29:56.551926+00:00",
+      "status": 200,
+      "responseBytes": 372,
+      "sha256": "f1372e6a4cef88b96e2854c5c5acf8ea28447988e9c77ba3d93be66480fce697",
+      "payload": {
+        "meta": {
+          "ll": [
+            -91.19661,
+            39.93709
+          ],
+          "sids": [
+            "93989 1",
+            "117072 2",
+            "UIN 3",
+            "72443 4",
+            "KUIN 5",
+            "USW00093989 6",
+            "UIN 7",
+            "USW00093989 32"
+          ],
+          "name": "QUINCY REGIONAL AIRPORT"
+        },
+        "data": [
+          [
+            "2028-02-27",
+            "44",
+            "27"
+          ],
+          [
+            "2028-02-28",
+            "45",
+            "27"
+          ],
+          [
+            "2028-02-29",
+            "45",
+            "27"
+          ],
+          [
+            "2028-03-01",
+            "45",
+            "28"
+          ],
+          [
+            "2028-03-02",
+            "46",
+            "28"
+          ],
+          [
+            "2028-03-03",
+            "46",
+            "28"
+          ],
+          [
+            "2028-03-04",
+            "46",
+            "28"
+          ]
+        ]
+      }
+    },
+    {
+      "window": "rollover",
+      "params": {
+        "sid": "UIN",
+        "sdate": "2026-12-29",
+        "edate": "2027-01-04",
+        "meta": [
+          "name",
+          "sids",
+          "ll"
+        ],
+        "elems": [
+          {
+            "name": "maxt",
+            "normal": "91"
+          },
+          {
+            "name": "mint",
+            "normal": "91"
+          }
+        ]
+      },
+      "url": "https://data.rcc-acis.org/StnData",
+      "retrievedAt": "2026-10-15T00:29:56.619366+00:00",
+      "status": 200,
+      "responseBytes": 372,
+      "sha256": "d8da4bd85927c00a25f55aa17ba2309df9ea914d8908c6ac3354d6f71469c714",
+      "payload": {
+        "meta": {
+          "ll": [
+            -91.19661,
+            39.93709
+          ],
+          "sids": [
+            "93989 1",
+            "117072 2",
+            "UIN 3",
+            "72443 4",
+            "KUIN 5",
+            "USW00093989 6",
+            "UIN 7",
+            "USW00093989 32"
+          ],
+          "name": "QUINCY REGIONAL AIRPORT"
+        },
+        "data": [
+          [
+            "2026-12-29",
+            "36",
+            "21"
+          ],
+          [
+            "2026-12-30",
+            "36",
+            "21"
+          ],
+          [
+            "2026-12-31",
+            "35",
+            "20"
+          ],
+          [
+            "2027-01-01",
+            "35",
+            "20"
+          ],
+          [
+            "2027-01-02",
+            "35",
+            "20"
+          ],
+          [
+            "2027-01-03",
+            "35",
+            "20"
+          ],
+          [
+            "2027-01-04",
+            "35",
+            "20"
+          ]
+        ]
+      }
+    },
+    {
+      "window": "records-replay",
+      "url": "https://data.rcc-acis.org/StnData",
+      "params": {
+        "sid": "SUS",
+        "sdate": "2026-10-11",
+        "edate": "2026-10-18",
+        "meta": [
+          "name",
+          "sids",
+          "ll"
+        ],
+        "elems": [
+          {
+            "name": "maxt",
+            "normal": "91",
+            "prec": 1
+          },
+          {
+            "name": "mint",
+            "normal": "91",
+            "prec": 1
+          }
+        ]
+      },
+      "retrievedAt": "2026-10-15T00:34:44.207071+00:00",
+      "status": 200,
+      "responseBytes": 417,
+      "sha256": "e48f078cfebc6423091581f784f9edc69ef0745723ca153fbec8af0a02d757a4",
+      "payload": {
+        "meta": {
+          "ll": [
+            -90.65577,
+            38.65752
+          ],
+          "sids": [
+            "03966 1",
+            "237964 2",
+            "SUS 3",
+            "KSUS 5",
+            "USW00003966 6",
+            "USW00003966 32"
+          ],
+          "name": "ST LOUIS SPIRIT OF ST LOUIS AP"
+        },
+        "data": [
+          [
+            "2026-10-11",
+            "71.6",
+            "46.9"
+          ],
+          [
+            "2026-10-12",
+            "71.2",
+            "46.6"
+          ],
+          [
+            "2026-10-13",
+            "70.8",
+            "46.2"
+          ],
+          [
+            "2026-10-14",
+            "70.4",
+            "45.8"
+          ],
+          [
+            "2026-10-15",
+            "70.0",
+            "45.5"
+          ],
+          [
+            "2026-10-16",
+            "69.6",
+            "45.1"
+          ],
+          [
+            "2026-10-17",
+            "69.2",
+            "44.7"
+          ],
+          [
+            "2026-10-18",
+            "68.8",
+            "44.4"
+          ]
+        ]
+      }
+    }
+  ]
+}

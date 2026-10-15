@@ -1,7 +1,8 @@
 # Seven-day observed station records
 
-Each visible forecast row shows its calendar-date record high and low beneath the optional NBM
-range. These are the maximum of observed daily `maxt` and minimum of observed daily `mint` for
+Each expanded forecast day shows its calendar-date record high and low. The collapsed row now
+shows its [daily normal high and low](daily-normals.md) beneath the optional NBM range. Records are
+the maximum of observed daily `maxt` and minimum of observed daily `mint` for
 that month/day at the selected climate station. They are Fahrenheit observations, separate from
 1991–2020 normals, NWS forecast temperatures and NBM quartiles. NWS remains the primary forecast.
 
@@ -83,8 +84,9 @@ record; February 29 requires ten actual leap dates. Legacy ranking/briefing samp
 remain unchanged. Archive span alone does not qualify a record.
 
 The existing two record queries now cover the actual seven visible dates, plus today/tomorrow
-when required by the climate card: at most nine one-date queries, with three existing ancillary
-climate queries. Three context requests run concurrently, each under the existing 20-second
+when required by the climate card: at most nine one-date queries, with two existing ancillary
+climate queries and bounded daily normal date ranges. Three context requests run concurrently,
+each under the existing 20-second
 deadline. Queued work stops after location/date/request supersession. This is optional context;
 forecast and model loading never await it. No weather cadence, permission, producer budget or
 NOAA extraction/publishing logic changes.

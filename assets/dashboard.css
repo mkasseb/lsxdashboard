@@ -1605,19 +1605,18 @@
 #nbmInfo summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:600}
 #nbmInfo p{margin:8px 0}#nbmInfo li{margin:8px 0;overflow-wrap:anywhere}
 
-/* Observed station records sit below optional NBM guidance, with quiet type and no severity tint. */
+/* Daily normals sit below NBM guidance; observed records stay in expanded day details. */
 .record-station{color:var(--muted);font-size:12px;line-height:1.5;margin:0 0 8px}
-.record-inline{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;padding:0 0 9px;color:var(--muted);font-size:12px;line-height:1.45;font-variant-numeric:tabular-nums}
-.record-label{font-weight:600}.record-value{white-space:nowrap}.record-value b{color:var(--text);font-weight:600}
-.record-years{color:var(--muted);font-weight:400}.record-dot{color:var(--border)}
-.record-detail{border-top:1px solid var(--border);padding-top:10px;margin-top:8px;color:var(--muted);font-size:12px;line-height:1.55}
-.record-detail h3{color:var(--text);font-size:13px;margin:0 0 8px}.record-detail p{margin:7px 0}.record-detail b{color:var(--text);font-weight:600}
+.normal-inline{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;padding:0 0 9px;color:var(--muted);font-size:12px;line-height:1.45;font-variant-numeric:tabular-nums}
+.normal-label{font-weight:600}.normal-value{white-space:nowrap}.normal-value b{color:var(--text);font-weight:600}.normal-dot{color:var(--border)}
+.record-detail,.normal-detail{border-top:1px solid var(--border);padding-top:10px;margin-top:8px;color:var(--muted);font-size:12px;line-height:1.55}
+.record-detail h3,.normal-detail h3{color:var(--text);font-size:13px;margin:0 0 8px}.record-detail p,.normal-detail p{margin:7px 0}.record-detail b,.normal-detail b{color:var(--text);font-weight:600}
 .record-calendar-note{font-size:12px;line-height:1.5;color:var(--muted);margin:10px 0}
 .record-source{font-size:12px;color:var(--muted);line-height:1.6}.record-source summary{color:var(--accent);min-height:44px;display:flex;align-items:center;cursor:pointer}
 .record-source summary::before{content:'▸';margin-right:6px}.record-source[open] summary::before{content:'▾'}
 .record-source p{margin:8px 0}.record-source li{margin:4px 0}.record-source a{overflow-wrap:anywhere}
-@media(max-width:680px){.record-inline{column-gap:6px}.record-dot{display:none}}
-@media(max-width:360px){.record-label{flex-basis:100%}}
+@media(max-width:680px){.normal-inline{column-gap:6px}.normal-dot{display:none}}
+@media(max-width:360px){.normal-label{flex-basis:100%}}
 
 .map-diagnostics{max-width:100%;text-align:left;margin-top:12px}
 .map-diagnostics pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px}
@@ -1790,7 +1789,7 @@ body{transition:none}
   .desktop-planning #forecastCard h2{margin-bottom:8px}
   .desktop-planning #forecastCard .day{padding-block:7px}
   .desktop-planning #forecastCard .nbm-inline{padding:0 0 5px}
-  .desktop-planning #forecastCard .record-inline{padding-bottom:8px}
+  .desktop-planning #forecastCard .normal-inline{padding-bottom:8px}
   #forecastCard .day{grid-template-columns:minmax(90px,1.2fr) 28px 52px minmax(40px,1fr) 78px 12px;gap:8px}
   body:not(.radar-full) .desktop-planning #radarCard{align-self:auto;display:block;min-height:0}
   body:not(.radar-full) .desktop-planning #radarCard .rs-view{flex:0 0 auto;min-height:0}

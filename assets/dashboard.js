@@ -2129,7 +2129,7 @@ function renderVsNormal(){
     var cls=Math.abs(d)<1?"cn-flat":(d>0?"cn-warm":"cn-cool");
     return ' <span class="'+cls+'">('+s+')</span>';
   }
-  var hiNormal=ctx.normWeek[climate.fcHiDate], loNormal=ctx.normWeek[climate.fcLoDate];
+  var hiNormal=forecastNormalFor(climate.fcHiDate), loNormal=forecastNormalFor(climate.fcLoDate);
   var normHi=hiNormal?hiNormal.hi:(climate.normDate===climate.fcHiDate?climate.normHi:null);
   var normLo=loNormal?loNormal.lo:(climate.normDate===climate.fcLoDate?climate.normLo:null);
   var hi = climate.fcHi!=null ? '<b>'+climate.fcHi+'°</b>'+dep(climate.fcHi,normHi) : '—';
@@ -2168,9 +2168,9 @@ function climAllOK(c,showSnow){
 
 /* ============ CLIMATE CONTEXT — records, rankings, streaks ============
    Up to seven visible calendar dates plus today/tomorrow, one observation per year per
-   date; three existing monthly/recent/normals queries. At most three requests in flight,
+   date; existing monthly/recent queries and bounded normal date ranges. At most three requests in flight,
    each with the existing 20s deadline. Only derived facts enter the 12-hour cache. */
-var CTX_KEY="lsxCtx_v5";
+var CTX_KEY="lsxCtx_v6";
 var ctx={ready:false, recHi:null, recLo:null, recPcp:null, doyHi:[], doyLo:[],
          monWet:[], monWarm:[], monMtd:null, monMean:null, monName:"", years:0,
          dry:null, hist:null, normWeek:{}, recStation:""};
@@ -3861,7 +3861,8 @@ function saveSnapshot(){
     var snapshotEl=el;
     if(p.id==="daily"){
       snapshotEl=el.cloneNode(true);
-      snapshotEl.querySelectorAll(".nbm-inline,.nbm-period-detail,.record-inline,.record-detail").forEach(function(node){node.remove();});
+      removeLegacyNormalComparisons(snapshotEl);
+      snapshotEl.querySelectorAll(".nbm-inline,.nbm-period-detail,.record-inline,.record-detail,.normal-inline,.normal-detail,.normal-comparison").forEach(function(node){node.remove();});
     }
     var h=snapshotEl.innerHTML;
     if(!h||/class="loading"/.test(h)) return;   // never cache a spinner
