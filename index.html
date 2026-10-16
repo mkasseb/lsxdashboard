@@ -52,7 +52,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css"
   integrity="sha384-uTttxo/aOKbdE5RlD/SPzSDoDmNvGlUYPjONi2MN/b7c9HPSvW07OIuyP7uL6jxK" crossorigin="anonymous"
   media="print" onload="this.media='all'">
-<link rel="stylesheet" href="/assets/dashboard.css?v=6785e97e17cd40e7">
+<link rel="stylesheet" href="/assets/dashboard.css?v=3351d8478366d2d5">
 </head>
 <body>
 <!-- First focusable thing on the page, and deliberately ahead of the sprite so it stays that way.
@@ -294,6 +294,19 @@
         <span class="link" id="rsLink"><a href="https://radar.weather.gov/station/KLSX/standard" target="_blank" rel="noopener">Official KLSX ↗</a></span>
       </span>
     </div>
+    <div class="radar-options">
+      <div class="rs-tabs radar-sources" role="group" aria-label="Radar source">
+        <button type="button" class="rs-tab on" data-radar-source="klsx" aria-pressed="true">Local KLSX</button>
+        <button type="button" class="rs-tab" data-radar-source="regional" aria-pressed="false">Regional</button>
+      </div>
+      <label class="radar-product" for="radarProduct">Product
+        <select id="radarProduct" aria-describedby="radarProductNote">
+          <option value="reflectivity">Reflectivity</option>
+          <option value="velocity">Velocity</option>
+        </select>
+      </label>
+    </div>
+    <p class="radar-product-note" id="radarProductNote">KLSX station coverage only. Use Regional for the surrounding radar network.</p>
     <p id="radarAlertNote" class="feed-status" data-state="unavailable" hidden></p>
     <div class="rs-view" id="rsRadar">
       <div class="imgwrap maplock-wrap">
@@ -316,7 +329,8 @@
       </div>
       <!-- role="img" collapses the whole key to its aria-label on purpose: read linearly the tick
            words are "light heavy hail", which is noise. The label says the thing they mean. -->
-      <div class="rs-legend" id="rsLegend" role="img"
+      <div class="rs-legend" id="rsLegend">
+      <div class="radar-key" id="regionalRadarScale" role="img" hidden
            title="Radar reflectivity in dBZ — how hard it is coming down"
            aria-label="Reflectivity key: green is light rain, yellow and red are heavy rain, pink and purple mean hail is likely.">
         <span class="rl-t">Intensity</span>
@@ -326,6 +340,11 @@
                label for D sits at (D−15)/50. light≈21, heavy≈45, hail≈59. -->
           <span class="rl-ticks"><span style="left:12%">light</span><span style="left:60%">heavy</span><span style="left:88%">hail</span></span>
         </span>
+      </div>
+      <div class="station-radar-key" id="stationRadarScale">
+        <span class="rl-t" id="stationLegendTitle">Reflectivity · dBZ</span>
+        <img id="stationLegendImage" alt="KLSX reflectivity scale" width="500" height="30">
+      </div>
       </div>
       <!-- Empty in the markup on purpose: syncWarnKey() fills it from the shapes actually drawn,
            and CSS :empty removes the row when the map is clear. -->
@@ -475,6 +494,6 @@
 <script src="/assets/dashboard-context.js?v=91467027b18ea8fe"></script>
 <script src="/assets/forecast-range.js?v=8c513cec2f2f1b84"></script>
 <script src="/assets/hourly-range.js?v=47ef09063f33ca6c"></script>
-<script src="/assets/dashboard.js?v=7e7d40faac557943"></script>
+<script src="/assets/dashboard.js?v=b1549537fd378f45"></script>
 </body>
 </html>

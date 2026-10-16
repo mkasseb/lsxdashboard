@@ -125,7 +125,12 @@ async function open(c, width=390) {
       if(/GetCapabilities|DescribeDomains/i.test(u.href)&&c.mapTimeHang)return;
       if(u.hostname==='tiles.openfreemap.org')return reply(c.mapStyleDown?{}:{version:8,sources:{},layers:[{id:'background',type:'background',paint:{'background-color':'#18202d'}}]},c.mapStyleDown?503:200);
       if(u.hostname==='opengeo.ncep.noaa.gov'||u.hostname==='gibs.earthdata.nasa.gov'){
-        if(/GetCapabilities/i.test(u.href))return route.fulfill({contentType:'text/xml',body:'<Dimension name="time">'+Array.from({length:31},(_,i)=>new Date(c.now-(60-i*2)*60000).toISOString()).join(',')+'</Dimension>'});
+        if(/GetLegendGraphic/i.test(u.href))return route.fulfill({contentType:'image/png',body:fs.readFileSync(path.join(__dirname,'fixtures/weather/klsx-'+(u.searchParams.get('layer')==='klsx_sr_bvel'?'velocity':'reflectivity')+'-legend.png'))});
+        if(/GetCapabilities/i.test(u.href)){
+          const names=u.pathname.includes('/klsx/')?['klsx_bdhc','klsx_sr_bref','klsx_sr_bvel']:['conus_bref_qcd'];
+          const times=Array.from({length:31},(_,i)=>new Date(c.now-(60-i*2)*60000).toISOString()).join(',');
+          return route.fulfill({contentType:'text/xml',body:c.radarCapabilities||'<WMS_Capabilities xmlns="http://www.opengis.net/wms"><Capability><Layer>'+names.map(name=>'<Layer><Name>'+name+'</Name><Dimension name="time">'+times+'</Dimension></Layer>').join('')+'</Layer></Capability></WMS_Capabilities>'});
+        }
         if(/DescribeDomains/i.test(u.href))return route.fulfill({contentType:'text/xml',body:'<Domain>'+new Date(c.now-H).toISOString()+'/'+new Date(c.now).toISOString()+'/PT10M</Domain>'});
         if(c.mapTilesDown)return route.abort();
         return route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=','base64')});
@@ -1232,4 +1237,4 @@ async function main() {
   if(report.failed)process.exitCode=1;
 }
 if(require.main===module)main().catch(e=>{console.error(e);process.exitCode=1;});
-module.exports={open,config,setBrowser:value=>{browser=value;}};
+module.exports={open,config,alert,setBrowser:value=>{browser=value;}};
