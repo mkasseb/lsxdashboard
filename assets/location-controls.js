@@ -161,7 +161,11 @@ function useMyLocation(explicit){
   // Write the label into .g-txt, never over the button: the phone layout hides that span to get
   // the geolocate control down to its icon, and a textContent assignment would delete it.
   function active(){ return seq===geoSeq&&locAtStart===locSeq; }
-  function label(t){ if(!active()) return; var s=btn&&btn.querySelector(".g-txt"); if(s) s.textContent=t; }
+  function label(t){
+    if(!active()) return;
+    var s=btn&&btn.querySelector(".g-txt");if(s)s.textContent=t;
+    if(btn)btn.setAttribute('aria-label',t.trim()+' — use current location');
+  }
   if(!navigator.geolocation){ if(explicit) alert("Geolocation isn't available on this device/browser."); return; }
   label(" Locating…");
   navigator.geolocation.getCurrentPosition(function(pos){

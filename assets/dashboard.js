@@ -1967,8 +1967,15 @@ scheduleMasonry();
 /* The fixed forecast band has its own resize/content lifecycle now. */
 (function(){
   var card=document.getElementById("forecastCard");
-  if(window.ResizeObserver) new ResizeObserver(fitDayDates).observe(card);
-  if(window.MutationObserver) new MutationObserver(fitDayDates).observe(card,{childList:true,subtree:true,characterData:true});
+  var frame=null;
+  function scheduleDates(){
+    if(frame!=null)return;
+    // Date fitting changes row heights. Run after resize delivery so a narrower
+    // viewport/fullscreen transition cannot resize its own observed parent mid-cycle.
+    frame=requestAnimationFrame(function(){frame=null;fitDayDates();});
+  }
+  if(window.ResizeObserver) new ResizeObserver(scheduleDates).observe(card);
+  if(window.MutationObserver) new MutationObserver(scheduleDates).observe(card,{childList:true,subtree:true,characterData:true});
 })();
 
 /* Active navigation follows rendered geometry, including independent disclosures and repacking. */

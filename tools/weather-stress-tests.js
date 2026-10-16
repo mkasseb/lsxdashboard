@@ -90,7 +90,7 @@ async function open(c, width=390) {
   if(c.storage)await page.addInitScript(storage=>Object.entries(storage).forEach(([key,value])=>localStorage.setItem(key,typeof value==='string'?value:JSON.stringify(value))),c.storage);
   if(c.geo)await page.addInitScript(geo=>Object.defineProperty(navigator,'geolocation',{value:{getCurrentPosition:success=>queueMicrotask(()=>success({coords:{latitude:geo.lat,longitude:geo.lon,accuracy:25}}))}}),c.geo);
   if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v23',snapshot),c.snapshot);
-  const errors=[],requests=[],delayedMapScripts=[],heldPoints=[],heldSpcProducts=[];
+  const errors=[],requests=[],delayedMapScripts=[],heldPoints=[],heldSpcProducts=[],heldCpc=[];
   let spcMetadataRequests=0;
   page.on('pageerror',e=>errors.push(e.message));
   let active=c;
@@ -192,6 +192,7 @@ async function open(c, width=390) {
     }
     if(u.hostname==='mapservices.weather.noaa.gov') {
       if(/cpc_(6_10|8_14)_day_outlk/.test(u.pathname)&&u.pathname.includes('/query')){
+        if(c.holdCpc){heldCpc.push({route,body:features(c.cpcAbove?[{cat:'Above Normal',prob:50}]:[])});return;}
         if(c.cpcDelay)await new Promise(resolve=>setTimeout(resolve,c.cpcDelay));
         const key=(u.pathname.includes('6_10')?'6':'8')+':'+u.pathname.split('/').at(-2);
         if(c.cpcDown?.includes(key))return reply({error:{code:500}},503);
@@ -232,6 +233,7 @@ async function open(c, width=390) {
   await page.goto('https://lsx-weather-test.invalid/'+(c.search||''),{waitUntil:'domcontentloaded'});
   if(!c.skipWait)await page.waitForFunction(()=>typeof refreshInFlight!=='undefined'&&refreshInFlight===null&&snapSafeSeq===locSeq);
   return {page,context,errors,requests,change:c=>{active=c;},
+    releaseCpc:()=>Promise.all(heldCpc.map(p=>p.route.fulfill({status:200,json:p.body}).catch(()=>{}))),
     spcMetadataRequests:()=>spcMetadataRequests,
     releaseSpcProducts:()=>Promise.all(heldSpcProducts.map(p=>p.route.fulfill({status:200,json:p.body}).catch(()=>{}))),
     releaseMapScripts:()=>Promise.all(delayedMapScripts.map(({route,asset})=>route.fulfill({contentType:asset[2],body:fs.readFileSync(require.resolve(asset[1]))}).catch(()=>{}))),
@@ -760,12 +762,13 @@ async function main() {
     });
     await run('snapshot warning waits for its own feed verification',config('cache labels'),async session=>{
       const snapshot=await session.page.evaluate(()=>{saveSnapshot();return localStorage.getItem(SNAP_KEY);});
-      const cached=await open(config('delayed cached CPC',{now:base+60000,snapshot,aqi:35,cpcDelay:1500,skipWait:true}));
+      const cached=await open(config('delayed cached CPC',{now:base+60000,snapshot,aqi:35,holdCpc:true,skipWait:true}));
       try{
         await cached.page.waitForFunction(()=>feedChecks.aqi.status==='ready');
         assert.equal(await cached.page.evaluate(()=>feedState(feedChecks.cpc,Date.now(),FEEDS.cpc.age)),'saved');
         assert(await cached.page.locator('#snapBar').evaluate(el=>el.classList.contains('show')));
         await expectText(cached.page,'#fresh-cpc',/Saved data/);
+        await cached.releaseCpc();
         await cached.page.waitForFunction(()=>refreshInFlight===null);
         assert.equal(await cached.page.evaluate(()=>feedChecks.cpc.saved),false);
         assert(!(await cached.page.locator('#snapBar').evaluate(el=>el.classList.contains('show'))));

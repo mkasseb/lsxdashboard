@@ -252,11 +252,21 @@ async function main() {
       assert.equal(calls, 2);
       assert.match(await p.locator('#qpf7').innerText(), /1\.2/);
     });
+    await run('geolocation name follows pending and completed visible labels', async p => {
+      await p.evaluate(()=>{
+        Object.defineProperty(navigator,'geolocation',{configurable:true,value:{getCurrentPosition:function(ok,fail){window.reviewGeoFail=fail;}}});
+        useMyLocation(false);
+      });
+      assert.match(await p.locator('#geoBtn').getAttribute('aria-label'),/Locating/);
+      await p.evaluate(()=>reviewGeoFail());
+      assert.match(await p.locator('#geoBtn').getAttribute('aria-label'),/My location/);
+    });
     await run('mobile fullscreen has an accessible open and close name', async p => {
       await p.setViewportSize({width:320,height:900});
       const control=p.locator('#rsFull');
       assert.match(await control.getAttribute('aria-label'), /open.*fullscreen/i);
       await p.evaluate(() => setRadarFull(true));
+      await p.clock.runFor(250);
       assert.match(await control.getAttribute('aria-label'), /close.*fullscreen/i);
       await p.evaluate(() => setRadarFull(false));
       assert.match(await control.getAttribute('aria-label'), /open.*fullscreen/i);

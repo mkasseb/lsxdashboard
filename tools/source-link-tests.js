@@ -100,6 +100,7 @@ async function main(){
  const browser=await playwright[engine].launch({headless:engine!=='firefox',...(engine==='chromium'?{executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']}: {})});setBrowser(browser);
  try{
   for(const width of [320,390,768,1280])for(const theme of ['dark','light']){
+   if(process.env.SOURCE_LINK_CASE_FILTER&&!new RegExp(process.env.SOURCE_LINK_CASE_FILTER,'i').test(width+' '+theme))continue;
    const touch=width<768,s=await open(config('official sources',{touch,cpcAbove:true}),width),p=s.page;
    try{
     // New tabs are intercepted independently of the dashboard's API fixture routing.
@@ -143,12 +144,14 @@ async function main(){
   const s=await open(config('saved links'));
   let snapshot;
   try{snapshot=await s.page.evaluate(()=>{saveSnapshot();return localStorage.getItem(SNAP_KEY);});}finally{await s.context.close();}
-  const cached=await open(config('restored links',{now:JSON.parse(snapshot).t+60000,snapshot,skipWait:true,cpcDelay:5000}));
+  const cached=await open(config('restored links',{now:JSON.parse(snapshot).t+60000,snapshot,skipWait:true,holdCpc:true}));
   try{
    await cached.page.waitForFunction(()=>snapRestored);
    await resources(cached.page);
    await contracts(cached.page);
    assert.equal(await cached.page.evaluate(()=>feedChecks.cpc.saved),true);
+   await cached.releaseCpc();
+   await cached.page.waitForFunction(()=>feedChecks.cpc.saved===false);
    console.log('PASS saved source-link markup');
   }finally{await cached.context.close();}
  }finally{await browser.close();}
