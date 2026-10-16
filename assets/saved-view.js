@@ -146,6 +146,12 @@ function restoreSnapshot(){
     if(!el) return;
     el.innerHTML=h;
     if(p.id==="daily") removeForecastUv(el); // Retire untagged UV cells from older v23 snapshots too.
+    if(p.id==="cpc")el.querySelectorAll('a.cpc-item:not([aria-labelledby])').forEach(function(a){
+      // Older saved tiles overrode their visible period/value with an unrelated name.
+      // Repair the label without treating restored weather as a newly checked source.
+      a.setAttribute('aria-label',a.textContent.replace(/↗/g,' ').replace(/\s+/g,' ').trim()+' — CPC outlook (opens in a new tab)');
+      a.removeAttribute('aria-describedby');
+    });
     n++; savedParts[p.id]=p.feed;
     feedChecks[p.feed]={status:c.status,successAt:c.successAt,issuedAt:c.issuedAt||0,saved:true};
   });

@@ -8,9 +8,9 @@ const {open, config, setBrowser} = require('./weather-stress-tests');
 const engine = process.env.WEATHER_BROWSER || 'chromium';
 let passed = 0, failed = 0;
 
-async function run(name, test) {
+async function run(name, test, extra={}) {
   if (process.env.DASHBOARD_CASE_FILTER && !new RegExp(process.env.DASHBOARD_CASE_FILTER, 'i').test(name)) return;
-  const session = await open(config('review regression', {aqi:75, uv:6}));
+  const session = await open(config('review regression', {aqi:75, uv:6, ...extra}));
   try {
     await test(session.page);
     assert.deepEqual(session.errors, [], 'no uncaught application errors');
@@ -167,6 +167,20 @@ async function main() {
       });
       assert.equal(await p.locator('#daily .dd-item').filter({hasText:'UV Index'}).count(), 0);
     });
+    await run('older CPC snapshots repair accessible names without renewing source age', async p => {
+      const age = await p.evaluate(() => {
+        saveSnapshot();
+        const snap=JSON.parse(localStorage.getItem(SNAP_KEY)),old=document.createElement('div');
+        old.innerHTML=snap.parts.cpc;
+        old.querySelectorAll('a').forEach(a=>{a.removeAttribute('aria-labelledby');a.setAttribute('aria-label','CPC outlook (opens in a new tab)');});
+        snap.parts.cpc=old.innerHTML;localStorage.setItem(SNAP_KEY,JSON.stringify(snap));restoreSnapshot();
+        return snap.feeds.cpc.successAt;
+      });
+      assert(await p.locator('#cpc a').evaluateAll(links=>links.length===4&&links.every(a=>
+        a.getAttribute('aria-label').includes(a.textContent.replace(/↗/g,' ').replace(/\s+/g,' ').trim()))));
+      assert.equal(await p.evaluate(()=>feedChecks.cpc.successAt),age);
+      assert.equal(await p.evaluate(()=>feedChecks.cpc.saved),true);
+    }, {cpcAbove:true});
     await run('malformed UV values cannot become ready or print NaN', async p => {
       const now = await p.evaluate(() => Date.now());
       await p.route('https://api.open-meteo.com/**', r => r.fulfill({json:{
