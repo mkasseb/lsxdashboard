@@ -112,7 +112,7 @@ both themes, including expanded forecast/model help, active warnings and unavail
 `ACCESSIBILITY_REPORT` selects its JSON report. This includes accessible names matching visible
 labels as well as contrast, landmarks and input labels; keyboard behavior has separate browser tests.
 
-`tools/model-worker-tests.js` verifies actual worker processing under the production CSP and both
+`tools/model-worker-tests.js` serves versioned assets over real local HTTP and verifies worker processing under the production CSP and both
 constructor/startup failure fallbacks. Model bytes transfer to a same-origin worker for JSON parsing,
 complete provenance/region validation and selection of one point. Only compact validated values
 return to the UI. Each response is validated once, including when workers are unavailable; subsequent

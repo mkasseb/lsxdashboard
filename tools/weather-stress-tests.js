@@ -74,6 +74,7 @@ const features=a=>({features:a.map(attributes=>({attributes}))});
 const results=[];
 let browser;
 async function open(c, width=390) {
+  const testOrigin=c.origin||'https://lsx-weather-test.invalid';
   const context=await browser.newContext({viewport:{width,height:900},hasTouch:!!c.touch,timezoneId:c.timezone||'America/Chicago'});
   const page=await context.newPage();
   page.setDefaultTimeout(15000);
@@ -96,7 +97,10 @@ async function open(c, width=390) {
   let active=c;
   await context.route('**/*',async route=>{
     const req=route.request(),u=new URL(req.url());
-    if(u.hostname==='lsx-weather-test.invalid') {
+    if(u.origin===testOrigin) {
+      // Worker integration uses a real local server: Firefox does not intercept all
+      // dedicated-worker imports in the same way as main-document requests.
+      if(active.origin&&u.pathname.startsWith('/assets/'))return route.continue();
       if(u.pathname==='/')return route.fulfill({status:200,contentType:'text/html',headers:active.productionCsp?{'Content-Security-Policy':fs.readFileSync(path.join(root,'_headers'),'utf8').match(/Content-Security-Policy: (.*)/)[1]}:{},body:active.maps&&!active.badMapIntegrity?html.replace(/integrity="[^"]*"/g,""):html});
       const asset=assets[u.pathname];
       return route.fulfill({status:asset?200:404,contentType:asset?.type||'text/plain',body:asset?(active.eagerContext?asset.content.replace('var deferredFeeds={stations:false,context:false};','var deferredFeeds={stations:true,context:true};'):asset.content):'Missing static asset'});
@@ -230,7 +234,7 @@ async function open(c, width=390) {
     if(u.hostname==='cdn.jsdelivr.net'&&u.pathname.endsWith('.svg')) return route.fulfill({status:200,contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg"/>'});
     return route.abort().catch(()=>{}); // Maps and unrelated third-party widgets use their real fallbacks.
   });
-  await page.goto('https://lsx-weather-test.invalid/'+(c.search||''),{waitUntil:'domcontentloaded'});
+  await page.goto(testOrigin+'/'+(c.search||''),{waitUntil:'domcontentloaded'});
   if(!c.skipWait)await page.waitForFunction(()=>typeof refreshInFlight!=='undefined'&&refreshInFlight===null&&snapSafeSeq===locSeq);
   return {page,context,errors,requests,change:c=>{active=c;},
     releaseCpc:()=>Promise.all(heldCpc.map(p=>p.route.fulfill({status:200,json:p.body}).catch(()=>{}))),

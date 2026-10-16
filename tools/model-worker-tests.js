@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 'use strict';
-const fs=require('node:fs'),zlib=require('node:zlib'),assert=require('node:assert/strict');
+const fs=require('node:fs'),zlib=require('node:zlib'),http=require('node:http'),assert=require('node:assert/strict');
+const {html,assets}=require('./source');
 const playwright=require('playwright'),{open,config,setBrowser}=require('./weather-stress-tests');
 const engine=process.env.WEATHER_BROWSER||'chromium';
 const daily=JSON.parse(zlib.gunzipSync(fs.readFileSync('tools/fixtures/weather/nbm-quartile-daily-recorded.json.gz')));
@@ -11,19 +12,32 @@ async function routes(page){
   await page.route('**/data/nbm-hourly.json',r=>r.fulfill({json:hourly}));
 }
 (async()=>{
- const browser=await playwright[engine].launch({headless:engine!=='firefox',...(engine==='chromium'?{executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']}:{})});setBrowser(browser);
+ let failWorker=false;
+ const csp=fs.readFileSync('_headers','utf8').match(/Content-Security-Policy: (.*)/)[1];
+ const server=http.createServer((req,res)=>{
+  const name=new URL(req.url,'http://localhost').pathname,asset=assets[name];
+  res.setHeader('Content-Security-Policy',csp);res.setHeader('Cache-Control','no-store');
+  if(name==='/assets/model-worker.js'&&failWorker){res.writeHead(503).end();return;}
+  res.writeHead(name==='/'||asset?200:404,{'Content-Type':name==='/'?'text/html':asset?.type||'text/plain'});
+  res.end(name==='/'?html:asset?.content||'');
+ });
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+ const origin='http://127.0.0.1:'+server.address().port;
+ let browser;
  try{
-  const s=await open(config('Worker validation',{now,productionCsp:true}));
+  browser=await playwright[engine].launch({headless:engine!=='firefox',...(engine==='chromium'?{executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']}:{})});setBrowser(browser);
+  const s=await open(config('Worker validation',{now,origin,productionCsp:true}));
   try{
    const p=s.page;await routes(p);
    await p.evaluate(()=>{
-    window.workerJobs=[];const NativeWorker=Worker;
+    window.workerJobs=[];window.workerErrors=[];const NativeWorker=Worker;
     window.Worker=function(url){const worker=new NativeWorker(url),send=worker.postMessage.bind(worker);window.testModelWorker=worker;
+     worker.addEventListener('error',e=>workerErrors.push(e.message||e.type));
      worker.postMessage=function(job,transfer){if(job.kind)workerJobs.push({kind:job.kind,bytes:job.buffer.byteLength});return send(job,transfer);};return worker;};
     NbmRange.validate=NbmHourly.validate=function(){throw new Error('UI thread must not validate regional model data');};
    });
    await p.evaluate(()=>Promise.all([loadNbmRange(),loadNbmHourly()]));
-   assert.deepEqual(await p.evaluate(()=>workerJobs.map(j=>j.kind).sort()),['daily','hourly']);
+   assert.deepEqual(await p.evaluate(()=>workerJobs.map(j=>j.kind).sort()),['daily','hourly'],JSON.stringify(await p.evaluate(()=>({workerErrors,feeds:[feedChecks.nbmRange,feedChecks.nbmHourly]}))));
    assert(await p.evaluate(()=>workerJobs.every(j=>j.bytes>1000000)));
    assert.equal(await p.evaluate(()=>feedChecks.nbmRange.status),'ready');
    assert.equal(await p.evaluate(()=>feedChecks.nbmHourly.status),'ready');
@@ -48,11 +62,11 @@ async function routes(page){
    assert.deepEqual(s.errors,[]);console.log('PASS actual worker under production CSP, transferred regional bytes, cached repaints, cancellation/late replies and malformed-response recovery');
   }finally{await s.context.close();}
   for(const mode of ['constructor','startup']){
-   const fallback=await open(config('Worker fallback',{now}));
+   failWorker=mode==='startup';
+   const fallback=await open(config('Worker fallback',{now,origin}));
    try{
     const p=fallback.page;await routes(p);
     if(mode==='constructor')await p.evaluate(()=>{window.Worker=function(){throw new Error('Workers unavailable');};});
-    else await p.route('**/assets/model-worker.js?*',r=>r.abort());
     await p.evaluate(()=>{
      window.mainValidations=0;
      [NbmRange,NbmHourly].forEach(api=>{const validate=api.validate;api.validate=function(...args){mainValidations++;return validate.apply(api,args);};});
@@ -65,5 +79,5 @@ async function routes(page){
     console.log('PASS '+mode+' failure falls back once per response and caches validation');
    }finally{await fallback.context.close();}
   }
- }finally{await browser.close();}
+ }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve));}
 })().catch(e=>{console.error(e);process.exitCode=1;});

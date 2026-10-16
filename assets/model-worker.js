@@ -12,7 +12,7 @@ self.onmessage=function(event){
          !/^[a-f0-9]{16}$/.test(url.searchParams.get('v')))throw new Error('Invalid model dependency URL');
       return url.href;
     });
-    importScripts.apply(null,urls);initialized=true;self.postMessage({ready:true});return;
+    self.importScripts.apply(self,urls);initialized=true;self.postMessage({ready:true});return;
   }
   try{
     if(!['daily','hourly'].includes(job.kind)||!(job.buffer instanceof ArrayBuffer))throw new Error('Invalid model job');
