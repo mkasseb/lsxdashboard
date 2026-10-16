@@ -180,7 +180,7 @@
 </div>
 
 <div class="locbar">
-  <button id="geoBtn" title="Use my current location" aria-label="Use my current location"><svg class="ic" aria-hidden="true"><use href="#i-pin"/></svg><span class="g-txt">My location</span></button>
+  <button id="geoBtn" title="Use my current location" aria-label="My location — use current location"><svg class="ic" aria-hidden="true"><use href="#i-pin"/></svg><span class="g-txt">My location</span></button>
   <form id="locForm" class="locsearch" autocomplete="off">
     <input id="locSearch" type="search" placeholder="Search an LSX-area city or town…" autocomplete="off" aria-label="Search a location in the St. Louis (LSX) forecast area" enterkeyhint="search"
            role="combobox" aria-expanded="false" aria-controls="locSug" aria-autocomplete="list">
@@ -240,7 +240,7 @@
 <section class="card " id="callCard">
     <div class="call-head">
       <h2 id="keyMessagesTitle">NWS Local Forecast</h2>
-      <a class="link" id="keyDiscussionLink" hidden target="_blank" rel="noopener noreferrer">Full discussion ↗</a>
+      <a class="link" id="keyDiscussionLink" hidden target="_blank" rel="noopener noreferrer">Full discussion <span aria-hidden="true">↗</span></a>
     </div>
     <p id="briefStatus" class="feed-status" data-state="unavailable" role="status" hidden></p>
     <p class="nws-message-meta" id="keyMessagesMeta"></p>
@@ -266,7 +266,7 @@
     <div class="precip-details">
       <div class="precip-events" id="precipEvents"><div class="loading">Loading precipitation amounts…</div></div>
       <div class="resource-links">
-        <a class="source-link" href="https://www.wpc.ncep.noaa.gov/qpf/qpf2.shtml" target="_blank" rel="noopener noreferrer" aria-label="WPC Precipitation (QPF) (opens in a new tab)"><svg class="ic" aria-hidden="true"><use href="#i-rain"/></svg><abbr title="Weather Prediction Center">WPC</abbr> Precip (<abbr title="Quantitative Precipitation Forecast — how much rain or melted snow is expected, not just whether">QPF</abbr>) <span aria-hidden="true">↗</span></a>
+        <a class="source-link" href="https://www.wpc.ncep.noaa.gov/qpf/qpf2.shtml" target="_blank" rel="noopener noreferrer" aria-label="WPC Precip (QPF) — precipitation amounts (opens in a new tab)"><svg class="ic" aria-hidden="true"><use href="#i-rain"/></svg><abbr title="Weather Prediction Center">WPC</abbr> Precip (<abbr title="Quantitative Precipitation Forecast — how much rain or melted snow is expected, not just whether">QPF</abbr>) <span aria-hidden="true">↗</span></a>
       </div>
     </div>
     <div id="hourly24"><div class="loading">Loading hourly…</div></div>
@@ -385,7 +385,7 @@
     </section>
 <section class="card " id="afdCard">
     <h2>NWS Forecast Details
-      <a class="link" id="afdDiscussionLink" target="_blank" rel="noopener noreferrer" hidden>Full discussion ↗</a>
+      <a class="link" id="afdDiscussionLink" target="_blank" rel="noopener noreferrer" hidden>Full discussion <span aria-hidden="true">↗</span></a>
     </h2>
     <div id="afd"><div class="loading">Loading discussion…</div></div>
   </section>
@@ -449,7 +449,7 @@
       <div id="cnSrc" class="cn-src"></div>
       <div id="cnCtx" class="cn-ctx"></div>
       <div class="resource-links">
-        <a class="source-link" href="https://www.weather.gov/lsx/climate" target="_blank" rel="noopener noreferrer" aria-label="Climate and Records — NWS St. Louis (opens in a new tab)"><svg class="ic" aria-hidden="true"><use href="#i-record"/></svg>Climate &amp; Records <span aria-hidden="true">↗</span></a>
+        <a class="source-link" href="https://www.weather.gov/lsx/climate" target="_blank" rel="noopener noreferrer" aria-label="Climate &amp; Records — NWS St. Louis (opens in a new tab)"><svg class="ic" aria-hidden="true"><use href="#i-record"/></svg>Climate &amp; Records <span aria-hidden="true">↗</span></a>
       </div>
       <div class="imgcap"><span>Station: <span id="cnStation">…</span></span><span title="The 30-year averages NOAA compares today against, recomputed each decade">1991–2020 normals</span></div>
     </section>
@@ -489,12 +489,20 @@
   integrity="sha384-5+cfbwT0iiub6VsQAdn6yz16nr6sDiQoHx6tm4O8OVYXHYOxcffFmCJBL0dgdvGp" crossorigin="anonymous"></script>
 <script type="application/json" data-map-src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"
   integrity="sha384-tXYNKOHx4T02jMP7YYCtBxPIv1B5gaA5mcVPBzqMp6d7VzWzxJgI2aWF/nJLrQdS" crossorigin="anonymous"></script>
-<script src="/assets/weather-core.js?v=05ddddc7127d7bb3"></script>
-<script src="/assets/weather-feeds.js?v=10ae902004c2f5a6"></script>
+<script src="/assets/weather-contracts.js?v=ad8b9553dc77bd53"></script>
+<script src="/assets/weather-core.js?v=9cc48b7c8a53c914"></script>
+<script src="/assets/weather-feeds.js?v=2b8e8aa24d121f63"></script>
 <script src="/assets/forecast-view.js?v=b085103e7f838428"></script>
 <script src="/assets/dashboard-context.js?v=91467027b18ea8fe"></script>
-<script src="/assets/forecast-range.js?v=8c513cec2f2f1b84"></script>
-<script src="/assets/hourly-range.js?v=47ef09063f33ca6c"></script>
-<script src="/assets/dashboard.js?v=acd2e419ab4dce30"></script>
+<script src="/assets/model-data.js?v=aa9f38687b71f14d" data-worker-src="/assets/model-worker.js?v=e24f53310a2265e5"></script>
+<script src="/assets/forecast-range.js?v=bf3ea1b8fd379a71"></script>
+<script src="/assets/hourly-range.js?v=7baf32c7b38e4343"></script>
+<script src="/assets/radar-map.js?v=3f435d32b2dc3e09"></script>
+<script src="/assets/station-map.js?v=28a078d94c91ec8b"></script>
+<script src="/assets/map-runtime.js?v=a90e87023f88b543"></script>
+<script src="/assets/location-controls.js?v=7c6b0212e037443e"></script>
+<script src="/assets/saved-view.js?v=bf3fc664c2dddc40"></script>
+<script src="/assets/climate-view.js?v=e49bca3cb10e3252"></script>
+<script src="/assets/dashboard.js?v=135e7d453a1fc1e3"></script>
 </body>
 </html>

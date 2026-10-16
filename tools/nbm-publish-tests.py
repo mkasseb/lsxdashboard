@@ -112,6 +112,11 @@ class PublisherTests(unittest.TestCase):
         self.app_update('tools/changed.py')
         with self.assertRaisesRegex(ValueError, 'code changed'): self.publish()
 
+    def test_changed_shared_weather_policy_requires_fresh_publisher(self):
+        self.app_update('assets/weather-contracts.js')
+        with self.assertRaisesRegex(ValueError, 'code changed'): self.publish()
+        self.assertEqual(self.head(), p.git(self.repo, 'rev-parse', 'HEAD').stdout.decode().strip())
+
     def test_same_cycle_revision_cannot_roll_back(self):
         self.publish(); head = self.head()
         self.data['periods'][0]['kelvin'][0][0] -= .01

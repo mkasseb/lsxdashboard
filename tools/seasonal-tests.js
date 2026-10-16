@@ -3,7 +3,7 @@
 // Deterministic cross-product of physically plausible and deliberately inconsistent source inputs.
 const vm=require('vm'),fs=require('fs'),assert=require('node:assert/strict'),path=require('path');
 const core={Intl,Date,URLSearchParams};vm.createContext(core);
-vm.runInContext(fs.readFileSync(path.join(__dirname,'../assets/weather-core.js'),'utf8'),core);
+vm.runInContext(fs.readFileSync(path.join(__dirname,'../assets/weather-contracts.js'),'utf8')+fs.readFileSync(path.join(__dirname,'../assets/weather-core.js'),'utf8'),core);
 const dates=['2026-01-15T18:00:00Z','2026-04-15T18:00:00Z','2026-07-15T18:00:00Z','2026-10-15T18:00:00Z','2026-03-08T06:00:00Z','2026-11-01T05:00:00Z','2026-12-31T23:00:00Z','2026-10-02T04:00:00Z'];
 const conditions=['Clear','Thunderstorms','Sleet','Freezing Rain','Blizzard','Dense Fog'];
 function hours(now,temp,rh,wind,condition){return core.bottomLineHours(Array.from({length:24},(_,i)=>({temperature:temp,relativeHumidity:{value:rh},windSpeed:wind==null?'':wind+' mph',shortForecast:condition,probabilityOfPrecipitation:{value:/storm|sleet|freezing|blizzard/i.test(condition)?80:0},startTime:new Date(+now+i*3600000).toISOString(),endTime:new Date(+now+(i+1)*3600000).toISOString(),isDaytime:core.weatherParts(+now+i*3600000).hour>=7&&core.weatherParts(+now+i*3600000).hour<19})));}

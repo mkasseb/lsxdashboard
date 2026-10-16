@@ -114,6 +114,9 @@ class PublishTests(unittest.TestCase):
     def test_obsolete_code_stops_both_products(self):
         self.app_update('tools/changed.py')
         with self.assertRaisesRegex(ValueError,'code changed'):self.publish()
+    def test_shared_weather_policy_change_stops_both_products(self):
+        self.app_update('assets/weather-contracts.js')
+        with self.assertRaisesRegex(ValueError,'code changed'):self.publish()
     def test_invalid_future_and_removed_budget_fail_closed(self):
         self.publish();git(self.repo,'fetch','origin','main');git(self.repo,'reset','--hard','FETCH_HEAD')
         for content in ('{}',json.dumps(dict(schema=1,preparedAt='2099-01-01T00:00:00Z',windowStart='2099-01-01T00:00:00Z'))):

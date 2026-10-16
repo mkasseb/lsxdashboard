@@ -66,10 +66,10 @@ function requestWeather(url,options,signal,asText){
   var ctl=new AbortController(), timedOut=false;
   function abort(){ ctl.abort(); }
   if(signal){ if(signal.aborted) abort(); else signal.addEventListener("abort",abort,{once:true}); }
-  var timer=setTimeout(function(){ timedOut=true; ctl.abort(); },20000);
+  var timer=setTimeout(function(){ timedOut=true; ctl.abort(); },WeatherContracts.policy.requestTimeout);
   return fetch(url,Object.assign({},options,{signal:ctl.signal})).then(function(r){
     if(!r.ok){ var err=new Error("Weather service returned "+r.status); err.status=r.status; throw err; }
-    return asText?r.text():r.json();
+    return asText==='buffer'?r.arrayBuffer():asText?r.text():r.json();
   }).catch(function(e){
     if(timedOut){ var err=new Error("Weather request timed out"); err.name="TimeoutError"; throw err; }
     throw e;
@@ -202,15 +202,13 @@ function loadCurrent(){
     if(result.station!==current.station){ current.station=result.station; saveLoc(current); }
     var o=result.observation;
     feedUpdate("current","ready",o.properties.timestamp);
-    var p=o.properties, c2f=function(c){return c==null?null:Math.round(c*9/5+32);};
-    var temp=c2f(p.temperature&&p.temperature.value), dew=c2f(p.dewpoint&&p.dewpoint.value);
-    var rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?Math.round(p.relativeHumidity.value):null;
-    var windMph=(p.windSpeed&&p.windSpeed.value!=null)?Math.round(p.windSpeed.value*0.621371):null;
-    var windDir=degToCompass(p.windDirection&&p.windDirection.value);
-    var gust=(p.windGust&&p.windGust.value!=null)?Math.round(p.windGust.value*0.621371):null;
-    var press=(p.barometricPressure&&p.barometricPressure.value!=null)?(p.barometricPressure.value/3386.39).toFixed(2):null;
-    var vis=(p.visibility&&p.visibility.value!=null)?Math.round(p.visibility.value/1609.34):null;
-    var hiObs=c2f(p.heatIndex&&p.heatIndex.value), wcObs=c2f(p.windChill&&p.windChill.value);
+    var p=o.properties, values=WeatherContracts.observation(o,Date.now(),null,true);
+    if(!values) throw new Error("Observation failed validation");
+    var rounded=function(value){return value==null?null:Math.round(value);};
+    var temp=rounded(values.temperature), dew=rounded(values.dewpoint), rh=rounded(values.humidity);
+    var windMph=rounded(values.wind), windDir=degToCompass(values.direction), gust=rounded(values.gust);
+    var press=values.pressure==null?null:values.pressure.toFixed(2), vis=rounded(values.visibility);
+    var hiObs=rounded(values.heatIndex), wcObs=rounded(values.windChill);
     var feels=(hiObs!=null)?hiObs:((wcObs!=null)?wcObs:feelsLikeF(temp,rh,windMph));
     var desc=p.textDescription||"—", now=new Date();
     // Real sunrise/sunset for the icon's day/night variant (polar-edge fallback: 7am–7pm)
@@ -719,7 +717,7 @@ function loadRivers(){
       var d=res[0], fcSeries=res[1];
       var ob=(d.status&&d.status.observed)||{}, val=ob.primary, unit=ob.primaryUnit||"ft", info=catInfo(ob.floodCategory);
       if(typeof val!=="number"||!isFinite(val)||val<=-500) return riverLinkOnly(r);
-      var age=riverObservationState(ob,Date.now(),r.maxAge||2*3600000);
+      var age=riverObservationState(ob,Date.now(),r.maxAge||WeatherContracts.policy.riverObservationAge);
       if(age.state!=="ready") return riverLinkOnly(r,age.time
         ?"Last report "+weatherTime(age.time,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT · stale; current level unverified"
         :"Observation time unavailable; current level unverified");
@@ -737,7 +735,7 @@ function loadRivers(){
       }
       // What the river is forecast to DO — crest, keep climbing, or recede
       var issue=Date.parse(fcSeries&&fcSeries.issuedTime||"");
-      var forecastFresh=isFinite(issue)&&issue>0&&issue<=Date.now()+10*60000&&Date.now()-issue<=48*3600000;
+      var forecastFresh=WeatherContracts.sourceState(issue,Date.now(),WeatherContracts.policy.riverForecastAge).state==="ready";
       var cr=forecastFresh?crestInfo(fcSeries,val):null;
       if(fcSeries) sub.push(forecastFresh?"Forecast issued "+weatherTime(issue,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"Forecast issuance unavailable or stale");
       var crestCat=null;
@@ -769,12 +767,11 @@ function loadAqi(){
   var url="https://air-quality-api.open-meteo.com/v1/air-quality?latitude="+current.lat+"&longitude="+current.lon+"&current=us_aqi,pm2_5,pm10&timeformat=unixtime";
   return getJSON(url,null,locSignal()).then(function(d){
     if(!fresh()) return;   // user moved while this was in flight
-    var cur=d.current||{}, aqi=cur.us_aqi, info=aqiInfo(aqi);
-    if(typeof aqi!=="number"||!isFinite(aqi)||aqi<0) throw new Error("Invalid AQI");
-    var observed=typeof cur.time==="number"?cur.time*1000:0;
-    if(!observed||observed>Date.now()+10*60000||Date.now()-observed>2*3600000) throw new Error("AQI observation time unavailable or stale");
-    feedUpdate("aqi","ready",observed);
-    aqiState={val:(aqi!=null)?aqi:null, pm:(cur.pm2_5!=null)?Math.round(cur.pm2_5):null, err:false};
+    var value=WeatherContracts.airQuality(d,Date.now());
+    if(!value) throw new Error("Air quality failed validation");
+    var info=aqiInfo(value.value);
+    feedUpdate("aqi","ready",value.time);
+    aqiState={val:value.value,pm:value.pm25==null?null:Math.round(value.pm25),err:false};
     // The dedicated card only appears when air quality is a story: AQI > 100 ("Unhealthy for
     // Sensitive Groups" and worse — EPA's literal "Hazardous" is 301+, far too rare a trigger).
     // data-aqibad lets a restored snapshot recover the same visibility decision.
@@ -940,7 +937,7 @@ function loadCpc(){
     feedUpdate("cpc",known===4?"ready":known?"partial":"unavailable");
     function val(i){ return values[i]; }
     // Each period page contains both temperature and precipitation maps with their legends.
-    el.innerHTML='<div class="cpc-grid">'+[
+    el.innerHTML='<span id="cpcSourceHint" class="sr-only">CPC outlook (opens in a new tab)</span><div class="cpc-grid">'+[
       ["610day","6–10 Day","t","Temperature"],
       ["610day","6–10 Day","p","Precipitation"],
       ["814day","8–14 Day","t","Temperature"],
@@ -948,8 +945,8 @@ function loadCpc(){
     ].map(function(item,i){
       return officialSourceLink("https://www.cpc.ncep.noaa.gov/products/predictions/"+item[0]+"/",
         "CPC "+item[1]+" "+item[3]+" outlook",
-        '<div class="k">'+item[1]+' · '+item[3]+' <span aria-hidden="true">↗</span></div><span id="cpcValue'+i+'">'+cpcPill(item[2],val(i))+'</span>',
-        "cpc-item source-link","cpcValue"+i);
+        '<div class="k" id="cpcLabel'+i+'">'+item[1]+' · '+item[3]+' <span aria-hidden="true">↗</span></div><span id="cpcValue'+i+'">'+cpcPill(item[2],val(i))+'</span>',
+        "cpc-item source-link","cpcSourceHint","cpcLabel"+i+" cpcValue"+i);
     }).join("")+'</div>';
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
@@ -1271,27 +1268,10 @@ function loadUv(){
   return getJSON("https://api.open-meteo.com/v1/forecast?latitude="+current.lat+"&longitude="+current.lon
     +"&hourly=uv_index&daily=uv_index_max&forecast_days=7&timezone=America%2FChicago&timeformat=unixtime", null, locSignal()).then(function(d){
     if(!fresh()) return;   // user moved while this was in flight
-    var h=d.hourly||{}, ts=h.time||[], vs=h.uv_index||[], now=Date.now(), best=null, cur=null, curGap=Infinity;
-    for(var i=0;i<ts.length;i++){
-      if(typeof vs[i]!=="number"||!isFinite(vs[i])||vs[i]<0) continue;
-      var t=(typeof ts[i]==="number")?ts[i]*1000:(/Z$|[+-]\d\d:\d\d$/.test(ts[i])?Date.parse(ts[i]):NaN);
-      if(!isFinite(t)) continue;
-      var gap=Math.abs(t-now);
-      // "now" is the nearest hourly sample, but only if one is actually near — never extrapolate
-      if(gap<curGap && gap<=5400000){ curGap=gap; cur=vs[i]; }
-      if(t<now-1800000||t>now+24*3600000) continue;    // peak across the next 24 h (useful in the evening too)
-      if(!best||vs[i]>best.v) best={v:vs[i],t:t};
-    }
-    if(cur==null&&!best) throw new Error("UV samples unavailable");
-    feedUpdate("uv",cur==null?"partial":"ready");
-    uv.now=cur; uv.peak=best;
-    var dd=d.daily||{}, dts=dd.time||[], dvs=dd.uv_index_max||[], map={};
-    for(var j=0;j<dts.length;j++){
-      if(typeof dvs[j]!=="number"||!isFinite(dvs[j])||dvs[j]<0) continue;
-      var date=typeof dts[j]==="number"&&isFinite(dts[j])?weatherParts(dts[j]*1000).key:recordDateKey(dts[j]);
-      if(date) map[date]=dvs[j];
-    }
-    uv.daily=map;
+    var values=WeatherContracts.uv(d,Date.now());
+    if(!values) throw new Error("UV samples unavailable");
+    feedUpdate("uv",values.now==null?"partial":"ready");
+    uv=values;
     renderUvNow();
     if(typeof renderTheCall==="function") renderTheCall();
     // The 7-day may already be on screen; repaint it so each day picks up its UV figure.
@@ -1345,26 +1325,19 @@ function loadStationPlot(){
   var seq=++stationRequestSeq;
   deferredFeeds.stations=true;
   // Data acquisition is independent of map initialization; renderStationLayer waits for the map.
-  var c2f=function(c){return (c==null)?null:Math.round(c*9/5+32);};
   var checked=0;
   var jobs=STN_LIST.map(function(s){
     return getJSON(API+"/stations/"+s.id+"/observations/latest").then(function(d){
       if(seq!==stationRequestSeq) return null;
       var p=(d&&d.properties)||{};
-      var observed=Date.parse(p.timestamp||"");
-      // Invalid or future timestamps cannot be plotted at full strength or replace
-      // a previously usable report. Its original timestamp still controls fallback age.
-      if(!isFinite(observed)||observed<=0||observed>Date.now()+10*60000) return _stnLast[s.id]||null;
-      var tempF=c2f(p.temperature&&p.temperature.value), dewF=c2f(p.dewpoint&&p.dewpoint.value);
-      var mph=(p.windSpeed&&p.windSpeed.value!=null)?Math.round(p.windSpeed.value*0.621371):null;
-      var rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?Math.round(p.relativeHumidity.value):rhFromTd(tempF,dewF);
-      var o={id:s.id,lat:s.lat,lon:s.lon,
-        tempF:tempF, dewF:dewF, rh:rh,
-        feelsF:feelsLikeF(tempF,rh,mph),
-        windDir:(p.windDirection&&p.windDirection.value!=null)?Math.round(p.windDirection.value):null,
-        windMph:mph,
-        gustMph:(p.windGust&&p.windGust.value!=null)?Math.round(p.windGust.value*0.621371):null,
-        ts:p.timestamp||null};
+      var values=WeatherContracts.observation(d,Date.now(),WeatherContracts.policy.stationRetention,false);
+      if(!values) return _stnLast[s.id]||null;
+      var rounded=function(value){return value==null?null:Math.round(value);};
+      var tempF=rounded(values.temperature), dewF=rounded(values.dewpoint), mph=rounded(values.wind);
+      var rh=values.humidity==null?rhFromTd(tempF,dewF):rounded(values.humidity);
+      var o={id:s.id,lat:s.lat,lon:s.lon,tempF:tempF,dewF:dewF,rh:rh,
+        feelsF:feelsLikeF(tempF,rh,mph),windDir:rounded(values.direction),windMph:mph,
+        gustMph:rounded(values.gust),ts:p.timestamp};
       if(currentObservationFresh(d,Date.now())) checked++;
       _stnLast[s.id]=o;
       return o;
@@ -1444,7 +1417,7 @@ function pointQuery(base,layer,fields,signal){
   return getJSON(base+layer+"/query?geometry="+current.lon+","+current.lat
     +"&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects"
     +"&outFields="+(fields||"*")+"&returnGeometry=false&f=json", null, signal||locSignal()).then(function(d){
-      if(!d||d.error||!Array.isArray(d.features)) throw new Error("Invalid ArcGIS point response");
+      if(!WeatherContracts.arcgis(d)) throw new Error("Invalid ArcGIS point response");
       return d;
     });
 }
@@ -1526,7 +1499,7 @@ function fetchSpcThreats(signal){
     // The categorical product sets the expected issuance; each threat layer must match it.
     return getJSON(SPC_URL+RISK_LAYERS.spc[day-1]+"/query?where=1%3D1&outFields=valid,expire,issue&returnGeometry=false&resultRecordCount=1&f=json",null,signal)
       .then(function(d){
-        if(!fresh()||!d||d.error||!Array.isArray(d.features)||!d.features.length) return null;
+        if(!fresh()||!WeatherContracts.arcgis(d)||!d.features.length) return null;
         var period=spcOutlookPeriod(d.features[0].attributes,day,nowMs); if(!period) return null;
         return Promise.all(["tornado","wind","hail"].map(function(kind){
           var layer=SPC_THREAT_LAYERS[day-1][kind];

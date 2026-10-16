@@ -60,7 +60,7 @@ def publish(repo, directory, expected_head, now=None, before_push=None):
     now = now or datetime.now(daily.UTC)
     daily.git(repo, 'fetch', '--no-tags', 'origin', 'refs/heads/main')
     head = daily.git(repo, 'rev-parse', 'FETCH_HEAD').stdout.decode().strip()
-    if daily.git(repo, 'diff', '--name-only', expected_head, head, '--', 'tools/', 'assets/forecast-range.js', 'assets/hourly-range.js', '.github/').stdout:
+    if daily.git(repo, 'diff', '--name-only', expected_head, head, '--', 'tools/', 'assets/forecast-range.js', 'assets/hourly-range.js', 'assets/weather-contracts.js', '.github/').stdout:
         raise ValueError('Publisher or validation code changed; start a fresh run')
     files, outcomes = {}, {}
     for name, p in PRODUCTS.items():

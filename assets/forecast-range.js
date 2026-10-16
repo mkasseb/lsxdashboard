@@ -1,7 +1,7 @@
 /* Supplemental regional guidance. No values enter NWS forecasts, headlines or risk decisions. */
 var NbmRange=(function(){
   'use strict';
-  var H=3600000, MAX_AGE=24*H;
+  var H=3600000, MAX_AGE=WeatherContracts.policy.modelAge;
   function finite(v){return typeof v==='number'&&Number.isFinite(v);}
   function time(s){return typeof s==='string'?Date.parse(s):NaN;}
   function same(a,b){return a&&b&&['index','lat','lon','gridHash'].every(function(k){return a[k]===b[k];});}
@@ -121,7 +121,7 @@ var NbmRange=(function(){
        !forecastPoint||forecastPoint.lat!==current.lat||forecastPoint.lon!==current.lon)return false;
     var now=Date.now(),ends=visible.windows&&visible.windows[activation.row];
     if(visible.scope!==scope()||!finite(visible.run)||now-visible.run>=MAX_AGE||!ends||!ends.every(function(end){return end>now;}))return false;
-    var result=validate(raw,storedPoint,now),candidates=nextDays||days;
+    var result=ModelData.current(raw,'daily',now),candidates=nextDays||days;
     if(JSON.stringify(candidates.map(rowKey))!==JSON.stringify(visible.keys))return false;
     return !!result.periods&&align(candidates,result.periods,now).matches.some(function(m){return rowKey(candidates[m.row])===activation.row;});
   }
@@ -185,7 +185,7 @@ var NbmRange=(function(){
     var status=document.getElementById('nbmStatus'),body=document.getElementById('nbmInfoBody'),daily=document.getElementById('daily');
     if(!status||!body||!daily)return;
     var currentData=raw&&storedSeq===locSeq&&storedPoint.lat===current.lat&&storedPoint.lon===current.lon;
-    var result=currentData?validate(raw,storedPoint,Date.now()):{status:'unavailable',reason:failure};
+    var result=currentData?ModelData.current(raw,'daily',Date.now()):{status:'unavailable',reason:failure};
     if(canDefer(days)){pendingRender=true;return;}
     pendingRender=false;if(activation)finishActivation();
     var focus=captureView();
@@ -247,10 +247,10 @@ var NbmRange=(function(){
   function reset(){raw=null;storedPoint=null;storedSeq=-1;days=[];forecastPoint=null;forecastSeq=-1;requestSeq++;openViews={};viewScope='';clearTimeout(activationTimer);activation=null;pendingPaint=null;pendingRender=false;visible={};failure='Checking NBM model guidance…';render();}
   function load(){
     var fresh=locGuard(),point={lat:current.lat,lon:current.lon},seq=++requestSeq;
-    return getJSON('/data/nbm-range.json',null,locSignal()).then(function(d){
+    return ModelData.load('daily',point,locSignal()).then(function(d){
       if(!fresh()||seq!==requestSeq||point.lat!==current.lat||point.lon!==current.lon)return;
       raw=d;storedPoint=point;storedSeq=locSeq;
-      var result=validate(d,point,Date.now());render();
+      var result=ModelData.current(d,'daily',Date.now());render();
       feedUpdate('nbmRange',['ready','partial'].includes(result.status)?result.status:'unavailable',d.run);
     }).catch(function(){
       if(!fresh()||seq!==requestSeq)return;

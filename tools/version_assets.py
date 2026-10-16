@@ -7,7 +7,7 @@ import re
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 ROOT = Path(__file__).resolve().parent.parent
-REF = re.compile(r'\b(src|href)="([^"]+)"')
+REF = re.compile(r'\b(data-worker-src|src|href)="([^"]+)"')
 
 
 def versioned_html(text, page):

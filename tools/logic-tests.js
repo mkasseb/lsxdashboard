@@ -34,6 +34,7 @@ function lift(pattern, label) {
 }
 
 const TIME_HELPERS = [
+  require('./source').assets['/assets/weather-contracts.js'].content,
   lift(/^var WEATHER_TZ=.*$/m, 'WEATHER_TZ'),
   lift(/^var WEATHER_PARTS=.*$/m, 'WEATHER_PARTS'),
   ...['weatherParts','weatherTime','calendarDate','weatherDay'].map(name=>
@@ -1803,7 +1804,7 @@ async function checkGridLoaderIsolation() {
     incomplete.find(c=>c.topic==='precip').headline,'Rain chance incomplete');
   check('unverified alert or air checks cannot endorse outdoor comfort',
     SUBJECT.bottomLineHourlyCandidates(hours,{now,aqi:35,allowComfort:false}).some(c=>c.tone==='good'),false);
-  const gauge=new Function(lift(/^function riverObservationState\(ob,now,maxAge\)\{[\s\S]*?^\}/m,'riverObservationState()')+';return riverObservationState;')();
+  const gauge=new Function(TIME_HELPERS+lift(/^function riverObservationState\(ob,now,maxAge\)\{[\s\S]*?^\}/m,'riverObservationState()')+';return riverObservationState;')();
   check('gauge without a source timestamp remains unknown',gauge({},+now,7200000).state,'unknown');
   check('stale gauge is not current',gauge({validTime:new Date(+now-3*3600000).toISOString()},+now,7200000).state,'stale');
   check('future gauge timestamp is unverified',gauge({validTime:new Date(+now+3600000).toISOString()},+now,7200000).state,'unknown');

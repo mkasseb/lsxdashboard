@@ -332,8 +332,8 @@ def region(client, run, planned):
 
 def consumer_valid(raw, asset):
     """Independently validate retained bytes before permitting a no-op; never renew their age."""
-    js = """const fs=require('fs'),vm=require('vm');const s={Intl,Date,URLSearchParams};
-vm.createContext(s);vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),s);
+    js = """const fs=require('fs'),vm=require('vm'),path=require('path');const s={Intl,Date,URLSearchParams};
+vm.createContext(s);vm.runInContext(fs.readFileSync(path.join(path.dirname(process.argv[1]),'weather-contracts.js'),'utf8')+fs.readFileSync(process.argv[1],'utf8'),s);
 const d=JSON.parse(fs.readFileSync(0,'utf8')),n=process.argv[2];
 if(s[n].validate(d,{lat:38.8,lon:-90.79},Date.parse(d.retrievedAt)).status!=='ready')process.exit(1);"""
     result = subprocess.run(['node', '-e', js, str(Path(__file__).resolve().parent.parent/'assets'/asset),

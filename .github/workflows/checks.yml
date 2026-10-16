@@ -21,6 +21,9 @@ jobs:
           node-version: '22'
       - run: python3 tools/check.py
       - run: node tools/logic-tests.js
+      - run: node tools/weather-contract-tests.js
+      - run: node tools/model-data-tests.js
+      - run: node tools/feed-health-tests.js
       - run: node tools/daily-record-tests.js
       - run: node tools/spc-discovery-tests.js
       - run: node tools/nws-message-tests.js
@@ -52,7 +55,7 @@ jobs:
           node-version: '22'
       - name: Install browser test tools outside the static app
         run: |
-          npm install --prefix "$RUNNER_TEMP/lsx-browser" playwright@1.62.1 pngjs@7.0.0 leaflet@1.9.4 maplibre-gl@5.24.0 @maplibre/maplibre-gl-leaflet@0.1.4
+          npm install --prefix "$RUNNER_TEMP/lsx-browser" playwright@1.62.1 @axe-core/playwright@4.14.0 pngjs@7.0.0 leaflet@1.9.4 maplibre-gl@5.24.0 @maplibre/maplibre-gl-leaflet@0.1.4
           node "$RUNNER_TEMP/lsx-browser/node_modules/playwright/cli.js" install --with-deps ${{ matrix.browser }}
       - name: Verify official NWS messages, fallback, warning precedence and location races
         env:
@@ -62,6 +65,15 @@ jobs:
         env:
           WEATHER_BROWSER: ${{ matrix.browser }}
         run: NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" xvfb-run -a node tools/dashboard-regression-tests.js
+      - name: Audit WCAG accessibility in both themes, phone and desktop, warnings and outages
+        env:
+          WEATHER_BROWSER: ${{ matrix.browser }}
+          ACCESSIBILITY_REPORT: ${{ runner.temp }}/accessibility.json
+        run: NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" xvfb-run -a node tools/accessibility-tests.js
+      - name: Verify model worker, cached renders and browser fallback
+        env:
+          WEATHER_BROWSER: ${{ matrix.browser }}
+        run: NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" xvfb-run -a node tools/model-worker-tests.js
       - name: Verify weather icon artwork in both themes
         env:
           WEATHER_BROWSER: ${{ matrix.browser }}
@@ -130,6 +142,7 @@ jobs:
           name: weather-scenarios-${{ matrix.browser }}
           path: |
             ${{ runner.temp }}/weather-scenarios.json
+            ${{ runner.temp }}/accessibility.json
             ${{ runner.temp }}/redesign
           if-no-files-found: ignore
 

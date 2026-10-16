@@ -5,7 +5,8 @@ const http=require('http'),fs=require('fs'),path=require('path'),cp=require('chi
 const playwright=require('playwright'),root=path.join(__dirname,'..');
 const legacy='f8976ef0d8101528cec520ff886bb278096f271c';
 const names=['dashboard.css','weather-core.js','weather-feeds.js','forecast-view.js','dashboard-context.js','dashboard.js'];
-const currentNames=[...names,'forecast-range.js','hourly-range.js'];
+const historicalNames=[...names,'forecast-range.js','hourly-range.js'];
+const currentNames=Object.keys(require('./source').assets).map(p=>path.basename(p));
 const quartileLegacy='3e4ed1634acd2b3caefd86cca94a08d43f1fb18f';
 const old=Object.fromEntries(names.map(name=>[name,cp.execFileSync('git',['show',legacy+':assets/'+name],{cwd:root,maxBuffer:10*1024*1024})]));
 const vendors=[['leaflet/1.9.4/leaflet.min.js','leaflet/dist/leaflet.js'],['leaflet/1.9.4/leaflet.min.css','leaflet/dist/leaflet.css'],['maplibre-gl@5.24.0/dist/maplibre-gl.js','maplibre-gl/dist/maplibre-gl.js'],['maplibre-gl@5.24.0/dist/maplibre-gl.css','maplibre-gl/dist/maplibre-gl.css'],['@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js','@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js']];
@@ -24,7 +25,7 @@ const server=http.createServer((req,res)=>{
     res.setHeader('Cache-Control','public, max-age=0, must-revalidate');res.setHeader('Content-Type','text/html');res.end(controlled(html));return;
   }
   if(p.startsWith('/assets/')){
-    const name=path.basename(p);if(!(priming&&!quartileMode?names:currentNames).includes(name)){res.writeHead(404).end();return;}
+    const name=path.basename(p);if(!(priming?(quartileMode?historicalNames:names):currentNames).includes(name)){res.writeHead(404).end();return;}
     res.setHeader('Cache-Control',priming?'public, max-age=14400, must-revalidate':'no-cache, max-age=0, must-revalidate');
     res.setHeader('Content-Type',name.endsWith('.css')?'text/css':'application/javascript');
     res.end(controlled(priming?(quartileMode?cp.execFileSync('git',['show',quartileLegacy+':assets/'+name],{cwd:root,maxBuffer:10*1024*1024}).toString():old[name].toString()):fs.readFileSync(path.join(root,'assets',name),'utf8')));return;

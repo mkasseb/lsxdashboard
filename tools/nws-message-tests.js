@@ -2,7 +2,7 @@
 'use strict';
 // Offline parsing/freshness contracts, including authentic carried-forward LSX messages.
 const fs=require('node:fs'),assert=require('node:assert/strict');
-const {afdKeyMessages,nwsTextTime,nwsLocalPeriod}=new Function(fs.readFileSync('assets/weather-core.js','utf8')+';return {afdKeyMessages,nwsTextTime,nwsLocalPeriod};')();
+const {afdKeyMessages,nwsTextTime,nwsLocalPeriod}=new Function(fs.readFileSync('assets/weather-contracts.js','utf8')+fs.readFileSync('assets/weather-core.js','utf8')+';return {afdKeyMessages,nwsTextTime,nwsLocalPeriod};')();
 const recorded=require('./fixtures/weather/nws-afd-recorded.json'),now=Date.parse(recorded.verifiedAt),H=3600000;
 const expected=[
  'Near-record warmth and predominantly dry weather is forecast into early next week.',

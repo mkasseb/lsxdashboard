@@ -28,7 +28,7 @@ function browserObserver(sites){
   }
  }).observe(document,{subtree:true,attributes:true,attributeFilter:['src'],attributeOldValue:true});
  AbortController.prototype.abort=function(){
-  const frames=Array.from(String(new Error().stack).matchAll(/assets\/(weather-feeds\.js|dashboard\.js)(?:\?[^():\s]*)?:(\d+):(\d+)/g),m=>({file:m[1],line:Number(m[2])}));
+  const frames=Array.from(String(new Error().stack).matchAll(/assets\/(weather-feeds\.js|location-controls\.js)(?:\?[^():\s]*)?:(\d+):(\d+)/g),m=>({file:m[1],line:Number(m[2])}));
   calls.set(this.signal,{at:Date.now(),generation:generation(),frames});
   return abortOriginal.apply(this,arguments);
  };
@@ -39,7 +39,7 @@ function browserObserver(sites){
    const aborted=()=>{
     const call=calls.get(signal),frames=call?.frames||[];
     const timeout=frames.some(f=>f.file==='weather-feeds.js'&&f.line===sites.timeoutLine);
-    const location=frames.some(f=>f.file==='dashboard.js'&&f.line===sites.locationLine)&&startGeneration!==null&&call.generation>startGeneration;
+    const location=frames.some(f=>f.file==='location-controls.js'&&f.line===sites.locationLine)&&startGeneration!==null&&call.generation>startGeneration;
     emit({rawUrl,method,startedAt,startGeneration,abortGeneration:call?.generation??null,abortedAt:call?.at??Date.now(),
      cause:timeout?'weather-timeout':location?'observed-location-abort':'unclassified-signal-abort',frames:frames.slice(0,5)});
    };

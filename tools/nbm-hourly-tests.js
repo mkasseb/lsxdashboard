@@ -1,6 +1,6 @@
 'use strict';
 const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
-const s={Intl,Date,URLSearchParams};vm.createContext(s);vm.runInContext(fs.readFileSync('assets/hourly-range.js','utf8'),s);
+const s={Intl,Date,URLSearchParams};vm.createContext(s);vm.runInContext(fs.readFileSync('assets/weather-contracts.js','utf8')+fs.readFileSync('assets/hourly-range.js','utf8'),s);
 const N=s.NbmHourly,H=3600000,clone=x=>JSON.parse(JSON.stringify(x));
 const data=JSON.parse(require('zlib').gunzipSync(fs.readFileSync('tools/fixtures/weather/nbm-quartile-hourly-recorded.json.gz'))),now=Date.parse(data.retrievedAt),point={lat:38.8,lon:-90.79};
 const result=N.validate(data,point,now);assert.equal(result.status,'ready');
