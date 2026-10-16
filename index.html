@@ -52,7 +52,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css"
   integrity="sha384-uTttxo/aOKbdE5RlD/SPzSDoDmNvGlUYPjONi2MN/b7c9HPSvW07OIuyP7uL6jxK" crossorigin="anonymous"
   media="print" onload="this.media='all'">
-<link rel="stylesheet" href="/assets/dashboard.css?v=3351d8478366d2d5">
+<link rel="stylesheet" href="/assets/dashboard.css?v=f4856f36f6e7f6f0">
 </head>
 <body>
 <!-- First focusable thing on the page, and deliberately ahead of the sprite so it stays that way.
@@ -344,6 +344,7 @@
       <div class="station-radar-key" id="stationRadarScale">
         <span class="rl-t" id="stationLegendTitle">Reflectivity · dBZ</span>
         <img id="stationLegendImage" alt="KLSX reflectivity scale" width="500" height="30">
+        <button type="button" class="radar-legend-retry" id="radarLegendRetry" hidden>Legend unavailable · Retry legend</button>
       </div>
       </div>
       <!-- Empty in the markup on purpose: syncWarnKey() fills it from the shapes actually drawn,
@@ -494,6 +495,6 @@
 <script src="/assets/dashboard-context.js?v=91467027b18ea8fe"></script>
 <script src="/assets/forecast-range.js?v=8c513cec2f2f1b84"></script>
 <script src="/assets/hourly-range.js?v=47ef09063f33ca6c"></script>
-<script src="/assets/dashboard.js?v=b1549537fd378f45"></script>
+<script src="/assets/dashboard.js?v=ac002f0c5f3ce423"></script>
 </body>
 </html>

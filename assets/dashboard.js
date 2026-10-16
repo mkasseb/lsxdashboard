@@ -2746,7 +2746,28 @@ function detachRadarLayers(){
      with nothing left on screen explaining which moment it belongs to. Empty frames means unpin. */
   syncSatToRadar();
 }
-function syncRadarProductUI(){
+function loadRadarLegend(img,url,retry){
+  var button=document.getElementById("radarLegendRetry");
+  if(!img._legendBound){
+    img._legendBound=true;
+    img.addEventListener("error",function(){
+      img._legendFailed=true;img.hidden=true;
+      if(button) button.hidden=false;
+    });
+    img.addEventListener("load",function(){
+      img._legendFailed=false;img.hidden=false;
+      if(button) button.hidden=true;
+    });
+  }
+  if(img._legendURL!==url||retry&&img._legendFailed){
+    var failed=img._legendFailed;
+    img._legendURL=url;img._legendFailed=false;img.hidden=false;
+    if(button) button.hidden=true;
+    // A retry must make a fresh request even if the browser cached an error for this URL.
+    img.src=url+(failed?"&_legendRetry="+Date.now():"");
+  }
+}
+function syncRadarProductUI(retryLegend){
   var station=radarView.source==="klsx", velocity=station&&radarView.product==="velocity";
   document.querySelectorAll("[data-radar-source]").forEach(function(b){
     var on=b.getAttribute("data-radar-source")===radarView.source;
@@ -2762,7 +2783,7 @@ function syncRadarProductUI(){
   if(title) title.textContent=velocity?"Radial velocity · knots":"Reflectivity · dBZ";
   if(img&&station){
     var url=KLSX_WMS+"?service=WMS&request=GetLegendGraphic&format=image/png&layer="+radarProduct().layer;
-    if(img.getAttribute("src")!==url) img.setAttribute("src",url);
+    loadRadarLegend(img,url,!!retryLegend);
     img.alt=velocity?"KLSX velocity scale: negative values toward the radar, positive values away, in knots"
       :"KLSX reflectivity scale in dBZ; higher values indicate stronger echoes";
   }
@@ -2784,6 +2805,7 @@ function setRadarView(source,product){
     if(skyOn.radar) nwsRadar.addTo(rvMap);
   }
   syncSkyMeta();
+  syncRadarProductUI(true);
   syncRadarBadge();
   if(rvMap&&skyOn.radar) refreshRadarLayer();
 }
@@ -2834,6 +2856,7 @@ document.addEventListener("click",function(e){
 document.getElementById("radarProduct").addEventListener("change",function(e){
   setRadarView(radarView.source,e.target.value);
 });
+document.getElementById("radarLegendRetry").addEventListener("click",function(){syncRadarProductUI(true);});
 syncRadarProductUI();
 
 /* ============ SATELLITE TIME TRACK ============

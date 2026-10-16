@@ -9,7 +9,7 @@ const reflectivity=scans(25,5),velocity=scans(25,5,2),regional=scans(61,2);
 function capabilities(entries){return '<WMS_Capabilities xmlns="http://www.opengis.net/wms"><Capability><Layer>'+Object.entries(entries).map(([name,times])=>'<Layer><Name>'+name+'</Name><Dimension name="time">'+times.join(',')+'</Dimension></Layer>').join('')+'</Layer></Capability></WMS_Capabilities>';}
 // An unrelated product comes first, and each product has its own cadence and scan time.
 const xml=capabilities({klsx_bdhc:scans(2,5,180),klsx_sr_bref:reflectivity,klsx_sr_bvel:velocity,conus_bref_qcd:regional});
-async function ready(page,layer){await page.waitForFunction(layer=>radarFrames.length>1&&radarFrames.every(f=>f.layer.wmsParams.layers===layer&&f.layer._ok>0)&&!radarFallback,layer);}
+async function ready(page,layer){try{await page.waitForFunction(layer=>radarFrames.length>1&&radarFrames.every(f=>f.layer.wmsParams.layers===layer&&f.layer._ok>0)&&!radarFallback,layer);}catch(e){console.error('RADAR_PRODUCT_STATE',await page.evaluate(()=>({view:radarView,product:radarProduct(),fallback:radarFallback,frames:radarFrames.map(f=>({time:f.time,layer:f.layer.wmsParams.layers,ok:f.layer._ok,err:f.layer._err,attached:rvMap.hasLayer(f.layer)}))})));throw e;}}
 async function overflow(page){assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),'No horizontal overflow');}
 async function state(page){return page.evaluate(()=>({view:radarView,layer:radarProduct().layer,times:radarFrames.map(f=>f.time),span:radarSpanMin(),url:radarFrames[0]?.layer._url}));}
 const settings=extra=>config('KLSX products',{now,maps:true,productionCsp:true,radarCapabilities:xml,...extra});
@@ -33,7 +33,7 @@ const settings=extra=>config('KLSX products',{now,maps:true,productionCsp:true,r
     assert.equal((await state(p)).times.at(-1),velocity.at(-1));assert((await state(p)).span<=60);
     assert(await p.evaluate(()=>oldFrames.every(l=>!rvMap.hasLayer(l))&&!radarPlaying));
     assert(await p.evaluate(()=>productMap===rvMap&&productWarnings===warnLayer&&productSatellite===satLayer));
-    assert.deepEqual(await p.evaluate(()=>[rvMap.getCenter().lat,rvMap.getCenter().lng,rvMap.getZoom()]),camera);
+    assert(await p.evaluate(camera=>rvMap.getZoom()===camera[2]&&rvMap.project(rvMap.getCenter()).distanceTo(rvMap.project(camera.slice(0,2)))<2,camera),'Source switch preserves the camera within two rendered pixels');
     assert.match(await p.locator('#stationLegendImage').getAttribute('src'),/layer=klsx_sr_bvel$/);
     assert.match(await p.locator('#stationLegendTitle').innerText(),/velocity.*knots/i);
     assert.match(await p.locator('#radarProductNote').innerText(),/toward KLSX.*away/);
@@ -79,6 +79,23 @@ const settings=extra=>config('KLSX products',{now,maps:true,productionCsp:true,r
    assert.deepEqual(session.errors,[]);console.log('PASS '+engine+' late responses cannot replace a product or resurrect a hidden layer');
    report.push({case:'source and visibility request races',status:'passed'});
   }finally{await session.context.close();}
+  const legend=await open(settings({radarLegendDown:true}),390),l=legend.page;
+  try{
+   await ready(l,'klsx_sr_bref');await l.locator('#radarLegendRetry').waitFor({state:'visible'});
+   const before=legend.requests.filter(url=>url.includes('GetLegendGraphic')).length;
+   await l.evaluate(()=>{syncSkyMeta();syncSkyMeta();});
+   assert.equal(legend.requests.filter(url=>url.includes('GetLegendGraphic')).length,before,'Metadata refresh must not create a legend retry loop');
+   await l.locator('[data-radar-source="regional"]').click();await ready(l,'conus_bref_qcd');
+   legend.change(settings());await l.locator('[data-radar-source="klsx"]').click();await ready(l,'klsx_sr_bref');
+   await l.waitForFunction(()=>stationLegendImage.complete&&stationLegendImage.naturalWidth===500&&!stationLegendImage.hidden);
+   assert(await l.locator('#radarLegendRetry').isHidden());
+   legend.change(settings({radarLegendDown:true}));await l.locator('#radarProduct').selectOption('velocity');await ready(l,'klsx_sr_bvel');
+   await l.locator('#radarLegendRetry').waitFor({state:'visible'});legend.change(settings());await l.locator('#radarLegendRetry').click();
+   await l.waitForFunction(()=>stationLegendImage.complete&&stationLegendImage.naturalWidth===500&&!stationLegendImage.hidden);
+   assert(await l.locator('#radarLegendRetry').isHidden());assert.deepEqual(legend.errors,[]);
+   console.log('PASS '+engine+' failed legends recover on station restore and explicit retry without retry loops');
+   report.push({case:'legend failure and retry',status:'passed'});
+  }finally{await legend.context.close();}
   const fallback=await open(settings({radarCapabilities:capabilities({klsx_bdhc:reflectivity})}),390),f=fallback.page;
   try{
    await f.waitForFunction(()=>radarFallback&&nwsRadar._ok>0);

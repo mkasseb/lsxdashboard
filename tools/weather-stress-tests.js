@@ -125,7 +125,7 @@ async function open(c, width=390) {
       if(/GetCapabilities|DescribeDomains/i.test(u.href)&&c.mapTimeHang)return;
       if(u.hostname==='tiles.openfreemap.org')return reply(c.mapStyleDown?{}:{version:8,sources:{},layers:[{id:'background',type:'background',paint:{'background-color':'#18202d'}}]},c.mapStyleDown?503:200);
       if(u.hostname==='opengeo.ncep.noaa.gov'||u.hostname==='gibs.earthdata.nasa.gov'){
-        if(/GetLegendGraphic/i.test(u.href))return route.fulfill({contentType:'image/png',body:fs.readFileSync(path.join(__dirname,'fixtures/weather/klsx-'+(u.searchParams.get('layer')==='klsx_sr_bvel'?'velocity':'reflectivity')+'-legend.png'))});
+        if(/GetLegendGraphic/i.test(u.href))return c.radarLegendDown?route.abort():route.fulfill({contentType:'image/png',body:fs.readFileSync(path.join(__dirname,'fixtures/weather/klsx-'+(u.searchParams.get('layer')==='klsx_sr_bvel'?'velocity':'reflectivity')+'-legend.png'))});
         if(/GetCapabilities/i.test(u.href)){
           const names=u.pathname.includes('/klsx/')?['klsx_bdhc','klsx_sr_bref','klsx_sr_bvel']:['conus_bref_qcd'];
           const times=Array.from({length:31},(_,i)=>new Date(c.now-(60-i*2)*60000).toISOString()).join(',');
