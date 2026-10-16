@@ -638,7 +638,8 @@ async function main() {
     }
     await run('stale station observations cannot read as current',config('stale station',{staleObservation:true}),async({page})=>{await expectText(page,'#current',/Current observation unavailable/);assert.equal(await page.evaluate(()=>heroNow.temp),null);await durations(page);});
     await run('recorded live LSX grid and hourly replay',config('recorded',{recorded:true,now:Date.parse(recorded.recordedAt)}),async({page})=>{
-      await durations(page);assert.equal(await page.evaluate(()=>forecastGrid.properties.updateTime),recorded.responses.grid.properties.updateTime);assert.equal(await page.evaluate(()=>smart.hourlyAll.length),recorded.responses.hourly.properties.periods.length);await expectText(page,'#precipEvents',/NWS forecast amounts/);await expectText(page,'.precip-total',/~0\.77″ rain/);
+      const remaining=recorded.responses.hourly.properties.periods.filter(p=>Date.parse(p.endTime)>Date.parse(recorded.recordedAt));
+      await durations(page);assert.equal(await page.evaluate(()=>forecastGrid.properties.updateTime),recorded.responses.grid.properties.updateTime);assert.equal(await page.evaluate(()=>smart.hourlyAll.length),remaining.length);assert(await page.evaluate(()=>smart.hourlyAll.every(p=>Date.parse(p.endTime)>Date.now())));await expectText(page,'#precipEvents',/NWS forecast amounts/);await expectText(page,'.precip-total',/~0\.77″ rain/);
     },1440);
     await run('hazardous air quality and extreme UV',config('smoke and sun',{aqi:325,uv:11,temp:100}),async({page})=>{
       await expectText(page,'#aqi',/325.*Hazardous/s);assert(await page.locator('#aqiCard').evaluate(el=>el.classList.contains('show')));await expectText(page,'#ccUv',/11.*Extreme/s);assert.equal(await page.evaluate(()=>callAqi),325);

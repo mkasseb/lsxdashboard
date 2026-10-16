@@ -40,7 +40,7 @@ if(days[0]){
     if(typeof renderVsNormal==="function") renderVsNormal();
   }
 }
-function popOf(p){ return (p&&p.probabilityOfPrecipitation&&p.probabilityOfPrecipitation.value!=null)?p.probabilityOfPrecipitation.value:null; }
+function popOf(p){ return precipChance(p&&p.probabilityOfPrecipitation); }
 function factsFor(d){
   var hi=d.day?d.day.temperature:null, lo=d.night?d.night.temperature:null;
   var main=d.day||d.night;
@@ -63,7 +63,8 @@ function factsFor(d){
           feelsHigh:feelsHigh,feelsLow:feelsLow,feelsLowLabel:lowLabel,
           dayPop:dayPop,nightPop:nightPop,
           dayCondition:d.day?d.day.shortForecast:"",nightCondition:d.night?d.night.shortForecast:"",
-          pop:Math.max(dayPop!=null?dayPop:0,nightPop!=null?nightPop:0),
+          pop:dayPop==null&&nightPop==null?null:Math.max(dayPop||0,nightPop||0),
+          popMissing:!!(d.day&&dayPop==null||d.night&&nightPop==null),
           wind:main?(((main.windDirection?main.windDirection+" ":"")+(main.windSpeed||"")).trim()||"—"):"—"};
 }
 // Stored as a repaintable closure: climate context (per-day normals) usually lands AFTER the
@@ -147,7 +148,7 @@ function paintDays(){ return days.map(function(d){
     +'<div class="day-detail">'
       +detail
       +'<div class="dd-grid">'
-        +'<div class="dd-item"><div class="k">Precip Chance</div><div class="v">'+(pop>0?pop+"%":"0%")+'</div></div>'
+        +'<div class="dd-item"><div class="k">Precip Chance</div><div class="v">'+(pop==null?"Unavailable":(fact.popMissing?"Known peak "+pop+"% · incomplete":pop+"%"))+'</div></div>'
         +'<div class="dd-item"><div class="k">Wind</div><div class="v">'+esc(wind)+'</div></div>'
         +'<div class="dd-item'+(impact?' impact-'+impact.kind:'')+'"><div class="k">'
           +(impact&&impact.kind==="hot"?"Peak Feels Like":(impact&&impact.kind==="cold"?"Lowest Feels Like":"Feels Like"))+'</div>'
@@ -161,7 +162,7 @@ function paintDays(){ return days.map(function(d){
           if(du==null) return "";
           var dr=Math.round(du), dl=uvLevel(dr);
           return '<div class="dd-item"><div class="k">UV Index</div>'
-            +'<div class="v"><span class="lvcol" style="color:'+dl.c+'">'+dr+" "+dl.t+'</span></div></div>';
+            +'<div class="v"><span class="lvcol" style="color:'+exposureColor(dl.c)+'">'+dr+" "+dl.t+'</span></div></div>';
         })()
       +'</div>'
     +'</div>'
@@ -173,6 +174,12 @@ if(typeof ensureForecastRecordDates==="function") ensureForecastRecordDates();
 
 /* Optional observed station context has its own date, location and freshness gates.
    It never supplies an NWS temperature, NBM range, alert or planning decision. */
+function removeForecastUv(root){
+  root.querySelectorAll('.dd-grid .dd-item').forEach(function(item){
+    var key=item.querySelector('.k');
+    if(key&&key.textContent==='UV Index') item.remove();
+  });
+}
 function forecastNormalFor(date){
   if(!ctx||!ctx.ready||ctx.location!==locationKey(current)||ctx.recordAsOf!==ctxTodayKey()||ctx.normalPeriod!=="1991-2020") return null;
   var n=ctx.normWeek&&ctx.normWeek[date];

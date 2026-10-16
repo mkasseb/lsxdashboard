@@ -1560,11 +1560,15 @@ function currentCardHarness(result) {
   function feedUpdate(){}
     var current={station:'KSUS',lat:38.8,lon:-90.79};
     var heroNow={temp:83};
-    var document={getElementById:function(id){return els[id];}};
+    var document={getElementById:function(id){return els[id];},body:{removeAttribute:function(){}}};
     function locGuard(){return function(){return true;};}
     function currentObservation(){return Promise.resolve(result);}
     function esc(s){return String(s);}
     function timeAgo(){return '3 hr ago';}
+    function renderUvNow(){}
+    function renderAqiMini(){}
+    ${lift(/^function currentExposure\(\)\{[\s\S]*?^\}/m, 'currentExposure()')}
+    ${lift(/^function renderCurrentUnavailable\(message\)\{[\s\S]*?^\}/m, 'renderCurrentUnavailable()')}
     ${lift(/^function loadCurrent\(\)\{[\s\S]*?^\}/m, 'loadCurrent()')}
     return {run:loadCurrent,els,getTemp:function(){return heroNow.temp;}};
   `)(result, els);

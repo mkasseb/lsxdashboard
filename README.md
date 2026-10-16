@@ -83,6 +83,13 @@ calculations; visual rendering is reviewed by eye.
 exercise the served assets. CI installs Playwright outside the app and saves its scenario report.
 Locally, omit `CHROMIUM_PATH` to use a browser installed with Playwright's `install chromium` command.
 
+`tools/dashboard-regression-tests.js` checks overlapping refreshes, location-search cancellation,
+unknown daily rain chances, elapsed forecast periods, UV outages and snapshot provenance,
+independent air-quality/UV rendering, invalid station timestamps, and retryable source metadata.
+It also checks the mobile fullscreen control's accessible name and AQI/UV contrast in both themes.
+It uses the same browser setup and controlled upstream responses as the stress suite, and runs
+in all three CI browser engines. `DASHBOARD_CASE_FILTER` selects matching case names locally.
+
 ## Deploying
 
 Cloudflare Pages, connected to this repo. Every push to `main` deploys.

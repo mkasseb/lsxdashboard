@@ -58,6 +58,10 @@ jobs:
         env:
           WEATHER_BROWSER: ${{ matrix.browser }}
         run: NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" NWS_ARTIFACTS="$RUNNER_TEMP/redesign/nws" xvfb-run -a node tools/nws-message-browser-tests.js
+      - name: Verify refresh ordering, search cancellation and unavailable data
+        env:
+          WEATHER_BROWSER: ${{ matrix.browser }}
+        run: NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" xvfb-run -a node tools/dashboard-regression-tests.js
       - name: Verify weather icon artwork in both themes
         env:
           WEATHER_BROWSER: ${{ matrix.browser }}

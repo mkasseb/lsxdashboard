@@ -681,6 +681,10 @@ var mapStylePromises={};
 function loadMapStyle(theme){
   if(!mapStylePromises[theme]){
     mapStylePromises[theme]=getJSON("https://tiles.openfreemap.org/styles/"+(theme==="light"?"positron":"dark"))
+      .then(function(style){
+        if(!style||style.version!==8||!Array.isArray(style.layers)||!style.sources||typeof style.sources!=="object"||Array.isArray(style.sources)) throw new Error("Invalid basemap style");
+        return style;
+      })
       .catch(function(e){ delete mapStylePromises[theme]; throw e; });
   }
   return mapStylePromises[theme];
@@ -1509,6 +1513,22 @@ function ccNone(label,why){
   return '<span class="cc-gap" title="'+esc(why)+'">'+esc(label)+'</span>';
 }
 
+function currentExposure(){
+  return '<div class="cc-expo"><div class="cc-uv" id="ccUv"></div><div class="aqi-mini" id="aqiMini"></div></div>';
+}
+function exposureColor(color){
+  var colors={"#3ecf8e":"green","#ffd23f":"yellow","#e0b93a":"uv-yellow","#ff9f2f":"orange",
+    "#ff6a2f":"red-orange","#c13bff":"purple","#ff3b3b":"red"};
+  return colors[color]?"var(--ex-"+colors[color]+")":color;
+}
+function renderCurrentUnavailable(message){
+  heroNow.temp=null;
+  document.body.removeAttribute("data-wx");
+  document.getElementById("current").innerHTML='<div class="empty" role="status"><b>Current observation unavailable.</b> '+message+'</div>'
+    +currentExposure()+'<div class="stn">UV &amp; air Open-Meteo · <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a></div>';
+  renderUvNow(); renderAqiMini();
+}
+
 
 function currentObservation(){
   var station=current.station, lat=current.lat, lon=current.lon, signal=locSignal();
@@ -1704,7 +1724,7 @@ function renderAqiMini(){
   }
   var i=aqiInfo(aqiState.val);
   el.innerHTML='<div class="k"><span class="ex-dot" style="background:'+i.c+'"></span>Air Quality</div>'
-    +'<div class="v" style="color:'+i.c+'">'+aqiState.val+' <span class="ex-cat">'+i.t+'</span></div>'
+    +'<div class="v" style="color:'+exposureColor(i.c)+'">'+aqiState.val+' <span class="ex-cat">'+i.t+'</span></div>'
     +'<div class="s">'+(aqiState.pm!=null?'PM2.5 <b>'+aqiState.pm+'</b>':'')+'</div>';
 }
 
@@ -3027,6 +3047,7 @@ function setRadarFull(on){
   document.body.classList.toggle("radar-full",on);
   if(btn){
     btn.setAttribute("aria-expanded",on?"true":"false");
+    btn.setAttribute("aria-label",on?"Close radar fullscreen":"Open radar fullscreen");
     var t=btn.querySelector(".rsf-t"); if(t) t.textContent=on?"Close":"Fullscreen";
     // The icon is not swapped here — body.radar-full picks which of the button's two marks shows.
   }
@@ -3180,6 +3201,7 @@ function updateLocNow(){
    before it lands, the response is DISCARDED rather than painted: a slow forecast for the old
    town was otherwise overwriting the new one and sitting there under the new town's label. */
 var locSeq=0, snapSafeSeq=0, geoSeq=0;
+var locRequests={};
 /* Packages the capture half of that guard. Call it once at the top of a location-scoped loader,
    then call the returned fresh() immediately before any DOM write:
 
@@ -3193,7 +3215,13 @@ var locSeq=0, snapSafeSeq=0, geoSeq=0;
    could gate on, and converting them all to hand a paint closure back would be a large rewrite of
    safety-critical code. What it does remove is the half that was quietly easy to get wrong:
    capturing locSeq at the wrong moment, or comparing against the wrong variable. */
-function locGuard(){ var g=locSeq; return function(){ return g===locSeq; }; }
+// Named guards also reject older refreshes for the same feed and location. Manual
+// refresh can overlap scheduled work even when the location generation stays put.
+function locGuard(key){
+  var g=locSeq, request=key?(locRequests[key]||0)+1:0;
+  if(key) locRequests[key]=request;
+  return function(){ return g===locSeq&&(!key||locRequests[key]===request); };
+}
 /* The guard above discards a stale RESULT; this cancels the stale REQUEST. Without it, switching
    towns a few times leaves every superseded fetch running to completion, competing for the browser's
    handful of per-host connections with the ones the user is actually waiting on.
@@ -3491,6 +3519,7 @@ function sugAria(open,active){
   if(active) inp.setAttribute("aria-activedescendant",active); else inp.removeAttribute("aria-activedescendant");
 }
 function hideSug(){
+  clearTimeout(sugTimer); sugSeq++;
   var b=document.getElementById("locSug");
   b.classList.remove("show"); b.innerHTML=""; sugItems=[]; sugHot=-1; sugAria(false,null);
 }
@@ -3698,9 +3727,9 @@ function initLocationUI(){
     else manual();
   });
   inp.addEventListener("input",function(){
-    clearTimeout(sugTimer);
+    hideSug();   // Old results and pending replies stop belonging to the edited query immediately.
     var q=inp.value.trim();
-    if(q.length<2){ hideSug(); return; }
+    if(q.length<2) return;
     sugTimer=setTimeout(function(){ fetchSuggestions(q); },300);
   });
   form.addEventListener("submit",function(e){   // iOS "search"/"go" key lands here reliably
@@ -3784,7 +3813,7 @@ function renderUvNow(){
     sub.push(when);
   }
   el.innerHTML='<div class="k"><span class="ex-dot" style="background:'+lv.c+'"></span>UV</div>'
-    +'<div class="v" style="color:'+lv.c+'">'+val+'</div>'
+    +'<div class="v" style="color:'+exposureColor(lv.c)+'">'+val+'</div>'
     // Left genuinely empty when there is no detail (a UV of 2 has neither a burn clock nor a
     // higher peak to name), so .s:empty can collapse it rather than leaving a stray margin.
     +'<div class="s">'+(sub.length?'<span class="ex-b">'
@@ -3988,6 +4017,7 @@ function saveSnapshot(){
       if(typeof NbmRange!=="undefined"&&NbmRange.forecastPending())return;
       snapshotEl=el.cloneNode(true);
       removeLegacyNormalComparisons(snapshotEl);
+      removeForecastUv(snapshotEl); // UV has its own feed/check time; a saved NWS row cannot verify it.
       snapshotEl.querySelectorAll(".nbm-inline,.nbm-unavailable,.nbm-period-detail,.record-inline,.record-detail,.normal-inline,.normal-detail,.normal-comparison").forEach(function(node){node.remove();});
     }
     var h=snapshotEl.innerHTML;
@@ -4044,7 +4074,9 @@ function restoreSnapshot(){
     if(!h||!c||!c.successAt||checkedAge<0||checkedAge>p.ttl||(c.status!=="ready"&&c.status!=="partial")) return;
     var el=document.getElementById(p.id);
     if(!el) return;
-    el.innerHTML=h; n++; savedParts[p.id]=p.feed;
+    el.innerHTML=h;
+    if(p.id==="daily") removeForecastUv(el); // Retire untagged UV cells from older v23 snapshots too.
+    n++; savedParts[p.id]=p.feed;
     feedChecks[p.feed]={status:c.status,successAt:c.successAt,issuedAt:c.issuedAt||0,saved:true};
   });
   if(!n) return false;

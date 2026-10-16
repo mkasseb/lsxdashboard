@@ -97,7 +97,7 @@ function pointsFor(lat,lon){
 }
 
 function loadForecastGrid(){
-  var fresh=locGuard();
+  var fresh=locGuard("grid");
   return pointsFor(current.lat,current.lon).then(function(pt){
     if(!fresh()) return null;
     var url=pt.properties.forecastGridData; if(!url) throw new Error("No forecast grid");
@@ -120,7 +120,7 @@ function loadForecastGrid(){
 }
 
 function loadForecast(){
-  var fresh=locGuard();
+  var fresh=locGuard("daily");
   var daily=document.getElementById("daily");
   function failDaily(){
     feedUpdate("daily","unavailable");
@@ -170,7 +170,7 @@ function loadForecast(){
 }
 
 function loadCurrent(){
-  var fresh=locGuard();
+  var fresh=locGuard("current");
   var el=document.getElementById("current"), stEl=document.getElementById("ccStation");
   /* A searched/geolocated place starts without a station. Discovery belongs in this loader so a
      transient failure is retried by the ordinary 10-minute schedule; calling loadCurrent() with a
@@ -187,7 +187,7 @@ function loadCurrent(){
       if(isAbort(e)||!fresh()) return;
       feedUpdate("current","unavailable");
       if(stEl) stEl.textContent="\u2014";
-      if(el) el.innerHTML='<div class="empty">Couldn\'t find a nearby reporting station. This will retry automatically.</div>';
+      renderCurrentUnavailable("Couldn't find a nearby reporting station. This will retry automatically.");
     });
   }
   return currentObservation().then(function(result){
@@ -195,10 +195,8 @@ function loadCurrent(){
     if(!result.observation){
       feedUpdate("current","unavailable");
       stEl.textContent=result.station||"—";
-      heroNow.temp=null;
-      el.innerHTML='<div class="empty" role="status"><b>Current observation unavailable.</b> '
-        +(result.lastTimestamp&&isFinite(Date.parse(result.lastTimestamp))?'Last report from '+esc(result.station)+' was '+esc(timeAgo(result.lastTimestamp))+'. ':'')
-        +'Nearby stations will be checked again on refresh.</div>';
+      renderCurrentUnavailable((result.lastTimestamp&&isFinite(Date.parse(result.lastTimestamp))?'Last report from '+esc(result.station)+' was '+esc(timeAgo(result.lastTimestamp))+'. ':'')
+        +'Nearby stations will be checked again on refresh.');
       return;
     }
     if(result.station!==current.station){ current.station=result.station; saveLoc(current); }
@@ -245,7 +243,7 @@ function loadCurrent(){
       +'<div class="cc-item"><div class="k">Pressure</div><div class="v">'+(press!=null?press+'"':ccGap("pressure"))+'</div></div>'
       +'<div class="cc-item"><div class="k">Visibility</div><div class="v">'+(vis!=null?vis+'<span class="cc-unit"> mi</span>':ccGap("visibility"))+'</div></div>'
       +'</div>'
-      +'<div class="cc-expo"><div class="cc-uv" id="ccUv"></div><div class="aqi-mini" id="aqiMini"></div></div>'
+      +currentExposure()
       +'<div class="cc-ctx" id="ccCtx"></div>'
       // Every source in one line, set to be read second. AirNow is a constant href, so it lives in
       // the markup rather than being rebuilt by renderAqiMini — which means it survives an AQI
@@ -267,7 +265,7 @@ function loadCurrent(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
     feedUpdate("current","unavailable");
     stEl.textContent="—";
-    el.innerHTML='<div class="empty">No current obs from '+current.station+'. Station may be offline.</div>';
+    renderCurrentUnavailable('No current obs from '+esc(current.station)+'. Station may be offline.');
   });
 }
 
@@ -709,8 +707,9 @@ function renderAlertsData(data){
 }
 
 
+var riverRequestSeq=0;
 function loadRivers(){
-  var el=document.getElementById("rivers"), known=0;
+  var seq=++riverRequestSeq, known=0;
   var jobs=RIVERS.map(function(r){
     var base="https://api.water.noaa.gov/nwps/v1/gauges/"+r.id;
     // the forecast series is a separate endpoint; a gauge without one (Eureka today) just loses
@@ -757,11 +756,15 @@ function loadRivers(){
         +'<span class="rcat">'+info.label+'</span></span></a>';
     }).catch(function(){return riverLinkOnly(r);});
   });
-  return Promise.all(jobs).then(function(rows){feedUpdate("rivers",known===RIVERS.length?"ready":known?"partial":"unavailable");RIVERS.forEach(function(r,i){riverRows[r.id]=rows[i];});renderRiverRows();});
+  return Promise.all(jobs).then(function(rows){
+    if(seq!==riverRequestSeq) return;
+    feedUpdate("rivers",known===RIVERS.length?"ready":known?"partial":"unavailable");
+    RIVERS.forEach(function(r,i){riverRows[r.id]=rows[i];});renderRiverRows();
+  });
 }
 
 function loadAqi(){
-  var fresh=locGuard();
+  var fresh=locGuard("aqi");
   var el=document.getElementById("aqi"), card=document.getElementById("aqiCard");
   var url="https://air-quality-api.open-meteo.com/v1/air-quality?latitude="+current.lat+"&longitude="+current.lon+"&current=us_aqi,pm2_5,pm10&timeformat=unixtime";
   return getJSON(url,null,locSignal()).then(function(d){
@@ -779,8 +782,8 @@ function loadAqi(){
     if(card) card.classList.toggle("show",bad);
     if(el) el.innerHTML=bad
       ?'<div class="aqi-main" data-aqibad="1"><div class="aqi-chip" style="background:'+info.c+'"></div><div>'
-        +'<div class="aqi-num" style="color:'+info.c+'">'+aqiState.val+'</div>'
-        +'<div class="aqi-cat" style="color:'+info.c+'">'+info.t+'</div>'
+        +'<div class="aqi-num" style="color:'+exposureColor(info.c)+'">'+aqiState.val+'</div>'
+        +'<div class="aqi-cat" style="color:'+exposureColor(info.c)+'">'+info.t+'</div>'
         +'<div class="aqi-sub">'+info.s+(aqiState.pm!=null?' · PM2.5 '+aqiState.pm+' µg/m³':'')+'</div></div></div>'
       :"";
     renderAqiMini();
@@ -863,7 +866,7 @@ function loadSpc(){
 }
 
 function loadMcd(){
-  var fresh=locGuard();
+  var fresh=locGuard("mcd");
   return resolveRiskLayers().then(function(){
     return getJSON(MCD_URL+RISK_LAYERS.mcd+"/query?where=1%3D1&outFields=name&returnGeometry=true&f=geojson");
   }).then(function(fc){
@@ -927,7 +930,7 @@ function loadMcd(){
 }
 
 function loadCpc(){
-  var fresh=locGuard();
+  var fresh=locGuard("cpc");
   var el=document.getElementById("cpc"); if(!el) return Promise.resolve();
   var jobs=[pointQuery(CPC_610,0),pointQuery(CPC_610,1),pointQuery(CPC_814,0),pointQuery(CPC_814,1)];
   return Promise.allSettled(jobs).then(function(rs){
@@ -956,7 +959,7 @@ function loadCpc(){
 }
 
 function loadDrought(){
-  var fresh=locGuard();
+  var fresh=locGuard("drought");
   var card=document.getElementById("droughtCard"); if(!card) return Promise.resolve();
   function outlookRow(id, rs){
     var el=document.getElementById(id); if(!el) return;
@@ -994,7 +997,7 @@ function loadDrought(){
 }
 
 function loadHazards(){
-  var fresh=locGuard();
+  var fresh=locGuard("hazards");
   var el=document.getElementById("hazards"); if(!el) return Promise.resolve();
   // Real service layout: 3-7 day → Temp(1) Precip(4) Fire/Drought(7); 8-14 day → Temp(3) Precip(6) Fire/Drought(8)
   var q37=[pointQuery(HZ_URL,1),pointQuery(HZ_URL,4),pointQuery(HZ_URL,7)];
@@ -1043,7 +1046,7 @@ function loadHazards(){
 }
 
 function loadClimate(){
-  var fresh=locGuard();
+  var fresh=locGuard("climate");
   var grid=document.getElementById("cnGrid"); if(!grid) return Promise.resolve();
   return Promise.all([climStation(current.lat,current.lon), deepStation(current.lat,current.lon)]).then(function(sts){
     // Guard HERE, not just at the ask() below: the station lookup is itself async, so a resolved
@@ -1264,13 +1267,13 @@ function ensureForecastRecordDates(){
 }
 
 function loadUv(){
-  var fresh=locGuard();
+  var fresh=locGuard("uv");
   return getJSON("https://api.open-meteo.com/v1/forecast?latitude="+current.lat+"&longitude="+current.lon
     +"&hourly=uv_index&daily=uv_index_max&forecast_days=7&timezone=America%2FChicago&timeformat=unixtime", null, locSignal()).then(function(d){
     if(!fresh()) return;   // user moved while this was in flight
     var h=d.hourly||{}, ts=h.time||[], vs=h.uv_index||[], now=Date.now(), best=null, cur=null, curGap=Infinity;
     for(var i=0;i<ts.length;i++){
-      if(vs[i]==null) continue;
+      if(typeof vs[i]!=="number"||!isFinite(vs[i])||vs[i]<0) continue;
       var t=(typeof ts[i]==="number")?ts[i]*1000:(/Z$|[+-]\d\d:\d\d$/.test(ts[i])?Date.parse(ts[i]):NaN);
       if(!isFinite(t)) continue;
       var gap=Math.abs(t-now);
@@ -1283,7 +1286,11 @@ function loadUv(){
     feedUpdate("uv",cur==null?"partial":"ready");
     uv.now=cur; uv.peak=best;
     var dd=d.daily||{}, dts=dd.time||[], dvs=dd.uv_index_max||[], map={};
-    for(var j=0;j<dts.length;j++){ if(dvs[j]!=null) map[typeof dts[j]==="number"?weatherParts(dts[j]*1000).key:dts[j]]=dvs[j]; }
+    for(var j=0;j<dts.length;j++){
+      if(typeof dvs[j]!=="number"||!isFinite(dvs[j])||dvs[j]<0) continue;
+      var date=typeof dts[j]==="number"&&isFinite(dts[j])?weatherParts(dts[j]*1000).key:recordDateKey(dts[j]);
+      if(date) map[date]=dvs[j];
+    }
     uv.daily=map;
     renderUvNow();
     if(typeof renderTheCall==="function") renderTheCall();
@@ -1294,15 +1301,17 @@ function loadUv(){
     feedUpdate("uv","unavailable");
     uv.now=null; uv.peak=null; uv.daily={}; renderUvNow();
     if(typeof renderTheCall==="function") renderTheCall();
+    if(typeof loadForecast._paint==="function") loadForecast._paint();
   });
 }
 
 function loadQpf(){
-  var fresh=locGuard();
+  var fresh=locGuard("qpf");
   var chip=document.getElementById("qpf7"); if(!chip) return Promise.resolve();
   function findLayer(){
     if(qpfLayerId!==undefined) return Promise.resolve(qpfLayerId);
     return getJSON(QPF_URL+"?f=json").then(function(d){
+      if(!d||d.error||!Array.isArray(d.layers)) throw new Error("Invalid rainfall layer metadata");
       var best=null;
       (d.layers||[]).forEach(function(l){
         var n=String(l.name||"");
@@ -1331,14 +1340,21 @@ function loadQpf(){
   }).catch(function(){ if(fresh()) chip.textContent=""; });
 }
 
+var stationRequestSeq=0;
 function loadStationPlot(){
+  var seq=++stationRequestSeq;
   deferredFeeds.stations=true;
   // Data acquisition is independent of map initialization; renderStationLayer waits for the map.
   var c2f=function(c){return (c==null)?null:Math.round(c*9/5+32);};
   var checked=0;
   var jobs=STN_LIST.map(function(s){
     return getJSON(API+"/stations/"+s.id+"/observations/latest").then(function(d){
+      if(seq!==stationRequestSeq) return null;
       var p=(d&&d.properties)||{};
+      var observed=Date.parse(p.timestamp||"");
+      // Invalid or future timestamps cannot be plotted at full strength or replace
+      // a previously usable report. Its original timestamp still controls fallback age.
+      if(!isFinite(observed)||observed<=0||observed>Date.now()+10*60000) return _stnLast[s.id]||null;
       var tempF=c2f(p.temperature&&p.temperature.value), dewF=c2f(p.dewpoint&&p.dewpoint.value);
       var mph=(p.windSpeed&&p.windSpeed.value!=null)?Math.round(p.windSpeed.value*0.621371):null;
       var rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?Math.round(p.relativeHumidity.value):rhFromTd(tempF,dewF);
@@ -1350,16 +1366,17 @@ function loadStationPlot(){
         gustMph:(p.windGust&&p.windGust.value!=null)?Math.round(p.windGust.value*0.621371):null,
         ts:p.timestamp||null};
       if(currentObservationFresh(d,Date.now())) checked++;
-      if(o.ts) _stnLast[s.id]=o;   // an ob with no timestamp could never age out — don't cache it
+      _stnLast[s.id]=o;
       return o;
     }).catch(function(){ return _stnLast[s.id]||null; });
   });
   return Promise.all(jobs).then(function(list){
+    if(seq!==stationRequestSeq) return;
     var now=Date.now();
     stnObs=list.map(function(o){
       if(!o) return null;
       var t=o.ts?(Date.parse(o.ts)||0):0;
-      if(t&&now-t>STN_DEAD_MS){ delete _stnLast[o.id]; return null; }
+      if(!t||t>now+10*60000||now-t>STN_DEAD_MS){ delete _stnLast[o.id]; return null; }
       o.stale=!!t&&(now-t>STN_STALE_MS);
       return o;
     });
@@ -1386,7 +1403,7 @@ function loadStationPlot(){
       age.textContent=plotted?(parts.join(" · ")||"tap a station for detail")
                             :"no obs — NWS API isn't answering";
     }
-  }).catch(function(){ feedUpdate("stations","unavailable"); });
+  }).catch(function(){ if(seq===stationRequestSeq) feedUpdate("stations","unavailable"); });
 }
 
 var afdRequestSeq=0;
@@ -1568,11 +1585,11 @@ function climStation(lat,lon){
     _climStationCache[key]=out;
     return out;
   }).catch(function(e){
-    // An ABORT means the user moved, not that this place has no usable station — caching the KSTL
-    // fallback under the abandoned key would make it permanently wrong if they came back.
-    if(isAbort(e)){ delete _climStationCache[key]; throw e; }
+    // Failed discovery must be retried next refresh. Share the in-flight lookup, but
+    // do not permanently cache the fallback after an outage or an abandoned location.
+    if(_climStationCache[key]===p) delete _climStationCache[key];
+    if(isAbort(e)) throw e;
     var fb={sid:"KSTL",name:"St. Louis Lambert",lookupFailed:true};
-    _climStationCache[key]=fb;
     return fb;
   });
   // Cache the in-flight promise too: loadClimate and loadClimateContext both ask at once,

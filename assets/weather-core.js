@@ -1538,7 +1538,8 @@ function validatedForecast(data,now){
       &&typeof p.name==="string"&&typeof p.isDaytime==="boolean"
       &&typeof p.shortForecast==="string"&&typeof p.windSpeed==="string"
       &&(p.detailedForecast==null||typeof p.detailedForecast==="string")
-      &&isFinite(Date.parse(p.startTime))&&Date.parse(p.endTime)>Date.parse(p.startTime);
+      &&isFinite(Date.parse(p.startTime))&&Date.parse(p.endTime)>Date.parse(p.startTime)
+      &&Date.parse(p.endTime)>now;
   }).sort(function(a,b){return Date.parse(a.startTime)-Date.parse(b.startTime);});
   if(!periods.some(function(p){return Date.parse(p.endTime)>now;})) return null;
   return {properties:Object.assign({},data.properties,{periods:periods})};
