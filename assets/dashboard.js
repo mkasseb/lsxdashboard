@@ -622,6 +622,28 @@ function initMapLocks(){
 var rvMap=null, rvBase=null, rvMarker=null, nwsRadar=null, warnLayer=null, warnCase=null;
 var satLayer=null, baseLabels=null;
 var NWS_WMS="https://opengeo.ncep.noaa.gov/geoserver/conus/conus_bref_qcd/ows";
+var KLSX_WMS="https://opengeo.ncep.noaa.gov/geoserver/klsx/ows";
+var RADAR_VIEW_KEY="lsxRadarView_v1", radarView={source:"klsx",product:"reflectivity"};
+try{
+  var savedRadarView=JSON.parse(localStorage.getItem(RADAR_VIEW_KEY)||"null");
+  if(savedRadarView){
+    radarView.source=savedRadarView.source==="regional"?"regional":"klsx";
+    radarView.product=radarView.source==="klsx"&&savedRadarView.product==="velocity"?"velocity":"reflectivity";
+  }
+}catch(e){}
+function radarProduct(){
+  if(radarView.source==="regional") return {url:NWS_WMS,layer:"conus_bref_qcd",label:"Regional reflectivity"};
+  return {url:KLSX_WMS,layer:radarView.product==="velocity"?"klsx_sr_bvel":"klsx_sr_bref",
+    label:"KLSX "+(radarView.product==="velocity"?"velocity":"reflectivity")};
+}
+function createRadarLayer(time){
+  var p=radarProduct(), options={layers:p.layer,format:"image/png",transparent:true,
+    opacity:time?0:RADAR_OPACITY,version:"1.3.0",pane:"radarPane"};
+  if(time) options.time=time;
+  var layer=L.tileLayer.wms(p.url,options);
+  bindSkyHealth(layer);
+  return layer;
+}
 /* 0.9, not the 0.8 it launched with. The 0.8 was tuned when reflectivity sat straight on a dark
    basemap and needed to let the geography through; over the dimmed cloud shield the geography
    comes through the labels pane instead, and the extra tenth is what keeps LIGHT rain — the low,
@@ -781,11 +803,7 @@ function initRadarMap(style){
      Constructed either way, added only if reflectivity is on — addTo() starts fetching tiles the
      moment it runs, and a visitor who left the layer off last time should not pay for a sweep the
      next line would immediately take away again. */
-  nwsRadar=L.tileLayer.wms(NWS_WMS,{
-    layers:"conus_bref_qcd",format:"image/png",transparent:true,opacity:RADAR_OPACITY,version:"1.3.0",
-    pane:"radarPane"
-  });
-  bindSkyHealth(nwsRadar);
+  nwsRadar=createRadarLayer();
   if(skyOn.radar) nwsRadar.addTo(rvMap);
   /* A divIcon rather than a circleMarker so the mark can be MORE than a disc — the .me-pin CSS
      owns its look (halo, pulse) for the reasons given there. markerPane sits at 600, over the
@@ -836,7 +854,7 @@ var RADAR_SPAN_MIN=60;
    broke". Detail is not what a z4 view is for anyway: seven frames still show an hour of motion at
    synoptic scale, for roughly half the requests. */
 var RADAR_N_DESK=15, RADAR_N_PHONE=8, RADAR_N_WIDE=7, RADAR_WIDE_ZOOM=5;
-var radarFrames=[], radarPool={}, radarIdx=-1, radarBuildGen=0;
+var radarFrames=[], radarPool={}, radarIdx=-1, radarBuildGen=0, radarRequestGen=0;
 var radarPlaying=false, radarTimer=null, radarUserPaused=false;
 function radarFrameCount(){
   if(rvMap && rvMap.getZoom()<=RADAR_WIDE_ZOOM) return RADAR_N_WIDE;
@@ -868,6 +886,10 @@ function rebuildRadarFramesForView(){
    than silently substituting a sweep from the wrong end of the window. */
 function pickRadarTimes(times){
   var n=radarFrameCount();
+  // Station scans have a different cadence and a two-hour archive. Trim BEFORE the budget
+  // shortcut, or a phone can accidentally label the whole archive as a one-hour loop.
+  var cutoff=Date.parse(times[times.length-1])-RADAR_SPAN_MIN*60000;
+  times=times.filter(function(t){ return Date.parse(t)>=cutoff; });
   if(times.length<=n) return times.slice();
   var ms=times.map(function(t){ return +new Date(t); });
   var newest=ms[ms.length-1], oldest=newest-RADAR_SPAN_MIN*60000;
@@ -893,12 +915,26 @@ function radarSpanMin(){
   if(radarFrames.length<2) return 0;
   return Math.round((new Date(radarFrames[radarFrames.length-1].time)-new Date(radarFrames[0].time))/60000);
 }
-function fetchRadarTimes(){
-  return getText(NWS_WMS+"?service=WMS&version=1.3.0&request=GetCapabilities")
+function fetchRadarTimes(product){
+  product=product||radarProduct();
+  return getText(product.url+"?service=WMS&version=1.3.0&request=GetCapabilities")
     .then(function(xml){
-      var m=xml.match(/<Dimension[^>]*name="time"[^>]*>([\s\S]*?)<\/Dimension>/i);
-      if(!m) throw new Error("no time dimension");
-      var list=m[1].split(",").map(function(s){return s.trim();}).filter(function(s){return /^\d{4}-\d\d-\d\d/.test(s);});
+      // The station workspace advertises several products with independent scan histories.
+      // Read the selected layer's dimension, never the first time dimension in the document.
+      var doc=new DOMParser().parseFromString(xml,"text/xml"), dimension=null;
+      var layers=doc.getElementsByTagNameNS("*","Layer");
+      for(var i=0;i<layers.length;i++){
+        var children=layers[i].children, name=null, time=null;
+        for(var j=0;j<children.length;j++){
+          if(children[j].localName==="Name") name=children[j].textContent.trim();
+          if(children[j].localName==="Dimension"&&children[j].getAttribute("name")==="time") time=children[j];
+        }
+        if(name&&name.split(":").pop()===product.layer){ dimension=time; break; }
+      }
+      if(!dimension) throw new Error("no selected radar time dimension");
+      var list=dimension.textContent.split(",").map(function(s){return s.trim();})
+        .filter(function(s){return /^\d{4}-\d\d-\d\dT/.test(s)&&isFinite(Date.parse(s));});
+      list=list.filter(function(t,i){return list.indexOf(t)===i;}).sort(function(a,b){return Date.parse(a)-Date.parse(b);});
       if(!list.length) throw new Error("empty time list");
       return list;
     });
@@ -939,10 +975,8 @@ function buildRadarFrames(times){
     keep[t]=1;
     var lyr=radarPool[t];
     if(!lyr){
-      lyr=L.tileLayer.wms(NWS_WMS,{layers:"conus_bref_qcd",format:"image/png",transparent:true,
-        version:"1.3.0",time:t,opacity:0,pane:"radarPane"});
+      lyr=createRadarLayer(t);
       lyr.on("load",function(){ lyr._ready=1; updateRadarCtl(); });
-      bindSkyHealth(lyr);
       radarPool[t]=lyr;
     }
     return {time:t, layer:lyr};
@@ -1100,7 +1134,9 @@ function initRadarCtl(){
 function refreshRadarLayer(){
   if(!rvMap) return ensureMaps();
   if(!skyOn.radar) return;   // layer switched off fetches nothing; applySkyLayers refreshes on the way back
-  return fetchRadarTimes().then(function(times){
+  var request=++radarRequestGen, product=radarProduct();
+  return fetchRadarTimes(product).then(function(times){
+    if(request!==radarRequestGen||!skyOn.radar) return;
     var wasLatest=(radarIdx<0)||(radarIdx>=radarFrames.length-1);
     radarFallback=false;
     radarTimesCache=times;   // lets a zoom re-pick the frame set without another capabilities fetch
@@ -1109,6 +1145,7 @@ function refreshRadarLayer(){
     showRadarFrame(wasLatest?radarFrames.length-1:radarIdx);              // don't yank a scrubbing user to "now"
     updateRadarCtl();
   }).catch(function(){
+    if(request!==radarRequestGen||!skyOn.radar) return;
     // No usable time list → behave exactly like the pre-loop dashboard: single latest layer, no fake time
     radarFallback=true;
     if(nwsRadar){
@@ -2646,15 +2683,17 @@ try{
 function syncSkyMeta(){
   var lk=document.getElementById("rsLink");
   if(lk) lk.innerHTML = skyOn.radar
-    ? '<a href="https://radar.weather.gov/station/KLSX/standard" target="_blank" rel="noopener">Official KLSX ↗</a>'
+    ? (radarView.source==="klsx"
+      ? '<a href="https://radar.weather.gov/station/KLSX/standard" target="_blank" rel="noopener">Official KLSX ↗</a>'
+      : '<a href="https://radar.weather.gov/" target="_blank" rel="noopener">Official radar ↗</a>')
     : '<a href="https://www.star.nesdis.noaa.gov/GOES/sector.php?sat=G19&amp;sector=umv" target="_blank" rel="noopener">GOES loop ↗</a>';
   var bits=[];
   /* "Names what is actually drawn" has to survive a layer that is switched ON and failing, or the
      caption goes from honest to actively misleading — crediting NOAA for reflectivity nobody
      received. A down layer says so where it used to advertise itself. */
   if(skyOn.radar) bits.push(radarDown()
-    ? '<b>Radar unavailable</b> — NOAA is not serving reflectivity right now'
-    : 'Official NOAA/NWS radar &middot; tap a <b>warning or watch</b> to jump to its alert');
+    ? '<b>'+esc(radarProduct().label)+' unavailable</b> — try '+(radarView.source==="klsx"?'Regional':'Local KLSX')
+    : 'NOAA/NWS '+esc(radarProduct().label)+' &middot; tap a <b>warning or watch</b> to jump to its alert');
   /* A pinned satellite says WHICH moment it is showing. Left as the plain credit it would quietly
      claim to be current while displaying an hour-old cloud shield — the same lie the radar badge's
      stale state exists to prevent, arriving through the other layer. */
@@ -2672,6 +2711,7 @@ function syncSkyMeta(){
      layer is down too, because a guide to colours the map is not painting is just clutter. */
   var lg=document.getElementById("rsLegend");
   if(lg) lg.classList.toggle("on", !!rvMap && !!skyOn.radar && !radarDown());
+  syncRadarProductUI();
   [].slice.call(document.querySelectorAll("#rsTabs .rs-tab")).forEach(function(b){
     var on=!!skyOn[b.getAttribute("data-l")];
     b.disabled=!rvMap;
@@ -2685,6 +2725,7 @@ function syncSkyMeta(){
    the way back and draw nothing. Rebuilding costs one capabilities fetch, and the sweeps would be
    stale by then anyway. */
 function detachRadarLayers(){
+  radarRequestGen++; // an in-flight response must not resurrect a hidden or replaced product
   radarBuildGen++;   // cancel any staged historical-frame queue before it adds another layer
   radarPauseLoop();
   if(!rvMap) return;
@@ -2694,6 +2735,7 @@ function detachRadarLayers(){
     delete radarPool[t];
   });
   radarFrames=[]; radarIdx=-1;
+  radarTimesCache=[];
   /* The pool is gone, so every per-layer tile tally went with it. Reset the cached verdict too, or
      syncSkyHealth() compares against a stale "was down" and skips the redraw that clears the badge
      when reflectivity comes back. */
@@ -2703,6 +2745,69 @@ function detachRadarLayers(){
   /* A pinned satellite outliving the frame list would strand the card on an hour-old cloud shield
      with nothing left on screen explaining which moment it belongs to. Empty frames means unpin. */
   syncSatToRadar();
+}
+function loadRadarLegend(img,url,retry){
+  var button=document.getElementById("radarLegendRetry");
+  if(!img._legendBound){
+    img._legendBound=true;
+    img.addEventListener("error",function(){
+      img._legendFailed=true;img.hidden=true;
+      if(button) button.hidden=false;
+    });
+    img.addEventListener("load",function(){
+      img._legendFailed=false;img.hidden=false;
+      if(button) button.hidden=true;
+    });
+  }
+  if(img._legendURL!==url||retry&&img._legendFailed){
+    var failed=img._legendFailed;
+    img._legendURL=url;img._legendFailed=false;img.hidden=false;
+    if(button) button.hidden=true;
+    // A retry must make a fresh request even if the browser cached an error for this URL.
+    img.src=url+(failed?"&_legendRetry="+Date.now():"");
+  }
+}
+function syncRadarProductUI(retryLegend){
+  var station=radarView.source==="klsx", velocity=station&&radarView.product==="velocity";
+  document.querySelectorAll("[data-radar-source]").forEach(function(b){
+    var on=b.getAttribute("data-radar-source")===radarView.source;
+    b.classList.toggle("on",on);
+    b.setAttribute("aria-pressed",on?"true":"false");
+  });
+  var select=document.getElementById("radarProduct");
+  if(select){ select.value=radarView.product; select.disabled=!station; }
+  var regional=document.getElementById("regionalRadarScale"), local=document.getElementById("stationRadarScale");
+  if(regional) regional.hidden=station;
+  if(local) local.hidden=!station;
+  var title=document.getElementById("stationLegendTitle"), img=document.getElementById("stationLegendImage");
+  if(title) title.textContent=velocity?"Radial velocity · knots":"Reflectivity · dBZ";
+  if(img&&station){
+    var url=KLSX_WMS+"?service=WMS&request=GetLegendGraphic&format=image/png&layer="+radarProduct().layer;
+    loadRadarLegend(img,url,!!retryLegend);
+    img.alt=velocity?"KLSX velocity scale: negative values toward the radar, positive values away, in knots"
+      :"KLSX reflectivity scale in dBZ; higher values indicate stronger echoes";
+  }
+  var note=document.getElementById("radarProductNote");
+  if(note) note.textContent=station
+    ? (velocity?"Green: toward KLSX · Red: away. Wind along the radar beam, not surface wind.":"KLSX station coverage only. Use Regional for the surrounding radar network.")
+    : "Regional combines multiple radars. Velocity is available in Local KLSX.";
+}
+function setRadarView(source,product){
+  if(source!=="klsx"&&source!=="regional") return;
+  product=source==="klsx"&&product==="velocity"?"velocity":"reflectivity";
+  if(source===radarView.source&&product===radarView.product) return;
+  // Keep the map, camera, satellite and warning layers; replace only the radar's entire pool.
+  detachRadarLayers();
+  radarView={source:source,product:product};
+  try{ localStorage.setItem(RADAR_VIEW_KEY,JSON.stringify(radarView)); }catch(e){}
+  if(rvMap){
+    nwsRadar=createRadarLayer();
+    if(skyOn.radar) nwsRadar.addTo(rvMap);
+  }
+  syncSkyMeta();
+  syncRadarProductUI(true);
+  syncRadarBadge();
+  if(rvMap&&skyOn.radar) refreshRadarLayer();
 }
 function applySkyLayers(first){
   syncSkyMeta();
@@ -2741,11 +2846,18 @@ function setSkyLayer(name,on){
   applySkyLayers(false);
 }
 document.addEventListener("click",function(e){
+  var source=e.target.closest?e.target.closest("[data-radar-source]"):null;
+  if(source){ setRadarView(source.getAttribute("data-radar-source"),radarView.product); return; }
   var b=e.target.closest?e.target.closest("#rsTabs .rs-tab"):null;
   if(!b) return;
   var n=b.getAttribute("data-l");
   setSkyLayer(n,!skyOn[n]);
 });
+document.getElementById("radarProduct").addEventListener("change",function(e){
+  setRadarView(radarView.source,e.target.value);
+});
+document.getElementById("radarLegendRetry").addEventListener("click",function(){syncRadarProductUI(true);});
+syncRadarProductUI();
 
 /* ============ SATELLITE TIME TRACK ============
    Scrubbing the radar back an hour used to leave the cloud shield sitting at "now" — the storm in

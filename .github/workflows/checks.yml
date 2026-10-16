@@ -70,6 +70,12 @@ jobs:
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: |
           NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" REDESIGN_ARTIFACTS="$RUNNER_TEMP/redesign" xvfb-run -a node tools/radar-camera-tests.js
+      - name: Verify KLSX products, source switching, legends and request races
+        env:
+          WEATHER_BROWSER: ${{ matrix.browser }}
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: |
+          NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" RADAR_ARTIFACTS="$RUNNER_TEMP/redesign/radar" xvfb-run -a node tools/radar-product-tests.js
       - name: Run production-page weather scenarios
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"

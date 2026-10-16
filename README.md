@@ -114,7 +114,7 @@ All feeds are keyless. The sources have different attribution and reuse terms; s
 | Feed | Used for |
 |---|---|
 | `api.weather.gov` | Forecast, 24–72-hour views, grid event precipitation totals + gusts, station obs, active alerts, AFD + mesoscale discussion text, county zones |
-| `opengeo.ncep.noaa.gov` (WMS) | Official NWS radar, including the time dimension driving the loop |
+| `opengeo.ncep.noaa.gov` (WMS) | KLSX super-resolution base reflectivity/velocity (default local view), regional reflectivity mosaic, per-product scan times and station legends |
 | `mapservices.weather.noaa.gov` | SPC convective outlooks and separate tornado/wind/hail probabilities; fire outlooks and mesoscale discussion polygons; watch county fills; WPC excessive rainfall, winter storm severity, and QPF; CPC 6–10/8–14 day, hazards, and drought outlooks |
 | `services5.arcgis.com` | Current U.S. Drought Monitor classification |
 | `api.water.noaa.gov` (NWPS) | River gauge stages and crest forecasts |
@@ -166,6 +166,12 @@ The full design rationale — what each decision replaced, and why — lives in
   the viewport. The same map and explored camera survive responsive placement;
   radar and satellite stack on one Leaflet map; the loop targets a 60-minute span, not a sweep
   count; and a dead tile layer is detected per layer so it can never read as clear skies.
+  Local KLSX defaults to super-resolution reflectivity; a product selector offers radial velocity
+  in knots, with NOAA's own product legend and a direction explanation. Regional retains the
+  multi-radar mosaic. The source/product preference is saved separately from layer visibility;
+  switching discards the old radar pool and ignores late metadata while preserving the map,
+  explored camera, satellite and warning shapes. A station outage is labeled and leaves Regional
+  available explicitly. `tools/radar-product-tests.js` covers these transitions and failures.
 - **Every loader owns its failure.** Each degrades to an official link or to silence; one dead
   NOAA service must never blank a sibling card. Per-feed labels distinguish validated checks,
   partial results, overdue checks and unavailable data. Source timestamps stay separate from

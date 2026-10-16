@@ -850,6 +850,14 @@
      follows, for the same reason. */
   .rs-legend{display:none;align-items:center;gap:11px;margin-top:9px}
   .rs-legend.on{display:flex}
+  .radar-key{display:flex;align-items:center;gap:11px;width:100%}
+  .station-radar-key{display:grid;gap:5px;width:100%;min-width:0}
+  .radar-key[hidden],.station-radar-key[hidden]{display:none}
+  .station-radar-key img{display:block;width:100%;height:auto;max-width:500px;background:#444;border-radius:3px}
+  .station-radar-key img[hidden]{display:none}
+  .radar-legend-retry{justify-self:start;font:inherit;font-size:var(--fs-xs);padding:5px 9px}
+  #radarCard:has(#radar [data-retry-maps]) .radar-options,
+  #radarCard:has(#radar [data-retry-maps]) .radar-product-note{display:none}
   .rl-t{flex:0 0 auto;font-size:var(--fs-xs);font-weight:700;color:var(--muted);
     text-transform:uppercase;letter-spacing:.5px}
   .rl-scale{position:relative;flex:1 1 auto;min-width:0}
@@ -1027,6 +1035,16 @@
   .rs-tab.on{background:var(--chip);color:var(--accent)}
   .rs-tab.on::before{background:currentColor;box-shadow:none}
   .rs-tab:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+  .radar-options{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-bottom:8px}
+  .radar-options .radar-sources{margin-left:0}
+  .radar-sources .rs-tab{min-height:36px;text-transform:none;letter-spacing:0}
+  .radar-sources .rs-tab::before{display:none}
+  .radar-product{display:flex;align-items:center;gap:8px;font-size:var(--fs-xs);color:var(--muted)}
+  .radar-product select{min-height:38px;max-width:100%;padding:6px 8px;font:inherit;color:var(--text);
+    background:var(--inset);border:1px solid var(--border);border-radius:var(--r-md)}
+  .radar-product select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .radar-product select:disabled{opacity:.6}
+  .radar-product-note{margin:0 0 10px;font-size:var(--fs-xs);line-height:1.5;color:var(--muted)}
   /* One view now, but the class stays: the fullscreen rules target it to make the map the flex
      child that grows, and the card is still a flex column. */
   .rs-view{display:flex;flex-direction:column;min-width:0}
