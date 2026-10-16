@@ -47,7 +47,7 @@ const server=http.createServer((req,res)=>{
       res.setHeader('Content-Type','text/xml');res.end('<WMS_Capabilities xmlns="http://www.opengis.net/wms"><Capability><Layer>'+names.map(name=>'<Layer><Name>'+name+'</Name><Dimension name="time">'+times+'</Dimension></Layer>').join('')+'</Layer></Capability></WMS_Capabilities>');return;
     }
     if(/GetLegendGraphic/.test(req.url)){res.setHeader('Content-Type','image/png');res.end(fs.readFileSync(path.join(__dirname,'fixtures/weather/klsx-'+(u.searchParams.get('layer')==='klsx_sr_bvel'?'velocity':'reflectivity')+'-legend.png')));return;}
-    res.setHeader('Content-Type','image/png');res.end(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=','base64'));return;
+    res.setHeader('Content-Type','image/png');res.end(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGP4DwQACfsD/fteaysAAAAASUVORK5CYII=','base64'));return;
   }
   res.writeHead(404).end();
 });

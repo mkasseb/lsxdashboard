@@ -133,7 +133,7 @@ async function open(c, width=390) {
         }
         if(/DescribeDomains/i.test(u.href))return route.fulfill({contentType:'text/xml',body:'<Domain>'+new Date(c.now-H).toISOString()+'/'+new Date(c.now).toISOString()+'/PT10M</Domain>'});
         if(c.mapTilesDown)return route.abort();
-        return route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=','base64')});
+        return route.fulfill({contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGP4DwQACfsD/fteaysAAAAASUVORK5CYII=','base64')});
       }
     }
 
