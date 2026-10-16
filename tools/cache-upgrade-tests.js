@@ -41,7 +41,12 @@ const server=http.createServer((req,res)=>{
   if(vendor){res.setHeader('Content-Type',p.endsWith('.css')?'text/css':'application/javascript');res.end(fs.readFileSync(require.resolve(vendor[1])));return;}
   if(p.startsWith('/style/')){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({version:8,sources:{},layers:[{id:'background',type:'background',paint:{'background-color':'#18202d'}}]}));return;}
   if(p.startsWith('/radar/')||p.startsWith('/sat/')){
-    if(/GetCapabilities|DescribeDomains/.test(req.url)){res.setHeader('Content-Type','text/xml');res.end('<Dimension name="time">'+Array.from({length:15},(_,i)=>new Date(Date.now()-(14-i)*120000).toISOString()).join(',')+'</Dimension>');return;}
+    if(/GetCapabilities|DescribeDomains/.test(req.url)){
+      const times=Array.from({length:15},(_,i)=>new Date(Date.now()-(14-i)*120000).toISOString()).join(',');
+      const names=p.includes('/klsx/')?['klsx_sr_bref','klsx_sr_bvel']:['conus_bref_qcd'];
+      res.setHeader('Content-Type','text/xml');res.end('<WMS_Capabilities xmlns="http://www.opengis.net/wms"><Capability><Layer>'+names.map(name=>'<Layer><Name>'+name+'</Name><Dimension name="time">'+times+'</Dimension></Layer>').join('')+'</Layer></Capability></WMS_Capabilities>');return;
+    }
+    if(/GetLegendGraphic/.test(req.url)){res.setHeader('Content-Type','image/png');res.end(fs.readFileSync(path.join(__dirname,'fixtures/weather/klsx-'+(u.searchParams.get('layer')==='klsx_sr_bvel'?'velocity':'reflectivity')+'-legend.png')));return;}
     res.setHeader('Content-Type','image/png');res.end(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=','base64'));return;
   }
   res.writeHead(404).end();
