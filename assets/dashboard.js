@@ -1687,6 +1687,7 @@ initTheme();
 initLocationUI();
 initLocation();
 restoreSnapshot();   // paint the last good view NOW — before a single fetch (needs `current` from initLocation)
+initRadarControls();
 initMapLocks();
 syncRadarProductUI();
 /* The caption and the toggles' pressed state ship EMPTY and are written by syncSkyMeta(), which

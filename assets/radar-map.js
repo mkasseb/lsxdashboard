@@ -1056,6 +1056,7 @@ function setSkyLayer(name,on){
   try{ localStorage.setItem(SKY_KEY,JSON.stringify(skyOn)); }catch(e){}
   applySkyLayers(false);
 }
+function initRadarControls(){
 document.addEventListener("click",function(e){
   var source=e.target.closest?e.target.closest("[data-radar-source]"):null;
   if(source){ setRadarView(source.getAttribute("data-radar-source"),radarView.product); return; }
@@ -1068,6 +1069,8 @@ document.getElementById("radarProduct").addEventListener("change",function(e){
   setRadarView(radarView.source,e.target.value);
 });
 document.getElementById("radarLegendRetry").addEventListener("click",function(){syncRadarProductUI(true);});
+initRadarFullscreenControls();
+}
 /* ============ SATELLITE TIME TRACK ============
    Scrubbing the radar back an hour used to leave the cloud shield sitting at "now" — the storm in
    the past and the system carrying it in the present, drawn as one picture. That is precisely what
@@ -1262,6 +1265,7 @@ function setRadarFull(on){
   document.dispatchEvent(new Event('radarfullscreenchange'));
   if(typeof scheduleMasonry==="function") scheduleMasonry();
 }
+function initRadarFullscreenControls(){
 document.addEventListener("click",function(e){
   if(e.target.closest&&e.target.closest("#rsFull")) setRadarFull(!radarFull);
 });
@@ -1279,3 +1283,4 @@ document.addEventListener("keydown",function(e){
     }
   }
 });
+}

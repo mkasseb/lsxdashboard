@@ -100,6 +100,10 @@ calculations; visual rendering is reviewed by eye.
 exercise the served assets. CI installs Playwright outside the app and saves its scenario report.
 Locally, omit `CHROMIUM_PATH` to use a browser installed with Playwright's `install chromium` command.
 
+`tools/startup-tests.js` holds the main script's response while exercising the preceding modules,
+then verifies normal radar/fullscreen activation once startup completes. Radar handlers bind in the
+final startup step so controls cannot call dependencies that are still downloading.
+
 `tools/dashboard-regression-tests.js` checks overlapping refreshes, location-search cancellation,
 unknown daily rain chances, elapsed forecast periods, UV outages and snapshot provenance,
 independent air-quality/UV rendering, invalid station timestamps, and retryable source metadata.
