@@ -37,6 +37,12 @@ const server=http.createServer((req,res)=>{
     // withhold the same legacy bytes. Chromium/Firefox still exercise cache reuse.
     res.end(cp.execFileSync('git',['show',quartileLegacy+':'+p.slice(1)],{cwd:root,maxBuffer:10*1024*1024}));return;
   }
+  if(p==='/data/nbm-range.json'&&!priming){
+    // A model response activates the lazy worker so its versioned URL/imports are
+    // exercised too. Keep the authentic old timestamps; expired values stay withheld.
+    res.setHeader('Content-Type','application/json');
+    res.end(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-quartile-point-recorded.json')));return;
+  }
   if(p.startsWith('/external/')){res.writeHead(503,{'Content-Type':'application/json'}).end(JSON.stringify({error:'Controlled ancillary outage'}));return;}
   const vendor=vendors.find(([part])=>p==='/vendor/'+part);
   if(vendor){res.setHeader('Content-Type',p.endsWith('.css')?'text/css':'application/javascript');res.end(fs.readFileSync(require.resolve(vendor[1])));return;}
@@ -82,6 +88,7 @@ const server=http.createServer((req,res)=>{
         console.log('PASS negative control: cached PR49 scripts + unversioned new HTML reproduce blank radar and missing diagnostics');
       }else{
         await page.waitForFunction(()=>typeof rvMap!=='undefined'&&rvMap&&radarFrames.length>1&&radarFrames.some(f=>f.layer._ok>0),{},{timeout:30000});
+        await page.waitForFunction(()=>feedChecks.nbmRange&&feedChecks.nbmRange.status!=='loading');
         assert.deepEqual(errors,[]);
         for(const name of currentNames)assert(requests.some(p=>new RegExp('^/assets/'+name.replaceAll('.','\\.')+'\\?v=[a-f0-9]{16}$').test(p)),name+' fetched at new version URL');
         assert.equal(await page.locator('.map-diagnostics').count(),1);
