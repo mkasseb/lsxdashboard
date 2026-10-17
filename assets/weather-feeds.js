@@ -1051,7 +1051,18 @@ function loadClimate(){
     // and the card's footer. That's how "VICHY ROLLA" ended up labelling Quincy's departures.
     if(!fresh()) return;
     var st=sts[0], deep=sts[1];
+    var sourceChanged=climate.station&&climate.station!==st.sid;
     climate.station=st.sid; climate.stationName=st.name;
+    if(sourceChanged){
+      // A recovered lookup can select a different airport. Retire the fallback's facts
+      // before giving the card its new label, including any older request still in flight.
+      climate.normHi=null; climate.normLo=null; climate.normDate=null;
+      feedUpdate("climate","loading");
+      grid.innerHTML='<div class="loading">Loading departures…</div>';
+      var oldSrc=document.getElementById("cnSrc"); if(oldSrc) oldSrc.innerHTML="";
+      if(ctx.normalSource&&ctx.normalSource.sid!==st.sid){ctx.ready=false;feedUpdate("context","loading");}
+      renderVsNormal(); renderCurrentCtx(); renderContext();
+    }
     var nameEl=document.getElementById("cnStation"); if(nameEl) nameEl.textContent=st.name||st.sid;
     var showSnow=(function(){var m=weatherParts().month;return m>=10||m<=3;})(); // Nov–Apr
     // add:"mcnt" makes each running departure come back as [departure, missing-day-count] so a
@@ -1143,6 +1154,9 @@ function loadClimateContext(){
     // climate station. An area/ThreadEx series is never substituted for airport observations.
     if(!fresh()) return;
     var st=sts[0],deep=sts[1],rec=deep&&deep.sid?deep:st;
+    // Optional history may retry discovery after the eager climate load used a fallback.
+    // Refresh that consumer too; its named guard retires any pending fallback response.
+    if(climate.station&&climate.station!==st.sid) loadClimate();
     var key=st.sid+"|"+rec.sid+"|"+requestDate, cached=null;
     try{
       var c=JSON.parse(localStorage.getItem(CTX_KEY)||"null");

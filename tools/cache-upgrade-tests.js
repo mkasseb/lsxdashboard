@@ -110,7 +110,7 @@ const server=http.createServer((req,res)=>{
     await page.evaluate(()=>localStorage.setItem('lsxSnap_v21','legacy P10/P90 snapshot sentinel'));
     priming=false;requests=[];
     await page.goto(base+'/',{waitUntil:'domcontentloaded'});
-    await page.waitForFunction(()=>document.readyState==='complete'&&typeof SNAP_KEY!=='undefined'&&SNAP_KEY==='lsxSnap_v23'&&typeof NbmRange!=='undefined'&&typeof NbmHourly!=='undefined');
+    await page.waitForFunction(()=>document.readyState==='complete'&&typeof SNAP_KEY!=='undefined'&&SNAP_KEY==='lsxSnap_v24'&&typeof NbmRange!=='undefined'&&typeof NbmHourly!=='undefined');
     const retained=await page.evaluate(async()=>{
       const d=await(await fetch('/data/nbm-range.json')).json(),h=await(await fetch('/data/nbm-hourly.json')).json(),p={lat:38.8,lon:-90.79};
       return {dailySchema:d.schema,hourlySchema:h.schema,daily:NbmRange.validate(d,p,Date.parse(d.retrievedAt)).status,hourly:NbmHourly.validate(h,p,Date.parse(h.retrievedAt)).status,oldSnapshot:localStorage.getItem('lsxSnap_v21')};

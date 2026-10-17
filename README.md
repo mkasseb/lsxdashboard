@@ -105,8 +105,10 @@ then verifies normal radar/fullscreen activation once startup completes. Radar h
 final startup step so controls cannot call dependencies that are still downloading.
 
 `tools/dashboard-regression-tests.js` checks overlapping refreshes, location-search cancellation,
-unknown daily rain chances, elapsed forecast periods, UV outages and snapshot provenance,
+unknown daily rain chances, legacy snapshot invalidation, elapsed forecast periods, UV outages and snapshot provenance,
 independent air-quality/UV rendering, invalid station timestamps, and retryable source metadata.
+Climate recovery checks keep the station label, departures and daily normals together, including
+when an older fallback response is still pending.
 It also checks the mobile fullscreen control's accessible name and AQI/UV contrast in both themes.
 It uses the same browser setup and controlled upstream responses as the stress suite, and runs
 in all three CI browser engines. `DASHBOARD_CASE_FILTER` selects matching case names locally.

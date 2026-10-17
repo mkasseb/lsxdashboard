@@ -157,6 +157,22 @@ async function main() {
       const markup = await p.evaluate(() => {saveSnapshot(); return JSON.parse(localStorage.getItem(SNAP_KEY)).parts.daily;});
       assert.doesNotMatch(markup, />UV Index</);
     });
+    await run('legacy zero rain chances cannot return from saved forecasts during an outage', async p => {
+      const legacy=await p.evaluate(() => {
+        stopSchedule();saveSnapshot();
+        const snap=JSON.parse(localStorage.getItem(SNAP_KEY));
+        snap.parts.daily='<div id="legacyMissingRain">Missing rain chance: 0%</div>';
+        return {key:SNAP_KEY,snapshot:JSON.stringify(snap)};
+      });
+      await p.addInitScript(({key,snapshot})=>{localStorage.removeItem(key);localStorage.setItem('lsxSnap_v23',snapshot);},legacy);
+      const held=[];
+      await p.route('https://api.weather.gov/**',r=>{held.push(r);});
+      await p.reload({waitUntil:'domcontentloaded'});
+      assert.equal(await p.evaluate(()=>snapRestored),false);
+      assert.equal(await p.locator('#legacyMissingRain').count(),0);
+      assert.equal(await p.evaluate(()=>localStorage.getItem('lsxSnap_v23')),null);
+      await Promise.all(held.map(r=>r.fulfill({status:503,json:{}})));
+    });
     await run('older forecast snapshots discard UV without source provenance', async p => {
       await p.evaluate(() => {
         saveSnapshot();
@@ -227,6 +243,39 @@ async function main() {
       });
       assert.deepEqual(stations, ['KSTL','KUIN']);
       assert.equal(calls, 2);
+    });
+    for(const pending of [false,true])await run('climate recovery synchronizes station labels, departures and normals'+(pending?' with an older request pending':''),async p=>{
+      await p.evaluate(pending=>{
+        stopSchedule();locSeq++;_climStationCache={};_deepCache={};localStorage.removeItem(CTX_KEY);
+        climate.station=null;ctx.ready=false;
+        let lookups=0;
+        const station={name:'Quincy',sids:['KUIN 3'],ll:[-91.2,39.9],valid_daterange:Array(3).fill(['1950-01-01','2026-09-30'])};
+        deepStation=()=>Promise.resolve(null);
+        acisPost=(endpoint,q)=>{
+          if(endpoint==='StnMeta')return ++lookups===1?Promise.reject(new Error('temporary outage')):Promise.resolve({meta:[station]});
+          if(q.elems[0].normal==='1'){
+            const reply={data:[[q.sdate,q.sid==='KSTL'?75:55,35,[q.sid==='KSTL'?9:2,0],[2,0],[1,0],[1,0],[0,0]]]};
+            if(pending&&q.sid==='KSTL')return new Promise(resolve=>{window.reviewReleaseClimate=()=>resolve(reply);});
+            return Promise.resolve(reply);
+          }
+          if(q.elems[0].normal==='91'){
+            const start=Date.parse(q.sdate+'T12:00:00Z'),end=Date.parse(q.edate+'T12:00:00Z');
+            return Promise.resolve({meta:station,data:Array.from({length:(end-start)/86400000+1},(_,i)=>[new Date(start+i*86400000).toISOString().slice(0,10),55,35])});
+          }
+          return Promise.resolve({data:[]});
+        };
+        window.reviewOldClimate=loadClimate();
+      },pending);
+      if(pending)await p.waitForFunction(()=>typeof reviewReleaseClimate==='function');
+      else await p.evaluate(()=>reviewOldClimate);
+      assert.equal(await p.locator('#cnStation').innerText(),'St. Louis Lambert');
+      await p.evaluate(()=>loadClimateContext());
+      if(pending)await p.evaluate(async()=>{reviewReleaseClimate();await reviewOldClimate;});
+      const state=await p.evaluate(()=>({station:climate.station,normal:climate.normHi,contextStation:ctx.normalSource.sid,status:feedChecks.climate.status}));
+      assert.deepEqual(state,{station:'KUIN',normal:55,contextStation:'KUIN',status:'ready'});
+      assert.equal(await p.locator('#cnStation').innerText(),'Quincy');
+      assert.match(await p.locator('#cnGrid').innerText(),/\+2\.0°/);
+      assert.doesNotMatch(await p.locator('#cnGrid').innerText(),/\+9\.0°/);
     });
     await run('malformed basemap style permits a successful retry', async p => {
       let calls = 0;

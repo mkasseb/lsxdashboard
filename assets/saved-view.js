@@ -59,8 +59,9 @@
 // v21: CPC tiles and hazards periods now contain official source anchors.
 // v22: native P25/P50/P75 labels and removal of tail-based threshold commentary.
 // v23: airport record rows are revalidated independently of saved NWS markup.
-var SNAP_KEY="lsxSnap_v23", snapRestored=false;
-try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13","lsxSnap_v14","lsxSnap_v15","lsxSnap_v16","lsxSnap_v17","lsxSnap_v18","lsxSnap_v19","lsxSnap_v20","lsxSnap_v21","lsxSnap_v22"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
+// v24: older daily markup can present an unknown rain chance as 0%; it cannot be revalidated.
+var SNAP_KEY="lsxSnap_v24", snapRestored=false;
+try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13","lsxSnap_v14","lsxSnap_v15","lsxSnap_v16","lsxSnap_v17","lsxSnap_v18","lsxSnap_v19","lsxSnap_v20","lsxSnap_v21","lsxSnap_v22","lsxSnap_v23"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
 var SNAP_PARTS=Object.keys(FEEDS).reduce(function(parts,k){return parts.concat((FEEDS[k].snapshot||[]).map(function(p){return Object.assign({feed:k},p);}));},[]);
 function saveSnapshot(){
   // Mid-transition the DOM still shows the OLD place while `current` is already the new one --
@@ -145,7 +146,7 @@ function restoreSnapshot(){
     var el=document.getElementById(p.id);
     if(!el) return;
     el.innerHTML=h;
-    if(p.id==="daily") removeForecastUv(el); // Retire untagged UV cells from older v23 snapshots too.
+    if(p.id==="daily") removeForecastUv(el); // UV always needs its own independently checked source.
     if(p.id==="cpc")el.querySelectorAll('a.cpc-item:not([aria-labelledby])').forEach(function(a){
       // Older saved tiles overrode their visible period/value with an unrelated name.
       // Repair the label without treating restored weather as a newly checked source.
