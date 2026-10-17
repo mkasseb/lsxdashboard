@@ -693,9 +693,7 @@ function bottomLineHours(hrs){
 /* The NWS /observations/latest endpoint can return an hours-old report with HTTP 200. A
    timestamp and a temperature are both required before the hero may call it "Now". */
 function currentObservationFresh(o,nowMs){
-  var p=o&&o.properties, ts=p&&Date.parse(p.timestamp);
-  return !!p&&isFinite(ts)&&ts>0&&ts<=nowMs+10*60000&&nowMs-ts<=STN_STALE_MS
-    &&p.temperature&&p.temperature.value!=null&&isFinite(Number(p.temperature.value));
+  return !!WeatherContracts.observation(o,nowMs,WeatherContracts.policy.observationAge,true);
 }
 
 function stationMiles(lat1,lon1,lat2,lon2){
@@ -1193,7 +1191,7 @@ function extractAFD(text){
 
 /* AFD Key Messages are official text, never a synopsis or a generated substitute. Keep the
    product clock separate: aviation-only issuances often carry the same messages forward. */
-var NWS_MESSAGES_MAX_AGE=18*3600000;
+var NWS_MESSAGES_MAX_AGE=WeatherContracts.policy.messagesAge;
 function nwsTextTime(line){
   var m=/^(?:Issued at\s+)?(\d{1,4})\s+(AM|PM)\s+(CST|CDT|EST|EDT|MST|MDT|PST|PDT|AKST|AKDT|HST|UTC|GMT)\s+(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d{4})$/i.exec(line.trim());
   if(!m) return 0;
@@ -1246,7 +1244,7 @@ function afdKeyMessages(prod,office,now){
 function nwsLocalPeriod(data,check,now,maxCheckAge){
   if(feedState(check,now,maxCheckAge)!=='ready'||check.saved) return null;
   var issued=Date.parse(data&&data.properties&&(data.properties.updateTime||data.properties.updated||data.properties.generatedAt)||'');
-  if(!isFinite(issued)||issued<=0||issued>now+10*60000||now-issued>12*3600000) return null;
+  if(WeatherContracts.sourceState(issued,now,WeatherContracts.policy.localForecastAge).state!=='ready') return null;
   var periods=data&&data.properties&&data.properties.periods;
   if(!Array.isArray(periods)) return null;
   var period=periods.find(function(p){return p&&Date.parse(p.startTime)<=now&&Date.parse(p.endTime)>now
@@ -1389,9 +1387,7 @@ function chaikinRing(ring,iters){
 
 /* NWPS timestamps describe measurements, not the time the HTTP request succeeded. */
 function riverObservationState(ob,now,maxAge){
-  var t=Date.parse(ob&&ob.validTime||"");
-  if(!isFinite(t)||t<=0||t>now+10*60000) return {state:"unknown",time:0};
-  return {state:now-t>maxAge?"stale":"ready",time:t};
+  return WeatherContracts.sourceState(ob&&ob.validTime,now,maxAge);
 }
 
 function feedState(check,now,maxAge){
@@ -1532,16 +1528,7 @@ function sharedLocation(search){
 
 /* Validate each forecast independently before any renderer can consume malformed periods. */
 function validatedForecast(data,now){
-  if(!data||!data.properties||!Array.isArray(data.properties.periods)) return null;
-  var periods=data.properties.periods.filter(function(p){
-    return p&&typeof p.temperature==="number"&&isFinite(p.temperature)
-      &&typeof p.name==="string"&&typeof p.isDaytime==="boolean"
-      &&typeof p.shortForecast==="string"&&typeof p.windSpeed==="string"
-      &&(p.detailedForecast==null||typeof p.detailedForecast==="string")
-      &&isFinite(Date.parse(p.startTime))&&Date.parse(p.endTime)>Date.parse(p.startTime);
-  }).sort(function(a,b){return Date.parse(a.startTime)-Date.parse(b.startTime);});
-  if(!periods.some(function(p){return Date.parse(p.endTime)>now;})) return null;
-  return {properties:Object.assign({},data.properties,{periods:periods})};
+  return WeatherContracts.forecast(data,now);
 }
 
 /* Retained evidence cannot outlive either the event end or the message expiration. */

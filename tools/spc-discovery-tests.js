@@ -28,6 +28,7 @@ function declaration(name){
   assert(text,'Served declaration must exist: '+name);return text[0];
 }
 const subject=[
+  require('./source').assets['/assets/weather-contracts.js'].content,
   ...['SPC_URL','ERO_URL','FIRE_URL','WSSI_URL','MCD_URL','WWA_URL','RISK_LAYERS','SPC_THREAT_LAYERS','RISK_READY','SPC_DISCOVERY_DELAYS','_spcDiscovery','_spcDisposed','_riskLayersP','_spcLoad','locSeq','locAbort'].map(declaration),
   ...['requestWeather','requestJSON','getJSON','isAbort','locGuard','locSignal','spcDiscoveryAbort','spcDiscoveryRetryable','readSpcLayers','waitSpcDiscovery','discoverSpcLayers','pauseSpcDiscovery','resumeSpcDiscovery','disposeSpcDiscovery','restoreSpcDiscovery','resolveRiskLayers','loadSpc','pointQuery','spcQuery','eroQuery','fireQuery','fireDay3Query','wssiQuery','fetchSpcThreats','spcUtcTime','spcOutlookPeriod','spcThreatProductCurrent','spcThreatProbability','spcRisk','eroRisk','fireRisk','riskPill'].map(lift)
 ].join('\n');

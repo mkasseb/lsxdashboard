@@ -37,7 +37,7 @@ assert.equal(context.result,fetchPromise,'Observer returns the identical origina
 vm.runInContext('ctl.abort();',context,{filename:'assets/weather-feeds.js',lineOffset:68});
 assert(context.ctl.signal.aborted);assert.equal(observations[0].cause,'weather-timeout');
 vm.runInContext('ctl=new AbortController();window.fetch("/data/nbm-range.json",{signal:ctl.signal});locSeq++;',context);
-vm.runInContext('ctl.abort();',context,{filename:'assets/dashboard.js',lineOffset:3029});
+vm.runInContext('ctl.abort();',context,{filename:'assets/location-controls.js',lineOffset:3029});
 assert.equal(observations[1].cause,'observed-location-abort');assert.equal(observations[1].startGeneration,0);assert.equal(observations[1].abortGeneration,1);
 const img={matches:()=>true,getAttribute:()=>context.window.L.Util.emptyImageUrl,isConnected:false};
 mutationCallback([{type:'attributes',attributeName:'src',oldValue:'https://radar.example.org/tile?coordinates=private',target:img}]);

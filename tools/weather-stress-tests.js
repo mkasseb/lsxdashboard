@@ -74,6 +74,7 @@ const features=a=>({features:a.map(attributes=>({attributes}))});
 const results=[];
 let browser;
 async function open(c, width=390) {
+  const testOrigin=c.origin||'https://lsx-weather-test.invalid';
   const context=await browser.newContext({viewport:{width,height:900},hasTouch:!!c.touch,timezoneId:c.timezone||'America/Chicago'});
   const page=await context.newPage();
   page.setDefaultTimeout(15000);
@@ -89,14 +90,17 @@ async function open(c, width=390) {
   });
   if(c.storage)await page.addInitScript(storage=>Object.entries(storage).forEach(([key,value])=>localStorage.setItem(key,typeof value==='string'?value:JSON.stringify(value))),c.storage);
   if(c.geo)await page.addInitScript(geo=>Object.defineProperty(navigator,'geolocation',{value:{getCurrentPosition:success=>queueMicrotask(()=>success({coords:{latitude:geo.lat,longitude:geo.lon,accuracy:25}}))}}),c.geo);
-  if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v23',snapshot),c.snapshot);
-  const errors=[],requests=[],delayedMapScripts=[],heldPoints=[],heldSpcProducts=[];
+  if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v24',snapshot),c.snapshot);
+  const errors=[],requests=[],delayedMapScripts=[],heldPoints=[],heldSpcProducts=[],heldCpc=[];
   let spcMetadataRequests=0;
   page.on('pageerror',e=>errors.push(e.message));
   let active=c;
   await context.route('**/*',async route=>{
     const req=route.request(),u=new URL(req.url());
-    if(u.hostname==='lsx-weather-test.invalid') {
+    if(u.origin===testOrigin) {
+      // Worker integration uses a real local server: Firefox does not intercept all
+      // dedicated-worker imports in the same way as main-document requests.
+      if(active.origin&&u.pathname.startsWith('/assets/'))return route.continue();
       if(u.pathname==='/')return route.fulfill({status:200,contentType:'text/html',headers:active.productionCsp?{'Content-Security-Policy':fs.readFileSync(path.join(root,'_headers'),'utf8').match(/Content-Security-Policy: (.*)/)[1]}:{},body:active.maps&&!active.badMapIntegrity?html.replace(/integrity="[^"]*"/g,""):html});
       const asset=assets[u.pathname];
       return route.fulfill({status:asset?200:404,contentType:asset?.type||'text/plain',body:asset?(active.eagerContext?asset.content.replace('var deferredFeeds={stations:false,context:false};','var deferredFeeds={stations:true,context:true};'):asset.content):'Missing static asset'});
@@ -192,6 +196,7 @@ async function open(c, width=390) {
     }
     if(u.hostname==='mapservices.weather.noaa.gov') {
       if(/cpc_(6_10|8_14)_day_outlk/.test(u.pathname)&&u.pathname.includes('/query')){
+        if(c.holdCpc){heldCpc.push({route,body:features(c.cpcAbove?[{cat:'Above Normal',prob:50}]:[])});return;}
         if(c.cpcDelay)await new Promise(resolve=>setTimeout(resolve,c.cpcDelay));
         const key=(u.pathname.includes('6_10')?'6':'8')+':'+u.pathname.split('/').at(-2);
         if(c.cpcDown?.includes(key))return reply({error:{code:500}},503);
@@ -229,9 +234,10 @@ async function open(c, width=390) {
     if(u.hostname==='cdn.jsdelivr.net'&&u.pathname.endsWith('.svg')) return route.fulfill({status:200,contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg"/>'});
     return route.abort().catch(()=>{}); // Maps and unrelated third-party widgets use their real fallbacks.
   });
-  await page.goto('https://lsx-weather-test.invalid/'+(c.search||''),{waitUntil:'domcontentloaded'});
+  await page.goto(testOrigin+'/'+(c.search||''),{waitUntil:'domcontentloaded'});
   if(!c.skipWait)await page.waitForFunction(()=>typeof refreshInFlight!=='undefined'&&refreshInFlight===null&&snapSafeSeq===locSeq);
   return {page,context,errors,requests,change:c=>{active=c;},
+    releaseCpc:()=>Promise.all(heldCpc.map(p=>p.route.fulfill({status:200,json:p.body}).catch(()=>{}))),
     spcMetadataRequests:()=>spcMetadataRequests,
     releaseSpcProducts:()=>Promise.all(heldSpcProducts.map(p=>p.route.fulfill({status:200,json:p.body}).catch(()=>{}))),
     releaseMapScripts:()=>Promise.all(delayedMapScripts.map(({route,asset})=>route.fulfill({contentType:asset[2],body:fs.readFileSync(require.resolve(asset[1]))}).catch(()=>{}))),
@@ -638,7 +644,8 @@ async function main() {
     }
     await run('stale station observations cannot read as current',config('stale station',{staleObservation:true}),async({page})=>{await expectText(page,'#current',/Current observation unavailable/);assert.equal(await page.evaluate(()=>heroNow.temp),null);await durations(page);});
     await run('recorded live LSX grid and hourly replay',config('recorded',{recorded:true,now:Date.parse(recorded.recordedAt)}),async({page})=>{
-      await durations(page);assert.equal(await page.evaluate(()=>forecastGrid.properties.updateTime),recorded.responses.grid.properties.updateTime);assert.equal(await page.evaluate(()=>smart.hourlyAll.length),recorded.responses.hourly.properties.periods.length);await expectText(page,'#precipEvents',/NWS forecast amounts/);await expectText(page,'.precip-total',/~0\.77″ rain/);
+      const remaining=recorded.responses.hourly.properties.periods.filter(p=>Date.parse(p.endTime)>Date.parse(recorded.recordedAt));
+      await durations(page);assert.equal(await page.evaluate(()=>forecastGrid.properties.updateTime),recorded.responses.grid.properties.updateTime);assert.equal(await page.evaluate(()=>smart.hourlyAll.length),remaining.length);assert(await page.evaluate(()=>smart.hourlyAll.every(p=>Date.parse(p.endTime)>Date.now())));await expectText(page,'#precipEvents',/NWS forecast amounts/);await expectText(page,'.precip-total',/~0\.77″ rain/);
     },1440);
     await run('hazardous air quality and extreme UV',config('smoke and sun',{aqi:325,uv:11,temp:100}),async({page})=>{
       await expectText(page,'#aqi',/325.*Hazardous/s);assert(await page.locator('#aqiCard').evaluate(el=>el.classList.contains('show')));await expectText(page,'#ccUv',/11.*Extreme/s);assert.equal(await page.evaluate(()=>callAqi),325);
@@ -759,12 +766,13 @@ async function main() {
     });
     await run('snapshot warning waits for its own feed verification',config('cache labels'),async session=>{
       const snapshot=await session.page.evaluate(()=>{saveSnapshot();return localStorage.getItem(SNAP_KEY);});
-      const cached=await open(config('delayed cached CPC',{now:base+60000,snapshot,aqi:35,cpcDelay:1500,skipWait:true}));
+      const cached=await open(config('delayed cached CPC',{now:base+60000,snapshot,aqi:35,holdCpc:true,skipWait:true}));
       try{
         await cached.page.waitForFunction(()=>feedChecks.aqi.status==='ready');
         assert.equal(await cached.page.evaluate(()=>feedState(feedChecks.cpc,Date.now(),FEEDS.cpc.age)),'saved');
         assert(await cached.page.locator('#snapBar').evaluate(el=>el.classList.contains('show')));
         await expectText(cached.page,'#fresh-cpc',/Saved data/);
+        await cached.releaseCpc();
         await cached.page.waitForFunction(()=>refreshInFlight===null);
         assert.equal(await cached.page.evaluate(()=>feedChecks.cpc.saved),false);
         assert(!(await cached.page.locator('#snapBar').evaluate(el=>el.classList.contains('show'))));

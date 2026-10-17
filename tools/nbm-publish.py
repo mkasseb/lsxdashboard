@@ -71,8 +71,8 @@ def candidate(directory, now):
                     or not row[0] <= row[1] <= row[2]):
                 raise ValueError('Invalid regional percentiles')
     # Reuse the independent consumer validation for period/cell/unit/provenance/age checks.
-    js = """const fs=require('fs'),vm=require('vm');const s={Intl,Date,URLSearchParams};
-vm.createContext(s);vm.runInContext(fs.readFileSync(process.argv[1],'utf8'),s);
+    js = """const fs=require('fs'),vm=require('vm'),path=require('path');const s={Intl,Date,URLSearchParams};
+vm.createContext(s);vm.runInContext(fs.readFileSync(path.join(path.dirname(process.argv[1]),'weather-contracts.js'),'utf8')+fs.readFileSync(process.argv[1],'utf8'),s);
 const d=JSON.parse(fs.readFileSync(0,'utf8'));
 if(s.NbmRange.validate(d,{lat:38.8,lon:-90.79},Number(process.argv[2])).status!=='ready')process.exit(1);"""
     subprocess.run(['node', '-e', js, str(ROOT/'assets/forecast-range.js'), str(now.timestamp()*1000)],
@@ -86,7 +86,7 @@ def publish(repo, directory, expected_head, now=None, before_push=None):
     git(repo, 'fetch', '--no-tags', 'origin', 'refs/heads/main')
     head = git(repo, 'rev-parse', 'FETCH_HEAD').stdout.decode().strip()
     # Do not run an obsolete publisher against newly changed validation/publishing code.
-    if git(repo, 'diff', '--name-only', expected_head, head, '--', 'tools/', 'assets/forecast-range.js', 'assets/hourly-range.js', '.github/').stdout:
+    if git(repo, 'diff', '--name-only', expected_head, head, '--', 'tools/', 'assets/forecast-range.js', 'assets/hourly-range.js', 'assets/weather-contracts.js', '.github/').stdout:
         raise ValueError('Publisher or validation code changed; start a fresh run')
     previous = [read_at(repo, head, p) for p in PATHS]
     if any(x is not None for x in previous) and any(x is None for x in previous):

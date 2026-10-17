@@ -2,7 +2,7 @@
 'use strict';
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const sandbox={Intl,Date,URLSearchParams};vm.createContext(sandbox);
-vm.runInContext(fs.readFileSync(path.join(__dirname,'../assets/forecast-range.js'),'utf8'),sandbox);
+vm.runInContext(fs.readFileSync(path.join(__dirname,'../assets/weather-contracts.js'),'utf8')+fs.readFileSync(path.join(__dirname,'../assets/forecast-range.js'),'utf8'),sandbox);
 const {validate,local}=sandbox.NbmRange;
 const data=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-quartile-point-recorded.json')));
 const now=Date.parse(data.retrievedAt),point=data.requestedPoint,H=3600000;
@@ -80,7 +80,7 @@ console.log('PASS native/NWS overlap, ambiguity, zero/missing, expired, timezone
 }
 // Longer horizon is authentic GRIB data; edge cases below mutate only test inputs.
 {
-vm.runInContext(fs.readFileSync(path.join(__dirname,'../assets/weather-core.js'),'utf8'),sandbox);
+vm.runInContext(fs.readFileSync(path.join(__dirname,'../assets/weather-contracts.js'),'utf8')+fs.readFileSync(path.join(__dirname,'../assets/weather-core.js'),'utf8'),sandbox);
 const full=JSON.parse(require('node:zlib').gunzipSync(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-quartile-daily-recorded.json.gz'))));
 const capture=JSON.parse(fs.readFileSync(path.join(__dirname,'fixtures/weather/nbm-quartile-nws-recorded.json')));
 const at=Math.max(Date.parse(full.retrievedAt),Date.parse(capture.retrievedAt));

@@ -13,7 +13,7 @@ function validate(d,p,now){
      !Array.isArray(d.cells)||d.cells.length<2500||d.cells.length>4000||!Array.isArray(d.hours)||!d.hours.length||d.hours.length>48||!/^[a-f0-9]{32}$/.test(d.gridHash))return bad;
   var run=time(d.run),retrieved=time(d.retrievedAt);
   if(!finite(run)||run%H||new Date(run).getUTCHours()%6||run>now||!finite(retrieved)||retrieved<run||retrieved>now+300000)return bad;
-  if(now-run>=24*H)return {status:'stale',reason:'Range expired: model run is 24 hours old or older.'};
+  if(now-run>=WeatherContracts.policy.modelAge)return {status:'stale',reason:'Range expired: model run is 24 hours old or older.'};
   if(p.lat<38.2||p.lat>39.2||p.lon<-91.1||p.lon>-89.5)return {status:'missing',reason:'Model range is not available for this location.'};
   var seen={},chosen=-1,km=Infinity;
   d.cells.forEach(function(c,i){
@@ -49,7 +49,7 @@ function presentation(hrs,duration,now){
  toggle.disabled=duration!==24;
  if(duration!==24){status.textContent='Model range is available in the 24-hour view.';return [];}
  if(!selected()){status.textContent='NWS forecast shown. Model range is off.';return [];}
- var r=raw&&generation===locSeq&&point&&point.lat===current.lat&&point.lon===current.lon?validate(raw,point,now):{status:'unavailable',reason:failure};
+ var r=raw&&generation===locSeq&&point&&point.lat===current.lat&&point.lon===current.lon?ModelData.current(raw,'hourly',now):{status:'unavailable',reason:failure};
  if(!r.values){status.textContent=r.reason;return [];}
  if(officialGeneration!==locSeq||!official){status.textContent='Waiting for the current NWS hourly forecast.';return [];}
  var points=align(r,hrs,now),count=points.filter(Boolean).length;
@@ -70,9 +70,9 @@ function reset(){raw=null;point=null;generation=-1;official=null;officialGenerat
 }
 function load(){
  var fresh=locGuard(),n=++seq,p={lat:current.lat,lon:current.lon};
- return getJSON('/data/nbm-hourly.json',null,locSignal()).then(function(d){
+ return ModelData.load('hourly',p,locSignal()).then(function(d){
   if(!fresh()||n!==seq)return;
-  var r=validate(d,p,Date.now());if(r.status==='unavailable'||r.status==='stale')throw Object.assign(Error('Invalid or expired model range'),{rangeReason:r.reason});
+  var r=ModelData.current(d,'hourly',Date.now());if(r.status==='unavailable'||r.status==='stale')throw Object.assign(Error('Invalid or expired model range'),{rangeReason:r.reason});
   raw=d;point=p;generation=locSeq;lastFailed=false;feedUpdate('nbmHourly',['ready','partial'].includes(r.status)?r.status:'unavailable',d.run);repaint();
  }).catch(function(error){if(!fresh()||n!==seq)return;lastFailed=true;failure=error.rangeReason||'Model range unavailable. NWS forecast shown.';feedUpdate('nbmHourly','unavailable');repaint();});
 }

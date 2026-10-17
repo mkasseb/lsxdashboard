@@ -66,10 +66,10 @@ function requestWeather(url,options,signal,asText){
   var ctl=new AbortController(), timedOut=false;
   function abort(){ ctl.abort(); }
   if(signal){ if(signal.aborted) abort(); else signal.addEventListener("abort",abort,{once:true}); }
-  var timer=setTimeout(function(){ timedOut=true; ctl.abort(); },20000);
+  var timer=setTimeout(function(){ timedOut=true; ctl.abort(); },WeatherContracts.policy.requestTimeout);
   return fetch(url,Object.assign({},options,{signal:ctl.signal})).then(function(r){
     if(!r.ok){ var err=new Error("Weather service returned "+r.status); err.status=r.status; throw err; }
-    return asText?r.text():r.json();
+    return asText==='buffer'?r.arrayBuffer():asText?r.text():r.json();
   }).catch(function(e){
     if(timedOut){ var err=new Error("Weather request timed out"); err.name="TimeoutError"; throw err; }
     throw e;
@@ -97,7 +97,7 @@ function pointsFor(lat,lon){
 }
 
 function loadForecastGrid(){
-  var fresh=locGuard();
+  var fresh=locGuard("grid");
   return pointsFor(current.lat,current.lon).then(function(pt){
     if(!fresh()) return null;
     var url=pt.properties.forecastGridData; if(!url) throw new Error("No forecast grid");
@@ -120,7 +120,7 @@ function loadForecastGrid(){
 }
 
 function loadForecast(){
-  var fresh=locGuard();
+  var fresh=locGuard("daily");
   var daily=document.getElementById("daily");
   function failDaily(){
     feedUpdate("daily","unavailable");
@@ -170,7 +170,7 @@ function loadForecast(){
 }
 
 function loadCurrent(){
-  var fresh=locGuard();
+  var fresh=locGuard("current");
   var el=document.getElementById("current"), stEl=document.getElementById("ccStation");
   /* A searched/geolocated place starts without a station. Discovery belongs in this loader so a
      transient failure is retried by the ordinary 10-minute schedule; calling loadCurrent() with a
@@ -187,7 +187,7 @@ function loadCurrent(){
       if(isAbort(e)||!fresh()) return;
       feedUpdate("current","unavailable");
       if(stEl) stEl.textContent="\u2014";
-      if(el) el.innerHTML='<div class="empty">Couldn\'t find a nearby reporting station. This will retry automatically.</div>';
+      renderCurrentUnavailable("Couldn't find a nearby reporting station. This will retry automatically.");
     });
   }
   return currentObservation().then(function(result){
@@ -195,24 +195,20 @@ function loadCurrent(){
     if(!result.observation){
       feedUpdate("current","unavailable");
       stEl.textContent=result.station||"—";
-      heroNow.temp=null;
-      el.innerHTML='<div class="empty" role="status"><b>Current observation unavailable.</b> '
-        +(result.lastTimestamp&&isFinite(Date.parse(result.lastTimestamp))?'Last report from '+esc(result.station)+' was '+esc(timeAgo(result.lastTimestamp))+'. ':'')
-        +'Nearby stations will be checked again on refresh.</div>';
+      renderCurrentUnavailable((result.lastTimestamp&&isFinite(Date.parse(result.lastTimestamp))?'Last report from '+esc(result.station)+' was '+esc(timeAgo(result.lastTimestamp))+'. ':'')
+        +'Nearby stations will be checked again on refresh.');
       return;
     }
     if(result.station!==current.station){ current.station=result.station; saveLoc(current); }
     var o=result.observation;
     feedUpdate("current","ready",o.properties.timestamp);
-    var p=o.properties, c2f=function(c){return c==null?null:Math.round(c*9/5+32);};
-    var temp=c2f(p.temperature&&p.temperature.value), dew=c2f(p.dewpoint&&p.dewpoint.value);
-    var rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?Math.round(p.relativeHumidity.value):null;
-    var windMph=(p.windSpeed&&p.windSpeed.value!=null)?Math.round(p.windSpeed.value*0.621371):null;
-    var windDir=degToCompass(p.windDirection&&p.windDirection.value);
-    var gust=(p.windGust&&p.windGust.value!=null)?Math.round(p.windGust.value*0.621371):null;
-    var press=(p.barometricPressure&&p.barometricPressure.value!=null)?(p.barometricPressure.value/3386.39).toFixed(2):null;
-    var vis=(p.visibility&&p.visibility.value!=null)?Math.round(p.visibility.value/1609.34):null;
-    var hiObs=c2f(p.heatIndex&&p.heatIndex.value), wcObs=c2f(p.windChill&&p.windChill.value);
+    var p=o.properties, values=WeatherContracts.observation(o,Date.now(),null,true);
+    if(!values) throw new Error("Observation failed validation");
+    var rounded=function(value){return value==null?null:Math.round(value);};
+    var temp=rounded(values.temperature), dew=rounded(values.dewpoint), rh=rounded(values.humidity);
+    var windMph=rounded(values.wind), windDir=degToCompass(values.direction), gust=rounded(values.gust);
+    var press=values.pressure==null?null:values.pressure.toFixed(2), vis=rounded(values.visibility);
+    var hiObs=rounded(values.heatIndex), wcObs=rounded(values.windChill);
     var feels=(hiObs!=null)?hiObs:((wcObs!=null)?wcObs:feelsLikeF(temp,rh,windMph));
     var desc=p.textDescription||"—", now=new Date();
     // Real sunrise/sunset for the icon's day/night variant (polar-edge fallback: 7am–7pm)
@@ -245,7 +241,7 @@ function loadCurrent(){
       +'<div class="cc-item"><div class="k">Pressure</div><div class="v">'+(press!=null?press+'"':ccGap("pressure"))+'</div></div>'
       +'<div class="cc-item"><div class="k">Visibility</div><div class="v">'+(vis!=null?vis+'<span class="cc-unit"> mi</span>':ccGap("visibility"))+'</div></div>'
       +'</div>'
-      +'<div class="cc-expo"><div class="cc-uv" id="ccUv"></div><div class="aqi-mini" id="aqiMini"></div></div>'
+      +currentExposure()
       +'<div class="cc-ctx" id="ccCtx"></div>'
       // Every source in one line, set to be read second. AirNow is a constant href, so it lives in
       // the markup rather than being rebuilt by renderAqiMini — which means it survives an AQI
@@ -267,7 +263,7 @@ function loadCurrent(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
     feedUpdate("current","unavailable");
     stEl.textContent="—";
-    el.innerHTML='<div class="empty">No current obs from '+current.station+'. Station may be offline.</div>';
+    renderCurrentUnavailable('No current obs from '+esc(current.station)+'. Station may be offline.');
   });
 }
 
@@ -709,8 +705,9 @@ function renderAlertsData(data){
 }
 
 
+var riverRequestSeq=0;
 function loadRivers(){
-  var el=document.getElementById("rivers"), known=0;
+  var seq=++riverRequestSeq, known=0;
   var jobs=RIVERS.map(function(r){
     var base="https://api.water.noaa.gov/nwps/v1/gauges/"+r.id;
     // the forecast series is a separate endpoint; a gauge without one (Eureka today) just loses
@@ -720,7 +717,7 @@ function loadRivers(){
       var d=res[0], fcSeries=res[1];
       var ob=(d.status&&d.status.observed)||{}, val=ob.primary, unit=ob.primaryUnit||"ft", info=catInfo(ob.floodCategory);
       if(typeof val!=="number"||!isFinite(val)||val<=-500) return riverLinkOnly(r);
-      var age=riverObservationState(ob,Date.now(),r.maxAge||2*3600000);
+      var age=riverObservationState(ob,Date.now(),r.maxAge||WeatherContracts.policy.riverObservationAge);
       if(age.state!=="ready") return riverLinkOnly(r,age.time
         ?"Last report "+weatherTime(age.time,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT · stale; current level unverified"
         :"Observation time unavailable; current level unverified");
@@ -738,7 +735,7 @@ function loadRivers(){
       }
       // What the river is forecast to DO — crest, keep climbing, or recede
       var issue=Date.parse(fcSeries&&fcSeries.issuedTime||"");
-      var forecastFresh=isFinite(issue)&&issue>0&&issue<=Date.now()+10*60000&&Date.now()-issue<=48*3600000;
+      var forecastFresh=WeatherContracts.sourceState(issue,Date.now(),WeatherContracts.policy.riverForecastAge).state==="ready";
       var cr=forecastFresh?crestInfo(fcSeries,val):null;
       if(fcSeries) sub.push(forecastFresh?"Forecast issued "+weatherTime(issue,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"Forecast issuance unavailable or stale");
       var crestCat=null;
@@ -757,21 +754,24 @@ function loadRivers(){
         +'<span class="rcat">'+info.label+'</span></span></a>';
     }).catch(function(){return riverLinkOnly(r);});
   });
-  return Promise.all(jobs).then(function(rows){feedUpdate("rivers",known===RIVERS.length?"ready":known?"partial":"unavailable");RIVERS.forEach(function(r,i){riverRows[r.id]=rows[i];});renderRiverRows();});
+  return Promise.all(jobs).then(function(rows){
+    if(seq!==riverRequestSeq) return;
+    feedUpdate("rivers",known===RIVERS.length?"ready":known?"partial":"unavailable");
+    RIVERS.forEach(function(r,i){riverRows[r.id]=rows[i];});renderRiverRows();
+  });
 }
 
 function loadAqi(){
-  var fresh=locGuard();
+  var fresh=locGuard("aqi");
   var el=document.getElementById("aqi"), card=document.getElementById("aqiCard");
   var url="https://air-quality-api.open-meteo.com/v1/air-quality?latitude="+current.lat+"&longitude="+current.lon+"&current=us_aqi,pm2_5,pm10&timeformat=unixtime";
   return getJSON(url,null,locSignal()).then(function(d){
     if(!fresh()) return;   // user moved while this was in flight
-    var cur=d.current||{}, aqi=cur.us_aqi, info=aqiInfo(aqi);
-    if(typeof aqi!=="number"||!isFinite(aqi)||aqi<0) throw new Error("Invalid AQI");
-    var observed=typeof cur.time==="number"?cur.time*1000:0;
-    if(!observed||observed>Date.now()+10*60000||Date.now()-observed>2*3600000) throw new Error("AQI observation time unavailable or stale");
-    feedUpdate("aqi","ready",observed);
-    aqiState={val:(aqi!=null)?aqi:null, pm:(cur.pm2_5!=null)?Math.round(cur.pm2_5):null, err:false};
+    var value=WeatherContracts.airQuality(d,Date.now());
+    if(!value) throw new Error("Air quality failed validation");
+    var info=aqiInfo(value.value);
+    feedUpdate("aqi","ready",value.time);
+    aqiState={val:value.value,pm:value.pm25==null?null:Math.round(value.pm25),err:false};
     // The dedicated card only appears when air quality is a story: AQI > 100 ("Unhealthy for
     // Sensitive Groups" and worse — EPA's literal "Hazardous" is 301+, far too rare a trigger).
     // data-aqibad lets a restored snapshot recover the same visibility decision.
@@ -779,8 +779,8 @@ function loadAqi(){
     if(card) card.classList.toggle("show",bad);
     if(el) el.innerHTML=bad
       ?'<div class="aqi-main" data-aqibad="1"><div class="aqi-chip" style="background:'+info.c+'"></div><div>'
-        +'<div class="aqi-num" style="color:'+info.c+'">'+aqiState.val+'</div>'
-        +'<div class="aqi-cat" style="color:'+info.c+'">'+info.t+'</div>'
+        +'<div class="aqi-num" style="color:'+exposureColor(info.c)+'">'+aqiState.val+'</div>'
+        +'<div class="aqi-cat" style="color:'+exposureColor(info.c)+'">'+info.t+'</div>'
         +'<div class="aqi-sub">'+info.s+(aqiState.pm!=null?' · PM2.5 '+aqiState.pm+' µg/m³':'')+'</div></div></div>'
       :"";
     renderAqiMini();
@@ -863,7 +863,7 @@ function loadSpc(){
 }
 
 function loadMcd(){
-  var fresh=locGuard();
+  var fresh=locGuard("mcd");
   return resolveRiskLayers().then(function(){
     return getJSON(MCD_URL+RISK_LAYERS.mcd+"/query?where=1%3D1&outFields=name&returnGeometry=true&f=geojson");
   }).then(function(fc){
@@ -927,7 +927,7 @@ function loadMcd(){
 }
 
 function loadCpc(){
-  var fresh=locGuard();
+  var fresh=locGuard("cpc");
   var el=document.getElementById("cpc"); if(!el) return Promise.resolve();
   var jobs=[pointQuery(CPC_610,0),pointQuery(CPC_610,1),pointQuery(CPC_814,0),pointQuery(CPC_814,1)];
   return Promise.allSettled(jobs).then(function(rs){
@@ -937,7 +937,7 @@ function loadCpc(){
     feedUpdate("cpc",known===4?"ready":known?"partial":"unavailable");
     function val(i){ return values[i]; }
     // Each period page contains both temperature and precipitation maps with their legends.
-    el.innerHTML='<div class="cpc-grid">'+[
+    el.innerHTML='<span id="cpcSourceHint" class="sr-only">CPC outlook (opens in a new tab)</span><div class="cpc-grid">'+[
       ["610day","6–10 Day","t","Temperature"],
       ["610day","6–10 Day","p","Precipitation"],
       ["814day","8–14 Day","t","Temperature"],
@@ -945,8 +945,8 @@ function loadCpc(){
     ].map(function(item,i){
       return officialSourceLink("https://www.cpc.ncep.noaa.gov/products/predictions/"+item[0]+"/",
         "CPC "+item[1]+" "+item[3]+" outlook",
-        '<div class="k">'+item[1]+' · '+item[3]+' <span aria-hidden="true">↗</span></div><span id="cpcValue'+i+'">'+cpcPill(item[2],val(i))+'</span>',
-        "cpc-item source-link","cpcValue"+i);
+        '<div class="k" id="cpcLabel'+i+'">'+item[1]+' · '+item[3]+' <span aria-hidden="true">↗</span></div><span id="cpcValue'+i+'">'+cpcPill(item[2],val(i))+'</span>',
+        "cpc-item source-link","cpcSourceHint","cpcLabel"+i+" cpcValue"+i);
     }).join("")+'</div>';
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
@@ -956,7 +956,7 @@ function loadCpc(){
 }
 
 function loadDrought(){
-  var fresh=locGuard();
+  var fresh=locGuard("drought");
   var card=document.getElementById("droughtCard"); if(!card) return Promise.resolve();
   function outlookRow(id, rs){
     var el=document.getElementById(id); if(!el) return;
@@ -994,7 +994,7 @@ function loadDrought(){
 }
 
 function loadHazards(){
-  var fresh=locGuard();
+  var fresh=locGuard("hazards");
   var el=document.getElementById("hazards"); if(!el) return Promise.resolve();
   // Real service layout: 3-7 day → Temp(1) Precip(4) Fire/Drought(7); 8-14 day → Temp(3) Precip(6) Fire/Drought(8)
   var q37=[pointQuery(HZ_URL,1),pointQuery(HZ_URL,4),pointQuery(HZ_URL,7)];
@@ -1043,7 +1043,7 @@ function loadHazards(){
 }
 
 function loadClimate(){
-  var fresh=locGuard();
+  var fresh=locGuard("climate");
   var grid=document.getElementById("cnGrid"); if(!grid) return Promise.resolve();
   return Promise.all([climStation(current.lat,current.lon), deepStation(current.lat,current.lon)]).then(function(sts){
     // Guard HERE, not just at the ask() below: the station lookup is itself async, so a resolved
@@ -1051,7 +1051,18 @@ function loadClimate(){
     // and the card's footer. That's how "VICHY ROLLA" ended up labelling Quincy's departures.
     if(!fresh()) return;
     var st=sts[0], deep=sts[1];
+    var sourceChanged=climate.station&&climate.station!==st.sid;
     climate.station=st.sid; climate.stationName=st.name;
+    if(sourceChanged){
+      // A recovered lookup can select a different airport. Retire the fallback's facts
+      // before giving the card its new label, including any older request still in flight.
+      climate.normHi=null; climate.normLo=null; climate.normDate=null;
+      feedUpdate("climate","loading");
+      grid.innerHTML='<div class="loading">Loading departures…</div>';
+      var oldSrc=document.getElementById("cnSrc"); if(oldSrc) oldSrc.innerHTML="";
+      if(ctx.normalSource&&ctx.normalSource.sid!==st.sid){ctx.ready=false;feedUpdate("context","loading");}
+      renderVsNormal(); renderCurrentCtx(); renderContext();
+    }
     var nameEl=document.getElementById("cnStation"); if(nameEl) nameEl.textContent=st.name||st.sid;
     var showSnow=(function(){var m=weatherParts().month;return m>=10||m<=3;})(); // Nov–Apr
     // add:"mcnt" makes each running departure come back as [departure, missing-day-count] so a
@@ -1143,6 +1154,9 @@ function loadClimateContext(){
     // climate station. An area/ThreadEx series is never substituted for airport observations.
     if(!fresh()) return;
     var st=sts[0],deep=sts[1],rec=deep&&deep.sid?deep:st;
+    // Optional history may retry discovery after the eager climate load used a fallback.
+    // Refresh that consumer too; its named guard retires any pending fallback response.
+    if(climate.station&&climate.station!==st.sid) loadClimate();
     var key=st.sid+"|"+rec.sid+"|"+requestDate, cached=null;
     try{
       var c=JSON.parse(localStorage.getItem(CTX_KEY)||"null");
@@ -1264,27 +1278,14 @@ function ensureForecastRecordDates(){
 }
 
 function loadUv(){
-  var fresh=locGuard();
+  var fresh=locGuard("uv");
   return getJSON("https://api.open-meteo.com/v1/forecast?latitude="+current.lat+"&longitude="+current.lon
     +"&hourly=uv_index&daily=uv_index_max&forecast_days=7&timezone=America%2FChicago&timeformat=unixtime", null, locSignal()).then(function(d){
     if(!fresh()) return;   // user moved while this was in flight
-    var h=d.hourly||{}, ts=h.time||[], vs=h.uv_index||[], now=Date.now(), best=null, cur=null, curGap=Infinity;
-    for(var i=0;i<ts.length;i++){
-      if(vs[i]==null) continue;
-      var t=(typeof ts[i]==="number")?ts[i]*1000:(/Z$|[+-]\d\d:\d\d$/.test(ts[i])?Date.parse(ts[i]):NaN);
-      if(!isFinite(t)) continue;
-      var gap=Math.abs(t-now);
-      // "now" is the nearest hourly sample, but only if one is actually near — never extrapolate
-      if(gap<curGap && gap<=5400000){ curGap=gap; cur=vs[i]; }
-      if(t<now-1800000||t>now+24*3600000) continue;    // peak across the next 24 h (useful in the evening too)
-      if(!best||vs[i]>best.v) best={v:vs[i],t:t};
-    }
-    if(cur==null&&!best) throw new Error("UV samples unavailable");
-    feedUpdate("uv",cur==null?"partial":"ready");
-    uv.now=cur; uv.peak=best;
-    var dd=d.daily||{}, dts=dd.time||[], dvs=dd.uv_index_max||[], map={};
-    for(var j=0;j<dts.length;j++){ if(dvs[j]!=null) map[typeof dts[j]==="number"?weatherParts(dts[j]*1000).key:dts[j]]=dvs[j]; }
-    uv.daily=map;
+    var values=WeatherContracts.uv(d,Date.now());
+    if(!values) throw new Error("UV samples unavailable");
+    feedUpdate("uv",values.now==null?"partial":"ready");
+    uv=values;
     renderUvNow();
     if(typeof renderTheCall==="function") renderTheCall();
     // The 7-day may already be on screen; repaint it so each day picks up its UV figure.
@@ -1294,15 +1295,17 @@ function loadUv(){
     feedUpdate("uv","unavailable");
     uv.now=null; uv.peak=null; uv.daily={}; renderUvNow();
     if(typeof renderTheCall==="function") renderTheCall();
+    if(typeof loadForecast._paint==="function") loadForecast._paint();
   });
 }
 
 function loadQpf(){
-  var fresh=locGuard();
+  var fresh=locGuard("qpf");
   var chip=document.getElementById("qpf7"); if(!chip) return Promise.resolve();
   function findLayer(){
     if(qpfLayerId!==undefined) return Promise.resolve(qpfLayerId);
     return getJSON(QPF_URL+"?f=json").then(function(d){
+      if(!d||d.error||!Array.isArray(d.layers)) throw new Error("Invalid rainfall layer metadata");
       var best=null;
       (d.layers||[]).forEach(function(l){
         var n=String(l.name||"");
@@ -1331,35 +1334,36 @@ function loadQpf(){
   }).catch(function(){ if(fresh()) chip.textContent=""; });
 }
 
+var stationRequestSeq=0;
 function loadStationPlot(){
+  var seq=++stationRequestSeq;
   deferredFeeds.stations=true;
   // Data acquisition is independent of map initialization; renderStationLayer waits for the map.
-  var c2f=function(c){return (c==null)?null:Math.round(c*9/5+32);};
   var checked=0;
   var jobs=STN_LIST.map(function(s){
     return getJSON(API+"/stations/"+s.id+"/observations/latest").then(function(d){
+      if(seq!==stationRequestSeq) return null;
       var p=(d&&d.properties)||{};
-      var tempF=c2f(p.temperature&&p.temperature.value), dewF=c2f(p.dewpoint&&p.dewpoint.value);
-      var mph=(p.windSpeed&&p.windSpeed.value!=null)?Math.round(p.windSpeed.value*0.621371):null;
-      var rh=(p.relativeHumidity&&p.relativeHumidity.value!=null)?Math.round(p.relativeHumidity.value):rhFromTd(tempF,dewF);
-      var o={id:s.id,lat:s.lat,lon:s.lon,
-        tempF:tempF, dewF:dewF, rh:rh,
-        feelsF:feelsLikeF(tempF,rh,mph),
-        windDir:(p.windDirection&&p.windDirection.value!=null)?Math.round(p.windDirection.value):null,
-        windMph:mph,
-        gustMph:(p.windGust&&p.windGust.value!=null)?Math.round(p.windGust.value*0.621371):null,
-        ts:p.timestamp||null};
+      var values=WeatherContracts.observation(d,Date.now(),WeatherContracts.policy.stationRetention,false);
+      if(!values) return _stnLast[s.id]||null;
+      var rounded=function(value){return value==null?null:Math.round(value);};
+      var tempF=rounded(values.temperature), dewF=rounded(values.dewpoint), mph=rounded(values.wind);
+      var rh=values.humidity==null?rhFromTd(tempF,dewF):rounded(values.humidity);
+      var o={id:s.id,lat:s.lat,lon:s.lon,tempF:tempF,dewF:dewF,rh:rh,
+        feelsF:feelsLikeF(tempF,rh,mph),windDir:rounded(values.direction),windMph:mph,
+        gustMph:rounded(values.gust),ts:p.timestamp};
       if(currentObservationFresh(d,Date.now())) checked++;
-      if(o.ts) _stnLast[s.id]=o;   // an ob with no timestamp could never age out — don't cache it
+      _stnLast[s.id]=o;
       return o;
     }).catch(function(){ return _stnLast[s.id]||null; });
   });
   return Promise.all(jobs).then(function(list){
+    if(seq!==stationRequestSeq) return;
     var now=Date.now();
     stnObs=list.map(function(o){
       if(!o) return null;
       var t=o.ts?(Date.parse(o.ts)||0):0;
-      if(t&&now-t>STN_DEAD_MS){ delete _stnLast[o.id]; return null; }
+      if(!t||t>now+10*60000||now-t>STN_DEAD_MS){ delete _stnLast[o.id]; return null; }
       o.stale=!!t&&(now-t>STN_STALE_MS);
       return o;
     });
@@ -1386,7 +1390,7 @@ function loadStationPlot(){
       age.textContent=plotted?(parts.join(" · ")||"tap a station for detail")
                             :"no obs — NWS API isn't answering";
     }
-  }).catch(function(){ feedUpdate("stations","unavailable"); });
+  }).catch(function(){ if(seq===stationRequestSeq) feedUpdate("stations","unavailable"); });
 }
 
 var afdRequestSeq=0;
@@ -1427,7 +1431,7 @@ function pointQuery(base,layer,fields,signal){
   return getJSON(base+layer+"/query?geometry="+current.lon+","+current.lat
     +"&geometryType=esriGeometryPoint&inSR=4326&spatialRel=esriSpatialRelIntersects"
     +"&outFields="+(fields||"*")+"&returnGeometry=false&f=json", null, signal||locSignal()).then(function(d){
-      if(!d||d.error||!Array.isArray(d.features)) throw new Error("Invalid ArcGIS point response");
+      if(!WeatherContracts.arcgis(d)) throw new Error("Invalid ArcGIS point response");
       return d;
     });
 }
@@ -1509,7 +1513,7 @@ function fetchSpcThreats(signal){
     // The categorical product sets the expected issuance; each threat layer must match it.
     return getJSON(SPC_URL+RISK_LAYERS.spc[day-1]+"/query?where=1%3D1&outFields=valid,expire,issue&returnGeometry=false&resultRecordCount=1&f=json",null,signal)
       .then(function(d){
-        if(!fresh()||!d||d.error||!Array.isArray(d.features)||!d.features.length) return null;
+        if(!fresh()||!WeatherContracts.arcgis(d)||!d.features.length) return null;
         var period=spcOutlookPeriod(d.features[0].attributes,day,nowMs); if(!period) return null;
         return Promise.all(["tornado","wind","hail"].map(function(kind){
           var layer=SPC_THREAT_LAYERS[day-1][kind];
@@ -1568,11 +1572,11 @@ function climStation(lat,lon){
     _climStationCache[key]=out;
     return out;
   }).catch(function(e){
-    // An ABORT means the user moved, not that this place has no usable station — caching the KSTL
-    // fallback under the abandoned key would make it permanently wrong if they came back.
-    if(isAbort(e)){ delete _climStationCache[key]; throw e; }
+    // Failed discovery must be retried next refresh. Share the in-flight lookup, but
+    // do not permanently cache the fallback after an outage or an abandoned location.
+    if(_climStationCache[key]===p) delete _climStationCache[key];
+    if(isAbort(e)) throw e;
     var fb={sid:"KSTL",name:"St. Louis Lambert",lookupFailed:true};
-    _climStationCache[key]=fb;
     return fb;
   });
   // Cache the in-flight promise too: loadClimate and loadClimateContext both ask at once,

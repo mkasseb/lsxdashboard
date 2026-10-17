@@ -103,7 +103,11 @@ const settings=extra=>config('KLSX products',{now,maps:true,productionCsp:true,r
    assert.equal(await f.evaluate(()=>nwsRadar.wmsParams.layers),'klsx_sr_bref');
    fallback.change(settings());await f.evaluate(()=>refreshRadarLayer());await ready(f,'klsx_sr_bref');
    await f.route('**/geoserver/klsx/**',async route=>{if(/GetMap/i.test(route.request().url()))return route.abort();await route.fallback();});
-   await f.locator('#radarProduct').selectOption('velocity');await f.waitForFunction(()=>radarDown());
+   await f.locator('#radarProduct').selectOption('velocity');
+   // The temporary latest layer can fail before capabilities build the selected
+   // product's frames. Wait for that final set instead of observing an interim outage.
+   await f.waitForFunction(()=>!radarFallback&&radarFrames.length>1&&
+    radarFrames.every(frame=>frame.layer.wmsParams.layers==='klsx_sr_bvel')&&radarDown());
    assert.match(await f.locator('#radarTime').innerText(),/unavailable/);assert.match(await f.locator('#rsCap').innerText(),/KLSX velocity unavailable.*Regional/);
    assert(await f.locator('#rsLegend').isHidden());
    await f.locator('[data-radar-source="regional"]').click();await ready(f,'conus_bref_qcd');assert.equal(await f.evaluate(()=>radarDown()),false);

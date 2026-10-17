@@ -20,10 +20,10 @@ const expected=[
  ['#droughtCard .dr-tier:nth-of-type(3) > a',cpc+'expert_assessment/sdo_summary.php','Season (3 mo) — CPC seasonal drought outlook'],
  ['#hazards .hz-row:nth-child(1) a','https://www.wpc.ncep.noaa.gov/threats/threats.php','WPC Days 3–7 hazards outlook'],
  ['#hazards .hz-row:nth-child(2) a',cpc+'predictions/threats/threats.php','CPC Days 8–14 hazards outlook'],
- ['#h24Card .resource-links a','https://www.wpc.ncep.noaa.gov/qpf/qpf2.shtml','WPC Precipitation (QPF)'],
+ ['#h24Card .resource-links a','https://www.wpc.ncep.noaa.gov/qpf/qpf2.shtml','WPC Precip (QPF) — precipitation amounts'],
  ['#radarCard .resource-links a','https://map.blitzortung.org/#7/38.7/-90.4','Live Lightning — Blitzortung community network'],
  ['#riskCard .resource-links a','https://www.spc.noaa.gov/exper/mesoanalysis/','SPC Mesoanalysis'],
- ['#climateCard .resource-links a','https://www.weather.gov/lsx/climate','Climate and Records — NWS St. Louis'],
+ ['#climateCard .resource-links a','https://www.weather.gov/lsx/climate','Climate & Records — NWS St. Louis'],
  ['#moreWeatherResources a:nth-child(1)','https://www.weather.gov/lsx/winter','Winter Weather — NWS St. Louis'],
  ['#moreWeatherResources a:nth-child(2)','https://aviationweather.gov/gfa/#obs','Aviation Weather — Aviation Weather Center'],
  ['#forecastRecordSourceBody a[href="https://www.rcc-acis.org/ACISWSdoc.html"]', 'https://www.rcc-acis.org/ACISWSdoc.html','ACIS source documentation'],
@@ -59,13 +59,15 @@ async function contracts(page){
   const a=page.locator(selector);
   assert.equal(await a.count(),1,selector);
   assert.equal(await a.getAttribute('href'),url);
-  assert.equal(await a.getAttribute('aria-label'),label+' (opens in a new tab)');
+  if(!selector.startsWith('#cpc '))assert.equal(await a.getAttribute('aria-label'),label+' (opens in a new tab)');
   assert.equal(await a.getAttribute('target'),'_blank');
   assert.equal(await a.getAttribute('rel'),'noopener noreferrer');
   assert.match(await a.innerText(),/↗/);
   if(selector.startsWith('#cpc ')){
    const described=await a.getAttribute('aria-describedby');
-   assert(described);assert.match(await page.locator('#'+described).innerText(),/Leaning|Equal chances|Unavailable/);
+   assert.equal(described,'cpcSourceHint');
+   const ids=(await a.getAttribute('aria-labelledby')).split(' ');
+   assert.equal(ids.length,2);assert.match(await page.locator('#'+ids[1]).innerText(),/Leaning|Equal chances|Unavailable/);
   }
   assert.equal(await a.locator('a,button,input,summary,[role="button"]').count(),0,'No nested controls');
   assert.equal(await a.evaluate(e=>!!e.parentElement.closest('a,button,summary,[role="button"]')),false);
@@ -98,6 +100,7 @@ async function main(){
  const browser=await playwright[engine].launch({headless:engine!=='firefox',...(engine==='chromium'?{executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']}: {})});setBrowser(browser);
  try{
   for(const width of [320,390,768,1280])for(const theme of ['dark','light']){
+   if(process.env.SOURCE_LINK_CASE_FILTER&&!new RegExp(process.env.SOURCE_LINK_CASE_FILTER,'i').test(width+' '+theme))continue;
    const touch=width<768,s=await open(config('official sources',{touch,cpcAbove:true}),width),p=s.page;
    try{
     // New tabs are intercepted independently of the dashboard's API fixture routing.
@@ -105,7 +108,10 @@ async function main(){
     await p.evaluate(t=>applyTheme(t),theme);
     await resources(p,touch);
     await contracts(p);
-    for(const [selector,url] of expected)await activate(p,s.context,selector,url,touch);
+    for(const [selector,url] of expected){
+     try{await activate(p,s.context,selector,url,touch);}
+     catch(error){error.message=engine+' '+width+' '+theme+' '+selector+': '+error.message;throw error;}
+    }
     for(const id of ['cpcCard','droughtCard']){
      const toggle=p.locator('#'+id+' .context-toggle');
      assert.equal(await toggle.getAttribute('aria-expanded'),'true','Link did not collapse card');
@@ -138,12 +144,14 @@ async function main(){
   const s=await open(config('saved links'));
   let snapshot;
   try{snapshot=await s.page.evaluate(()=>{saveSnapshot();return localStorage.getItem(SNAP_KEY);});}finally{await s.context.close();}
-  const cached=await open(config('restored links',{now:JSON.parse(snapshot).t+60000,snapshot,skipWait:true,cpcDelay:5000}));
+  const cached=await open(config('restored links',{now:JSON.parse(snapshot).t+60000,snapshot,skipWait:true,holdCpc:true}));
   try{
    await cached.page.waitForFunction(()=>snapRestored);
    await resources(cached.page);
    await contracts(cached.page);
    assert.equal(await cached.page.evaluate(()=>feedChecks.cpc.saved),true);
+   await cached.releaseCpc();
+   await cached.page.waitForFunction(()=>feedChecks.cpc.saved===false);
    console.log('PASS saved source-link markup');
   }finally{await cached.context.close();}
  }finally{await browser.close();}

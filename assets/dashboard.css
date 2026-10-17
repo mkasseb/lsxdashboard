@@ -22,6 +22,8 @@
        worst case, not the flattering one. */
     --text:#e6edf5;--muted:#a7b4c6;--accent:#6bb4ff;--good:#3ecf8e;--h24night:rgba(120,140,255,.08);
     --warn:#ffb020;--sev:#ff7a2f;--danger:#ff4d4d;
+    --ex-green:#3ecf8e;--ex-yellow:#ffd23f;--ex-uv-yellow:#e0b93a;--ex-orange:#ff9f2f;
+    --ex-red-orange:#ff6a2f;--ex-purple:#d58aff;--ex-red:#ff6b6b;
     --shadow:0 6px 24px rgba(0,0,0,.4);
     --inset:rgba(255,255,255,.03);--chip:rgba(255,255,255,.12);--glow:rgba(74,163,255,.08);
     --glass1:rgba(19,25,36,.62);--glass2:rgba(26,34,49,.54);--gline:rgba(255,255,255,.09);--gspec:rgba(255,255,255,.11);
@@ -47,6 +49,8 @@
        darkest surface any light-theme text sits on. */
     --text:#101725;--muted:#4f5a6e;--accent:#1153b4;--good:#0f6e4b;--h24night:rgba(40,70,160,.07);
     --warn:#88560f;--sev:#a83e13;--danger:#bd1f1f;
+    --ex-green:#1c5d40;--ex-yellow:#735f1c;--ex-uv-yellow:#65531a;--ex-orange:#734815;
+    --ex-red-orange:#733015;--ex-purple:#571b73;--ex-red:#731b1b;
     --shadow:0 6px 20px rgba(20,32,58,.10),0 1px 3px rgba(20,32,58,.06);
     --inset:rgba(16,23,37,.045);--chip:rgba(16,23,37,.075);--glow:rgba(30,99,201,.10);
     --glass1:rgba(255,255,255,.88);--glass2:rgba(247,250,254,.82);--gline:rgba(16,23,37,.10);--gspec:rgba(255,255,255,.95);
@@ -1116,20 +1120,10 @@
      opportunity in the sub-line, and with nowrap clauses on both sides they have to stay real
      whitespace or the line cannot wrap at all and overflows the tile. */
   .cc-expo .ex-sep{color:var(--muted)}
-  /* uvLevel/aqiInfo are tuned for the dark panel and arrive as an inline colour, so CSS can't
-     remap them level by level. On the light panel AQI "Moderate" (#ffd23f) sits at 1.3:1 against
-     --inset. One scoped darkening pass fixes every level at once, and hue survives, so the colour
-     still means what it meant.
-     .62 was the first pass at this and left the yellow end at 2.8:1 — brightness() scales sRGB
-     linearly, and #ffd23f simply starts too bright for a 38% cut to reach AA. .45 is the factor at
-     which the WORST level in the ramp clears 4.5:1 on every light surface it appears over.
-     .lvcol marks anything else carrying one of these inline level colours, so a new one opts in by
-     name rather than by being remembered. */
-  :root[data-theme="light"] .cc-expo .v,
-  :root[data-theme="light"] .cc-expo .ex-dot,
-  :root[data-theme="light"] .aqi-num,
-  :root[data-theme="light"] .aqi-cat,
-  :root[data-theme="light"] .lvcol{filter:brightness(.45)}
+  /* Text uses explicit theme colors, rather than filtering the entire element
+     (including its already-muted children). Decorative dots retain their hue. */
+  :root[data-theme="light"] .cc-expo .ex-dot{filter:brightness(.45)}
+  .stn a,.empty a{text-decoration:underline;text-underline-offset:2px}
   .aqi-main{display:flex;align-items:center;gap:16px}
   .aqi-num{font-size:var(--fs-hero);font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
   .aqi-cat{font-size:var(--fs-lg);font-weight:700;margin-top:2px}

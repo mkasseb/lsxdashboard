@@ -13,7 +13,7 @@ function harness(){
  const store=new Map(),meta=fixture.records.KSTL['10-11'].response.meta;
  const station={sid:'KSTL',...meta};
  const state={Date:class extends Date{constructor(...a){super(...(a.length?a:[clock]));}static now(){return clock;}},Intl,Promise,console,
-  current:{lat:38.8,lon:-90.79},smart:{days:[]},ctx:{ready:false},deferredFeeds:{context:false},CTX_KEY:'test',FEEDS:{context:{age:12*H}},feedChecks:{context:{successAt:0}},savedParts:{},MONTHS:Array.from({length:12},(_,i)=>String(i)),
+  current:{lat:38.8,lon:-90.79},smart:{days:[]},climate:{station:null},ctx:{ready:false},deferredFeeds:{context:false},CTX_KEY:'test',FEEDS:{context:{age:12*H}},feedChecks:{context:{successAt:0}},savedParts:{},MONTHS:Array.from({length:12},(_,i)=>String(i)),
   WEATHER_TZ:'America/Chicago',WEATHER_PARTS:new Intl.DateTimeFormat('en-US',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'}),
   locGuard(){const captured=seq;return ()=>seq===captured;},climStation:()=>Promise.resolve({sid:'SUS',...normalReplay.meta}),deepStation:()=>Promise.resolve(station),
   ctxTodayKey:()=>state.weatherParts().key,localStorage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v),removeItem:k=>store.delete(k)},

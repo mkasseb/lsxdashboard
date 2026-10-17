@@ -34,6 +34,7 @@ function lift(pattern, label) {
 }
 
 const TIME_HELPERS = [
+  require('./source').assets['/assets/weather-contracts.js'].content,
   lift(/^var WEATHER_TZ=.*$/m, 'WEATHER_TZ'),
   lift(/^var WEATHER_PARTS=.*$/m, 'WEATHER_PARTS'),
   ...['weatherParts','weatherTime','calendarDate','weatherDay'].map(name=>
@@ -140,10 +141,10 @@ function check(name, actual, expected) {
 }
 
 /* Restored outlook fragments must include the new official source anchors. */
-check('observed record markup migration bumps the snapshot key',
-  /var SNAP_KEY="lsxSnap_v23"/.test(SRC), true);
-check('the previous v22 snapshot is explicitly discarded',
-  /"lsxSnap_v22"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
+check('precipitation semantics migration bumps the snapshot key',
+  /var SNAP_KEY="lsxSnap_v24"/.test(SRC), true);
+check('the previous v23 snapshot is explicitly discarded',
+  /"lsxSnap_v23"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
 const snapshotParts = new Function(lift(/^var FEEDS=\{[\s\S]*?^\};/m, 'FEEDS')+'\n'+
   lift(/^var SNAP_PARTS=.*$/m, 'SNAP_PARTS')+'; return SNAP_PARTS;')();
 check('saved HTML cannot restore stale current readings, risk or briefing',
@@ -1560,11 +1561,15 @@ function currentCardHarness(result) {
   function feedUpdate(){}
     var current={station:'KSUS',lat:38.8,lon:-90.79};
     var heroNow={temp:83};
-    var document={getElementById:function(id){return els[id];}};
+    var document={getElementById:function(id){return els[id];},body:{removeAttribute:function(){}}};
     function locGuard(){return function(){return true;};}
     function currentObservation(){return Promise.resolve(result);}
     function esc(s){return String(s);}
     function timeAgo(){return '3 hr ago';}
+    function renderUvNow(){}
+    function renderAqiMini(){}
+    ${lift(/^function currentExposure\(\)\{[\s\S]*?^\}/m, 'currentExposure()')}
+    ${lift(/^function renderCurrentUnavailable\(message\)\{[\s\S]*?^\}/m, 'renderCurrentUnavailable()')}
     ${lift(/^function loadCurrent\(\)\{[\s\S]*?^\}/m, 'loadCurrent()')}
     return {run:loadCurrent,els,getTemp:function(){return heroNow.temp;}};
   `)(result, els);
@@ -1799,7 +1804,7 @@ async function checkGridLoaderIsolation() {
     incomplete.find(c=>c.topic==='precip').headline,'Rain chance incomplete');
   check('unverified alert or air checks cannot endorse outdoor comfort',
     SUBJECT.bottomLineHourlyCandidates(hours,{now,aqi:35,allowComfort:false}).some(c=>c.tone==='good'),false);
-  const gauge=new Function(lift(/^function riverObservationState\(ob,now,maxAge\)\{[\s\S]*?^\}/m,'riverObservationState()')+';return riverObservationState;')();
+  const gauge=new Function(TIME_HELPERS+lift(/^function riverObservationState\(ob,now,maxAge\)\{[\s\S]*?^\}/m,'riverObservationState()')+';return riverObservationState;')();
   check('gauge without a source timestamp remains unknown',gauge({},+now,7200000).state,'unknown');
   check('stale gauge is not current',gauge({validTime:new Date(+now-3*3600000).toISOString()},+now,7200000).state,'stale');
   check('future gauge timestamp is unverified',gauge({validTime:new Date(+now+3600000).toISOString()},+now,7200000).state,'unknown');

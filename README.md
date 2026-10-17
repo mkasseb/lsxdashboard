@@ -12,9 +12,22 @@ Not an official NWS product. During severe weather, defer to official warnings a
 
 A static page with plain assets: [`index.html`](index.html) contains the markup,
 [`assets/dashboard.css`](assets/dashboard.css) the styles,
+[`assets/weather-contracts.js`](assets/weather-contracts.js) shared input validation and units,
 [`assets/weather-core.js`](assets/weather-core.js) the decision functions,
 [`assets/weather-feeds.js`](assets/weather-feeds.js) the feed registry and loaders, and
-[`assets/dashboard.js`](assets/dashboard.js) the rendering, interactions, maps and startup.
+[`assets/dashboard.js`](assets/dashboard.js) card rendering, freshness and refresh orchestration.
+The scripts retain explicit load order in `index.html` and share the existing global interfaces.
+
+| UI responsibility | Asset |
+|---|---|
+| Radar, satellite, playback and fullscreen | `assets/radar-map.js` |
+| Station plotting and map filters | `assets/station-map.js` |
+| Bounded map-library bootstrap, diagnostics and retry | `assets/map-runtime.js` |
+| Location generations, search, favorites and sharing | `assets/location-controls.js` |
+| Saved-view provenance, TTLs and sanitization | `assets/saved-view.js` |
+| Climate and current-condition context | `assets/climate-view.js` |
+| Daily/hourly forecast UI and context | `assets/forecast-view.js`, `assets/dashboard-context.js` |
+| Model ingestion and selected-point presentation | `assets/model-data.js`, `assets/model-worker.js`, `assets/forecast-range.js`, `assets/hourly-range.js` |
 
 - **No build step.** No bundler, no transpiler, no runtime `package.json`. Edit a plain file and reload.
 - **No API keys.** Every feed was chosen because it is keyless and CORS-open, so the whole thing
@@ -44,6 +57,9 @@ ship silently are checked mechanically. CI runs static and logic checks on every
 ```bash
 python3 tools/check.py        # HTML/CSS comments, JS syntax, CSP, icons, root files
 node tools/logic-tests.js     # the functions that decide something
+node tools/weather-contract-tests.js # units, missing values and source clocks
+node tools/model-data-tests.js # cached parity, expiry and local timing measurements
+node tools/feed-health-tests.js # offline feed-check failure/budget tests
 node tools/spc-discovery-tests.js # bounded SPC retries, cancellation and concurrency
 ```
 
@@ -59,13 +75,14 @@ It also checks
 2,000 seeded accumulation cases against a separate oracle. The fixture records its source URLs
 and retrieval time; extreme scenarios are synthetic. Map scenarios load the pinned Leaflet/MapLibre libraries against deterministic tiles and styles,
 including initial style failure/retry, radar playback, tile outages and fullscreen keyboard behavior.
-This suite does not verify live upstream tile availability or browser-specific rendering outside Chromium.
+The full stress suite runs in Chromium; targeted regression, map, accessibility and model-worker suites
+also run in Firefox and WebKit. Controlled scenarios do not establish live tile availability.
 
 Install Playwright separately from the dashboard (which has no npm dependencies), then run with a
 local Chromium executable:
 
 ```bash
-npm install --prefix /tmp/lsx-browser-tests playwright@1.62.1 leaflet@1.9.4 maplibre-gl@5.24.0 @maplibre/maplibre-gl-leaflet@0.1.4
+npm install --prefix /tmp/lsx-browser-tests playwright@1.62.1 @axe-core/playwright@4.14.0 pngjs@7.0.0 leaflet@1.9.4 maplibre-gl@5.24.0 @maplibre/maplibre-gl-leaflet@0.1.4
 NODE_PATH=/tmp/lsx-browser-tests/node_modules CHROMIUM_PATH=/usr/bin/chromium \
   node tools/weather-stress-tests.js
 ```
@@ -82,6 +99,48 @@ calculations; visual rendering is reviewed by eye.
 `tools/source.js` reads the same local scripts and styles referenced by the page, so the tests
 exercise the served assets. CI installs Playwright outside the app and saves its scenario report.
 Locally, omit `CHROMIUM_PATH` to use a browser installed with Playwright's `install chromium` command.
+
+`tools/startup-tests.js` holds the main script's response while exercising the preceding modules,
+then verifies normal radar/fullscreen activation once startup completes. Radar handlers bind in the
+final startup step so controls cannot call dependencies that are still downloading.
+
+`tools/dashboard-regression-tests.js` checks overlapping refreshes, location-search cancellation,
+unknown daily rain chances, legacy snapshot invalidation, elapsed forecast periods, UV outages and snapshot provenance,
+independent air-quality/UV rendering, invalid station timestamps, and retryable source metadata.
+Climate recovery checks keep the station label, departures and daily normals together, including
+when an older fallback response is still pending.
+It also checks the mobile fullscreen control's accessible name and AQI/UV contrast in both themes.
+It uses the same browser setup and controlled upstream responses as the stress suite, and runs
+in all three CI browser engines. `DASHBOARD_CASE_FILTER` selects matching case names locally.
+
+`tools/accessibility-tests.js` runs axe WCAG 2 A/AA and 2.1 A/AA checks at 320 and 1440 pixels in
+both themes, including expanded forecast/model help, active warnings and unavailable observations.
+`ACCESSIBILITY_REPORT` selects its JSON report. This includes accessible names matching visible
+labels as well as contrast, landmarks and input labels; keyboard behavior has separate browser tests.
+
+`tools/model-worker-tests.js` serves versioned assets over real local HTTP and verifies worker processing under the production CSP and both
+constructor/startup failure fallbacks. Model bytes transfer to a same-origin worker for JSON parsing,
+complete provenance/region validation and selection of one point. Only compact validated values
+return to the UI. Each response is validated once, including when workers are unavailable; subsequent
+renders recheck the original run/retrieval times and interval ends. At exactly 24 hours of source age
+model values are withheld. Failed checks never reset source ages. Worker imports and the worker
+descriptor use the same content hashes as page scripts, covered by asset and real HTTP-cache checks.
+
+Run these scripts using the same `NODE_PATH`/`CHROMIUM_PATH` setup as the stress suite. Set
+`WEATHER_BROWSER=firefox` or `webkit` to exercise those installed Playwright browsers (Firefox uses
+`xvfb-run` on Linux). `MODEL_PROFILE_REPORT` saves the offline model timings; those measure individual
+validation and cached freshness calls, not whole-page load time. On one local Node 24 run, the authentic
+1.24/3.82 MB daily/hourly fixtures took about 63/170 ms per full validation, versus under 0.01 ms per
+cached check. Selected payloads were 2,793/5,693 bytes; timings vary by machine and browser.
+
+`node tools/feed-health.js /tmp/feed-health.json` checks keyless live points, daily/hourly forecasts,
+KSUS observations, alerts, LSX discussion, AQI, UV, a river gauge, KLSX radar capabilities, map style,
+SPC named layers and seven-day rainfall metadata. It uses shared data contracts, normal TLS, three
+concurrent requests, 20 seconds per request, a 5 MiB response limit and an 18-request total budget
+(currently 14 requests). Empty alerts are valid. Source-age/schema failures are reported per feed
+without preventing other checks. The read-only **Live feed health** workflow runs every six hours and
+on manual dispatch, saves a JSON artifact and fails on an unusable feed. It never refreshes or publishes
+NBM data. The workflow starts on the default branch after merge; ordinary PR tests use offline fixtures.
 
 ## Deploying
 

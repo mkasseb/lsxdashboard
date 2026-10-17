@@ -498,14 +498,14 @@ def local_assets(html):
     for tag in re.findall(r"<(?:script|link)\b[^>]*>", html):
         if tag.startswith("<link") and 'rel="stylesheet"' not in tag:
             continue
-        match = re.search(r'(?:src|href)="([^"]+)"', tag)
-        if not match or match[1].startswith(("https://", "http://", "//")):
-            continue
-        name = urlsplit(match[1]).path.lstrip("/")
-        path = os.path.realpath(os.path.join(ROOT, name))
-        if not path.startswith(os.path.realpath(ROOT) + os.sep) or not os.path.isfile(path):
-            raise ValueError("Missing or invalid static asset: " + name)
-        assets.append((name, path, read(path)))
+        for match in re.finditer(r'\s(?:data-worker-src|src|href)="([^"]+)"', tag):
+            if match[1].startswith(("https://", "http://", "//")):
+                continue
+            name = urlsplit(match[1]).path.lstrip("/")
+            path = os.path.realpath(os.path.join(ROOT, name))
+            if not path.startswith(os.path.realpath(ROOT) + os.sep) or not os.path.isfile(path):
+                raise ValueError("Missing or invalid static asset: " + name)
+            assets.append((name, path, read(path)))
     return assets
 
 

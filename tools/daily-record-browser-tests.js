@@ -20,6 +20,7 @@ async function main(){
      const q=params(route.request());calls.push(q);
      const sample=fixture.records.KSTL['10-11'].response.meta;
      if(route.request().url().endsWith('/StnMeta'))return route.fulfill({json:{meta:[sample,{...normalReplay.meta,valid_daterange:Array(3).fill(['1991-01-01','2026-10-10'])}]}});
+     if(q.elems?.[0]?.normal==='1')return route.fulfill({json:{data:[]}}); // Primary departures are outside this recorded daily-normal fixture.
      if(q.elems?.[0]?.normal){
       assert.equal(q.sid,'SUS');assert.equal(q.elems[0].normal,'91');assert.equal(q.elems[0].prec,1);assert.deepEqual(q.meta,['name','sids','ll']);
       if(control.normalHang)await new Promise(r=>{release=r;});

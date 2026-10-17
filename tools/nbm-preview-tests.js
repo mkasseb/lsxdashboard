@@ -119,7 +119,7 @@ async function main(){
    const context=await browser.newContext({viewport:{width,height:1000},timezoneId:width===390?'America/Chicago':'Asia/Tokyo'});
    const page=await context.newPage();
    const lines=file=>fs.readFileSync(path.join(root,'assets',file),'utf8').split('\n');
-   const sites={timeoutLine:lines('weather-feeds.js').findIndex(l=>l.includes('timedOut=true; ctl.abort();'))+1,locationLine:lines('dashboard.js').findIndex(l=>l.includes('if(locAbort) locAbort.abort();'))+1};
+   const sites={timeoutLine:lines('weather-feeds.js').findIndex(l=>l.includes('timedOut=true; ctl.abort();'))+1,locationLine:lines('location-controls.js').findIndex(l=>l.includes('if(locAbort) locAbort.abort();'))+1};
    assert(sites.timeoutLine>0&&sites.locationLine>0,'Observe known native timeout/location abort call sites');
    const network=await watchNetwork(page,audit,width,sites);
    page.on('pageerror',e=>audit.runtimeErrors.push({phase:'live',width,message:e.message}));
