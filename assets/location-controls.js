@@ -129,6 +129,12 @@ function clearLocationUI(){
       if(el) el.innerHTML=text?'<div class="loading">'+esc(text)+'</div>':"";
     });
   });
+  // The registry replaced the alert markup. An unchanged feed still needs a fresh paint here.
+  alertsHTML=null;
+  var ac=document.getElementById("alertsCard"); if(ac) ac.classList.remove("calm");
+  var scope=document.getElementById("alertsScope"); if(scope) scope.textContent=current.name.replace(" (home)","");
+  var station=document.getElementById("ccStation");
+  if(station){ station.textContent="\u2014"; station.removeAttribute("title"); station.classList.remove("has-hint"); }
   syncHourlyControls();
   renderNwsMessages(); renderAFD(null);
   var aq=document.getElementById("aqiCard"); if(aq) aq.classList.remove("show");
