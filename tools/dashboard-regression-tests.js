@@ -4,7 +4,7 @@
 // Reproduce review findings through the served page, with controlled upstream responses.
 const assert = require('node:assert/strict');
 const playwright = require('playwright');
-const {open, config, setBrowser} = require('./weather-stress-tests');
+const {open, config, alert, setBrowser} = require('./weather-stress-tests');
 const engine = process.env.WEATHER_BROWSER || 'chromium';
 let passed = 0, failed = 0;
 
@@ -104,6 +104,21 @@ async function main() {
   });
   setBrowser(browser);
   try {
+    for (const event of [null, 'Tornado Warning']) {
+      await run(event ? 'unchanged warnings repaint after a location change' : 'unchanged all-clear repaints after a location change', async p => {
+        const transition=await p.evaluate(() => {
+          setLocation({name:'Wentzville, MO',lat:38.81,lon:-90.86,station:null,precision:'representative'},{save:true});
+          return {station:document.getElementById('ccStation').textContent,
+            stationHint:document.getElementById('ccStation').getAttribute('title'),
+            scope:document.getElementById('alertsScope').textContent};
+        });
+        assert.deepEqual(transition,{station:'—',stationHint:null,scope:'Wentzville, MO'},'old location labels clear before new requests complete');
+        await p.waitForFunction(() => snapSafeSeq===locSeq&&feedChecks.alerts.status==='ready');
+        assert.equal(await p.locator('#alerts .loading').count(),0,'a successful unchanged alert result must replace the loading state');
+        assert.match(await p.locator('#alerts').innerText(),event ? /Tornado Warning/ : /No active watches, warnings or advisories/);
+        assert.equal(await p.locator('#alertsScope').innerText(),'Wentzville, MO');
+      }, {alerts:event?[alert(event,config('alert baseline').now)]:[]});
+    }
     await run('late forecast success cannot overwrite a newer refresh', p => forecastRace(p, false));
     await run('late forecast failure cannot clear a newer refresh', p => forecastRace(p, true));
     await run('late river refresh cannot overwrite newer gauge levels', p => regionalRace(p, false));
