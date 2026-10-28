@@ -9,6 +9,7 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import re
 import resource
 import time
 import urllib.error
@@ -47,10 +48,41 @@ def urls(run, hour):
     return BASE+d+'/'+file, FILTER+urllib.parse.urlencode(query)
 
 
+def diagnostic_url(value):
+    """Keep public NOAA paths, never credentials, queries, fragments or foreign paths."""
+    try:
+        url = urllib.parse.urlsplit(value)
+        if url.scheme not in ('http', 'https') or not url.hostname:
+            return '[invalid URL]'
+        host = url.hostname
+        public_file = r'/blend\.\d{8}/\d{2}/qmd/blend\.t\d{2}z\.qmd\.f\d{3}\.co\.grib2'
+        public = (host == 'nomads.ncep.noaa.gov' and
+                  (url.path == '/cgi-bin/filter_blend.pl' or re.fullmatch('/pub/data/nccf/com/blend/prod'+public_file, url.path)) or
+                  host == 'noaa-nbm-grib2-pds.s3.amazonaws.com' and
+                  (url.path == '/' or re.fullmatch(public_file, url.path)))
+        path = url.path if public else '/[redacted]'
+        return urllib.parse.urlunsplit((url.scheme, host, path, '', ''))[:1024]
+    except (TypeError, ValueError):
+        return '[invalid URL]'
+
+
+def error_description(error):
+    # HTTP reasons and URLError messages can contain upstream URLs or header values.
+    if isinstance(error, urllib.error.HTTPError):
+        return f'HTTPError: HTTP Error {error.code}'
+    if isinstance(error, urllib.error.URLError):
+        return f'URLError: {type(error.reason).__name__}'
+    if isinstance(error, TimeoutError):
+        return 'TimeoutError: request timed out'
+    return f'{type(error).__name__}: {error}'
+
+
 class Client:
     def __init__(self):
         self.requests = self.bytes = 0
         self.started = time.monotonic()
+        self.context = {}
+        self.errors = []
 
     def request(self, url, head=False, limit=500_000):
         for attempt in range(2):
@@ -58,14 +90,28 @@ class Client:
                     time.monotonic()-self.started > LIMITS['elapsedSeconds']):
                 raise RuntimeError('Hourly resource budget exhausted')
             self.requests += 1
+            method = 'HEAD' if head else 'GET'
+            self.context = dict(self.context, phase=self.context.get('phase', 'request'),
+                                url=diagnostic_url(url), method=method, attempt=attempt+1)
             try:
-                with urllib.request.urlopen(urllib.request.Request(url, method='HEAD' if head else 'GET'), timeout=30) as r:
+                with urllib.request.urlopen(urllib.request.Request(url, method=method), timeout=30) as r:
                     raw = b'' if head else r.read(limit+1)
                     self.bytes += len(raw)
                     if r.status != 200 or len(raw) > limit:
                         raise ValueError('Invalid or oversized NOAA response')
                     return raw, {k.lower(): v for k, v in r.headers.items()}
             except (urllib.error.URLError, TimeoutError) as error:
+                event = dict(self.context, error=type(error).__name__)
+                if isinstance(error, urllib.error.HTTPError):
+                    event.update(httpStatus=error.code, responseUrl=diagnostic_url(error.url))
+                    location = error.headers.get('Location') if error.headers else None
+                    if location:
+                        try:
+                            event['redirectUrl'] = diagnostic_url(urllib.parse.urljoin(error.url or url, location))
+                        except (TypeError, ValueError):
+                            event['redirectUrl'] = '[invalid URL]'
+                self.errors.append(event)
+                self.errors = self.errors[-8:]
                 if isinstance(error, urllib.error.HTTPError) and error.code not in (429, 500, 502, 503, 504):
                     raise
                 if attempt:
@@ -157,17 +203,22 @@ def retained(directory, run):
 def extract(client, directory, run):
     cycle = datetime.strptime(run, '%Y%m%d%H').replace(tzinfo=UTC)
     old = retained(directory, iso(cycle))
-    versions = [client.version(urls(run, h)[0], cycle) for h in range(1, HOURS+1)]
+    versions = []
+    for h in range(1, HOURS+1):
+        client.context = dict(candidate=run, phase='metadata-before', forecastHour=h)
+        versions.append(client.version(urls(run, h)[0], cycle))
     if old and all(p['publication'] == v for p, v in zip(old['hours'], versions)):
         return old, False
     data = dict(schema=SCHEMA, percentiles=list(PERCENTILES), source='NOAA NBM QMD NOMADS subset', run=iso(cycle), units='K',
                 timezone='America/Chicago', coverage=COVERAGE, hours=[], cells=[], gridHash=None)
     for h, version in enumerate(versions, 1):
         original, subset = urls(run, h)
+        client.context = dict(candidate=run, phase='subset', forecastHour=h)
         raw, _ = client.request(subset)
         grid, cells, kelvin = decode(raw, cycle, h, data['gridHash'])
         if data['cells'] and cells != data['cells']:
             raise ValueError('Native cell coordinates changed across hours')
+        client.context = dict(candidate=run, phase='metadata-after', forecastHour=h)
         if client.version(original, cycle) != version:
             raise ValueError('NOMADS object revised during extraction')
         data['gridHash'], data['cells'] = grid, cells
@@ -183,6 +234,7 @@ def extract(client, directory, run):
 
 def available(client, run):
     prefix = f'blend.{run[:8]}/{run[8:]}/qmd/'
+    client.context = dict(candidate=run, phase='inventory')
     raw, _ = client.request(regional.nbm.BASE+'?list-type=2&max-keys=1000&prefix='+prefix)
     root = ET.fromstring(raw)
     ns = '{http://s3.amazonaws.com/doc/2006-03-01/}'
@@ -212,7 +264,7 @@ def choose(client, directory, cycles, attempts=2, delay=15, sleep=time.sleep):
             except (Pending, urllib.error.URLError, TimeoutError) as error:
                 if isinstance(error, urllib.error.HTTPError) and error.code not in (404, 429, 500, 502, 503, 504):
                     raise  # Never conceal an access denial with retries or older cycles.
-                notes.append(f'{run}: {type(error).__name__}: {error}')
+                notes.append(f'{run}: {error_description(error)}')
                 if attempt+1 < attempts:
                     sleep(delay)
     raise Pending('No complete hourly source cycle; '+ '; '.join(notes))
@@ -245,8 +297,9 @@ def refresh(directory, run=None):
             report = dict(status='ready' if changed else 'unchanged', changed=changed, dataRun=data['run'],
                           hours=len(data['hours']), cells=len(data['cells']), outputBytes=len(raw), publicationNotes=notes)
         except Exception as error:
-            report = dict(status='failed', error=f'{type(error).__name__}: {error}', retainedPrevious=(directory/'nbm-hourly.json').exists())
+            report = dict(status='failed', error=error_description(error), retainedPrevious=(directory/'nbm-hourly.json').exists())
         report.update(checkedAt=iso(datetime.now(UTC)), downloadBytes=client.bytes, requests=client.requests,
+                      lastOperation=client.context, diagnostics=client.errors,
                       elapsedSeconds=round(time.monotonic()-client.started, 3), peakRssMiB=round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024, 2), limits=LIMITS)
         regional.atomic(directory/'nbm-hourly-status.json', report)
         return report

@@ -1,5 +1,6 @@
 import gzip
 import importlib.util
+import io
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,6 +32,65 @@ class Tests(unittest.TestCase):
         with patch.object(m.urllib.request,'urlopen',side_effect=TimeoutError()),patch.object(m.time,'sleep'):
             with self.assertRaises(TimeoutError):c.request('https://nomads.ncep.noaa.gov/')
             self.assertEqual(c.requests,2)
+            self.assertEqual([e['attempt'] for e in c.errors],[1,2])
+
+    def test_302_report_identifies_metadata_failure_without_retry_or_secrets(self):
+        now=datetime.now(timezone.utc)
+        run=now.replace(hour=(now.hour//6)*6).strftime('%Y%m%d%H')
+        url=m.urls(run,1)[0]
+        error=urllib.error.HTTPError(url+'?token=PRIVATE_QUERY#PRIVATE_FRAGMENT',302,'PRIVATE_REASON',{
+            'Location':'https://PRIVATE_USER:PRIVATE_PASSWORD@nomads.ncep.noaa.gov/login/PRIVATE_PATH?token=PRIVATE_REDIRECT#PRIVATE_HASH',
+            'Set-Cookie':'session=PRIVATE_COOKIE'},None)
+        with tempfile.TemporaryDirectory()as t:
+            d=Path(t);original=b'{"run":"last-good","retrievedAt":"unchanged"}'
+            (d/'nbm-hourly.json').write_bytes(original)
+            with patch.object(m,'available',return_value=True),patch.object(m.urllib.request,'urlopen',side_effect=error)as net,patch.object(m.time,'sleep')as wait:
+                report=m.refresh(d,run=run)
+            self.assertEqual(report['status'],'failed');self.assertEqual(report['requests'],1)
+            net.assert_called_once();wait.assert_not_called()
+            self.assertEqual((d/'nbm-hourly.json').read_bytes(),original)
+            event=report['diagnostics'][0]
+            self.assertEqual({k:event[k]for k in ('candidate','phase','forecastHour','method','attempt','httpStatus')},
+                             dict(candidate=run,phase='metadata-before',forecastHour=1,method='HEAD',attempt=1,httpStatus=302))
+            self.assertEqual(event['url'],url);self.assertEqual(event['responseUrl'],url)
+            self.assertEqual(event['redirectUrl'],'https://nomads.ncep.noaa.gov/[redacted]')
+            self.assertEqual(report['lastOperation']['url'],url)
+            self.assertNotIn('PRIVATE_',json.dumps(report))
+            self.assertEqual(json.loads((d/'nbm-hourly-status.json').read_text()),report)
+
+    def test_subset_and_post_decode_metadata_errors_keep_their_phase(self):
+        run='2026100900'
+        version=dict(publishedAt='2026-10-09T08:00:00Z',contentLength=10000)
+        for phase in ('subset','metadata-after'):
+            c=m.Client();error=urllib.error.HTTPError(m.urls(run,1)[0],302,'Moved',{'Location':'/cgi-bin/filter_blend.pl?token=PRIVATE'},None)
+            body=io.BytesIO(b'test');body.status=200;body.headers={}
+            calls=0;original=c.version
+            def version_call(url,stamp):
+                nonlocal calls
+                calls+=1
+                return version if calls<=48 else original(url,stamp)
+            responses=[error]if phase=='subset'else[body,error]
+            with tempfile.TemporaryDirectory()as t,patch.object(c,'version',side_effect=version_call),patch.object(m,'decode',return_value=('grid',[],[])),patch.object(m.urllib.request,'urlopen',side_effect=responses),patch.object(m.time,'sleep')as wait:
+                with self.assertRaises(urllib.error.HTTPError):m.extract(c,Path(t),run)
+            self.assertEqual(c.errors[-1]['phase'],phase)
+            self.assertEqual(c.errors[-1]['method'],'GET'if phase=='subset'else'HEAD')
+            self.assertEqual(c.errors[-1]['redirectUrl'],'https://nomads.ncep.noaa.gov/cgi-bin/filter_blend.pl')
+            wait.assert_not_called()
+
+    def test_malformed_redirect_cannot_replace_original_http_error(self):
+        c=m.Client();error=urllib.error.HTTPError('https://nomads.ncep.noaa.gov/',302,'Moved',{'Location':'https://[invalid'},None)
+        with patch.object(m.urllib.request,'urlopen',side_effect=error):
+            with self.assertRaises(urllib.error.HTTPError)as caught:c.request(m.FILTER,head=True)
+        self.assertIs(caught.exception,error);self.assertEqual(c.errors[-1]['redirectUrl'],'[invalid URL]')
+
+    def test_download_diagnostic_history_is_bounded(self):
+        c=m.Client();error=urllib.error.HTTPError(m.FILTER,302,'Moved',{},None)
+        with patch.object(m.urllib.request,'urlopen',side_effect=error):
+            for hour in range(1,11):
+                c.context=dict(candidate='2026100900',phase='subset',forecastHour=hour)
+                with self.assertRaises(urllib.error.HTTPError):c.request(m.FILTER)
+        self.assertEqual(c.requests,10);self.assertEqual(len(c.errors),8)
+        self.assertEqual([e['forecastHour']for e in c.errors],list(range(3,11)))
     def test_resource_caps_before_network(self):
         for kind in ('requests','bytes','time'):
             c=m.Client()
