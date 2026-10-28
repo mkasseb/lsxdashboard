@@ -1,13 +1,33 @@
 #!/usr/bin/env node
 'use strict';
 // Read-only, keyless upstream smoke checks. No extraction, publication or writes to feeds.
-const fs=require('node:fs'),C=require('../assets/weather-contracts');
-const API='https://api.weather.gov',MAP='https://mapservices.weather.noaa.gov/vector/rest/services/';
+const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),C=require('../assets/weather-contracts');
+const API='https://api.weather.gov',MAP='https://mapservices.weather.noaa.gov/vector/rest/services/',SITE='https://lsxdashboard.com';
 const allowed=new Set(['api.weather.gov','api.water.noaa.gov','mapservices.weather.noaa.gov','api.open-meteo.com',
-  'air-quality-api.open-meteo.com','opengeo.ncep.noaa.gov','tiles.openfreemap.org']);
+  'air-quality-api.open-meteo.com','opengeo.ncep.noaa.gov','tiles.openfreemap.org','lsxdashboard.com']);
+// Run the same validators as the dashboard, without initializing any UI or fetching GRIBs.
+const models={Intl,Date,URLSearchParams,WeatherContracts:C},point={lat:38.8,lon:-90.79},H=3600000;
+vm.createContext(models);
+for(const file of ['forecast-range.js','hourly-range.js'])
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../assets',file),'utf8'),models,{filename:file});
 function demand(ok,message){if(!ok)throw new Error(message);}
 function fresh(value,now,age,label){demand(C.sourceState(value,now,age).state==='ready',label+' is missing, stale or in the future');}
 function nwsLink(value,path){const u=new URL(value);demand(u.origin===API&&u.pathname.startsWith(path),'Unexpected NWS source URL');return u.href;}
+function nbmCoverage(data,kind,now){
+ const result=(kind==='daily'?models.NbmRange:models.NbmHourly).validate(data,point,now);
+ demand(result.status==='ready','NBM '+kind+' '+result.status+': '+(result.reason||'Incomplete model snapshot'));
+ const details={run:data.run,sourceAgeHours:(now-result.run)/H,point};
+ if(kind==='daily'){
+  demand(data.schema===3&&data.periods.length===18,'NBM daily native horizon is incomplete');
+  // Native extrema intervals differ from NWS day/night windows; an absent join is legitimate.
+  return {...details,nativePeriods:data.periods.length,unexpiredPeriods:result.periods.length};
+ }
+ const start=Math.floor(now/H)*H;
+ const matched=Array.from({length:24},(_,i)=>result.values[start+i*H]).filter(Boolean).length;
+ demand(matched===24,'NBM hourly covers '+matched+'/24 current UTC hours');
+ return {...details,nativeHours:data.hours.length,matchedHours:matched,
+  windowStart:new Date(start).toISOString(),windowEnd:new Date(start+24*H).toISOString()};
+}
 async function run({fetchImpl=fetch,now=Date.now(),timeoutMs=C.policy.requestTimeout,maxBytes=5*1024*1024,maxRequests=18}={}){
  let requests=0;const results=[],started=Date.now();
  async function request(url,asText=false){
@@ -37,6 +57,8 @@ async function run({fetchImpl=fetch,now=Date.now(),timeoutMs=C.policy.requestTim
     fresh(data.properties.updateTime||data.properties.generatedAt,now,C.policy.localForecastAge,label);
    }
   }],
+  ['Deployed NBM daily',async()=>nbmCoverage(await request(SITE+'/data/nbm-range.json'),'daily',now)],
+  ['Deployed NBM hourly',async()=>nbmCoverage(await request(SITE+'/data/nbm-hourly.json'),'hourly',now)],
   ['NWS KSUS observation',async()=>demand(C.observation(await request(API+'/stations/KSUS/observations/latest'),now,null,true),'Observation temperature/units/time unavailable')],
   ['NWS alerts',async()=>{
    const data=await request(API+'/alerts/active?area=MO,IL');
@@ -79,7 +101,7 @@ async function run({fetchImpl=fetch,now=Date.now(),timeoutMs=C.policy.requestTim
  ];
  let index=0;
  async function work(){while(index<tasks.length){const [name,test]=tasks[index++],t=Date.now();
-  try{await test();results.push({name,status:'pass',ms:Date.now()-t});}
+  try{const details=await test();results.push({name,status:'pass',ms:Date.now()-t,...details});}
   catch(error){results.push({name,status:'fail',ms:Date.now()-t,error:error.message});}
  }}
  await Promise.all([work(),work(),work()]);

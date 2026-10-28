@@ -135,10 +135,16 @@ cached check. Selected payloads were 2,793/5,693 bytes; timings vary by machine 
 
 `node tools/feed-health.js /tmp/feed-health.json` checks keyless live points, daily/hourly forecasts,
 KSUS observations, alerts, LSX discussion, AQI, UV, a river gauge, KLSX radar capabilities, map style,
-SPC named layers and seven-day rainfall metadata. It uses shared data contracts, normal TLS, three
-concurrent requests, 20 seconds per request, a 5 MiB response limit and an 18-request total budget
-(currently 14 requests). Empty alerts are valid. Source-age/schema failures are reported per feed
-without preventing other checks. The read-only **Live feed health** workflow runs every six hours and
+SPC named layers, seven-day rainfall metadata and the deployed daily/hourly NBM JSON. NBM checks reuse
+the dashboard's validators at the supported Lake St. Louis point: native provenance, units, quartiles,
+coverage and the exact 24-hour source-age limit. Daily requires the published 18 native intervals;
+hourly requires the complete 48-hour snapshot and matches all current rolling 24 UTC hours. These
+checks are independent of NWS availability and do not require a comparison between unlike native
+daily and NWS intervals. Stale, partial or malformed NBM fails its own check while healthy siblings
+continue; legitimate empty alerts and zero values remain valid. It uses shared data contracts, normal
+TLS, three concurrent requests, 20 seconds per request, a 5 MiB response limit and an 18-request total
+budget (currently 16 requests). Source-age/schema failures are reported per feed without preventing
+other checks. The read-only **Live feed health** workflow runs every six hours and
 on manual dispatch, saves a JSON artifact and fails on an unusable feed. It never refreshes or publishes
 NBM data. The workflow starts on the default branch after merge; ordinary PR tests use offline fixtures.
 
@@ -680,6 +686,13 @@ compression. These are scenarios, not a new spending commitment. No paid service
 browser network permission is added. Reliability and latency of NOAA's subset service remain an
 operational dependency; budget exhaustion or malformed/incomplete groups preserve last-good data,
 which still expires at 24 hours of source age.
+
+Hourly status includes the last operation and up to eight download-error diagnostics: candidate,
+forecast hour, phase (inventory, metadata before/after decode, or subset), requested method, attempt,
+HTTP status and sanitized response/redirect URL when available. Credentials, query strings, fragments,
+foreign/private paths, response bodies and headers are not logged. Error text uses safe classifications
+and omits upstream reason strings and arbitrary parser/exception messages. Diagnostics do not change
+redirect handling, retries, fallback or resource limits.
 
 `tools/nbm-hourly-publish.py` reuses the existing guarded Git publisher but permits only the hourly
 JSON and receipt. It rejects partial, stale, malformed, oversized, rollback or obsolete-code
