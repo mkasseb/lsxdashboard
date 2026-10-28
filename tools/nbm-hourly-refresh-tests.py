@@ -3,6 +3,7 @@ import importlib.util
 import io
 import json
 from datetime import datetime, timezone
+from email.utils import format_datetime
 from pathlib import Path
 import tempfile
 import unittest
@@ -91,6 +92,38 @@ class Tests(unittest.TestCase):
                 with self.assertRaises(urllib.error.HTTPError):c.request(m.FILTER)
         self.assertEqual(c.requests,10);self.assertEqual(len(c.errors),8)
         self.assertEqual([e['forecastHour']for e in c.errors],list(range(3,11)))
+
+    def test_malformed_metadata_header_values_never_reach_status(self):
+        now=datetime.now(timezone.utc);run=now.replace(hour=(now.hour//6)*6).strftime('%Y%m%d%H')
+        for field in ('last-modified','content-length'):
+            body=io.BytesIO(b'');body.status=200
+            body.headers={'last-modified':format_datetime(now,usegmt=True),'content-length':'10000'}
+            body.headers[field]='PRIVATE_HEADER_VALUE'
+            with self.subTest(field=field),tempfile.TemporaryDirectory()as t:
+                d=Path(t);original=b'{"run":"last-good","retrievedAt":"unchanged"}'
+                (d/'nbm-hourly.json').write_bytes(original)
+                with patch.object(m,'available',return_value=True),patch.object(m.urllib.request,'urlopen',return_value=body)as net,patch.object(m.time,'sleep')as wait:
+                    report=m.refresh(d,run=run)
+                self.assertEqual(report['status'],'failed');self.assertTrue(report['error'].startswith('ValueError:'))
+                self.assertEqual(report['lastOperation']['phase'],'metadata-before')
+                self.assertEqual(report['lastOperation']['method'],'HEAD')
+                self.assertEqual(report['lastOperation']['url'],m.urls(run,1)[0])
+                self.assertNotIn('PRIVATE_HEADER_VALUE',json.dumps(report))
+                self.assertNotIn('PRIVATE_HEADER_VALUE',(d/'nbm-hourly-status.json').read_text())
+                self.assertEqual((d/'nbm-hourly.json').read_bytes(),original)
+                net.assert_called_once();wait.assert_not_called()
+
+    def test_arbitrary_exception_strings_are_not_logged(self):
+        for error in (ValueError('PRIVATE_VALUE'),RuntimeError('PRIVATE_VALUE'),OSError('PRIVATE_VALUE'),
+                      TimeoutError('PRIVATE_VALUE'),urllib.error.URLError('PRIVATE_VALUE')):
+            with self.subTest(kind=type(error).__name__),tempfile.TemporaryDirectory()as t:
+                d=Path(t)
+                with patch.object(m,'choose',side_effect=error):report=m.refresh(d)
+                self.assertEqual(report['status'],'failed')
+                self.assertTrue(report['error'].startswith(type(error).__name__+':'))
+                self.assertNotIn('PRIVATE_VALUE',json.dumps(report))
+                self.assertNotIn('PRIVATE_VALUE',(d/'nbm-hourly-status.json').read_text())
+                self.assertLess(len(report['error']),128)
     def test_resource_caps_before_network(self):
         for kind in ('requests','bytes','time'):
             c=m.Client()

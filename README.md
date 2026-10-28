@@ -690,8 +690,9 @@ which still expires at 24 hours of source age.
 Hourly status includes the last operation and up to eight download-error diagnostics: candidate,
 forecast hour, phase (inventory, metadata before/after decode, or subset), requested method, attempt,
 HTTP status and sanitized response/redirect URL when available. Credentials, query strings, fragments,
-foreign/private paths, response bodies and headers are not logged. HTTP error text omits upstream
-reason strings. Diagnostics do not change redirect handling, retries, fallback or resource limits.
+foreign/private paths, response bodies and headers are not logged. Error text uses safe classifications
+and omits upstream reason strings and arbitrary parser/exception messages. Diagnostics do not change
+redirect handling, retries, fallback or resource limits.
 
 `tools/nbm-hourly-publish.py` reuses the existing guarded Git publisher but permits only the hourly
 JSON and receipt. It rejects partial, stale, malformed, oversized, rollback or obsolete-code

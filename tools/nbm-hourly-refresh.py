@@ -71,10 +71,12 @@ def error_description(error):
     if isinstance(error, urllib.error.HTTPError):
         return f'HTTPError: HTTP Error {error.code}'
     if isinstance(error, urllib.error.URLError):
-        return f'URLError: {type(error.reason).__name__}'
+        return f'URLError: {type(error.reason).__name__[:64]}'
     if isinstance(error, TimeoutError):
         return 'TimeoutError: request timed out'
-    return f'{type(error).__name__}: {error}'
+    # Decoder and metadata parsers can echo response/header values in ValueError,
+    # OSError and other exception messages. The recorded operation provides context.
+    return f'{type(error).__name__[:64]}: hourly refresh failed; inspect lastOperation'
 
 
 class Client:
