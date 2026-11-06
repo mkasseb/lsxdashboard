@@ -40,6 +40,19 @@ function freshnessCheck(){
     else text+=({deferred:"Loads when this section approaches or is opened",loading:"Checking…",unavailable:"Unavailable",stale:"Check overdue",saved:"Saved data · awaiting verification"}[state]||"Unavailable")
       +(c.successAt?" · last successful check "+weatherTime(c.successAt,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"");
     if(c.issuedAt&&(state==="ready"||state==="partial"||state==="saved")) text+=" · source "+weatherTime(c.issuedAt,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT";
+    // Keep check/source clocks available without competing with the weather. Alerts and every
+    // incomplete, saved or overdue state stay outside the closed source disclosure.
+    if(cfg.card!=="alertsCard"){
+      var sources=card.querySelector(".feed-sources");
+      if(!sources){
+        sources=document.createElement("details"); sources.className="feed-sources";
+        sources.innerHTML='<summary>Sources &amp; updates</summary><div class="feed-source-list"></div>';
+        if(cfg.card==="currentCard") sources.querySelector('.feed-source-list').innerHTML='<p class="stn">UV &amp; air quality: Open-Meteo · <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a></p>';
+        card.appendChild(sources);
+      }
+      var parent=state==="ready"||state==="deferred"?sources.querySelector('.feed-source-list'):card;
+      if(el.parentNode!==parent) parent.appendChild(el);
+    }
     el.setAttribute("data-state",state);
     if(el.textContent!==text) el.textContent=text;
   });
@@ -189,6 +202,10 @@ function renderPrecipEvents(){
       +(extra.length?'<div class="precip-when">'+esc(extra.join(" \u00b7 "))+'</div>':'')
       +(notes.length?'<div class="precip-note">'+esc(notes.join(". "))+'.</div>':'')+'</div>';
   });
+  if(summary.dry){
+    el.innerHTML='<div class="precip-when">No measurable precipitation forecast in the next 72 hours.</div>';
+    return;
+  }
   el.innerHTML='<div class="precip-head">Upcoming precipitation \u00b7 events starting within 72 hours</div>'
     +(html?'<div class="precip-list">'+html+'</div>':'<div class="precip-when">'
       +(summary.dry?'No measurable precipitation forecast in the next 72 hours.':'Precipitation amounts incomplete; no reliable event total available.')+'</div>')
@@ -222,28 +239,20 @@ function renderHourly24(hrs){
   }
   var nbmPoints=typeof NbmHourly!=="undefined"?NbmHourly.presentation(hrs,hourlyHours,Date.now()):[];
   var n=hrs.length, i;
-  var hi=-999, lo=999, peak=0, popMissing=false, popKnown=false, temps=[], pops=[], feels=[], maxDiv=0, feelsHi=-999, maxWind=null, maxGust=null, gustMissing=false;
+  var hi=-999, lo=999, peak=0, popMissing=false, popKnown=false, temps=[], pops=[], feels=[], maxDiv=0;
   for(i=0;i<n;i++){
     var t=hrs[i].temperature; temps.push(t); if(t>hi)hi=t; if(t<lo)lo=t;
     var v=precipChance(hrs[i].probabilityOfPrecipitation);
     pops.push(v); if(v==null) popMissing=true; else{ popKnown=true; if(v>peak) peak=v; }
     var hrh=(hrs[i].relativeHumidity&&hrs[i].relativeHumidity.value!=null)?hrs[i].relativeHumidity.value:null;
     var fl=feelsLikeF(t,hrh,parseMph(hrs[i].windSpeed)); feels.push(fl);
-    var wind=parseMph(hrs[i].windSpeed), gust=gridGustAt(forecastGrid.gusts,Date.parse(hrs[i].startTime));
-    if(wind!=null) maxWind=maxWind==null?wind:Math.max(maxWind,wind);
-    if(gust!=null) maxGust=maxGust==null?gust:Math.max(maxGust,gust);
-    else gustMissing=true;
-    if(fl!=null){ if(Math.abs(fl-t)>maxDiv) maxDiv=Math.abs(fl-t); if(fl>feelsHi) feelsHi=fl; }
+    if(fl!=null&&Math.abs(fl-t)>maxDiv) maxDiv=Math.abs(fl-t);
   }
   var showFeels = maxDiv>=3;   // ghost curve only when it meaningfully diverges
   var sum='<div class="h24-sum">'
     +'<span class="h24-pill">▲ High <b '+tvAttr(hi)+'>'+hi+'°</b></span>'
     +'<span class="h24-pill">▼ Low <b '+tvAttr(lo)+'>'+lo+'°</b></span>'
     +'<span class="h24-pill">'+ic("drop")+(popMissing?(popKnown?'Rain chance incomplete · known peak <b style="color:var(--accent)">'+peak+'%</b>':'Rain chance unavailable'):'Peak rain <b style="color:var(--accent)">'+peak+'%</b>')+'</span>'
-    +(maxWind!=null?'<span class="h24-pill">'+ic("wind")+'Wind up to <b>'+maxWind+' mph</b></span>':'')
-    +(maxGust!=null?'<span class="h24-pill">'+(gustMissing?'Known gusts':'Gusts')+' up to <b>'+Math.round(maxGust)+' mph</b></span>':'')
-    +(showFeels?'<span class="h24-pill">'+ic("heat")+'Feels high <b '+tvAttr(feelsHi)+'>'+feelsHi+'°</b></span>':'')
-    +'<span class="h24-pill h24-now">'+wxImg(hrs[0].shortForecast,hrs[0].isDaytime,20)+' Forecast <b>'+hrs[0].temperature+'°</b></span>'
     +'</div>';
 
   // ---- geometry (full container width; 1200 fallback pre-layout) ----
@@ -372,7 +381,8 @@ function renderHourly24(hrs){
     +'</svg>';
 
   var coverage=n<hourlyHours?'Only '+n+' forecast hours are available in this window; gaps have no forecast data. ':'';
-  el.innerHTML=sum+'<div class="h24-wrap" data-hours="'+hourlyHours+'">'+svg+'<div class="h24-tip" id="h24tip"></div></div>'
+  el.innerHTML=sum+(nbmBand?'<p class="h24-range-key">Shading: middle 50% of NBM model outcomes</p>':'')
+    +'<div class="h24-wrap" data-hours="'+hourlyHours+'">'+svg+'<div class="h24-tip" id="h24tip"></div></div>'
     +'<input class="h24-cursor" id="hourlyCursor" type="range" min="0" max="'+(n-1)+'" value="0" step="1" aria-label="Forecast hour">'
     +'<div class="h24-detail" id="hourlyDetail" role="status" aria-live="polite"></div>'
     +'<div class="h24-note">'+coverage+'Move across the chart or use the slider for hourly detail. NWS point forecast; gusts from the NWS forecast grid.</div>';

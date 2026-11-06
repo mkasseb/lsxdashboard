@@ -42,18 +42,24 @@ function align(result,hrs,now){
  return hrs.map(function(h){var t=time(h.startTime);return result.values&&counts[t]===1&&time(h.endTime)-t===H&&time(h.endTime)>now&&h.temperatureUnit==='F'&&finite(h.temperature)?result.values[t]||null:null;});
 }
 function selected(){var e=document.getElementById('nbmHourlyToggle');return !!(e&&e.checked);}
+function rangeStatus(text,prominent){
+ var status=document.getElementById('nbmHourlyStatus');if(!status)return;
+ var info=document.getElementById('nbmHourlyInfo'),parent=prominent?info.parentNode:info;
+ if(status.parentNode!==parent)parent.appendChild(status);
+ status.dataset.warning=String(!!prominent);status.textContent=text;
+}
 function presentation(hrs,duration,now){
  var status=document.getElementById('nbmHourlyStatus'),toggle=document.getElementById('nbmHourlyToggle');
  if(!status||!toggle)return [];
  ['nbmHourlySource','nbmHourlyPercentiles'].forEach(function(id){var e=document.getElementById(id);if(e)e.textContent='';});
  toggle.disabled=duration!==24;
- if(duration!==24){status.textContent='Model range is available in the 24-hour view.';return [];}
- if(!selected()){status.textContent='NWS forecast shown. Model range is off.';return [];}
+ if(duration!==24){rangeStatus('Model range is available in the 24-hour view.');return [];}
+ if(!selected()){rangeStatus('NWS forecast shown. Model range is off.');return [];}
  var r=raw&&generation===locSeq&&point&&point.lat===current.lat&&point.lon===current.lon?ModelData.current(raw,'hourly',now):{status:'unavailable',reason:failure};
- if(!r.values){status.textContent=r.reason;return [];}
- if(officialGeneration!==locSeq||!official){status.textContent='Waiting for the current NWS hourly forecast.';return [];}
+ if(!r.values){rangeStatus(r.reason,true);return [];}
+ if(officialGeneration!==locSeq||!official){rangeStatus('Waiting for the current NWS hourly forecast.',true);return [];}
  var points=align(r,hrs,now),count=points.filter(Boolean).length;
- status.textContent=(lastFailed?'Latest check failed; previous range shown. ':'')+'Model run '+((now-r.run)/H).toFixed(1)+' hours old · '+count+'/'+hrs.length+' hours matched.';
+ rangeStatus((lastFailed?'Latest check failed; previous range shown. ':'')+'Model run '+((now-r.run)/H).toFixed(1)+' hours old · '+count+'/'+hrs.length+' hours matched.',lastFailed||count<hrs.length);
  var source=document.getElementById('nbmHourlySource');if(source)source.textContent='NOAA NBM QMD · run '+new Date(r.run).toISOString().slice(0,16).replace('T',' ')+' UTC. Native 2 m temperature at each valid hour, shown in °F. Missing hours stay blank. Range expires at 24 hours of source age.';
  return points;
 }
@@ -66,7 +72,7 @@ function forecast(hrs){official=hrs;officialGeneration=locSeq;}
 function repaint(){if(typeof renderHourly24==='function'&&renderHourly24._hrs)renderHourly24();}
 function reset(){raw=null;point=null;generation=-1;official=null;officialGeneration=-1;seq++;lastFailed=false;failure='Checking model range…';
 
- if(typeof document!=='undefined'){document.querySelectorAll('.nbm-hourly-band,.nbm-hourly-detail,#nbmBriefNote').forEach(function(e){e.remove();});var status=document.getElementById('nbmHourlyStatus');if(status)status.textContent=failure;['nbmHourlySource','nbmHourlyPercentiles'].forEach(function(id){var e=document.getElementById(id);if(e)e.textContent='';});}
+ if(typeof document!=='undefined'){document.querySelectorAll('.nbm-hourly-band,.nbm-hourly-detail,#nbmBriefNote').forEach(function(e){e.remove();});rangeStatus(failure,true);['nbmHourlySource','nbmHourlyPercentiles'].forEach(function(id){var e=document.getElementById(id);if(e)e.textContent='';});}
 }
 function load(){
  var fresh=locGuard(),n=++seq,p={lat:current.lat,lon:current.lon};
@@ -79,8 +85,8 @@ function load(){
 function init(){
  if(new URLSearchParams(location.search).get('nbm')==='0')return;
  var box=document.createElement('div');box.className='nbm-hourly-controls';
- box.innerHTML='<span class="nbm-hourly-nws-key">NWS temperature line</span><label><input id="nbmHourlyToggle" type="checkbox" checked> Show NBM model range</label><p id="nbmHourlyStatus" role="status">Checking model range…</p><details id="nbmHourlyInfo"><summary>About this range</summary><p id="nbmHourlyMeaning">The shaded NBM model range shows the middle 50% of modeled outcomes using native NOAA NBM quartiles. Roughly 25% of modeled outcomes lie below it and 25% above it; outcomes outside remain possible. This describes each hour separately, not the chance that the whole forecast stays inside. The NWS forecast line can fall outside the band.</p><p>The bounds are the 25th and 75th percentiles (P25 and P75). The middle estimate is the median (P50), not the midpoint of the bounds.</p><p id="nbmHourlyPercentiles"></p><p id="nbmHourlySource"></p></details>';
- document.getElementById('hourly24').before(box);
+ box.innerHTML='<details id="nbmHourlyInfo"><summary>Model range settings &amp; details</summary><label><input id="nbmHourlyToggle" type="checkbox" checked> Show NBM model range</label><p id="nbmHourlyStatus" role="status">Checking model range…</p><p id="nbmHourlyMeaning">The shaded NBM model range shows the middle 50% of modeled outcomes using native NOAA NBM quartiles. Roughly 25% of modeled outcomes lie below it and 25% above it; outcomes outside remain possible. This describes each hour separately, not the chance that the whole forecast stays inside. The NWS forecast line can fall outside the band.</p><p>The bounds are the 25th and 75th percentiles (P25 and P75). The middle estimate is the median (P50), not the midpoint of the bounds.</p><p id="nbmHourlyPercentiles"></p><p id="nbmHourlySource"></p></details>';
+ document.getElementById('hourly24').after(box);
  box.querySelector('input').addEventListener('change',repaint);
  FEEDS.nbmHourly={label:'Hourly NBM',load:'loadNbmHourly',every:15*60000,age:30*60000,local:true,failure:'unavailable'};
  feedChecks.nbmHourly={status:'loading',successAt:0,issuedAt:0,saved:false};

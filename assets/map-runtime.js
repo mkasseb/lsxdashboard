@@ -1,6 +1,6 @@
 /* The DOM above is parsed; third-party downloads must never gate startup or context controls. */
-var mapsCanStart=false, mapsInFlight=null;
-var mapBoot={phase:"loading",started:Date.now(),events:[]};
+var mapsCanStart=false, mapsInFlight=null, mapsRequested=false, mapApproach=null;
+var mapBoot={phase:"waiting",started:Date.now(),events:[]};
 function mapStage(detail){
   mapBoot.events.push(Math.round((Date.now()-mapBoot.started)/1000)+"s: "+detail);
   if(mapBoot.events.length>12)mapBoot.events.shift();
@@ -60,13 +60,14 @@ function ensureMapLibraries(){
     });
   });},Promise.resolve()).then(function(){
     // A CDN outage can also leave the map stylesheets unloaded.
-    return Promise.all([].slice.call(document.querySelectorAll('link[rel="stylesheet"]')).filter(function(node){
+    return Promise.all([].slice.call(document.querySelectorAll('link[data-map-style]')).filter(function(node){
       return /leaflet\/1\.9\.4\/|maplibre-gl@5\.24\.0\//.test(node.href)&&(retryStyles||!node.sheet||node.media==="print");
     }).map(function(original){
       return new Promise(function(resolve,reject){
         var link=document.createElement("link"),timer;
         mapStage("Loading CSS "+new URL(original.href).hostname+new URL(original.href).pathname);
         [].forEach.call(original.attributes,function(attr){link.setAttribute(attr.name,attr.value);});
+        link.rel="stylesheet";
         function done(err){
           clearTimeout(timer);link.onload=null;link.onerror=null;
           if(err){link.remove();reject(err);}else{original.remove();resolve();}
@@ -84,7 +85,7 @@ function removePartialMap(map){
   try{if(map) map.remove();}catch(e){}
 }
 function ensureMaps(){
-  if(!mapsCanStart||rvMap&&(stnMap||!feedRequested("stations"))) return Promise.resolve();
+  if(!mapsCanStart||!mapsRequested||rvMap&&(stnMap||!feedRequested("stations"))) return Promise.resolve();
   if(mapsInFlight) return mapsInFlight;
   var theme=effectiveLight()?"light":"dark";
   mapBoot.phase="loading";mapStage("Starting maps");
@@ -127,8 +128,26 @@ function ensureMaps(){
   });
   return mapsInFlight;
 }
+function requestMaps(){
+  mapsRequested=true;
+  if(mapApproach){mapApproach.disconnect();mapApproach=null;}
+  return ensureMaps();
+}
 function startMapRuntime(){
   mapsCanStart=true;
-  queueMicrotask(function(){initMapDiagnostics();initContextView();ensureMaps();});
+  queueMicrotask(function(){
+    initMapDiagnostics();initContextView();
+    var card=document.getElementById('radarCard');
+    document.getElementById('radar').innerHTML='<div class="imgfail">Radar loads when this section approaches. <button type="button" data-load-maps>Load radar</button></div>';
+    syncRadarBadge();
+    if(mapsRequested||location.hash==='#radarCard'||!('IntersectionObserver' in window)){requestMaps();return;}
+    mapApproach=new IntersectionObserver(function(entries){
+      if(entries.some(function(entry){return entry.isIntersecting;})) requestMaps();
+    },{rootMargin:'300px'});
+    mapApproach.observe(card);
+  });
 }
-document.addEventListener("click",function(e){if(e.target.closest("[data-retry-maps]"))ensureMaps();});
+document.addEventListener("click",function(e){
+  if(e.target.closest('[data-retry-maps],[data-load-maps],#rsTabs,#rsFull,[data-radar-source],#jumpNav a[href="#radarCard"]')) requestMaps();
+});
+document.addEventListener('change',function(e){if(e.target.id==='radarProduct')requestMaps();});

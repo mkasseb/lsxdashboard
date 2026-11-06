@@ -78,7 +78,7 @@ async function compareHourly(page,data){
  },data);
  if(result.status==='stale'){assert.equal(await page.locator('.nbm-hourly-band').count(),0);assert.match(await page.locator('#nbmHourlyStatus').innerText(),/24 hours old/);return result;}
  assert.equal(result.status,'ready');assert.equal(result.count,24);assert.equal(await page.locator('.nbm-hourly-band').count(),1);
- assert.match(await page.locator('#nbmHourlyStatus').innerText(),/24\/24 hours matched/);
+ assert.match(await page.locator('#nbmHourlyStatus').textContent(),/24\/24 hours matched/);
  for(let i=0;i<24;i++){
   await page.locator('#hourlyCursor').evaluate((e,i)=>{e.value=i;e.dispatchEvent(new Event('input'));},i);
   const p=result.points[i],text=await page.locator('#hourlyDetail').innerText();

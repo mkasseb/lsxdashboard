@@ -104,6 +104,67 @@ async function main() {
   });
   setBrowser(browser);
   try {
+    await run('hourly planning leads with readable weather on phone and desktop', async p => {
+      for(const width of [320,390,1440]){
+        await p.setViewportSize({width,height:900});await p.clock.runFor(400);
+        const layout=await p.evaluate(()=>{
+          const card=document.getElementById('h24Card'),chart=card.querySelector('.h24-svg');
+          return {chartOffset:chart.getBoundingClientRect().top-card.getBoundingClientRect().top,
+            chartBottom:chart.getBoundingClientRect().bottom,
+            settingsTop:card.querySelector('.nbm-hourly-controls').getBoundingClientRect().top,
+            precipTop:card.querySelector('.precip-details').getBoundingClientRect().top,
+            overflow:document.documentElement.scrollWidth>innerWidth+1};
+        });
+        assert(layout.chartOffset<280,JSON.stringify(layout));
+        assert(layout.settingsTop>=layout.chartBottom&&layout.precipTop>=layout.chartBottom);
+        assert.equal(layout.overflow,false);
+        assert.equal(await p.locator('.h24-sum .h24-pill').count(),3);
+        assert.match(await p.locator('.hourly-forecast-source').innerText(),/NWS point forecast.*Lake St. Louis/);
+        assert.match(await p.locator('.cc-observation-source').innerText(),/Observed.*Spirit of St. Louis Airport.*KSUS/);
+        assert.match(await p.locator('#hourlyDetail').innerText(),/feels.*Rain.*Wind.*Gusts/s);
+        assert.equal(await p.locator('#precipEvents .precip-note').count(),0,'A verified dry forecast needs one sentence');
+      }
+    });
+    await run('source disclosures keep overdue partial saved and failed weather visible', async p => {
+      assert.equal(await p.locator('#fresh-current').isVisible(),false);
+      const sources=p.locator('#currentCard .feed-sources');
+      await sources.locator('summary').click();assert(await p.locator('#fresh-current').isVisible());
+      assert.match(await p.locator('#fresh-current').innerText(),/checked.*source/);
+      await sources.locator('summary').click();
+      for(const status of ['unavailable','partial','saved','stale']){
+        await p.evaluate(status=>{
+          const c=feedChecks.current;
+          c.status=status==='saved'?'ready':status==='stale'?'ready':status;
+          c.saved=status==='saved';c.successAt=Date.now()-(status==='stale'?FEEDS.current.age+1:0);
+          freshnessCheck();
+        },status);
+        assert.equal(await p.locator('#fresh-current').getAttribute('data-state'),status);
+        assert(await p.locator('#fresh-current').isVisible(),status+' cannot be hidden by Sources & updates');
+      }
+      await p.evaluate(()=>feedUpdate('current','ready',new Date(Date.now()-300000).toISOString()));
+      assert.equal(await p.locator('#fresh-current').isVisible(),false);
+      assert.equal(await sources.evaluate(e=>e.open),false,'Refresh preserves the chosen disclosure state');
+      assert(await p.locator('#fresh-alerts').isVisible(),'Alert freshness stays visible');
+      assert(await p.locator('#nbmHourlyStatus').isVisible(),'Unavailable model data stays visible');
+    });
+    for(const trigger of ['approach','navigation','station demand'])await run('deferred radar starts on '+trigger, async p => {
+      assert.equal(await p.evaluate(()=>mapsRequested),false);
+      assert.equal(await p.evaluate(()=>rvMap),null);
+      await p.evaluate(()=>refreshAll());
+      assert.equal(await p.evaluate(()=>mapsRequested),false,'Refresh cannot activate an unseen radar');
+      assert.equal(await p.evaluate(()=>performance.getEntriesByType('resource').filter(r=>/leaflet|maplibre|tiles.openfreemap/.test(r.name)).length),0);
+      if(trigger==='approach')await p.locator('#radarCard').scrollIntoViewIfNeeded();
+      else if(trigger==='navigation')await p.locator('#jumpNav a[href="#radarCard"]').click();
+      else await p.evaluate(()=>requestContext('stations'));
+      await p.waitForFunction(()=>rvMap&&mapsInFlight===null&&radarFrames.length>1);
+      assert.equal(await p.locator('#radar [data-load-maps]').count(),0);
+    },{maps:true,deferMaps:true});
+    await run('radar loads for a direct radar link',async p=>{
+      await p.waitForFunction(()=>rvMap&&mapsInFlight===null);
+    },{maps:true,deferMaps:true,search:'#radarCard'});
+    await run('radar falls back to immediate loading without IntersectionObserver',async p=>{
+      await p.waitForFunction(()=>rvMap&&mapsInFlight===null);
+    },{maps:true,deferMaps:true,noIntersectionObserver:true});
     for (const event of [null, 'Tornado Warning']) {
       await run(event ? 'unchanged warnings repaint after a location change' : 'unchanged all-clear repaints after a location change', async p => {
         const transition=await p.evaluate(() => {

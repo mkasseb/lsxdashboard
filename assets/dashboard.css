@@ -709,15 +709,8 @@
   .cc-sun .cs-sep{color:var(--muted)}
   .cc-today:empty{display:none}
 
-  /* The 24-hour chart is a full-width card of its own again — see the markup note for why it left
-     the conditions column. Nothing here sizes it: it measures #hourly24 and draws to that, so the
-     card only has to supply ordinary card chrome and get out of the way. The `.h24-now` pill goes
-     back to being right-anchored by its own rule below, which is what it was written for; the
-     override that let it flow inline existed only because the hero column was too narrow to anchor
-     anything against. The ≤480px rule still un-anchors it on a phone.
-     The band rail above still names the place, so #h24loc stays hidden here for the same reason it
-     was hidden before — present in the DOM so the snapshot and clearLocationUI wiring is untouched. */
-  #h24Card #h24loc{display:none}
+  /* Forecast attribution names the selected town separately from the observation station. */
+  #h24Card #h24loc{display:inline}
 
 
   /* Daily */
@@ -1852,7 +1845,7 @@ a.cpc-item:hover{border-color:var(--accent)}
 
 /* Optional hourly model guidance: visually separate from the primary NWS curve. */
 .nbm-hourly-controls{margin:10px 0;font-size:12px;color:var(--muted)}
-.nbm-hourly-controls label{display:inline-flex;align-items:center;gap:8px;min-height:32px;font-weight:600;color:var(--text);cursor:pointer}
+.nbm-hourly-controls label{display:inline-flex;align-items:center;gap:8px;min-height:44px;font-weight:600;color:var(--text);cursor:pointer}
 .nbm-hourly-controls input{accent-color:var(--accent);width:16px;height:16px}
 #nbmHourlyStatus{margin:4px 0;line-height:1.5}
 .nbm-hourly-band{fill:#7186d8;fill-opacity:.23;stroke:#7186d8;stroke-opacity:.65;stroke-width:1;pointer-events:none}
@@ -1862,3 +1855,20 @@ a.cpc-item:hover{border-color:var(--accent)}
 .nbm-hourly-controls details{font-size:12px;color:var(--muted);line-height:1.5;margin-top:4px}
 .nbm-hourly-controls summary{cursor:pointer;min-height:44px;display:flex;align-items:center;color:var(--accent)}
 .nbm-hourly-controls details p{margin:8px 0}
+
+/* Put weather first; all original check and source clocks remain inspectable. */
+.feed-sources{margin-top:10px;border-top:1px solid var(--border);font-size:var(--fs-xs);color:var(--muted)}
+.feed-sources > summary{display:list-item;cursor:pointer;min-height:44px;padding:12px 0;box-sizing:border-box;font-weight:600}
+.feed-sources > summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.feed-source-list{padding-bottom:8px}
+.feed-source-list .stn{margin:4px 0 8px}
+.hourly-forecast-source{font-size:var(--fs-sm);color:var(--muted);line-height:1.5;margin:0 0 12px}
+.h24-range-key{font-size:var(--fs-xs);color:var(--muted);margin:0 0 6px;line-height:1.5}
+#h24Card .precip-details{margin:12px 0 0;padding:12px 0 0;border-bottom:0;border-top:1px solid var(--border)}
+#hourly24 .h24-sum{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:6px}
+#hourly24 .h24-pill{padding:6px 8px;line-height:1.4}
+#nbmHourlyStatus[data-warning="true"]{color:var(--warn)}
+@media(max-width:360px){
+  #hourly24 .h24-sum{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #hourly24 .h24-pill:last-child{grid-column:1/-1}
+}
