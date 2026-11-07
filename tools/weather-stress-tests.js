@@ -78,6 +78,7 @@ async function open(c, width=390) {
   const context=await browser.newContext({viewport:{width,height:900},hasTouch:!!c.touch,timezoneId:c.timezone||'America/Chicago'});
   const page=await context.newPage();
   page.setDefaultTimeout(15000);
+  if(c.noIntersectionObserver)await page.addInitScript(()=>{delete window.IntersectionObserver;});
   if(c.measure){const cdp=await context.newCDPSession(page);await cdp.send('Emulation.setCPUThrottlingRate',{rate:4});}
   await page.clock.install({time:new Date(c.now)});
   if(c.webglBlocked)await page.addInitScript(()=>{
@@ -90,7 +91,7 @@ async function open(c, width=390) {
   });
   if(c.storage)await page.addInitScript(storage=>Object.entries(storage).forEach(([key,value])=>localStorage.setItem(key,typeof value==='string'?value:JSON.stringify(value))),c.storage);
   if(c.geo)await page.addInitScript(geo=>Object.defineProperty(navigator,'geolocation',{value:{getCurrentPosition:success=>queueMicrotask(()=>success({coords:{latitude:geo.lat,longitude:geo.lon,accuracy:25}}))}}),c.geo);
-  if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v24',snapshot),c.snapshot);
+  if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v25',snapshot),c.snapshot);
   const errors=[],requests=[],delayedMapScripts=[],heldPoints=[],heldSpcProducts=[],heldCpc=[];
   let spcMetadataRequests=0;
   page.on('pageerror',e=>errors.push(e.message));
@@ -235,6 +236,9 @@ async function open(c, width=390) {
     return route.abort().catch(()=>{}); // Maps and unrelated third-party widgets use their real fallbacks.
   });
   await page.goto(testOrigin+'/'+(c.search||''),{waitUntil:'domcontentloaded'});
+  // Map scenarios explicitly request their subject. Ordinary phone sessions must exercise the
+  // real viewport deferral, including zero library/style/tile traffic before approaching radar.
+  if(c.maps&&!c.deferMaps)await page.evaluate(()=>{requestMaps();});
   if(!c.skipWait)await page.waitForFunction(()=>typeof refreshInFlight!=='undefined'&&refreshInFlight===null&&snapSafeSeq===locSeq);
   return {page,context,errors,requests,change:c=>{active=c;},
     releaseCpc:()=>Promise.all(heldCpc.map(p=>p.route.fulfill({status:200,json:p.body}).catch(()=>{}))),

@@ -12,8 +12,8 @@ async function primary(p){return p.evaluate(()=>({hrs:JSON.stringify(renderHourl
   const s=await open(config('Hourly authentic recording',{now,timezone,touch:width<500}),width),p=s.page;
   try{
    await official(p);const before=await primary(p);await model(p);assert.deepEqual(await primary(p),before);
-   assert.equal(await p.locator('.nbm-hourly-band').count(),1);assert.match(await p.locator('#nbmHourlyStatus').innerText(),/24\/24 hours matched/);
-   assert.equal(await p.locator('#nbmHourlyToggle').locator('..').innerText(),'Show NBM model range');
+   assert.equal(await p.locator('.nbm-hourly-band').count(),1);assert.match(await p.locator('#nbmHourlyStatus').textContent(),/24\/24 hours matched/);
+   assert.equal(await p.locator('#nbmHourlyStatus').isVisible(),false,'Healthy model bookkeeping stays in the disclosure');
    assert.match(await p.locator('.h24-svg').getAttribute('aria-label'),/NBM model range: the middle 50%.*P25–P75/);
    const input=p.locator('#hourlyCursor');await input.focus();await input.press('ArrowRight');
    assert.match(await p.locator('#hourlyDetail').innerText(),/NBM model range .*°F · middle estimate .*°F/);
@@ -21,6 +21,7 @@ async function primary(p){return p.evaluate(()=>({hrs:JSON.stringify(renderHourl
    assert.equal(await info.evaluate(e=>e.open),false);
    if(width<500)await help.tap();else{await help.focus();await help.press('Enter');}
    assert.equal(await info.evaluate(e=>e.open),true);
+   assert.equal(await p.locator('#nbmHourlyToggle').locator('..').innerText(),'Show NBM model range');
    assert.match(await info.innerText(),/outcomes outside remain possible/);
    assert.match(await info.innerText(),/NBM model range shows the middle 50%.*25%.*25% above/);
    assert.match(await p.locator('#nbmHourlyPercentiles').innerText(),/P25 .* P50 .* P75/);
@@ -28,10 +29,12 @@ async function primary(p){return p.evaluate(()=>({hrs:JSON.stringify(renderHourl
    if(process.env.NBM_ARTIFACTS){fs.mkdirSync(process.env.NBM_ARTIFACTS,{recursive:true});await info.screenshot({path:path.join(process.env.NBM_ARTIFACTS,`hourly-about-${width}-${timezone.replace('/','-')}.png`)});}
    await help.click();await input.focus();
    const chosen=await p.evaluate(()=>renderHourly24._selectedTime);await model(p);assert.equal(await p.evaluate(()=>renderHourly24._selectedTime),chosen);assert(await input.evaluate(e=>e===document.activeElement));
+   await help.click();
    await p.locator('#nbmHourlyToggle').uncheck();assert.equal(await p.locator('.nbm-hourly-band').count(),0);assert.equal(await p.locator('.nbm-hourly-detail').count(),0);
    await p.locator('#nbmHourlyToggle').check();
    for(const duration of [48,72]){await p.locator('#hourlyOptions [data-hours="'+duration+'"]').click();assert.equal(await p.locator('.nbm-hourly-band').count(),0);assert(await p.locator('#nbmHourlyToggle').isDisabled());}
    await p.locator('#hourlyOptions [data-hours="24"]').click();assert.equal(await p.locator('.nbm-hourly-band').count(),1);
+   await help.click();
    for(const theme of ['light','dark']){
     await p.evaluate(t=>{applyTheme(t);layoutMasonry();},theme);await p.clock.runFor(500);
     assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));

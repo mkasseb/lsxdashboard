@@ -243,18 +243,13 @@ function loadCurrent(){
       +'</div>'
       +currentExposure()
       +'<div class="cc-ctx" id="ccCtx"></div>'
-      // Every source in one line, set to be read second. AirNow is a constant href, so it lives in
-      // the markup rather than being rebuilt by renderAqiMini — which means it survives an AQI
-      // outage, exactly when someone would want to go look the number up themselves.
-      // Naming Open-Meteo is not decoration: the exposure pair now wears the same chrome as the
-      // metric tiles, and those ARE the station's. Without this the line above would read as a
-      // claim that KSUS measures UV and PM2.5.
-      +'<div class="stn">Observed '+timeAgo(p.timestamp)+' · <span class="has-hint" title="'
-      +esc(stnName(current.station)||"The weather station these readings come from")+'">'
-      +esc(current.station)+'</span>'
-      +' · UV &amp; air Open-Meteo'
+      // A station observation is distinct from the selected town's NWS point forecast.
+      // Exposure attribution and all check/source clocks remain in Sources & updates.
+      +'<div class="stn cc-observation-source">Observed '+timeAgo(p.timestamp)+' at '
+      +esc(stnName(current.station)||current.station)
+      +(stnName(current.station)?' ('+esc(current.station)+')':'')
       +'<span id="ccRecSrc"></span>'
-      +' · <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a></div>';
+      +'</div>';
     renderHeroToday();    // today's range + sun times, once the 7-day has landed
     renderUvNow();        // UV, once Open-Meteo has answered
     renderCurrentCtx();   // normals + today's records, once climate context has landed

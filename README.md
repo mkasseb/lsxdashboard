@@ -105,6 +105,13 @@ then verifies normal radar/fullscreen activation once startup completes. Radar h
 final startup step so controls cannot call dependencies that are still downloading.
 
 `tools/dashboard-regression-tests.js` checks overlapping refreshes, location-search cancellation,
+compact phone hourly planning, source disclosures with visible outage/expiry states, and radar
+loading on viewport approach, direct navigation, station demand or explicit controls. Radar libraries,
+styles and tiles wait until demand; browsers without IntersectionObserver load maps immediately.
+Healthy check/source timestamps remain under **Sources & updates**; warnings stay outside it.
+The Now card identifies its observation station by name, while the hourly card identifies the
+selected town's NWS point forecast. Model settings follow the chart; model failures remain visible.
+It also covers
 unknown daily rain chances, legacy snapshot invalidation, elapsed forecast periods, UV outages and snapshot provenance,
 independent air-quality/UV rendering, invalid station timestamps, and retryable source metadata.
 Climate recovery checks keep the station label, departures and daily normals together, including

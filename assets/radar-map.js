@@ -384,7 +384,7 @@ function syncRadarBadge(){
   var lbl=document.getElementById("radarTime");
   if(!lbl) return;
   lbl.className="radar-time";
-  if(!rvMap){lbl.textContent=typeof mapBoot!=="undefined"&&mapBoot.phase==="error"?"map unavailable":"loading map…";return;}
+  if(!rvMap){lbl.textContent=typeof mapBoot!=="undefined"&&mapBoot.phase==="waiting"?"not loaded":typeof mapBoot!=="undefined"&&mapBoot.phase==="error"?"map unavailable":"loading map…";return;}
   if(!skyOn.radar){ lbl.textContent=""; return; }
   if(radarDown()){ lbl.textContent="radar unavailable"; lbl.classList.add("down"); return; }
   if(!radarFrames.length){
@@ -1237,6 +1237,7 @@ function setRadarFull(on){
   if(!card||radarFull===on) return;
   radarFull=on;
   document.body.classList.toggle("radar-full",on);
+  if(on&&typeof requestMaps==="function")requestMaps();
   if(btn){
     btn.setAttribute("aria-expanded",on?"true":"false");
     btn.setAttribute("aria-label",on?"Close radar fullscreen":"Open radar fullscreen");
@@ -1274,7 +1275,7 @@ document.addEventListener("keydown",function(e){
   if(e.key==="Escape"){e.preventDefault();setRadarFull(false);return;}
   if(e.key==="Tab"){
     var card=document.getElementById("radarCard");
-    var controls=[].slice.call(card.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),[tabindex]:not([tabindex="-1"])'))
+    var controls=[].slice.call(card.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),summary,[tabindex]:not([tabindex="-1"])'))
       .filter(function(node){return !node.closest("[inert]")&&node.getClientRects().length;});
     if(!controls.length){e.preventDefault();return;}
     var first=controls[0],last=controls[controls.length-1],active=document.activeElement;
