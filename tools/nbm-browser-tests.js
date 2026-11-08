@@ -12,7 +12,7 @@ const modelRoute='**/data/nbm-range.json';
 async function nws(page,f=capture.forecast){await page.evaluate(f=>{renderDailyForecast(f,null);feedUpdate('daily','ready',f.properties.updateTime);},f);}
 async function model(page,data=regional){await page.unroute(modelRoute);await page.route(modelRoute,r=>r.fulfill({json:data}));await page.evaluate(()=>loadNbmRange());}
 async function primary(page){return page.evaluate(()=>({days:JSON.stringify(smart.days),call:document.getElementById('callCard').innerText,rows:Array.from(document.querySelectorAll('#daily .day'),x=>x.textContent),detail:Array.from(document.querySelectorAll('#daily .dd-text'),x=>x.textContent)}));}
-async function expandDay(page,index=0){const day=page.locator('#daily .day').nth(index);if(await day.getAttribute('aria-expanded')!=='true')await day.click();}
+async function expandDay(page,index=0){const day=page.locator('#daily .day').nth(index);if(await day.getAttribute('aria-expanded')!=='true')await day.press('Enter');}
 async function expandTiming(page,index=0){await expandDay(page,index);const timing=page.locator('.nbm-timing').nth(index),summary=timing.locator('summary');await summary.focus();if(!await timing.evaluate(e=>e.open))await summary.press('Enter');}
 async function collapsedRows(page,state,width,timezone){
  await page.evaluate(()=>document.querySelectorAll('#daily .day-item').forEach(row=>setOpen(row,row.querySelector('.day'),false)));
@@ -60,7 +60,7 @@ async function main(){
     assert(await p.locator('.nbm-inline').first().isHidden());
     assert.deepEqual(await primary(p),before);
     await toggle.check();
-    await p.locator('#daily .day').first().click();
+    await p.locator('#daily .day').first().press('Enter');
     assert.equal(await p.locator('.nbm-inline').count(),3);assert.equal(await p.locator('.nbm-comparison').count(),5);
     assert.deepEqual(await p.locator('.nbm-inline .nbm-label').allTextContents(),Array(3).fill('NBM model range'));
     assert.equal(await p.locator('.nbm-inline .nbm-window-note').count(),0);
