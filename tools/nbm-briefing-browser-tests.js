@@ -13,6 +13,7 @@ try{for(const [temp,bounds] of [[36,[28,35,40]],[86,[82,87,94]]]){
   await p.route('**/data/nbm-hourly.json',r=>r.fulfill({json:d}));await p.evaluate(()=>loadNbmHourly());
   assert.equal(await p.locator('.nbm-hourly-band').count(),1);assert.equal(await p.locator('#nbmBriefNote,#forecastTempContext').count(),0);
   assert.deepEqual(await p.evaluate(()=>({nws:document.getElementById('callCard').innerText,hourly:JSON.stringify(smart.hourlyAll),model:JSON.stringify(renderTheCall._nbmContext.model)})),before);
+  await p.locator('#nbmHourlyInfo summary').click();
   await p.locator('#nbmHourlyToggle').uncheck();await p.locator('#nbmHourlyToggle').check();assert.equal(await p.locator('#nbmBriefNote').count(),0);
   assert.deepEqual(s.errors,[]);console.log('PASS no threshold commentary at synthetic NWS '+temp+'F');
  }finally{await s.context.close();}

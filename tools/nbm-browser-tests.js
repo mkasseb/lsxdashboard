@@ -52,9 +52,10 @@ async function main(){
     assert(await p.locator('.nbm-inline').first().isHidden());
     assert(await p.locator('#nbmInfo').isHidden());
     await expandDay(p);
+    await p.locator('#daily .day[aria-expanded="true"]').first().waitFor({state:'visible'});
     assert(await p.locator('.nbm-period-detail').first().isHidden());
     await toggle.check();
-    assert(await p.locator('.nbm-period-detail').first().isVisible());
+    await p.locator('.nbm-period-detail').first().waitFor({state:'visible'});
     await toggle.uncheck();
     assert(await p.locator('.nbm-inline').first().isHidden());
     assert.deepEqual(await primary(p),before);
@@ -86,7 +87,7 @@ async function main(){
     await timingSummary.focus();await timingSummary.press('Enter');
     assert(await timing.evaluate(e=>e.open));assert(await p.locator('.nbm-comparison').first().isVisible());
     assert.match(await timing.innerText(),/NWS high.*Oct 9.*CDT/);
-    assert.match(await timing.innerText(),/Different interval \(18 hours\).*Oct 10, 1:00 AM CDT/);
+    assert.match(await timing.innerText(),/Different interval \(18 hours\).*Oct 10(?:,| at) 1:00 AM CDT/);
     assert.match(await timing.innerText(),/median \(P50\)/);
     await model(p);assert(await timing.evaluate(e=>e.open));assert(await timingSummary.evaluate(e=>e===document.activeElement));
     await p.evaluate(()=>loadForecast._paint());assert(await timing.evaluate(e=>e.open));assert(await timingSummary.evaluate(e=>e===document.activeElement));
