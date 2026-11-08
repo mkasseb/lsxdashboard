@@ -384,6 +384,10 @@ async function main() {
       await expectText(page,'#spc',/Unavailable/);
     },320);
     for(const width of [320,1280])await run('risk explanations work by tap and remain open after refresh at '+width+'px',config('risk help'),async({page})=>{
+      // Finish the lazy context work before exercising an ordinary disclosure click.
+      // A separate case below deliberately races the press with a radar retry.
+      await page.evaluate(()=>Promise.all([requestContext('stations'),requestContext('context')]));
+      await noCardOverlap(page);
       await page.evaluate(()=>{window.disclosureTrace=[];for(const type of ['pointerdown','pointerup','mousedown','mouseup','click','toggle'])document.addEventListener(type,e=>{const r=document.querySelector('#riskHelp summary').getBoundingClientRect();window.disclosureTrace.push({type,target:e.target.outerHTML?.slice(0,160),x:e.clientX,y:e.clientY,rect:{x:r.x,y:r.y,width:r.width,height:r.height},open:document.getElementById('riskHelp').open,pressed:masonryPointerActive});},true);});
       await page.locator('#riskHelp summary').click();
       try{await page.waitForFunction(()=>document.getElementById('riskHelp').open);}catch(e){console.error('DISCLOSURE_TRACE',JSON.stringify(await page.evaluate(()=>window.disclosureTrace)));throw e;}
