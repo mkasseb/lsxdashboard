@@ -261,6 +261,19 @@ var NbmRange=(function(){
   function init(){
     if(new URLSearchParams(location.search).get('nbm')==='0')return;
     var section=document.getElementById('forecastCard'),info=document.createElement('div');info.id='nbmInfo';
+    var rangePreference='lsxNbmDailyRanges';
+    var label=document.createElement('label');
+    label.className='nbm-daily-toggle';
+    label.innerHTML='<input id="nbmDailyToggle" type="checkbox" aria-controls="daily nbmInfo"> Show NBM model ranges';
+    var toggle=label.querySelector('input');
+    try{toggle.checked=localStorage.getItem(rangePreference)==='on';}catch(e){}
+    section.classList.toggle('nbm-ranges-off',!toggle.checked);
+    section.querySelector('#daily').before(label);
+    toggle.addEventListener('change',function(){
+      section.classList.toggle('nbm-ranges-off',!toggle.checked);
+      try{localStorage.setItem(rangePreference,toggle.checked?'on':'off');}catch(e){}
+      if(typeof scheduleMasonry==='function')scheduleMasonry();
+    });
     info.innerHTML='<p id="nbmWindowHelp">NBM uses 18-hour windows; expand a day for timing and model details.</p><p id="nbmStatus" role="status">Checking NBM model guidance…</p><details><summary>About NBM ranges &amp; unmatched windows</summary><div id="nbmInfoBody"></div></details>';
     section.appendChild(info);
     document.addEventListener('pointerdown',beginActivation,true);

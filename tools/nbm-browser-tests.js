@@ -47,6 +47,19 @@ async function main(){
     assert.equal(await p.locator('#nbmInfo details').getAttribute('open'),null);
     await nws(p);const before=await primary(p);await model(p);
     assert.deepEqual(await primary(p),before,'NBM never changes official values/text or risk decisions');
+    const toggle=p.locator('#nbmDailyToggle');
+    assert.equal(await toggle.isChecked(),false);
+    assert(await p.locator('.nbm-inline').first().isHidden());
+    assert(await p.locator('#nbmInfo').isHidden());
+    await expandDay(p);
+    assert(await p.locator('.nbm-period-detail').first().isHidden());
+    await toggle.check();
+    assert(await p.locator('.nbm-period-detail').first().isVisible());
+    await toggle.uncheck();
+    assert(await p.locator('.nbm-inline').first().isHidden());
+    assert.deepEqual(await primary(p),before);
+    await toggle.check();
+    await p.locator('#daily .day').first().click();
     assert.equal(await p.locator('.nbm-inline').count(),3);assert.equal(await p.locator('.nbm-comparison').count(),5);
     assert.deepEqual(await p.locator('.nbm-inline .nbm-label').allTextContents(),Array(3).fill('NBM model range'));
     assert.equal(await p.locator('.nbm-inline .nbm-window-note').count(),0);
@@ -101,6 +114,7 @@ async function main(){
     const forecastHeld=new Promise(resolve=>{releaseForecast=resolve;});
     await p.route('**/forecast',async r=>{await forecastHeld;await r.fulfill({json:capture.forecast});});
     await p.reload({waitUntil:'domcontentloaded'});
+    assert(await p.locator('#nbmDailyToggle').isChecked(),'The seven-day preference survives reload');
     await p.waitForFunction(()=>typeof snapRestored!=='undefined'&&snapRestored);
     await model(p);
     assert((await p.locator('#daily .day-item').count())>0,'Saved NWS rows restore');
@@ -197,7 +211,7 @@ async function main(){
    }finally{await s.context.close();}
   }
   const s=await open(config('NBM opt-out',{now,search:'?nbm=0'}),390);
-  assert.equal(await s.page.locator('#nbmInfo,.nbm-inline,#nbmRangeCard').count(),0);
+  assert.equal(await s.page.locator('#nbmDailyToggle,#nbmInfo,.nbm-inline,#nbmRangeCard').count(),0);
   assert.equal(await s.page.evaluate(()=>Object.hasOwn(FEEDS,'nbmRange')),false);await s.context.close();
   await require('./guidance-activation-tests')(engine);
  }finally{await browser.close();}

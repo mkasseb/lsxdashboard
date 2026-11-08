@@ -20,6 +20,7 @@ const engine=process.env.WEATHER_BROWSER||'chromium',report=[];
      await p.route('**/observations/latest',r=>r.fulfill({status:503,json:{}}));await p.evaluate(()=>loadCurrent());
     }
     const day=p.locator('#daily .day').first();await day.click();
+    await p.locator('#nbmDailyToggle').check();
     await p.locator('#nbmInfo details').evaluate(e=>e.open=true);
     await p.locator('#nbmHourlyInfo').evaluate(e=>e.open=true);
     for(const theme of ['dark','light']){

@@ -12,6 +12,7 @@ module.exports=async function(engine){
  ],audit=[];
  for(const test of cases){
   const session=await open(config('Guidance activation regression',{now:Date.parse(capture.retrievedAt),touch:test.input==='touch'}),test.width),p=session.page;
+  await p.locator('#nbmDailyToggle').check();
   try{
    await p.route('**/data/nbm-range.json',r=>r.fulfill({json:model}));
    await p.evaluate(async f=>{stopSchedule();deferredFeeds.context=false;window.activationNws=f;renderDailyForecast(f,null);feedUpdate('daily','ready',f.properties.updateTime);await loadNbmRange();},capture.forecast);

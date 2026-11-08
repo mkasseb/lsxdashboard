@@ -1596,6 +1596,10 @@
 .context-toggle{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:7px 10px;cursor:pointer}
 .context-toggle{margin:0 0 10px}
 .context-body[hidden]{display:none}
+.nbm-daily-toggle{display:inline-flex;align-items:center;gap:8px;min-height:44px;margin-bottom:4px;
+  color:var(--text);font-size:var(--fs-sm);font-weight:600;cursor:pointer}
+.nbm-daily-toggle input{accent-color:var(--accent);width:16px;height:16px;margin:0}
+#forecastCard.nbm-ranges-off :is(.nbm-inline,.nbm-unavailable,.nbm-period-detail,#nbmInfo){display:none}
 .nbm-inline,.nbm-unavailable{display:flex;flex-wrap:wrap;gap:3px 10px;padding:0 12px 9px;font-size:.76rem;line-height:1.4;color:var(--muted)}
 .nbm-label{font-weight:700}.nbm-band{white-space:nowrap}.nbm-window-note{color:var(--muted);font-size:.75rem}
 .nbm-period-detail{padding:10px 0;border-top:1px solid var(--border)}
