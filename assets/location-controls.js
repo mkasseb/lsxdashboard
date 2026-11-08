@@ -130,6 +130,7 @@ function clearLocationUI(){
     });
   });
   // The registry replaced the alert markup. An unchanged feed still needs a fresh paint here.
+  syncRiskBreakdown(false);
   alertsHTML=null;
   var ac=document.getElementById("alertsCard"); if(ac) ac.classList.remove("calm");
   var scope=document.getElementById("alertsScope"); if(scope) scope.textContent=current.name.replace(" (home)","");

@@ -355,6 +355,34 @@ async function main() {
       assert.equal(await session.page.evaluate(()=>document.activeElement.id),'h24Title');
       await expectText(session.page,'#hourly24',/unavailable/);
     });
+    await run('quiet outlook stays compact and expands for elevated or missing categories',config('quiet outlook'),async session=>{
+      const {page}=session, breakdown=page.locator('#riskBreakdown'), toggle=breakdown.locator('summary');
+      await expectText(page,'#riskQuiet',/through day 3/);
+      assert(await page.locator('#spc').isHidden());
+      assert(await page.locator('#riskProbabilityNote').isHidden());
+      await toggle.click();
+      assert(await page.locator('#spc').isVisible());
+      await page.evaluate(()=>loadSpc());
+      assert(await breakdown.evaluate(el=>el.open),'A quiet refresh preserves the disclosure state');
+      await toggle.click();
+      session.change(config('missing probability',{threatDown:[7]}));
+      await page.evaluate(()=>loadSpc());
+      assert(await page.locator('#riskProbabilityNote').isVisible());
+      assert(await page.locator('#spcThreats').isHidden());
+      session.change(config('general storms',{spcCategory:2}));
+      await page.evaluate(()=>loadSpc());
+      assert(await page.locator('#riskQuiet').isHidden());
+      await expectText(page,'#spc',/General Storms/);
+      session.change(config('elevated probability',{probabilities:[[5,0,0],[0,0,0]]}));
+      await page.evaluate(()=>loadSpc());
+      assert(await page.locator('#riskQuiet').isHidden());
+      assert(await page.locator('#spcThreats .elevated').isVisible());
+      session.change(config('missing category'));
+      await page.route(/SPC_wx_outlks\/MapServer\/17\/query\?/,route=>route.fulfill({status:503,json:{}}));
+      await page.evaluate(()=>loadSpc());
+      assert(await page.locator('#riskQuiet').isHidden());
+      await expectText(page,'#spc',/Unavailable/);
+    },320);
     for(const width of [320,1280])await run('risk explanations work by tap and remain open after refresh at '+width+'px',config('risk help'),async({page})=>{
       await page.evaluate(()=>{window.disclosureTrace=[];for(const type of ['pointerdown','pointerup','mousedown','mouseup','click','toggle'])document.addEventListener(type,e=>{const r=document.querySelector('#riskHelp summary').getBoundingClientRect();window.disclosureTrace.push({type,target:e.target.outerHTML?.slice(0,160),x:e.clientX,y:e.clientY,rect:{x:r.x,y:r.y,width:r.width,height:r.height},open:document.getElementById('riskHelp').open,pressed:masonryPointerActive});},true);});
       await page.locator('#riskHelp summary').click();
@@ -1166,8 +1194,10 @@ async function main() {
       await page.waitForFunction(()=>rvMap&&radarFrames.length>1);
     });
     await run('map time metadata timeout recovers without reloading',config('time timeout',{maps:true,mapTimeHang:true}),async session=>{
-      const {page}=session;await page.clock.runFor(21000);
-      assert.equal(await page.evaluate(()=>radarFallback),true);
+      const {page}=session;
+      await page.waitForFunction(()=>rvMap&&radarRequestGen>0);
+      await page.clock.runFor(21000);
+      await page.waitForFunction(()=>radarFallback);
       session.change(config('time recovered',{maps:true}));await page.evaluate(()=>refreshRadarLayer());
       await page.waitForFunction(()=>radarFrames.length>1&&!radarFallback);
     });

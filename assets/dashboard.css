@@ -829,15 +829,11 @@
      them — a tap beside them still falls through and unlocks. The attribution corner stays at
      Leaflet's own 1000, i.e. underneath, which was the whole point. */
   #radar .leaflet-top.leaflet-left{z-index:1300}
-  .radar-time{position:absolute;top:8px;right:8px;z-index:4;pointer-events:none;
-    background:rgba(10,14,20,.82);color:#fff;border:1px solid rgba(255,255,255,.18);
-    border-radius:var(--r-lg);padding:4px 11px;font-size:var(--fs-sm);font-weight:600;font-variant-numeric:tabular-nums}
+  .radar-time{margin:0 0 8px;color:var(--text);font-size:var(--fs-sm);line-height:1.5;
+    font-weight:650;font-variant-numeric:tabular-nums}
   .radar-time:empty{display:none}
-  .radar-time.past{background:rgba(255,176,32,.92);color:#141414;border-color:rgba(0,0,0,.2)}
-  /* Amber says "you scrubbed back", which is a state the visitor chose. Red says "what is on the
-     map is not now" — a dead feed or a stalled one — which is a state nobody chose and the only
-     one that can be mistaken for clear skies. Different cause, different colour. */
-  .radar-time.down{background:rgba(255,77,77,.94);color:#fff;border-color:rgba(0,0,0,.25)}
+  .radar-time.past{color:var(--muted)}
+  .radar-time.down{color:var(--warn)}
   /* ===== Reflectivity key =====
      The map painted a colour ramp and nothing on the page said what it meant. The stops below are
      the SERVER's colours, sampled per-5-dBZ out of this layer's own GetLegendGraphic rather than
@@ -991,7 +987,6 @@
     .rs-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 8px}
     .rs-head h2{grid-column:1;grid-row:1}
     .rs-head .rs-right{grid-column:2;grid-row:1}
-    .rs-head .rs-tabs{grid-column:1 / -1;grid-row:2;justify-self:start;margin-left:0}
     .rs-full .rsf-t{display:none}.rs-full{padding:5px 9px;font-size:var(--fs-md)}
   }
 
@@ -1032,9 +1027,9 @@
   .rs-tab.on{background:var(--chip);color:var(--accent)}
   .rs-tab.on::before{background:currentColor;box-shadow:none}
   .rs-tab:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-  .radar-options{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-bottom:8px}
-  .radar-options .radar-sources{margin-left:0}
-  .radar-sources .rs-tab{min-height:36px;text-transform:none;letter-spacing:0}
+  .radar-options{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin-bottom:8px}
+  .radar-options .rs-tabs{margin-left:0}
+  .radar-options .rs-tab{min-height:36px;text-transform:none;letter-spacing:0}
   .radar-sources .rs-tab::before{display:none}
   .radar-product{display:flex;align-items:center;gap:8px;font-size:var(--fs-xs);color:var(--muted)}
   .radar-product select{min-height:38px;max-width:100%;padding:6px 8px;font:inherit;color:var(--text);
@@ -1229,6 +1224,9 @@
      underneath the first pill (single word, so it can't wrap) */
   .spc-row{display:grid;grid-template-columns:74px 1fr 1fr 1fr;align-items:center;gap:6px;padding:8px 0;border-bottom:1px solid var(--border)}
   .spc-row:last-child{border-bottom:0}
+  .risk-quiet{margin:0;font-size:var(--fs-md);line-height:1.5}
+  #riskBreakdown{margin-top:0;border-top:0;padding-top:0}
+  #riskBreakdown > summary[hidden]{display:none}
   .spc-row.rhead{padding:2px 0 6px;border-bottom:1px solid var(--border)}
   .spc-row .rh{font-size:var(--fs-2xs);color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.5px;text-align:center}
   .spc-day{font-size:13px;color:var(--muted);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1799,7 +1797,7 @@ body{transition:none}
   body:not(.radar-full) .desktop-planning #radarCard .rs-head{display:flex;flex-wrap:wrap;gap:8px 12px}
   body:not(.radar-full) .desktop-planning #radarCard .rs-head h2{flex:1 1 auto}
   body:not(.radar-full) .desktop-planning #radarCard .rs-tabs{margin-left:0}
-  body:not(.radar-full) .desktop-planning #radarCard .rs-right{flex:0 0 100%;justify-content:space-between}
+  body:not(.radar-full) .desktop-planning #radarCard .rs-right{margin-left:auto}
   .desktop-planning .planning-support>.card{padding:18px}
   .desktop-planning .planning-support>.card h2{font-size:18px}
   .desktop-planning .planning-support .river-row .rlink{padding:11px 12px}

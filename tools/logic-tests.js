@@ -1513,6 +1513,7 @@ function riskHarness(getJSON, nowMs=Date.now()) {
     ${lift(/^function spcThreatText\(prob,kind\)\{[\s\S]*?^\}/m, 'spcThreatText()')}
     ${lift(/^function fetchSpcThreats\(signal\)\{[\s\S]*?^\}/m, 'fetchSpcThreats()')}
     ${lift(/^function renderSpcThreats\(days\)\{[\s\S]*?^\}/m, 'renderSpcThreats()')}
+    function syncRiskBreakdown(){}
     ${lift(/^function loadSpc\(\)\{[\s\S]*?^\}/m, 'loadSpc()')}
     return {spcQuery,eroQuery,fireQuery,fireDay3Query,wssiQuery,spcRisk,eroRisk,fireRisk,
       loadSpc,fetchSpcThreats,RISK_READY,els,getCallRisk:function(){return callRisk;}};

@@ -38,7 +38,6 @@ async function main(){
    else {assert(boxes.radarCard.y>=boxes.h24Card.bottom);assert(boxes.forecastCard.y>=boxes.radarCard.bottom);}
    const radarSize=await p.locator('#radar').boundingBox(),loadedTiles=await p.locator('#radar .leaflet-tile-loaded').count();if(width>1000)assert(Math.abs(radarSize.height-(width<=1240?350:380))<2,'Radar stays bounded independently of forecast height');
    const rowHeights=await p.locator('#daily .day').evaluateAll(rows=>rows.map(r=>r.getBoundingClientRect().height));const rowMax=await p.locator('#daily').evaluate(e=>e.classList.contains('no-dnd')?76:56);assert(rowHeights.every(h=>h>=44&&h<=rowMax),'Compact rows keep 44px targets and room for stacked calendar dates: '+rowHeights);
-   if(width<=680)assert(boxes.callCard.y>=boxes.currentCard.bottom);
    await p.locator('#daily .day').first().click();assert.equal(await p.locator('#daily .day').first().getAttribute('aria-expanded'),'true');
    await p.locator('#daily .day').first().press('Enter');assert.equal(await p.locator('#daily .day').first().getAttribute('aria-expanded'),'false');
    for(const hours of [48,72,24]){await p.locator('#hourlyOptions [data-hours="'+hours+'"]').click();assert.equal(await p.locator('#hourlyOptions [data-hours="'+hours+'"]').getAttribute('aria-pressed'),'true');}

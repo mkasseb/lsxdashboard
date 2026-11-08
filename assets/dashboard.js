@@ -1075,6 +1075,17 @@ function riskPill(info,denom){
 }
 
 
+function syncRiskBreakdown(quiet, probabilitiesMissing){
+  var breakdown=document.getElementById("riskBreakdown"), toggle=breakdown.querySelector("summary");
+  if(toggle.hidden===quiet){
+    if(!quiet&&document.activeElement===toggle) document.querySelector("#riskHelp summary").focus({preventScroll:true});
+    breakdown.open=!quiet;
+    toggle.hidden=!quiet;
+  }
+  document.getElementById("riskQuiet").hidden=!quiet;
+  document.getElementById("riskProbabilityNote").hidden=!quiet||!probabilitiesMissing;
+}
+
 function renderSpcThreats(days){
   var el=document.getElementById("spcThreats"); if(!el) return;
   var kinds=["tornado","wind","hail"], html='<div class="spc-threat-title">Severe-weather probabilities</div>'

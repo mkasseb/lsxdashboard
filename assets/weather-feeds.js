@@ -842,6 +842,11 @@ function loadSpc(){
     }
     el.innerHTML=html;
     renderSpcThreats(r[11]);
+    var threats=r[11]||[];
+    var elevated=threats.some(function(day){return day&&day.values.some(function(v){return v>0;});});
+    var complete=threats.length===2&&threats.every(function(day){return day&&day.values.every(function(v){return v!=null;});});
+    // Only nine verified zero categories qualify. General storms and missing categories stay visible.
+    syncRiskBreakdown(r.slice(0,9).every(function(v){return v===0;})&&!elevated,!complete);
     if(typeof renderTheCall==="function") renderTheCall();   // outlook levels can add/remove a verdict pill
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
@@ -849,6 +854,7 @@ function loadSpc(){
     el.innerHTML='<div class="empty">Risk outlooks unavailable. <a href="https://www.spc.noaa.gov/products/outlook/day1otlk.html" target="_blank" rel="noopener">Open SPC \u2197</a> \u00b7 <a href="https://www.spc.noaa.gov/products/fire_wx/" target="_blank" rel="noopener">Fire \u2197</a></div>';
     callRisk=null;                                           // never let a stale outlook keep a pill alive
     renderSpcThreats(null);
+    syncRiskBreakdown(false);
     if(typeof renderTheCall==="function") renderTheCall();
   }).finally(function(){
     signal.removeEventListener("abort",abort);
