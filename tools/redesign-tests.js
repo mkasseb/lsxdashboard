@@ -60,6 +60,8 @@ async function main(){
     const state={scroll:scrollY,top:card.top,bottom:card.bottom,edge,clamped};
     if(!clamped)return state;
     const growth=document.createElement('div');growth.id='late-context-growth';growth.style.height='24px';document.body.append(growth);
+    // Model a browser scroll-anchor adjustment during the same content growth.
+    if(card.top>edge+8)window.scrollBy({top:4,behavior:'instant'});
     window.dispatchEvent(new Event('resize'));
     return state;
    });

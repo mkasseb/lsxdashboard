@@ -2012,26 +2012,34 @@ scheduleMasonry();
       .sort(function(a,b){return a.box.top-b.box.top||a.box.left-b.box.left;});
     var active=candidates[0];
     candidates.forEach(function(item){if(item.box.top<=edge&&(!active||item.box.top>active.box.top+4))active=item;});
-    if(window.scrollY+window.innerHeight>=document.documentElement.scrollHeight-2){
+    var scrollY=window.scrollY, height=window.innerHeight;
+    var maxScroll=document.documentElement.scrollHeight-height;
+    if(scrollY>=maxScroll-2){
       var visible=candidates.filter(function(item){return item.box.top<window.innerHeight&&item.box.bottom>edge;});
       if(visible.length)active=visible[visible.length-1];
     }
-    // Native anchor jumps settle before this frame. Retire their intent before
-    // evaluating geometry after a real scroll or viewport change, so an old click
-    // cannot re-arm merely because its section becomes clamped again later.
-    if(clickedView&&(Math.abs(window.scrollY-clickedView.y)>1||
-      window.innerWidth!==clickedView.width||window.innerHeight!==clickedView.height)){
-      clicked=null;clickedView=null;
-    }
     var chosen=candidates.find(function(item){return item.link===clicked;});
-    var fullyVisible=chosen&&chosen.box.top>edge&&chosen.box.bottom<=window.innerHeight;
-    var clamped=fullyVisible&&chosen.box.top+window.scrollY-edge>document.documentElement.scrollHeight-window.innerHeight;
-    if(chosen&&!clickedView)clickedView={y:window.scrollY,width:window.innerWidth,height:window.innerHeight,clamped:!!clamped};
-    if(clickedView){if(clamped)clickedView.clamped=true;else if(!fullyVisible)clickedView.clamped=false;}
+    var fullyVisible=chosen&&chosen.box.top>edge&&chosen.box.bottom<=height;
+    var clamped=fullyVisible&&chosen.box.top+scrollY-edge>maxScroll;
+    if(clickedView){
+      // Late content can move scrollY through browser scroll anchoring. Keep a
+      // clamped target that stays visible while the scroll range changes.
+      var layoutChanged=clickedView.maxScroll!==maxScroll;
+      if(window.innerWidth!==clickedView.width||height!==clickedView.height||
+        (Math.abs(scrollY-clickedView.y)>1&&!(layoutChanged&&clickedView.clamped&&fullyVisible))){
+        clicked=null;clickedView=null;chosen=null;
+      }
+    }
+    // Some browsers deliver the anchor scroll after the first frame. Record its
+    // position only once the target reaches the sticky bar or the page end.
+    if(chosen&&(clickedView||clamped||Math.abs(chosen.box.top-edge)<=4)){
+      clickedView={y:scrollY,width:window.innerWidth,height:height,maxScroll:maxScroll,
+        clamped:!!(clamped||(clickedView&&clickedView.clamped&&fullyVisible))};
+    }
     // Late content can permit further scrolling without moving a fully visible
     // target. Preserve the initial clamped choice until the viewport actually moves.
     if(chosen&&active&&(Math.abs(chosen.box.top-active.box.top)<=4||
-      fullyVisible&&clickedView.clamped))active=chosen;
+      fullyVisible&&clickedView&&clickedView.clamped))active=chosen;
     links.forEach(function(link){if(active&&link===active.link)link.setAttribute('aria-current','location');else link.removeAttribute('aria-current');});
   }
   function schedule(){if(!queued){queued=true;requestAnimationFrame(update);}}
