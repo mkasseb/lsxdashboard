@@ -78,6 +78,7 @@ async function open(c, width=390) {
   const context=await browser.newContext({viewport:{width,height:900},hasTouch:!!c.touch,timezoneId:c.timezone||'America/Chicago'});
   const page=await context.newPage();
   page.setDefaultTimeout(15000);
+  if(c.noIntersectionObserver)await page.addInitScript(()=>{delete window.IntersectionObserver;});
   if(c.measure){const cdp=await context.newCDPSession(page);await cdp.send('Emulation.setCPUThrottlingRate',{rate:4});}
   await page.clock.install({time:new Date(c.now)});
   if(c.webglBlocked)await page.addInitScript(()=>{
@@ -90,7 +91,7 @@ async function open(c, width=390) {
   });
   if(c.storage)await page.addInitScript(storage=>Object.entries(storage).forEach(([key,value])=>localStorage.setItem(key,typeof value==='string'?value:JSON.stringify(value))),c.storage);
   if(c.geo)await page.addInitScript(geo=>Object.defineProperty(navigator,'geolocation',{value:{getCurrentPosition:success=>queueMicrotask(()=>success({coords:{latitude:geo.lat,longitude:geo.lon,accuracy:25}}))}}),c.geo);
-  if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v24',snapshot),c.snapshot);
+  if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v25',snapshot),c.snapshot);
   const errors=[],requests=[],delayedMapScripts=[],heldPoints=[],heldSpcProducts=[],heldCpc=[];
   let spcMetadataRequests=0;
   page.on('pageerror',e=>errors.push(e.message));
@@ -235,6 +236,9 @@ async function open(c, width=390) {
     return route.abort().catch(()=>{}); // Maps and unrelated third-party widgets use their real fallbacks.
   });
   await page.goto(testOrigin+'/'+(c.search||''),{waitUntil:'domcontentloaded'});
+  // Map scenarios explicitly request their subject. Ordinary phone sessions must exercise the
+  // real viewport deferral, including zero library/style/tile traffic before approaching radar.
+  if(c.maps&&!c.deferMaps)await page.evaluate(()=>{requestMaps();});
   if(!c.skipWait)await page.waitForFunction(()=>typeof refreshInFlight!=='undefined'&&refreshInFlight===null&&snapSafeSeq===locSeq);
   return {page,context,errors,requests,change:c=>{active=c;},
     releaseCpc:()=>Promise.all(heldCpc.map(p=>p.route.fulfill({status:200,json:p.body}).catch(()=>{}))),
@@ -351,7 +355,39 @@ async function main() {
       assert.equal(await session.page.evaluate(()=>document.activeElement.id),'h24Title');
       await expectText(session.page,'#hourly24',/unavailable/);
     });
+    await run('quiet outlook stays compact and expands for elevated or missing categories',config('quiet outlook'),async session=>{
+      const {page}=session, breakdown=page.locator('#riskBreakdown'), toggle=breakdown.locator('summary');
+      await expectText(page,'#riskQuiet',/through day 3/);
+      assert(await page.locator('#spc').isHidden());
+      assert(await page.locator('#riskProbabilityNote').isHidden());
+      await toggle.click();
+      assert(await page.locator('#spc').isVisible());
+      await page.evaluate(()=>loadSpc());
+      assert(await breakdown.evaluate(el=>el.open),'A quiet refresh preserves the disclosure state');
+      await toggle.click();
+      session.change(config('missing probability',{threatDown:[7]}));
+      await page.evaluate(()=>loadSpc());
+      assert(await page.locator('#riskProbabilityNote').isVisible());
+      assert(await page.locator('#spcThreats').isHidden());
+      session.change(config('general storms',{spcCategory:2}));
+      await page.evaluate(()=>loadSpc());
+      assert(await page.locator('#riskQuiet').isHidden());
+      await expectText(page,'#spc',/General Storms/);
+      session.change(config('elevated probability',{probabilities:[[5,0,0],[0,0,0]]}));
+      await page.evaluate(()=>loadSpc());
+      assert(await page.locator('#riskQuiet').isHidden());
+      assert(await page.locator('#spcThreats .elevated').isVisible());
+      session.change(config('missing category'));
+      await page.route(/SPC_wx_outlks\/MapServer\/17\/query\?/,route=>route.fulfill({status:503,json:{}}));
+      await page.evaluate(()=>loadSpc());
+      assert(await page.locator('#riskQuiet').isHidden());
+      await expectText(page,'#spc',/Unavailable/);
+    },320);
     for(const width of [320,1280])await run('risk explanations work by tap and remain open after refresh at '+width+'px',config('risk help'),async({page})=>{
+      // Finish the lazy context work before exercising an ordinary disclosure click.
+      // A separate case below deliberately races the press with a radar retry.
+      await page.evaluate(()=>Promise.all([requestContext('stations'),requestContext('context')]));
+      await noCardOverlap(page);
       await page.evaluate(()=>{window.disclosureTrace=[];for(const type of ['pointerdown','pointerup','mousedown','mouseup','click','toggle'])document.addEventListener(type,e=>{const r=document.querySelector('#riskHelp summary').getBoundingClientRect();window.disclosureTrace.push({type,target:e.target.outerHTML?.slice(0,160),x:e.clientX,y:e.clientY,rect:{x:r.x,y:r.y,width:r.width,height:r.height},open:document.getElementById('riskHelp').open,pressed:masonryPointerActive});},true);});
       await page.locator('#riskHelp summary').click();
       try{await page.waitForFunction(()=>document.getElementById('riskHelp').open);}catch(e){console.error('DISCLOSURE_TRACE',JSON.stringify(await page.evaluate(()=>window.disclosureTrace)));throw e;}
@@ -1162,8 +1198,10 @@ async function main() {
       await page.waitForFunction(()=>rvMap&&radarFrames.length>1);
     });
     await run('map time metadata timeout recovers without reloading',config('time timeout',{maps:true,mapTimeHang:true}),async session=>{
-      const {page}=session;await page.clock.runFor(21000);
-      assert.equal(await page.evaluate(()=>radarFallback),true);
+      const {page}=session;
+      await page.waitForFunction(()=>rvMap&&radarRequestGen>0);
+      await page.clock.runFor(21000);
+      await page.waitForFunction(()=>radarFallback);
       session.change(config('time recovered',{maps:true}));await page.evaluate(()=>refreshRadarLayer());
       await page.waitForFunction(()=>radarFrames.length>1&&!radarFallback);
     });

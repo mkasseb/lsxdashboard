@@ -384,26 +384,25 @@ function syncRadarBadge(){
   var lbl=document.getElementById("radarTime");
   if(!lbl) return;
   lbl.className="radar-time";
-  if(!rvMap){lbl.textContent=typeof mapBoot!=="undefined"&&mapBoot.phase==="error"?"map unavailable":"loading map…";return;}
-  if(!skyOn.radar){ lbl.textContent=""; return; }
+  if(!rvMap){lbl.textContent=typeof mapBoot!=="undefined"&&mapBoot.phase==="waiting"?"not loaded":typeof mapBoot!=="undefined"&&mapBoot.phase==="error"?"map unavailable":"loading map…";return;}
+  if(!skyOn.radar){ lbl.textContent=skyOn.sat?"Satellite view":"Radar and satellite off"; return; }
   if(radarDown()){ lbl.textContent="radar unavailable"; lbl.classList.add("down"); return; }
   if(!radarFrames.length){
     // No frame list, but the fallback layer is painting: say it is live without inventing a time.
-    lbl.textContent=radarFallback?"latest sweep":"";
+    lbl.textContent=radarFallback?"latest sweep · time unavailable":"Checking sweep time…";
     return;
   }
   var i=Math.max(0,Math.min(radarFrames.length-1,radarIdx));
   var t=new Date(radarFrames[i].time), latest=(i===radarFrames.length-1);
   var hhmm=t.toLocaleTimeString("en-US", {timeZone:WEATHER_TZ,hour:"numeric",minute:"2-digit"});
-  var age=Math.round((Date.now()-new Date(radarFrames[radarFrames.length-1].time))/60000);
-  if(latest && age>=RADAR_STALE_MIN){
-    // The dangerous case: a real sweep, drawn correctly, quietly an hour out of date.
-    lbl.textContent="sweep "+hhmm+" · "+age+" min old";
+  var age=Math.max(0,Math.floor((Date.now()-t)/60000));
+  var newestAge=(Date.now()-Date.parse(radarFrames[radarFrames.length-1].time))/60000;
+  lbl.textContent=(latest?"Latest sweep ":"Earlier sweep ")+hhmm+" CT · "+age+" min old";
+  if(newestAge>=RADAR_STALE_MIN){
+    lbl.textContent+=" · radar data delayed";
     lbl.classList.add("down");
-    return;
   }
-  lbl.textContent=(latest?"sweep ":"")+hhmm;
-  if(!latest) lbl.classList.add("past");
+  else if(!latest) lbl.classList.add("past");
 }
 function showRadarFrame(i){
   if(!radarFrames.length) return;
@@ -879,7 +878,7 @@ function showAlertOnRadar(ev,scope){
    tiles for the current view on every moveend regardless of whether anything can see them. With
    the radar pane set to display:none, one pan across the state still pulled ~90 reflectivity
    tiles. Off has to mean off the map. */
-var skyOn={radar:true, sat:true};
+var skyOn={radar:true, sat:false};
 var SKY_KEY="lsxSky_v1";
 try{
   var _sk=JSON.parse(localStorage.getItem(SKY_KEY)||"null");
@@ -999,9 +998,10 @@ function syncRadarProductUI(retryLegend){
       :"KLSX reflectivity scale in dBZ; higher values indicate stronger echoes";
   }
   var note=document.getElementById("radarProductNote");
-  if(note) note.textContent=station
-    ? (velocity?"Green: toward KLSX · Red: away. Wind along the radar beam, not surface wind.":"KLSX station coverage only. Use Regional for the surrounding radar network.")
-    : "Regional combines multiple radars. Velocity is available in Local KLSX.";
+  if(note){
+    note.hidden=!velocity;
+    note.textContent=velocity?"Green: toward KLSX · Red: away. Wind along the radar beam, not surface wind.":"";
+  }
 }
 function setRadarView(source,product){
   if(source!=="klsx"&&source!=="regional") return;
@@ -1237,6 +1237,7 @@ function setRadarFull(on){
   if(!card||radarFull===on) return;
   radarFull=on;
   document.body.classList.toggle("radar-full",on);
+  if(on&&typeof requestMaps==="function")requestMaps();
   if(btn){
     btn.setAttribute("aria-expanded",on?"true":"false");
     btn.setAttribute("aria-label",on?"Close radar fullscreen":"Open radar fullscreen");
@@ -1274,7 +1275,7 @@ document.addEventListener("keydown",function(e){
   if(e.key==="Escape"){e.preventDefault();setRadarFull(false);return;}
   if(e.key==="Tab"){
     var card=document.getElementById("radarCard");
-    var controls=[].slice.call(card.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),[tabindex]:not([tabindex="-1"])'))
+    var controls=[].slice.call(card.querySelectorAll('button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),summary,[tabindex]:not([tabindex="-1"])'))
       .filter(function(node){return !node.closest("[inert]")&&node.getClientRects().length;});
     if(!controls.length){e.preventDefault();return;}
     var first=controls[0],last=controls[controls.length-1],active=document.activeElement;

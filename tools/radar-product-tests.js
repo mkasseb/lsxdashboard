@@ -21,6 +21,16 @@ const settings=extra=>config('KLSX products',{now,maps:true,productionCsp:true,r
    const session=await open(settings({alerts:[alert('Tornado Warning',now)]}),width),p=session.page;
    try{
     await ready(p,'klsx_sr_bref');
+    assert.equal(await p.locator('[data-l="sat"]').getAttribute('aria-pressed'),'false');
+    assert(await p.evaluate(()=>!rvMap.hasLayer(satLayer)&&rvMap.hasLayer(baseLabels)));
+    assert.match(await p.locator('#radarTime').innerText(),/Latest sweep .* CT · \d+ min old/);
+    if(width===390){
+      const satellite=p.locator('[data-l="sat"]');
+      await satellite.click();
+      assert(await p.evaluate(()=>rvMap.hasLayer(satLayer)&&rvMap.hasLayer(baseLabels)));
+      await satellite.click();
+      assert(await p.evaluate(()=>!rvMap.hasLayer(satLayer)&&rvMap.hasLayer(baseLabels)));
+    }
     assert.equal((await state(p)).times.at(-1),reflectivity.at(-1));assert((await state(p)).span<=60);
     assert.equal(await p.locator('[data-radar-source="klsx"]').getAttribute('aria-pressed'),'true');
     assert.match(await p.locator('#stationLegendImage').getAttribute('src'),/layer=klsx_sr_bref$/);
@@ -39,6 +49,7 @@ const settings=extra=>config('KLSX products',{now,maps:true,productionCsp:true,r
     assert.match(await p.locator('#radarProductNote').innerText(),/toward KLSX.*away/);
     assert.match(await p.locator('#rsCap').innerText(),/KLSX velocity/);
     await p.locator('#radarSlider').fill('0');assert.equal(await p.evaluate(()=>radarIdx),0);
+    assert.match(await p.locator('#radarTime').innerText(),/Earlier sweep .* CT · \d+ min old/);
     await p.locator('[data-radar-source="regional"]').click();await ready(p,'conus_bref_qcd');
     assert.equal((await state(p)).times.at(-1),regional.at(-1));assert((await state(p)).span<=60);
     assert(await p.locator('#radarProduct').isDisabled());assert(await p.locator('#regionalRadarScale').isVisible());assert(await p.locator('#stationRadarScale').isHidden());

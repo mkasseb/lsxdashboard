@@ -12,10 +12,15 @@ const engine=process.env.WEATHER_BROWSER||'chromium',report=[];
    if(state==='warning')scenario.alerts=[alert('Tornado Warning',scenario.now)];
    const s=await open(scenario,width),p=s.page;
    try{
+    // Deferred maps let the first refresh finish during the existing card entrance. Audit the
+    // completed design, rather than the deliberately translucent intermediate animation frame.
+    await p.evaluate(()=>Promise.all([...document.querySelectorAll('.grid > *')].flatMap(el=>
+     el.getAnimations().filter(a=>Number.isFinite(a.effect.getComputedTiming().iterations)).map(a=>a.finished))));
     if(state==='observation outage'){
      await p.route('**/observations/latest',r=>r.fulfill({status:503,json:{}}));await p.evaluate(()=>loadCurrent());
     }
     const day=p.locator('#daily .day').first();await day.click();
+    await p.locator('#nbmDailyToggle').check();
     await p.locator('#nbmInfo details').evaluate(e=>e.open=true);
     await p.locator('#nbmHourlyInfo').evaluate(e=>e.open=true);
     for(const theme of ['dark','light']){

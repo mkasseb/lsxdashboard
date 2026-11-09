@@ -671,3 +671,23 @@ fragments, so refreshes and outages preserve them without a new snapshot schema.
 navigation section stays active when it is fully visible but too close to the document end to align
 with the sticky bar, including after late context growth at the same viewport. Actual scrolling,
 a new section jump or a viewport dimension change retires that remembered selection.
+
+## November 2026 scan and startup improvements
+
+Hourly planning leads with duration, selected-town NWS attribution, high/low/rain summary and the
+chart. Wind, gusts and feels-like readings remain in the selected-hour details. Model controls and
+source-cycle bookkeeping follow the chart in a native disclosure; a visible legend explains the
+band when present. Incomplete, expired or failed model guidance remains visible outside it.
+Precipitation events follow the chart and retain accumulation-period caveats; a verified dry
+forecast becomes one sentence. Snapshot v25 retires older hourly summary markup.
+
+Healthy feed check/source clocks move into a per-card Sources & updates disclosure. Alerts retain
+their visible check time. Loading, partial, overdue, unavailable and saved states stay outside the
+closed source disclosure and move back inside only after validation succeeds. Observation labels
+identify the actual station by name and code; selected-town forecasts keep their own attribution.
+
+Map bootstrap waits until radar is within 300px of the viewport, Radar navigation or controls are
+used, or station context is requested. The scheduler and refresh do not create demand. A placeholder
+explicitly identifies unloaded radar and offers Load radar; it never implies clear skies. Browsers
+without IntersectionObserver start immediately. Existing bounded retry, layer health, freshness,
+camera, fullscreen, SRI and location-generation behavior remain in place after activation.

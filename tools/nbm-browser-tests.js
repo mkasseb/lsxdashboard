@@ -12,7 +12,7 @@ const modelRoute='**/data/nbm-range.json';
 async function nws(page,f=capture.forecast){await page.evaluate(f=>{renderDailyForecast(f,null);feedUpdate('daily','ready',f.properties.updateTime);},f);}
 async function model(page,data=regional){await page.unroute(modelRoute);await page.route(modelRoute,r=>r.fulfill({json:data}));await page.evaluate(()=>loadNbmRange());}
 async function primary(page){return page.evaluate(()=>({days:JSON.stringify(smart.days),call:document.getElementById('callCard').innerText,rows:Array.from(document.querySelectorAll('#daily .day'),x=>x.textContent),detail:Array.from(document.querySelectorAll('#daily .dd-text'),x=>x.textContent)}));}
-async function expandDay(page,index=0){const day=page.locator('#daily .day').nth(index);if(await day.getAttribute('aria-expanded')!=='true')await day.click();}
+async function expandDay(page,index=0){const day=page.locator('#daily .day').nth(index);if(await day.getAttribute('aria-expanded')!=='true')await day.press('Enter');}
 async function expandTiming(page,index=0){await expandDay(page,index);const timing=page.locator('.nbm-timing').nth(index),summary=timing.locator('summary');await summary.focus();if(!await timing.evaluate(e=>e.open))await summary.press('Enter');}
 async function collapsedRows(page,state,width,timezone){
  await page.evaluate(()=>document.querySelectorAll('#daily .day-item').forEach(row=>setOpen(row,row.querySelector('.day'),false)));
@@ -47,6 +47,20 @@ async function main(){
     assert.equal(await p.locator('#nbmInfo details').getAttribute('open'),null);
     await nws(p);const before=await primary(p);await model(p);
     assert.deepEqual(await primary(p),before,'NBM never changes official values/text or risk decisions');
+    const toggle=p.locator('#nbmDailyToggle');
+    assert.equal(await toggle.isChecked(),false);
+    assert(await p.locator('.nbm-inline').first().isHidden());
+    assert(await p.locator('#nbmInfo').isHidden());
+    await expandDay(p);
+    await p.locator('#daily .day[aria-expanded="true"]').first().waitFor({state:'visible'});
+    assert(await p.locator('.nbm-period-detail').first().isHidden());
+    await toggle.check();
+    await p.locator('.nbm-period-detail').first().waitFor({state:'visible'});
+    await toggle.uncheck();
+    assert(await p.locator('.nbm-inline').first().isHidden());
+    assert.deepEqual(await primary(p),before);
+    await toggle.check();
+    await p.locator('#daily .day').first().press('Enter');
     assert.equal(await p.locator('.nbm-inline').count(),3);assert.equal(await p.locator('.nbm-comparison').count(),5);
     assert.deepEqual(await p.locator('.nbm-inline .nbm-label').allTextContents(),Array(3).fill('NBM model range'));
     assert.equal(await p.locator('.nbm-inline .nbm-window-note').count(),0);
@@ -73,7 +87,7 @@ async function main(){
     await timingSummary.focus();await timingSummary.press('Enter');
     assert(await timing.evaluate(e=>e.open));assert(await p.locator('.nbm-comparison').first().isVisible());
     assert.match(await timing.innerText(),/NWS high.*Oct 9.*CDT/);
-    assert.match(await timing.innerText(),/Different interval \(18 hours\).*Oct 10, 1:00 AM CDT/);
+    assert.match(await timing.innerText(),/Different interval \(18 hours\).*Oct 10(?:,| at) 1:00 AM CDT/);
     assert.match(await timing.innerText(),/median \(P50\)/);
     await model(p);assert(await timing.evaluate(e=>e.open));assert(await timingSummary.evaluate(e=>e===document.activeElement));
     await p.evaluate(()=>loadForecast._paint());assert(await timing.evaluate(e=>e.open));assert(await timingSummary.evaluate(e=>e===document.activeElement));
@@ -101,6 +115,7 @@ async function main(){
     const forecastHeld=new Promise(resolve=>{releaseForecast=resolve;});
     await p.route('**/forecast',async r=>{await forecastHeld;await r.fulfill({json:capture.forecast});});
     await p.reload({waitUntil:'domcontentloaded'});
+    assert(await p.locator('#nbmDailyToggle').isChecked(),'The seven-day preference survives reload');
     await p.waitForFunction(()=>typeof snapRestored!=='undefined'&&snapRestored);
     await model(p);
     assert((await p.locator('#daily .day-item').count())>0,'Saved NWS rows restore');
@@ -197,7 +212,7 @@ async function main(){
    }finally{await s.context.close();}
   }
   const s=await open(config('NBM opt-out',{now,search:'?nbm=0'}),390);
-  assert.equal(await s.page.locator('#nbmInfo,.nbm-inline,#nbmRangeCard').count(),0);
+  assert.equal(await s.page.locator('#nbmDailyToggle,#nbmInfo,.nbm-inline,#nbmRangeCard').count(),0);
   assert.equal(await s.page.evaluate(()=>Object.hasOwn(FEEDS,'nbmRange')),false);await s.context.close();
   await require('./guidance-activation-tests')(engine);
  }finally{await browser.close();}

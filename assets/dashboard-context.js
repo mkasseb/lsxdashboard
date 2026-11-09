@@ -6,7 +6,7 @@ function requestContext(key){
   deferredFeeds[key]=true;
   stampSched([key]);
   var job=runFeed(key);
-  if(key==="stations") job=Promise.all([job,ensureMaps()]);
+  if(key==="stations") job=Promise.all([job,requestMaps()]);
   return job;
 }
 function initContextView(){

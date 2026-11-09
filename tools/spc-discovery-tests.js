@@ -42,7 +42,7 @@ function harness(metadataReply=()=>response(spc),queryReply=null,otherReply=null
     clearTimeout(id){timers.delete(id);},
     current:{name:'Lake St. Louis, MO',lat:38.8,lon:-90.79},smart:{},callRisk:null,
     document:{hidden:false,getElementById(id){return elements[id]||(elements[id]={innerHTML:'',textContent:''});}},
-    ic:()=>'',textOn:()=>'',renderSpcThreats:days=>paints.push(days),feedUpdate:(...args)=>updates.push(args),
+    ic:()=>'',textOn:()=>'',renderSpcThreats:days=>paints.push(days),syncRiskBreakdown:()=>{},feedUpdate:(...args)=>updates.push(args),
     stampSched:keys=>restores.push(keys),runFeed:()=>Promise.resolve().then(()=>context.loadSpc())
   };
   context.fetch=(url,options)=>{

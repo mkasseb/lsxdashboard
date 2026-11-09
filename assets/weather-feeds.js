@@ -243,18 +243,13 @@ function loadCurrent(){
       +'</div>'
       +currentExposure()
       +'<div class="cc-ctx" id="ccCtx"></div>'
-      // Every source in one line, set to be read second. AirNow is a constant href, so it lives in
-      // the markup rather than being rebuilt by renderAqiMini — which means it survives an AQI
-      // outage, exactly when someone would want to go look the number up themselves.
-      // Naming Open-Meteo is not decoration: the exposure pair now wears the same chrome as the
-      // metric tiles, and those ARE the station's. Without this the line above would read as a
-      // claim that KSUS measures UV and PM2.5.
-      +'<div class="stn">Observed '+timeAgo(p.timestamp)+' · <span class="has-hint" title="'
-      +esc(stnName(current.station)||"The weather station these readings come from")+'">'
-      +esc(current.station)+'</span>'
-      +' · UV &amp; air Open-Meteo'
+      // A station observation is distinct from the selected town's NWS point forecast.
+      // Exposure attribution and all check/source clocks remain in Sources & updates.
+      +'<div class="stn cc-observation-source">Observed '+timeAgo(p.timestamp)+' at '
+      +esc(stnName(current.station)||current.station)
+      +(stnName(current.station)?' ('+esc(current.station)+')':'')
       +'<span id="ccRecSrc"></span>'
-      +' · <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a></div>';
+      +'</div>';
     renderHeroToday();    // today's range + sun times, once the 7-day has landed
     renderUvNow();        // UV, once Open-Meteo has answered
     renderCurrentCtx();   // normals + today's records, once climate context has landed
@@ -847,6 +842,11 @@ function loadSpc(){
     }
     el.innerHTML=html;
     renderSpcThreats(r[11]);
+    var threats=r[11]||[];
+    var elevated=threats.some(function(day){return day&&day.values.some(function(v){return v>0;});});
+    var complete=threats.length===2&&threats.every(function(day){return day&&day.values.every(function(v){return v!=null;});});
+    // Only nine verified zero categories qualify. General storms and missing categories stay visible.
+    syncRiskBreakdown(r.slice(0,9).every(function(v){return v===0;})&&!elevated,!complete);
     if(typeof renderTheCall==="function") renderTheCall();   // outlook levels can add/remove a verdict pill
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
@@ -854,6 +854,7 @@ function loadSpc(){
     el.innerHTML='<div class="empty">Risk outlooks unavailable. <a href="https://www.spc.noaa.gov/products/outlook/day1otlk.html" target="_blank" rel="noopener">Open SPC \u2197</a> \u00b7 <a href="https://www.spc.noaa.gov/products/fire_wx/" target="_blank" rel="noopener">Fire \u2197</a></div>';
     callRisk=null;                                           // never let a stale outlook keep a pill alive
     renderSpcThreats(null);
+    syncRiskBreakdown(false);
     if(typeof renderTheCall==="function") renderTheCall();
   }).finally(function(){
     signal.removeEventListener("abort",abort);
