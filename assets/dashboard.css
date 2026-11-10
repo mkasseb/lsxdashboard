@@ -118,18 +118,11 @@
   .leaflet-tooltip.stn-tip .stn-when{display:block;font-weight:400;color:var(--muted);
     font-size:11px;margin-top:4px}
 
-  /* ===== Temperature as text =====
-     The ramp's HUE is the data; its lightness is only how the data is made readable, and the two
-     themes need opposite answers to that. So the markup writes --th (see tvAttr in the script) and
-     the lightness comes from here. 72% / 30% are the extremes of what still clears 4.5:1 on every
-     surface these numbers land on — including a --chip pill, which is darker than the card and was
-     where the old flat 52% failed hardest. Saturation drops from the graphic ramp's 78% because at
-     the lightness AA demands, 78% pushes the yellow-green middle of the ramp somewhere no
-     temperature should be. */
-  :root{--t-s:80%;--t-l:73%}
-  :root[data-theme="light"]{--t-s:70%;--t-l:22%}
-  .tv{color:hsl(var(--th),var(--t-s),var(--t-l))}
-  text.tv{fill:hsl(var(--th),var(--t-s),var(--t-l))}
+  /* Temperature labels and marks adjust contrast when the theme changes. */
+  :root{--t-text-shade:white 42%;--t-mark-shade:black 0%}
+  :root[data-theme="light"]{--t-text-shade:black 47%;--t-mark-shade:black 26%}
+  .tv{color:color-mix(in srgb,var(--t-color),var(--t-text-shade))}
+  text.tv{fill:currentColor}
 
   /* ===== Icons =====
      One sprite, drawn as strokes, sized in em and inheriting currentColor. The em sizing is the
@@ -692,9 +685,7 @@
   .cc-range .cr-drop{font-size:var(--fs-2xs);font-weight:800;text-transform:uppercase;
     letter-spacing:var(--ls-eyebrow);color:var(--muted);white-space:nowrap;flex:0 0 auto}
   .cc-track{position:relative;flex:1 1 auto;height:8px;border-radius:5px;background:var(--chip);min-width:0}
-  /* Geometry only. The fill's colour is written inline from tCol(lo)→tCol(hi), the same ramp the
-     7-day rows use — do not put a static gradient back here. A fixed ramp painted every day the
-     same blue→green→yellow→orange, which contradicted this row's own end labels. */
+  /* The Today bar and 7-day rows use the same absolute temperature gradient. */
   .cc-track i{position:absolute;top:0;bottom:0;left:0;right:0;border-radius:5px}
   .cc-track b{position:absolute;top:-4px;width:4px;height:16px;border-radius:3px;background:var(--text);
     box-shadow:0 0 0 2px var(--panel),0 1px 4px rgba(0,0,0,.35);margin-left:-2px}

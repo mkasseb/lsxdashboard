@@ -140,11 +140,11 @@ function check(name, actual, expected) {
   failed++;
 }
 
-/* Restored outlook fragments must include the new official source anchors. */
-check('compact hourly layout migration bumps the snapshot key',
-  /var SNAP_KEY="lsxSnap_v25"/.test(SRC), true);
-check('the previous v24 snapshot is explicitly discarded',
-  /"lsxSnap_v24"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
+/* Saved charts and forecasts embed temperature colors in their markup. */
+check('the temperature palette migration bumps the snapshot key',
+  /var SNAP_KEY="lsxSnap_v30"/.test(SRC), true);
+check('the previous temperature snapshots are explicitly discarded',
+  /"lsxSnap_v25","lsxSnap_v26","lsxSnap_v27","lsxSnap_v28","lsxSnap_v29"\]\s*\.forEach\(function\(k\)\{ localStorage\.removeItem\(k\); \}\)/.test(SRC), true);
 const snapshotParts = new Function(lift(/^var FEEDS=\{[\s\S]*?^\};/m, 'FEEDS')+'\n'+
   lift(/^var SNAP_PARTS=.*$/m, 'SNAP_PARTS')+'; return SNAP_PARTS;')();
 check('saved HTML cannot restore stale current readings, risk or briefing',

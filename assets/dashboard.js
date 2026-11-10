@@ -150,27 +150,38 @@ function wxGroup(desc,day){
   return day?"sun":"night";
 }
 
-/* ONE temperature→hue ramp (cold blue → hot red), shared by everything that colours a temperature,
-   so a given reading reads the same on every card. Only the LIGHTNESS is per-context: thin strokes
-   and text sit on the dark panel and want 52%, while the station-plot chips are filled blocks
-   carrying dark text and need 62% to stay above 4.5:1 at the blue and red ends of the ramp. The
-   HUE — the part that actually encodes the value — is identical, which is what the station plot
-   used to get wrong by keeping its own 7-bucket scale. */
-/* The domain is −10…95°F. It ran 15–95 for years, which handed every cold-snap reading the same
-   terminal blue — the station plot's whole job is regional spread, and it went monochrome exactly
-   the week that spread was the story. −10 covers a modern St. Louis outbreak; whatever undershoots
-   it still clamps. The ENDPOINT hues (225 and 0) are untouched, so the 52%/62% lightness contrast
-   tuning below still holds — mid-range temps just sit a shade warmer than they used to. */
-function tHue(t){ return Math.round(225-225*Math.max(0,Math.min(1,(t+10)/(95+10)))); }
-function tCol(t){ return "hsl("+tHue(t)+",78%,52%)"; }    // strokes, gradients, marks
-function tChip(t){ return "hsl("+tHue(t)+",78%,62%)"; }   // filled chips that carry dark text
-/* Temperature as a NUMBER you read, rather than a stroke you look at. tCol()'s 52% lightness is
-   tuned to sit on a dark canvas as a line; the same value set as 13px text lands at 3-4:1, and the
-   value that fixes that in the dark theme (a bright 72%) is invisible on white. An inline style is
-   written once at render time and cannot know which theme it will be read in, so the markup emits
-   the HUE only and CSS picks the lightness per theme — which also means the colours re-resolve the
-   instant someone flips the toggle, with nothing to re-render. */
-function tvAttr(t,cls){ return 'class="tv'+(cls?" "+cls:"")+'" style="--th:'+tHue(t)+'"'; }
+/* W3C named sRGB colors with intermediate stops for the dashboard's absolute Fahrenheit scale.
+   SteelBlue and SkyBlue set the cool side. LightSalmon and IndianRed set the warm side. */
+var TEMP_COLORS=[
+  [-10,[70,130,180]],  // SteelBlue
+  [32,[92,165,213]],   // clear blue
+  [46,[135,186,220]],  // softened SkyBlue
+  [52,[169,174,183]],  // neutral gray
+  [64,[237,144,118]],  // softened LightSalmon
+  [95,[205,92,92]]     // IndianRed
+];
+function tCol(t){
+  var last=TEMP_COLORS.length-1;
+  t=Math.max(TEMP_COLORS[0][0],Math.min(TEMP_COLORS[last][0],t));
+  var i=1;
+  while(i<last&&t>TEMP_COLORS[i][0]) i++;
+  var lo=TEMP_COLORS[i-1], hi=TEMP_COLORS[i], f=(t-lo[0])/(hi[0]-lo[0]);
+  return "rgb("+lo[1].map(function(channel,j){ return Math.round(channel+(hi[1][j]-channel)*f); }).join(",")+")";
+}
+function tMark(t){ return "color-mix(in srgb,"+tCol(t)+",var(--t-mark-shade))"; }
+// Include interior palette stops so a wide range follows the same colors as individual readings.
+function tGradient(start,end){
+  var stops=[tMark(start)+" 0%"];
+  var colors=end<start?TEMP_COLORS.slice().reverse():TEMP_COLORS;
+  colors.forEach(function(stop){
+    var fraction=(stop[0]-start)/(end-start);
+    if(fraction>0&&fraction<1) stops.push(tMark(stop[0])+" "+(fraction*100)+"%");
+  });
+  stops.push(tMark(end)+" 100%");
+  return "linear-gradient(90deg,"+stops.join(",")+")";
+}
+function tChip(t){ return "color-mix(in srgb,"+tCol(t)+",white 20%)"; } // chips carry dark text
+function tvAttr(t,cls){ return 'class="tv'+(cls?" "+cls:"")+'" style="--t-color:'+tCol(t)+'"'; }
 
 var forecastGrid={status:"loading",properties:null,gusts:[]}, hourlyHours=24;
 function forecastClock(ms){
@@ -301,7 +312,7 @@ function renderHourly24(hrs){
 
   // per-hour temperature gradient
   var grad="";
-  for(i=0;i<n;i++){ grad+='<stop offset="'+((X(i)-padL)/innerW*100).toFixed(1)+'%" stop-color="'+tCol(temps[i])+'"/>'; }
+  for(i=0;i<n;i++){ grad+='<stop offset="'+((X(i)-padL)/innerW*100).toFixed(1)+'%" stop-color="'+tMark(temps[i])+'"/>'; }
 
   // Curve segments stop at missing hours. The x-axis always represents elapsed time.
   function curve(values,fill){
@@ -361,7 +372,7 @@ function renderHourly24(hrs){
   // now marker
   var nowX=X(0), nowY=Y(temps[0]);
   var nowMark='<line class="h24-nowline" x1="'+nowX+'" y1="'+(curveTop-14)+'" x2="'+nowX+'" y2="'+(barBase+2)+'" stroke="var(--accent)" stroke-dasharray="3 4" stroke-width="1" opacity=".55"/>'
-    +'<circle class="h24-nowdot" cx="'+nowX+'" cy="'+nowY.toFixed(1)+'" r="4.5" fill="'+tCol(temps[0])+'" stroke="var(--bg)" stroke-width="2"/>';
+    +'<circle class="h24-nowdot" cx="'+nowX+'" cy="'+nowY.toFixed(1)+'" r="4.5" fill="'+tMark(temps[0])+'" stroke="var(--bg)" stroke-width="2"/>';
 
   if(Date.parse(hrs[0].startTime)!==windowStart) nowMark="";
 

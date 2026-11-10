@@ -61,8 +61,9 @@
 // v23: airport record rows are revalidated independently of saved NWS markup.
 // v24: older daily markup can present an unknown rain chance as 0%; it cannot be revalidated.
 // v25: compact hourly summaries replace the older multi-row chip layout.
-var SNAP_KEY="lsxSnap_v25", snapRestored=false;
-try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13","lsxSnap_v14","lsxSnap_v15","lsxSnap_v16","lsxSnap_v17","lsxSnap_v18","lsxSnap_v19","lsxSnap_v20","lsxSnap_v21","lsxSnap_v22","lsxSnap_v23","lsxSnap_v24"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
+// v30: refresh cached forecast markup that embeds the previous temperature colors.
+var SNAP_KEY="lsxSnap_v30", snapRestored=false;
+try{ ["lsxSnap_v1","lsxSnap_v3","lsxSnap_v4","lsxSnap_v5","lsxSnap_v6","lsxSnap_v7","lsxSnap_v8","lsxSnap_v9","lsxSnap_v10","lsxSnap_v11","lsxSnap_v12","lsxSnap_v13","lsxSnap_v14","lsxSnap_v15","lsxSnap_v16","lsxSnap_v17","lsxSnap_v18","lsxSnap_v19","lsxSnap_v20","lsxSnap_v21","lsxSnap_v22","lsxSnap_v23","lsxSnap_v24","lsxSnap_v25","lsxSnap_v26","lsxSnap_v27","lsxSnap_v28","lsxSnap_v29"].forEach(function(k){ localStorage.removeItem(k); }); }catch(e){}   // don't let dead snapshots crowd the live one
 var SNAP_PARTS=Object.keys(FEEDS).reduce(function(parts,k){return parts.concat((FEEDS[k].snapshot||[]).map(function(p){return Object.assign({feed:k},p);}));},[]);
 function saveSnapshot(){
   // Mid-transition the DOM still shows the OLD place while `current` is already the new one --

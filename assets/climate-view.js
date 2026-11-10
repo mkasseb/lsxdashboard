@@ -219,7 +219,7 @@ function renderHeroToday(){
     out+='<div class="cc-range">'
       +'<span class="cr-lbl">'+(nextDay?"Tonight":"Today")+'</span>'
       +'<span '+tvAttr(lo,"cr-lo")+'>'+lo+'°</span>'
-      +'<span class="cc-track"><i style="background:linear-gradient(90deg,'+tCol(lo)+','+tCol(hi)+')"></i>'+mark+'</span>'
+      +'<span class="cc-track"><i style="background:'+tGradient(lo,hi)+'"></i>'+mark+'</span>'
       +'<span '+tvAttr(hi,"cr-hi")+'>'+hi+'°'
         +(nextDay?'<span class="cr-nx">tmrw</span>':'')+'</span>'
       +(r.drop!=null?'<span class="cr-drop">'+r.drop+'° colder</span>':'')

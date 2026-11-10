@@ -140,11 +140,8 @@ function rangeMark(lo,hi,now){
    seeing, and the only one that vanished. Nothing else needed changing: rangeMark()'s fraction
    already handles a descending pair, because both differences flip sign together.
 
-   The gradient is not what tells you the direction — tCol() maps each end by its ABSOLUTE value on
-   the scale the rest of the page shares, so 62°→48° is green-to-green and reads as two mild
-   readings, which is what they are. Direction comes from the numbers and the mark's position. That
-   is the deliberate trade made when this bar joined the shared scale: a gradient tuned to dramatise
-   each row's own delta would make identical colours mean different things in different cards. */
+   The gradient uses the shared absolute temperature scale. The numbers and marker show the
+   direction of the change. */
 function rangeRow(d0,d1,now){
   var lo=d0&&d0.night?d0.night.temperature:null;
   var hi=d0&&d0.day?d0.day.temperature:null;
