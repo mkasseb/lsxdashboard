@@ -1170,6 +1170,38 @@ function buildBottomLine(candidates,localAlert){
   return {lead:lead,supports:supports};
 }
 
+/* "Do I need a coat?" for the Your Day card. Reads only the normalized hourly records that
+   bottomLineHours() produced, over the hours someone is plausibly outside (7am–10pm local) in
+   the next 15. Feels-like is preferred over air temperature because that is what a person
+   dresses for. Fails quiet (null) without at least three usable waking hours rather than
+   guessing from one. Rain and winter cues come from the same NWS chances and wording the
+   briefing uses, so the two never disagree about whether it is wet. */
+function glanceWear(H){
+  var out=(H||[]).slice(0,15).filter(function(h){
+    return h&&h.hr>=7&&h.hr<=22&&(h.fl!=null||h.t!=null)&&isFinite(h.fl!=null?h.fl:h.t);
+  });
+  if(out.length<3) return null;
+  var fl=out.map(function(h){ return Math.round(h.fl!=null?h.fl:h.t); });
+  var lo=Math.min.apply(null,fl), hi=Math.max.apply(null,fl), swing=hi-lo;
+  var wet=out.some(function(h){ return h.pop!=null&&h.pop>=40&&!h.wint; });
+  var wintry=out.some(function(h){ return h.pop!=null&&h.pop>=30&&h.wint; });
+  var wear,icon="cold";
+  if(lo<=20) wear="Heavy coat, hat and gloves";
+  else if(lo<=35) wear="Winter coat";
+  else if(lo<=50) wear="Warm jacket";
+  else if(lo<=62) wear="Light jacket or sweater";
+  else if(hi>=88){ wear="Light, breathable clothes"; icon="heat"; }
+  else { wear="Short sleeves"; icon="sun"; }
+  var extras=[];
+  if(swing>=18&&lo<=62) extras.push("dress in layers");
+  if(wintry) extras.push("waterproof boots");
+  if(wet) extras.push("bring an umbrella");
+  return {icon:icon,topic:"wear",label:"Wear",headline:wear,
+          detail:"Feels like "+(lo===hi?lo+"°":lo+"–"+hi+"°")+" while you're out"
+            +(extras.length?" · "+extras.join(", "):"")+".",
+          lo:lo,hi:hi,umbrella:wet,boots:wintry,layers:swing>=18&&lo<=62};
+}
+
 function extractAFD(text){
   var wants=[["KEY MESSAGES","Key Messages","key"],["SYNOPSIS","Synopsis","para"],["SHORT TERM","Short-Term Outlook","para"]];
   for(var i=0;i<wants.length;i++){

@@ -108,6 +108,7 @@ const SUBJECT = new Function(`
   ${lift(/^function bottomLineAlertHeadline\(candidate,outdoor,alert\)\{[\s\S]*?^\}/m, 'bottomLineAlertHeadline()')}
   ${lift(/^function bottomLineWindowAction\(candidate,outdoor\)\{[\s\S]*?^\}/m, 'bottomLineWindowAction()')}
   ${lift(/^function buildBottomLine\(candidates,localAlert\)\{[\s\S]*?^\}/m, 'buildBottomLine()')}
+  ${lift(/^function glanceWear\(H\)\{[\s\S]*?^\}/m, 'glanceWear()')}
   ${lift(/^function extractAFD\(text\)\{[\s\S]*?^\}/m, 'extractAFD()')}
   ${lift(/^function parseMcd\(text\)\{[\s\S]*?^\}/m, 'parseMcd()')}
   ${lift(/^function mcdValidEnd\(v,refMs\)\{[\s\S]*?^\}/m, 'mcdValidEnd()')}
@@ -128,7 +129,7 @@ const SUBJECT = new Function(`
            OUTLOOK_CFG, outlookVerdict, precipChance, bottomLineHours, bottomLineHourlyCandidates, bottomLineWeekCandidates,
            currentObservationFresh, stationMiles, gridInterval, gridSeries, gridAmount, gridGustAt,
            precipEventSummary, forecastWindowHours, spcUtcTime, spcOutlookPeriod, spcThreatProbability, spcThreatText,
-           bottomLineLocalAlert, bottomLineAlertMatch, buildBottomLine,
+           bottomLineLocalAlert, bottomLineAlertMatch, buildBottomLine, glanceWear,
            extractAFD, parseMcd, mcdValidEnd, geomTouchesEnv, watchBoundary, chaikinRing };
 `)();
 
@@ -1034,6 +1035,33 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
   check('an alert with no verified end remains conservative',
     SUBJECT.bottomLineLocalAlert([{...localWarning,latest:0}],500),
     {event:'High Wind Warning',family:'wind',level:'warning',ends:0});
+}
+
+/* ============ glanceWear ============ */
+{
+  const G = SUBJECT.glanceWear;
+  const hr = (h, fl, pop, extra) => Object.assign({hr: h, t: fl, fl, pop, wint: false}, extra || {});
+  const day = (fls, pop, extra) => fls.map((f, i) => hr(7 + i, f, pop, extra));
+  check('wear withholds with fewer than three waking hours', G([hr(3,40,0),hr(4,40,0),hr(8,40,0)]), null);
+  check('wear ignores overnight hours entirely', G([0,1,2,3,4,5].map(h => hr(h,10,0))), null);
+  check('wear: bitter cold asks for hat and gloves', G(day([12,15,18],0)).headline, 'Heavy coat, hat and gloves');
+  check('wear: freezing day is a winter coat', G(day([28,31,34],0)).headline, 'Winter coat');
+  check('wear: chilly day is a warm jacket', G(day([42,46,48],0)).headline, 'Warm jacket');
+  check('wear: cool day is a light jacket', G(day([55,58,60],0)).headline, 'Light jacket or sweater');
+  check('wear: mild day is short sleeves', G(day([68,74,78],0)).headline, 'Short sleeves');
+  check('wear: hot day goes breathable', G(day([80,88,94],0)).headline, 'Light, breathable clothes');
+  const swing = G(day([40,50,60,62],0));
+  check('wear: a big swing on a cool day says layers', [swing.layers, /dress in layers/.test(swing.detail)], [true, true]);
+  check('wear: a big swing on a hot day does not', G(day([64,75,90],0)).layers, false);
+  const wet = G(day([50,52,54],60));
+  check('wear: rain likely adds an umbrella', [wet.umbrella, /bring an umbrella/.test(wet.detail)], [true, true]);
+  const snow = G(day([28,30,31],50,{wint:true}));
+  check('wear: wintry precip means boots, not an umbrella', [snow.boots, snow.umbrella], [true, false]);
+  check('wear: feels-like range is reported', G(day([50,52,54],0)).detail, "Feels like 50–54° while you're out.");
+  check('wear falls back to air temperature when feels-like is missing',
+    G([7,8,9].map(h => ({hr:h, t:30, fl:null, pop:0, wint:false}))).headline, 'Winter coat');
+  check('wear only looks 15 hours ahead',
+    G(day([70,70,70,70,70,70,70,70,70,70,70,70,70,70,70,20],0)).headline, 'Short sleeves');
 }
 
 /* ============ buildBottomLine ============ */

@@ -1526,6 +1526,67 @@ function renderTheCall(){
   var model=buildBottomLine(candidates,callLocalAlert);
   renderTheCall._nbmContext={model:model,candidates:candidates};
   renderNwsMessages();
+  renderGlance(H,hourlyReady,candidates);
+}
+
+/* ============ YOUR DAY ============
+   The briefing engine above already ranks every hourly, outlook and climate fact; this card is
+   where it finally gets read. It builds its OWN model (adding seven-day candidates past the
+   hourly edge) so the NBM commentary that reads renderTheCall._nbmContext is untouched. */
+function glanceIcon(name){
+  return '<svg class="ic" aria-hidden="true"><use href="#i-'+esc(name||"info")+'"/></svg>';
+}
+function renderGlance(H,hourlyReady,candidates){
+  var box=document.getElementById("glance"), card=document.getElementById("glanceCard");
+  if(!box||!card) return;
+  var now=Date.now(), statusEl=document.getElementById("glanceStatus"), notes=[];
+  var hourlyState=feedState(feedChecks.hourly,now,FEEDS.hourly.age);
+  if(feedState(feedChecks.alerts,now,FEEDS.alerts.age)!=="ready")
+    notes.push("Alert status is unverified. Check official NWS warnings.");
+  var html;
+  var usable=hourlyState==="ready"||hourlyState==="partial";
+  if(!usable||!hourlyReady){
+    // "saved" (snapshot paint) and "loading" wait for the live check; only a real failure,
+    // an overdue check or a too-short live series says so.
+    html=!usable&&hourlyState!=="unavailable"&&hourlyState!=="stale"
+      ?'<div class="loading">Reading the forecast…</div>'
+      :'<p class="glance-empty">No summary right now: the NWS hourly forecast for '+esc(current.name)
+        +' is unavailable or out of date. '+officialSourceLink('https://forecast.weather.gov/MapClick.php?lat='+current.lat+'&lon='+current.lon,'NWS local forecast for '+current.name,'Open the NWS forecast ↗')+'</p>';
+  }else{
+    var all=candidates.slice(), cutoff=H[H.length-1].end;
+    if(smart.weekDays&&smart.weekDays.length)
+      all=all.concat(bottomLineWeekCandidates(smart.weekDays,cutoff,smart.hourlyAll));
+    var model=buildBottomLine(all,callLocalAlert), wear=glanceWear(H);
+    renderGlance._model=model;
+    if(!model.lead){
+      // buildBottomLine withholds everything during an emergency it cannot match to forecast
+      // evidence. The alert card above is the message; this card must not compete with it.
+      html='<p class="glance-empty">An emergency alert is active here. Follow the alert above and official instructions.</p>';
+    }else{
+      var L=model.lead;
+      html='<div class="glance-lead tone-'+esc(L.tone)+'">'
+        +'<span class="glance-lead-ico">'+glanceIcon(L.icon)+'</span>'
+        +'<div><p class="glance-label">'+esc(L.label)+'</p>'
+        +'<p class="glance-headline">'+esc(L.headline)+'</p>'
+        +(L.detail?'<p class="glance-detail">'+esc(L.detail)+'</p>':'')
+        +(L.action?'<p class="glance-action">'+esc(L.action)+'</p>':'')
+        +'</div></div>';
+      var rows=model.supports.slice();
+      // Clothing is a constant question, so it always gets a row, unless a warning has the lead.
+      if(wear&&!L.alertAware) rows.splice(Math.min(rows.length,2),0,wear);
+      if(rows.length) html+='<ul class="glance-list">'+rows.map(function(c){
+        return '<li class="tone-'+esc(c.tone||"neutral")+'">'+glanceIcon(c.icon)
+          +'<span class="glance-row-label">'+esc(c.label)+'</span>'
+          +'<span class="glance-row-text"><strong>'+esc(c.headline)+'</strong>'
+          +(c.detail?' <span>'+esc(c.detail)+'</span>':'')+'</span></li>';
+      }).join('')+'</ul>';
+    }
+  }
+  var scope=document.getElementById("glanceScope"), scopeText=current.name?"For "+current.name:"Next 24 hours";
+  if(scope&&scope.textContent!==scopeText) scope.textContent=scopeText;
+  var noteText=notes.join(" ");
+  if(statusEl&&statusEl.textContent!==noteText){statusEl.textContent=noteText;statusEl.hidden=!noteText;}
+  if(box.innerHTML!==html) box.innerHTML=html;
 }
 
 /* ============ LIVE EXPIRY COUNTDOWNS ============

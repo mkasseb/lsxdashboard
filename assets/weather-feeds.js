@@ -31,7 +31,7 @@ var FEEDS={
   alerts:{label:"Alerts",card:"alertsCard",load:"loadAlerts",every:60000,age:2*60000,local:true,reset:{alerts:"Checking alerts…"}},
   current:{label:"Observation",card:"currentCard",load:"loadCurrent",every:10*60000,age:20*60000,local:true,reset:{current:"Loading conditions…",ccCtx:""}},
   daily:{label:"Daily forecast",card:"forecastCard",load:"loadForecast",every:30*60000,age:60*60000,local:true,reset:{daily:"Loading forecast…"},snapshot:[{id:"daily",ttl:6*3600000}]},
-  hourly:{label:"Hourly forecast",card:"h24Card",owner:"daily",age:60*60000,local:true,reset:{hourly24:"Loading hourly…",h24loc:""},snapshot:[{id:"hourly24",ttl:3*3600000},{id:"h24loc",ttl:3*3600000}]},
+  hourly:{label:"Hourly forecast",card:"h24Card",owner:"daily",age:60*60000,local:true,reset:{hourly24:"Loading hourly…",h24loc:"",glance:"Reading the forecast…"},snapshot:[{id:"hourly24",ttl:3*3600000},{id:"h24loc",ttl:3*3600000}]},
   grid:{label:"Amounts / gusts",card:"h24Card",load:"loadForecastGrid",every:30*60000,age:60*60000,local:true,reset:{precipEvents:"Loading precipitation amounts…"}},
   aqi:{label:"Air quality",card:"currentCard",load:"loadAqi",every:20*60000,age:40*60000,local:true,reset:{aqi:"",aqiMini:""}},
   uv:{label:"UV",card:"currentCard",load:"loadUv",every:60*60000,age:120*60000,local:true,reset:{ccUv:""}},
