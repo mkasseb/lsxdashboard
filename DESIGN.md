@@ -764,3 +764,13 @@ shows nothing but a pointer to the alert during an emergency the engine cannot m
 forecast evidence. It is never restored from the snapshot, and a location change resets it with
 the hourly feed. Colour is used only for the severity tone on the lead's rule and icons. On wide
 screens the lead and the supporting rows sit side by side, so the card costs one short band of height.
+
+Freezing is amber, not red, unless the low is 24° or colder ("Hard freeze by …"). A routine
+31° November morning in red trained readers to ignore red; the engine keeps the same priority so
+an ordinary freeze can still lead a quiet day. "Freezing early" became "Below freezing by 6am",
+because "early" read as early in the season. A first-freeze-of-season rule would need the
+season's observed minimums, which no current feed loads.
+
+On phones the card shows the lead and one row (Wear when present); the rest sits behind a
+44px "Show N more for today" button whose state survives refreshes. Wider screens ignore the
+collapse. `tools/glance-browser-tests.js` covers the toggle, the wide layout and both freeze tones.

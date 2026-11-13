@@ -812,7 +812,15 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
 
   const EVE = new Date(2026, 7, 13, 18);
   H = hours(EVE, 18, i => ({t: i === 0 ? 72 : (i === 12 ? 28 : 60), fl: i === 0 ? 72 : (i === 12 ? 28 : 60)}));
-  check('a freezing morning becomes the cold lead candidate', topic(weather(H, {now: EVE}), 'cold').headline, 'Freezing early');
+  check('a freezing morning becomes the cold lead candidate', topic(weather(H, {now: EVE}), 'cold').headline, 'Below freezing by 6am tomorrow');
+  check('an ordinary freeze is amber, not red', topic(weather(H, {now: EVE}), 'cold').tone, 'warning');
+  H = hours(EVE, 18, i => ({t: i === 0 ? 60 : (i === 12 ? 22 : 40), fl: i === 0 ? 60 : (i === 12 ? 22 : 40)}));
+  check('a hard freeze is named and red', [topic(weather(H, {now: EVE}), 'cold').headline, topic(weather(H, {now: EVE}), 'cold').tone],
+    ['Hard freeze by 6am tomorrow', 'danger']);
+  H = hours(EVE, 18, i => ({t: i === 0 ? 60 : (i === 12 ? 24 : 40), fl: i === 0 ? 60 : (i === 12 ? 24 : 40)}));
+  check('24 degrees is the hard-freeze edge', topic(weather(H, {now: EVE}), 'cold').tone, 'danger');
+  H = hours(EVE, 18, i => ({t: i === 0 ? 60 : (i === 12 ? 25 : 40), fl: i === 0 ? 60 : (i === 12 ? 25 : 40)}));
+  check('25 degrees stays amber', topic(weather(H, {now: EVE}), 'cold').tone, 'warning');
   H = hours(NOW, 12, i => ({t: i === 0 ? 72 : (i === 6 ? 45 : 65), fl: i === 0 ? 72 : (i === 6 ? 45 : 65)}));
   check('a real temperature crash becomes one trend candidate', topic(weather(H), 'cold').headline, 'Sharp temperature drop');
   H = hours(new Date(2026, 7, 14, 0), 12, i => ({t: i === 6 ? 40 : 48, fl: i === 6 ? 40 : 48}));
@@ -1266,7 +1274,7 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
       expected: 'Allow extra time for winter travel'},
     {name: 'winter outlook', topic: 'winter', headline: 'Major winter impacts', alert: {family: 'winter', event: 'Winter Storm Watch'},
       expected: 'Allow extra time for winter travel'},
-    {name: 'freezing cold', topic: 'cold', headline: 'Freezing early', alert: {family: 'winter', event: 'Freeze Warning'},
+    {name: 'freezing cold', topic: 'cold', headline: 'Below freezing by 6am', alert: {family: 'winter', event: 'Freeze Warning'},
       expected: 'Plan around freezing or dangerous cold'},
     {name: 'flooding', topic: 'flood', headline: 'Flash flooding likely', alert: {family: 'flood', event: 'Flash Flood Warning'},
       expected: 'Avoid flood-prone travel during heavy rain'},

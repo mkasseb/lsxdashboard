@@ -2099,7 +2099,15 @@ body.radar-full #radarCard#radarCard{background:var(--bg);border:0;
   .glance-list{margin-top:0;grid-template-columns:1fr}
   .glance-list li:first-child{border-top:0;padding-top:4px}
 }
+.glance-more{display:none}
 @media (max-width:640px){
+  /* Phones: lead + one row; the others wait behind a full-width 44px button. */
+  #glance:not(.glance-open) .glance-list li:not(.glance-keep){display:none}
+  #glance:not(.glance-open) .glance-list li.glance-keep{border-top:1px solid var(--border)}
+  .glance-more{display:block;width:100%;min-height:44px;margin-top:2px;padding:10px 0;text-align:left;
+    border:0;border-top:1px solid var(--border);border-radius:0;font-family:var(--fm);font-size:13px;
+    color:var(--text);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+  .glance-list li{padding:8px 0}
   .glance-headline{font-size:27px}
   .glance-lead{gap:10px;padding-left:10px}
   .glance-lead-ico .ic{width:30px;height:30px}

@@ -1574,19 +1574,41 @@ function renderGlance(H,hourlyReady,candidates){
       var rows=model.supports.slice();
       // Clothing is a constant question, so it always gets a row, unless a warning has the lead.
       if(wear&&!L.alertAware) rows.splice(Math.min(rows.length,2),0,wear);
-      if(rows.length) html+='<ul class="glance-list">'+rows.map(function(c){
-        return '<li class="tone-'+esc(c.tone||"neutral")+'">'+glanceIcon(c.icon)
+      /* Phones show the lead plus ONE row (Wear when there is one) so Now stays near the fold;
+         the rest sits behind a button. Wider screens ignore the collapse entirely (CSS). */
+      var keep=rows.indexOf(wear)>=0?rows.indexOf(wear):0, extra=rows.length-1;
+      if(rows.length) html+='<ul class="glance-list" id="glanceList">'+rows.map(function(c,i){
+        return '<li class="tone-'+esc(c.tone||"neutral")+(i===keep?' glance-keep':'')+'">'+glanceIcon(c.icon)
           +'<span class="glance-row-label">'+esc(c.label)+'</span>'
           +'<span class="glance-row-text"><strong>'+esc(c.headline)+'</strong>'
           +(c.detail?' <span>'+esc(c.detail)+'</span>':'')+'</span></li>';
       }).join('')+'</ul>';
+      if(extra>0) html+='<button type="button" class="glance-more" aria-controls="glanceList" aria-expanded="'
+        +(renderGlance._open?'true':'false')+'">'+(renderGlance._open?'Show less':'Show '+extra+' more for today')+'</button>';
     }
   }
   var scope=document.getElementById("glanceScope"), scopeText=current.name?"For "+current.name:"Next 24 hours";
   if(scope&&scope.textContent!==scopeText) scope.textContent=scopeText;
   var noteText=notes.join(" ");
   if(statusEl&&statusEl.textContent!==noteText){statusEl.textContent=noteText;statusEl.hidden=!noteText;}
-  if(box.innerHTML!==html) box.innerHTML=html;
+  box.classList.toggle("glance-open",!!renderGlance._open);
+  if(box.innerHTML!==html){
+    var moreFocused=document.activeElement&&document.activeElement.classList.contains("glance-more");
+    box.innerHTML=html;
+    var more=box.querySelector(".glance-more");
+    if(moreFocused&&more) more.focus({preventScroll:true});
+  }
+  if(!renderGlance._bound){
+    renderGlance._bound=true;
+    box.addEventListener("click",function(e){
+      var btn=e.target.closest&&e.target.closest(".glance-more"); if(!btn) return;
+      renderGlance._open=!renderGlance._open;
+      box.classList.toggle("glance-open",renderGlance._open);
+      btn.setAttribute("aria-expanded",renderGlance._open?"true":"false");
+      var n=box.querySelectorAll(".glance-list li").length-1;
+      btn.textContent=renderGlance._open?"Show less":"Show "+n+" more for today";
+    });
+  }
 }
 
 /* ============ LIVE EXPIRY COUNTDOWNS ============
