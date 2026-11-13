@@ -109,6 +109,8 @@ const SUBJECT = new Function(`
   ${lift(/^function bottomLineWindowAction\(candidate,outdoor\)\{[\s\S]*?^\}/m, 'bottomLineWindowAction()')}
   ${lift(/^function buildBottomLine\(candidates,localAlert\)\{[\s\S]*?^\}/m, 'buildBottomLine()')}
   ${lift(/^function glanceWear\(H\)\{[\s\S]*?^\}/m, 'glanceWear()')}
+  ${lift(/^var T_RAMP=.*$/m, 'T_RAMP')}
+  ${lift(/^function tRamp\(t\)\{[\s\S]*?^\}/m, 'tRamp()')}
   ${lift(/^function extractAFD\(text\)\{[\s\S]*?^\}/m, 'extractAFD()')}
   ${lift(/^function parseMcd\(text\)\{[\s\S]*?^\}/m, 'parseMcd()')}
   ${lift(/^function mcdValidEnd\(v,refMs\)\{[\s\S]*?^\}/m, 'mcdValidEnd()')}
@@ -129,7 +131,7 @@ const SUBJECT = new Function(`
            OUTLOOK_CFG, outlookVerdict, precipChance, bottomLineHours, bottomLineHourlyCandidates, bottomLineWeekCandidates,
            currentObservationFresh, stationMiles, gridInterval, gridSeries, gridAmount, gridGustAt,
            precipEventSummary, forecastWindowHours, spcUtcTime, spcOutlookPeriod, spcThreatProbability, spcThreatText,
-           bottomLineLocalAlert, bottomLineAlertMatch, buildBottomLine, glanceWear,
+           bottomLineLocalAlert, bottomLineAlertMatch, buildBottomLine, glanceWear, tRamp,
            extractAFD, parseMcd, mcdValidEnd, geomTouchesEnv, watchBoundary, chaikinRing };
 `)();
 
@@ -1044,6 +1046,22 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
   check('an alert with no verified end remains conservative',
     SUBJECT.bottomLineLocalAlert([{...localWarning,latest:0}],500),
     {event:'High Wind Warning',family:'wind',level:'warning',ends:0});
+}
+
+/* ============ temperature ramp ============ */
+{
+  const R = SUBJECT.tRamp;
+  const greens = [];
+  for (let t = -30; t <= 120; t += 0.5) {
+    const {h, k} = R(t), hue = ((h % 360) + 360) % 360;
+    if (hue > 70 && hue < 170 && k > 0.12) greens.push(t);
+  }
+  check('the temperature ramp never shows a saturated green', greens, []);
+  check('tonight-style cold reads blue/teal', [R(31).h >= 185 && R(31).h <= 215, R(41).h >= 185 && R(41).h <= 215], [true, true]);
+  check('hot reads red', R(95).h <= 10, true);
+  check('the hand-off is grey', [R(55).k <= 0.1, R(56).k <= 0.1], [true, true]);
+  check('the ramp clamps beyond its ends', [R(-40), R(130)], [R(-10), R(100)]);
+  check('a missing value does not produce NaN', Number.isFinite(R(undefined).h), true);
 }
 
 /* ============ glanceWear ============ */

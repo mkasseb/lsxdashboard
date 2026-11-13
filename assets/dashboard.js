@@ -156,21 +156,41 @@ function wxGroup(desc,day){
    carrying dark text and need 62% to stay above 4.5:1 at the blue and red ends of the ramp. The
    HUE — the part that actually encodes the value — is identical, which is what the station plot
    used to get wrong by keeping its own 7-bucket scale. */
-/* The domain is −10…95°F. It ran 15–95 for years, which handed every cold-snap reading the same
-   terminal blue — the station plot's whole job is regional spread, and it went monochrome exactly
-   the week that spread was the story. −10 covers a modern St. Louis outbreak; whatever undershoots
-   it still clamps. The ENDPOINT hues (225 and 0) are untouched, so the 52%/62% lightness contrast
-   tuning below still holds — mid-range temps just sit a shade warmer than they used to. */
-function tHue(t){ return Math.round(225-225*Math.max(0,Math.min(1,(t+10)/(95+10)))); }
-function tCol(t){ return "hsl("+tHue(t)+",78%,52%)"; }    // strokes, gradients, marks
-function tChip(t){ return "hsl("+tHue(t)+",78%,62%)"; }   // filled chips that carry dark text
+/* November 2026 "teal & gold" ramp. The old ramp ran hue 225→0 straight across −10…95°F, which
+   put 25–53°F (every November and most winter days) in green, and green says "fine" about a
+   freeze. The ramp now never passes through green: cold is purple → blue → teal, warm is gold →
+   orange → red, and the two halves meet at 54–57°F through a near-grey hand-off (saturation
+   ×0.08) so the hue can jump from teal to gold without a visible seam. Stops are
+   [°F, hue, saturation factor]; the factor scales each context's own saturation, so the
+   per-theme lightness tuning for text (CSS --t-s/--t-l) still applies unchanged. */
+var T_RAMP=[[-10,280,.9],[10,240,1],[30,210,1],[45,190,.92],[54,188,.08],[57,50,.08],[60,46,1],[80,30,1],[92,10,1],[100,-8,1]];
+function tRamp(t){
+  var R=T_RAMP, i;
+  t=Number(t); if(!isFinite(t)) t=R[0][0];
+  if(t<=R[0][0]) return {h:R[0][1],k:R[0][2]};
+  for(i=1;i<R.length;i++) if(t<=R[i][0]){
+    var a=R[i-1], b=R[i], f=(t-a[0])/(b[0]-a[0]);
+    return {h:Math.round(a[1]+(b[1]-a[1])*f), k:Math.round((a[2]+(b[2]-a[2])*f)*100)/100};
+  }
+  return {h:R[R.length-1][1],k:R[R.length-1][2]};
+}
+function tHue(t){ return tRamp(t).h; }
+function tCol(t){ var r=tRamp(t); return "hsl("+r.h+","+Math.round(78*r.k)+"%,52%)"; }    // strokes, gradients, marks
+function tChip(t){ var r=tRamp(t); return "hsl("+r.h+","+Math.round(78*r.k)+"%,62%)"; }   // filled chips that carry dark text
+/* A two-stop CSS gradient blends in RGB, and teal→gold through RGB is a muddy green: exactly
+   what the ramp avoids. Spanning bars sample the ramp every few degrees instead. */
+function tGrad(a,b){
+  var lo=Math.min(a,b), hi=Math.max(a,b), n=Math.max(1,Math.min(12,Math.ceil((hi-lo)/4))), stops=[];
+  for(var i=0;i<=n;i++) stops.push(tCol(lo+(hi-lo)*i/n)+" "+Math.round(i/n*100)+"%");
+  return "linear-gradient(90deg,"+stops.join(",")+")";
+}
 /* Temperature as a NUMBER you read, rather than a stroke you look at. tCol()'s 52% lightness is
    tuned to sit on a dark canvas as a line; the same value set as 13px text lands at 3-4:1, and the
    value that fixes that in the dark theme (a bright 72%) is invisible on white. An inline style is
    written once at render time and cannot know which theme it will be read in, so the markup emits
    the HUE only and CSS picks the lightness per theme — which also means the colours re-resolve the
    instant someone flips the toggle, with nothing to re-render. */
-function tvAttr(t,cls){ return 'class="tv'+(cls?" "+cls:"")+'" style="--th:'+tHue(t)+'"'; }
+function tvAttr(t,cls){ var r=tRamp(t); return 'class="tv'+(cls?" "+cls:"")+'" style="--th:'+r.h+';--tk:'+r.k+'"'; }
 
 var forecastGrid={status:"loading",properties:null,gusts:[]}, hourlyHours=24;
 function forecastClock(ms){

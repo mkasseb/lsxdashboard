@@ -776,3 +776,20 @@ On phones the card shows the lead and one row (Wear when present); the rest sits
 hidden rows: hiding one row behind a button of the same height saves nothing. The freeze detail
 reads "Low 31°." because the headline already names the time. Wider screens ignore the
 collapse. `tools/glance-browser-tests.js` covers the toggle, the wide layout and both freeze tones.
+
+## November 2026 temperature ramp: teal & gold
+
+The temperature ramp no longer passes through green. The old ramp ran hue 225→0 evenly across
+−10…95°F, which coloured 25–53°F green: every November day and most winter ones, including a
+freezing morning. `T_RAMP` in `dashboard.js` is a set of stops, [°F, hue, saturation factor]:
+purple below 0°F, blue through the 20s, teal into the 40s, a near-grey hand-off at 54–57°F, then
+gold from 60°F through orange in the 80s to red at 92°F and above. The grey is what lets the hue
+jump from teal to gold without passing through green, and it lands on the most comfortable
+temperatures, which need the least emphasis.
+
+`tHue()` still returns the hue, and text keeps its per-theme lightness from CSS. The saturation
+factor travels as `--tk`, which `.tv` multiplies into `--t-s`. Spanning bars (seven-day,
+the hero's today range) use `tGrad()`, which samples the ramp every few degrees: a two-stop CSS
+gradient blends in RGB, and teal→gold through RGB is exactly the muddy green the ramp avoids. A
+logic test fails if any temperature from −30 to 120°F maps to a saturated green, and the
+contrast check now samples 55, 56, 60 and 100°F as well.

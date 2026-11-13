@@ -128,8 +128,9 @@
      temperature should be. */
   :root{--t-s:80%;--t-l:73%}
   :root[data-theme="light"]{--t-s:70%;--t-l:22%}
-  .tv{color:hsl(var(--th),var(--t-s),var(--t-l))}
-  text.tv{fill:hsl(var(--th),var(--t-s),var(--t-l))}
+  /* --tk is the ramp's saturation factor (1 everywhere except the grey 54–57°F hand-off). */
+  .tv{color:hsl(var(--th),calc(var(--t-s) * var(--tk,1)),var(--t-l))}
+  text.tv{fill:hsl(var(--th),calc(var(--t-s) * var(--tk,1)),var(--t-l))}
 
   /* ===== Icons =====
      One sprite, drawn as strokes, sized in em and inheriting currentColor. The em sizing is the
