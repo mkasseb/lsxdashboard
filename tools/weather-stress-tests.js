@@ -104,7 +104,7 @@ async function open(c, width=390) {
       if(active.origin&&u.pathname.startsWith('/assets/'))return route.continue();
       if(u.pathname==='/')return route.fulfill({status:200,contentType:'text/html',headers:active.productionCsp?{'Content-Security-Policy':fs.readFileSync(path.join(root,'_headers'),'utf8').match(/Content-Security-Policy: (.*)/)[1]}:{},body:active.maps&&!active.badMapIntegrity?html.replace(/integrity="[^"]*"/g,""):html});
       const asset=assets[u.pathname];
-      return route.fulfill({status:asset?200:404,contentType:asset?.type||'text/plain',body:asset?(active.eagerContext?asset.content.replace('var deferredFeeds={stations:false,context:false};','var deferredFeeds={stations:true,context:true};'):asset.content):'Missing static asset'});
+      return route.fulfill({status:asset?200:404,contentType:asset?.type||'text/plain',body:asset?(active.eagerContext&&typeof asset.content==='string'?asset.content.replace('var deferredFeeds={stations:false,context:false};','var deferredFeeds={stations:true,context:true};'):asset.content):'Missing static asset'});
     }
     // Capture a request's scenario before any delay; later switches must not rewrite an old response.
     const scenario=clone(active);

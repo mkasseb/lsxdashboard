@@ -1665,7 +1665,7 @@ function applyTheme(pref){
     b.title = "Theme: "+pref+" (tap to change)";
   }
   var meta=document.querySelector('meta[name="theme-color"]');
-  if(meta) meta.setAttribute("content", t==="light"?"#eef1f6":"#0a0e14");
+  if(meta) meta.setAttribute("content", t==="light"?"#f1f2f3":"#0e0f11");
   if(typeof updateRadarBase==="function") updateRadarBase();
   if(typeof updateStationBase==="function") updateStationBase();
 }

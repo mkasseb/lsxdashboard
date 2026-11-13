@@ -19,4 +19,10 @@ for (const tag of html.match(/<(?:script|link)\b[^>]*>/g) || []) {
     if (tag.startsWith('<script') && match[1] === 'src') scripts.push(content);
   }
 }
+// Self-hosted fonts are referenced from the stylesheet, not the page, so the tag scan above
+// never sees them. Serve them too: layout and contrast checks should measure the real faces.
+const fontDir = path.join(root, 'assets', 'fonts');
+if (fs.existsSync(fontDir)) for (const name of fs.readdirSync(fontDir)) {
+  if (name.endsWith('.woff2')) assets['/assets/fonts/' + name] = {content: fs.readFileSync(path.join(fontDir, name)), type: 'font/woff2'};
+}
 module.exports = {html, assets, source: html + '\n' + scripts.join('\n')};
