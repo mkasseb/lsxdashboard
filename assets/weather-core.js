@@ -803,11 +803,17 @@ function bottomLineHourlyCandidates(H,opts){
   for(i=3;i<n;i++){ if(H[i].t!=null&&H[i].t<cMin){ cMin=H[i].t; cAt=H[i].d; } }
   var firstFreeze=null;
   for(i=0;i<n;i++){if(H[i].t!=null&&H[i].t<=32){firstFreeze=H[i];break;}}
-  if(firstFreeze&&(!mAt||mMin>32)) push(86,"cold","cold","Cold","Freezing near "+when(firstFreeze.d),
-    firstFreeze.t+"°.","Watch for freezing temperatures and slick spots where surfaces are wet.","danger");
+  /* A 31° November morning is routine here; red is kept for a hard freeze (24° or colder) so
+     the colour still means something on the night it matters. Priority is unchanged: an ordinary
+     freeze can still lead a quiet day, it just leads it in amber. */
+  function freezeTone(t){ return t!=null&&t<=24?"danger":"warning"; }
+  if(firstFreeze&&(!mAt||mMin>32)) push(86,"cold","cold","Cold",
+    (firstFreeze.t<=24?"Hard freeze by ":"Below freezing by ")+when(firstFreeze.d),
+    firstFreeze.t+"°.","Watch for freezing temperatures and slick spots where surfaces are wet.",freezeTone(firstFreeze.t));
   var cold=coldVerdict(H[0]&&H[0].t,mAt?mMin:null,cAt?cMin:null);
-  if(cold==="freezing") push(85,"cold","cold","Cold","Freezing early",
-    mMin+"° near "+when(mAt)+".","Plan for freezing temperatures early.","danger");
+  if(cold==="freezing") push(85,"cold","cold","Cold",
+    (mMin<=24?"Hard freeze by ":"Below freezing by ")+when(mAt),
+    "Low "+mMin+"°.",mMin<=24?"Protect plants, pipes and pets; cover exposed skin.":"Expect frost; scrape windshields and watch for slick spots.",freezeTone(mMin));
   else if(cold==="falling") push(66,"trend-down","cold","Temperature trend","Sharp temperature drop",
     "Falling "+(H[0].t-cMin)+"° to "+cMin+"° by "+when(cAt)+".","Bring a layer if you'll be out late.","warning");
   else if(cold==="cold") push(70,"cold","cold","Cold","Cold morning",
@@ -1168,6 +1174,38 @@ function buildBottomLine(candidates,localAlert){
     });
   }
   return {lead:lead,supports:supports};
+}
+
+/* "Do I need a coat?" for the Your Day card. Reads only the normalized hourly records that
+   bottomLineHours() produced, over the hours someone is plausibly outside (7am–10pm local) in
+   the next 15. Feels-like is preferred over air temperature because that is what a person
+   dresses for. Fails quiet (null) without at least three usable waking hours rather than
+   guessing from one. Rain and winter cues come from the same NWS chances and wording the
+   briefing uses, so the two never disagree about whether it is wet. */
+function glanceWear(H){
+  var out=(H||[]).slice(0,15).filter(function(h){
+    return h&&h.hr>=7&&h.hr<=22&&(h.fl!=null||h.t!=null)&&isFinite(h.fl!=null?h.fl:h.t);
+  });
+  if(out.length<3) return null;
+  var fl=out.map(function(h){ return Math.round(h.fl!=null?h.fl:h.t); });
+  var lo=Math.min.apply(null,fl), hi=Math.max.apply(null,fl), swing=hi-lo;
+  var wet=out.some(function(h){ return h.pop!=null&&h.pop>=40&&!h.wint; });
+  var wintry=out.some(function(h){ return h.pop!=null&&h.pop>=30&&h.wint; });
+  var wear,icon="walk";
+  if(lo<=20) wear="Heavy coat, hat and gloves";
+  else if(lo<=35) wear="Winter coat";
+  else if(lo<=50) wear="Warm jacket";
+  else if(lo<=62) wear="Light jacket or sweater";
+  else if(hi>=88) wear="Light, breathable clothes";
+  else wear="Short sleeves";
+  var extras=[];
+  if(swing>=18&&lo<=62) extras.push("dress in layers");
+  if(wintry) extras.push("waterproof boots");
+  if(wet) extras.push("bring an umbrella");
+  return {icon:icon,topic:"wear",label:"Wear",headline:wear,
+          detail:"Feels like "+(lo===hi?lo+"°":lo+"–"+hi+"°")+" while you're out"
+            +(extras.length?" · "+extras.join(", "):"")+".",
+          lo:lo,hi:hi,umbrella:wet,boots:wintry,layers:swing>=18&&lo<=62};
 }
 
 function extractAFD(text){

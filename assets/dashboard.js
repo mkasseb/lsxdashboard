@@ -156,21 +156,41 @@ function wxGroup(desc,day){
    carrying dark text and need 62% to stay above 4.5:1 at the blue and red ends of the ramp. The
    HUE — the part that actually encodes the value — is identical, which is what the station plot
    used to get wrong by keeping its own 7-bucket scale. */
-/* The domain is −10…95°F. It ran 15–95 for years, which handed every cold-snap reading the same
-   terminal blue — the station plot's whole job is regional spread, and it went monochrome exactly
-   the week that spread was the story. −10 covers a modern St. Louis outbreak; whatever undershoots
-   it still clamps. The ENDPOINT hues (225 and 0) are untouched, so the 52%/62% lightness contrast
-   tuning below still holds — mid-range temps just sit a shade warmer than they used to. */
-function tHue(t){ return Math.round(225-225*Math.max(0,Math.min(1,(t+10)/(95+10)))); }
-function tCol(t){ return "hsl("+tHue(t)+",78%,52%)"; }    // strokes, gradients, marks
-function tChip(t){ return "hsl("+tHue(t)+",78%,62%)"; }   // filled chips that carry dark text
+/* November 2026 "teal & gold" ramp. The old ramp ran hue 225→0 straight across −10…95°F, which
+   put 25–53°F (every November and most winter days) in green, and green says "fine" about a
+   freeze. The ramp now never passes through green: cold is purple → blue → teal, warm is gold →
+   orange → red, and the two halves meet at 54–57°F through a near-grey hand-off (saturation
+   ×0.08) so the hue can jump from teal to gold without a visible seam. Stops are
+   [°F, hue, saturation factor]; the factor scales each context's own saturation, so the
+   per-theme lightness tuning for text (CSS --t-s/--t-l) still applies unchanged. */
+var T_RAMP=[[-10,280,.9],[10,240,1],[30,210,1],[45,190,.92],[54,188,.08],[57,50,.08],[60,46,1],[80,30,1],[92,10,1],[100,-8,1]];
+function tRamp(t){
+  var R=T_RAMP, i;
+  t=Number(t); if(!isFinite(t)) t=R[0][0];
+  if(t<=R[0][0]) return {h:R[0][1],k:R[0][2]};
+  for(i=1;i<R.length;i++) if(t<=R[i][0]){
+    var a=R[i-1], b=R[i], f=(t-a[0])/(b[0]-a[0]);
+    return {h:Math.round(a[1]+(b[1]-a[1])*f), k:Math.round((a[2]+(b[2]-a[2])*f)*100)/100};
+  }
+  return {h:R[R.length-1][1],k:R[R.length-1][2]};
+}
+function tHue(t){ return tRamp(t).h; }
+function tCol(t){ var r=tRamp(t); return "hsl("+r.h+","+Math.round(78*r.k)+"%,52%)"; }    // strokes, gradients, marks
+function tChip(t){ var r=tRamp(t); return "hsl("+r.h+","+Math.round(78*r.k)+"%,62%)"; }   // filled chips that carry dark text
+/* A two-stop CSS gradient blends in RGB, and teal→gold through RGB is a muddy green: exactly
+   what the ramp avoids. Spanning bars sample the ramp every few degrees instead. */
+function tGrad(a,b){
+  var lo=Math.min(a,b), hi=Math.max(a,b), n=Math.max(1,Math.min(12,Math.ceil((hi-lo)/4))), stops=[];
+  for(var i=0;i<=n;i++) stops.push(tCol(lo+(hi-lo)*i/n)+" "+Math.round(i/n*100)+"%");
+  return "linear-gradient(90deg,"+stops.join(",")+")";
+}
 /* Temperature as a NUMBER you read, rather than a stroke you look at. tCol()'s 52% lightness is
    tuned to sit on a dark canvas as a line; the same value set as 13px text lands at 3-4:1, and the
    value that fixes that in the dark theme (a bright 72%) is invisible on white. An inline style is
    written once at render time and cannot know which theme it will be read in, so the markup emits
    the HUE only and CSS picks the lightness per theme — which also means the colours re-resolve the
    instant someone flips the toggle, with nothing to re-render. */
-function tvAttr(t,cls){ return 'class="tv'+(cls?" "+cls:"")+'" style="--th:'+tHue(t)+'"'; }
+function tvAttr(t,cls){ var r=tRamp(t); return 'class="tv'+(cls?" "+cls:"")+'" style="--th:'+r.h+';--tk:'+r.k+'"'; }
 
 var forecastGrid={status:"loading",properties:null,gusts:[]}, hourlyHours=24;
 function forecastClock(ms){
@@ -1526,6 +1546,91 @@ function renderTheCall(){
   var model=buildBottomLine(candidates,callLocalAlert);
   renderTheCall._nbmContext={model:model,candidates:candidates};
   renderNwsMessages();
+  renderGlance(H,hourlyReady,candidates);
+}
+
+/* ============ YOUR DAY ============
+   The briefing engine above already ranks every hourly, outlook and climate fact; this card is
+   where it finally gets read. It builds its OWN model (adding seven-day candidates past the
+   hourly edge) so the NBM commentary that reads renderTheCall._nbmContext is untouched. */
+function glanceIcon(name){
+  return '<svg class="ic" aria-hidden="true"><use href="#i-'+esc(name||"info")+'"/></svg>';
+}
+function renderGlance(H,hourlyReady,candidates){
+  var box=document.getElementById("glance"), card=document.getElementById("glanceCard");
+  if(!box||!card) return;
+  var now=Date.now(), statusEl=document.getElementById("glanceStatus"), notes=[];
+  var hourlyState=feedState(feedChecks.hourly,now,FEEDS.hourly.age);
+  if(feedState(feedChecks.alerts,now,FEEDS.alerts.age)!=="ready")
+    notes.push("Alert status is unverified. Check official NWS warnings.");
+  var html;
+  var usable=hourlyState==="ready"||hourlyState==="partial";
+  if(!usable||!hourlyReady){
+    // "saved" (snapshot paint) and "loading" wait for the live check; only a real failure,
+    // an overdue check or a too-short live series says so.
+    html=!usable&&hourlyState!=="unavailable"&&hourlyState!=="stale"
+      ?'<div class="loading">Reading the forecast…</div>'
+      :'<p class="glance-empty">No summary right now: the NWS hourly forecast for '+esc(current.name)
+        +' is unavailable or out of date. '+officialSourceLink('https://forecast.weather.gov/MapClick.php?lat='+current.lat+'&lon='+current.lon,'NWS local forecast for '+current.name,'Open the NWS forecast ↗')+'</p>';
+  }else{
+    var all=candidates.slice(), cutoff=H[H.length-1].end;
+    if(smart.weekDays&&smart.weekDays.length)
+      all=all.concat(bottomLineWeekCandidates(smart.weekDays,cutoff,smart.hourlyAll));
+    var model=buildBottomLine(all,callLocalAlert), wear=glanceWear(H);
+    renderGlance._model=model;
+    if(!model.lead){
+      // buildBottomLine withholds everything during an emergency it cannot match to forecast
+      // evidence. The alert card above is the message; this card must not compete with it.
+      html='<p class="glance-empty">An emergency alert is active here. Follow the alert above and official instructions.</p>';
+    }else{
+      var L=model.lead;
+      html='<div class="glance-lead tone-'+esc(L.tone)+'">'
+        +'<span class="glance-lead-ico">'+glanceIcon(L.icon)+'</span>'
+        +'<div><p class="glance-label">'+esc(L.label)+'</p>'
+        +'<p class="glance-headline">'+esc(L.headline)+'</p>'
+        +(L.detail?'<p class="glance-detail">'+esc(L.detail)+'</p>':'')
+        +(L.action?'<p class="glance-action">'+esc(L.action)+'</p>':'')
+        +'</div></div>';
+      var rows=model.supports.slice();
+      // Clothing is a constant question, so it always gets a row, unless a warning has the lead.
+      if(wear&&!L.alertAware) rows.splice(Math.min(rows.length,2),0,wear);
+      /* Phones show the lead plus ONE row (Wear when there is one) so Now stays near the fold;
+         the rest sits behind a button. Hiding a single row would cost a button of the same
+         height, so the collapse only starts at two hidden rows. Wider screens ignore it (CSS). */
+      var keep=rows.indexOf(wear)>=0?rows.indexOf(wear):0, extra=rows.length-1;
+      if(extra<2){ keep=-1; extra=0; }
+      if(rows.length) html+='<ul class="glance-list" id="glanceList">'+rows.map(function(c,i){
+        return '<li class="tone-'+esc(c.tone||"neutral")+(i===keep||keep<0?' glance-keep':'')+'">'+glanceIcon(c.icon)
+          +'<span class="glance-row-label">'+esc(c.label)+'</span>'
+          +'<span class="glance-row-text"><strong>'+esc(c.headline)+'</strong>'
+          +(c.detail?' <span>'+esc(c.detail)+'</span>':'')+'</span></li>';
+      }).join('')+'</ul>';
+      if(extra>0) html+='<button type="button" class="glance-more" aria-controls="glanceList" aria-expanded="'
+        +(renderGlance._open?'true':'false')+'">'+(renderGlance._open?'Show less':'Show '+extra+' more for today')+'</button>';
+    }
+  }
+  var scope=document.getElementById("glanceScope"), scopeText=current.name?"For "+current.name:"Next 24 hours";
+  if(scope&&scope.textContent!==scopeText) scope.textContent=scopeText;
+  var noteText=notes.join(" ");
+  if(statusEl&&statusEl.textContent!==noteText){statusEl.textContent=noteText;statusEl.hidden=!noteText;}
+  box.classList.toggle("glance-open",!!renderGlance._open);
+  if(box.innerHTML!==html){
+    var moreFocused=document.activeElement&&document.activeElement.classList.contains("glance-more");
+    box.innerHTML=html;
+    var more=box.querySelector(".glance-more");
+    if(moreFocused&&more) more.focus({preventScroll:true});
+  }
+  if(!renderGlance._bound){
+    renderGlance._bound=true;
+    box.addEventListener("click",function(e){
+      var btn=e.target.closest&&e.target.closest(".glance-more"); if(!btn) return;
+      renderGlance._open=!renderGlance._open;
+      box.classList.toggle("glance-open",renderGlance._open);
+      btn.setAttribute("aria-expanded",renderGlance._open?"true":"false");
+      var n=box.querySelectorAll(".glance-list li").length-1;
+      btn.textContent=renderGlance._open?"Show less":"Show "+n+" more for today";
+    });
+  }
 }
 
 /* ============ LIVE EXPIRY COUNTDOWNS ============

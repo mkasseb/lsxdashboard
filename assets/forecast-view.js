@@ -98,7 +98,7 @@ function paintDays(){ return days.map(function(d){
   var fact=factsFor(d), hi=fact.hi, lo=fact.lo;
   var a=(lo!=null?lo:hi), b=(hi!=null?hi:lo);
   var left=((Math.min(a,b)-wMin)/range)*100, width=Math.max(4,(Math.abs(b-a)/range)*100);
-  var grad="linear-gradient(90deg,"+tCol(Math.min(a,b))+","+tCol(Math.max(a,b))+")";
+  var grad=tGrad(a,b);
   var pop=fact.pop, popText=summaryPopText(pop), main=fact.main, wind=fact.wind;
   var mMonth=fact.month, mDay=fact.dayOfMonth, _dk=fact.key, hrec=fact.hrec, rh=fact.rh;
   var hotImpact=forecastImpact(fact.feelsHigh,hi!=null?hi:(main?main.temperature:null));

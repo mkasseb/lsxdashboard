@@ -741,3 +741,55 @@ follows the theme: a graphite tile with the gold bolt on light, an off-white til
 bolt on dark, so it never disappears into a dark tab strip. The home-screen icons cannot follow
 a theme, so `tools/icons.py` draws one fixed colourway, graphite with the gold bolt, full-bleed
 with the bolt inside the maskable safe zone.
+
+## November 2026 "Your day" card
+
+`#glanceCard` sits between the alerts and the hero and answers the question a visitor opens the
+page with: what does today mean for me. It is the first visible output of the briefing engine
+(`bottomLineHourlyCandidates`, `bottomLineWeekCandidates`, `buildBottomLine`), which had been
+running and tested but rendered nowhere since the hero moved to verified NWS Key Messages.
+
+It does not undo that decision. The Key Messages card still shows only official text; this card
+is a separate section, says plainly in "How this is worked out" that the dashboard computed it,
+and defers to warnings above it. It builds its own model with seven-day candidates added past
+the hourly edge, so `renderTheCall._nbmContext` (read by the NBM commentary) is unchanged.
+
+One addition to the engine: `glanceWear()` turns the feels-like range over waking hours
+(7am–10pm, next 15 hours) into a clothing line, with layers, boots and umbrella cues drawn from
+the same NWS chances and wording the briefing uses. It always gets a support row unless a local
+warning has taken the lead.
+
+The card is withheld, not guessed, when the hourly feed is stale, failed or too short, and it
+shows nothing but a pointer to the alert during an emergency the engine cannot match to
+forecast evidence. It is never restored from the snapshot, and a location change resets it with
+the hourly feed. Colour is used only for the severity tone on the lead's rule and icons. On wide
+screens the lead and the supporting rows sit side by side, so the card costs one short band of height.
+
+Freezing is amber, not red, unless the low is 24° or colder ("Hard freeze by …"). A routine
+31° November morning in red trained readers to ignore red; the engine keeps the same priority so
+an ordinary freeze can still lead a quiet day. "Freezing early" became "Below freezing by 6am",
+because "early" read as early in the season. A first-freeze-of-season rule would need the
+season's observed minimums, which no current feed loads.
+
+On phones the card shows the lead and one row (Wear when present); the rest sits behind a
+44px "Show N more for today" button whose state survives refreshes. The collapse starts at two
+hidden rows: hiding one row behind a button of the same height saves nothing. The freeze detail
+reads "Low 31°." because the headline already names the time. Wider screens ignore the
+collapse. `tools/glance-browser-tests.js` covers the toggle, the wide layout and both freeze tones.
+
+## November 2026 temperature ramp: teal & gold
+
+The temperature ramp no longer passes through green. The old ramp ran hue 225→0 evenly across
+−10…95°F, which coloured 25–53°F green: every November day and most winter ones, including a
+freezing morning. `T_RAMP` in `dashboard.js` is a set of stops, [°F, hue, saturation factor]:
+purple below 0°F, blue through the 20s, teal into the 40s, a near-grey hand-off at 54–57°F, then
+gold from 60°F through orange in the 80s to red at 92°F and above. The grey is what lets the hue
+jump from teal to gold without passing through green, and it lands on the most comfortable
+temperatures, which need the least emphasis.
+
+`tHue()` still returns the hue, and text keeps its per-theme lightness from CSS. The saturation
+factor travels as `--tk`, which `.tv` multiplies into `--t-s`. Spanning bars (seven-day,
+the hero's today range) use `tGrad()`, which samples the ramp every few degrees: a two-stop CSS
+gradient blends in RGB, and teal→gold through RGB is exactly the muddy green the ramp avoids. A
+logic test fails if any temperature from −30 to 120°F maps to a saturated green, and the
+contrast check now samples 55, 56, 60 and 100°F as well.

@@ -108,6 +108,9 @@ const SUBJECT = new Function(`
   ${lift(/^function bottomLineAlertHeadline\(candidate,outdoor,alert\)\{[\s\S]*?^\}/m, 'bottomLineAlertHeadline()')}
   ${lift(/^function bottomLineWindowAction\(candidate,outdoor\)\{[\s\S]*?^\}/m, 'bottomLineWindowAction()')}
   ${lift(/^function buildBottomLine\(candidates,localAlert\)\{[\s\S]*?^\}/m, 'buildBottomLine()')}
+  ${lift(/^function glanceWear\(H\)\{[\s\S]*?^\}/m, 'glanceWear()')}
+  ${lift(/^var T_RAMP=.*$/m, 'T_RAMP')}
+  ${lift(/^function tRamp\(t\)\{[\s\S]*?^\}/m, 'tRamp()')}
   ${lift(/^function extractAFD\(text\)\{[\s\S]*?^\}/m, 'extractAFD()')}
   ${lift(/^function parseMcd\(text\)\{[\s\S]*?^\}/m, 'parseMcd()')}
   ${lift(/^function mcdValidEnd\(v,refMs\)\{[\s\S]*?^\}/m, 'mcdValidEnd()')}
@@ -128,7 +131,7 @@ const SUBJECT = new Function(`
            OUTLOOK_CFG, outlookVerdict, precipChance, bottomLineHours, bottomLineHourlyCandidates, bottomLineWeekCandidates,
            currentObservationFresh, stationMiles, gridInterval, gridSeries, gridAmount, gridGustAt,
            precipEventSummary, forecastWindowHours, spcUtcTime, spcOutlookPeriod, spcThreatProbability, spcThreatText,
-           bottomLineLocalAlert, bottomLineAlertMatch, buildBottomLine,
+           bottomLineLocalAlert, bottomLineAlertMatch, buildBottomLine, glanceWear, tRamp,
            extractAFD, parseMcd, mcdValidEnd, geomTouchesEnv, watchBoundary, chaikinRing };
 `)();
 
@@ -811,7 +814,16 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
 
   const EVE = new Date(2026, 7, 13, 18);
   H = hours(EVE, 18, i => ({t: i === 0 ? 72 : (i === 12 ? 28 : 60), fl: i === 0 ? 72 : (i === 12 ? 28 : 60)}));
-  check('a freezing morning becomes the cold lead candidate', topic(weather(H, {now: EVE}), 'cold').headline, 'Freezing early');
+  check('a freezing morning becomes the cold lead candidate', topic(weather(H, {now: EVE}), 'cold').headline, 'Below freezing by 6am tomorrow');
+  check('an ordinary freeze is amber, not red', topic(weather(H, {now: EVE}), 'cold').tone, 'warning');
+  check('the freeze detail does not repeat the time', topic(weather(H, {now: EVE}), 'cold').detail, 'Low 28°.');
+  H = hours(EVE, 18, i => ({t: i === 0 ? 60 : (i === 12 ? 22 : 40), fl: i === 0 ? 60 : (i === 12 ? 22 : 40)}));
+  check('a hard freeze is named and red', [topic(weather(H, {now: EVE}), 'cold').headline, topic(weather(H, {now: EVE}), 'cold').tone],
+    ['Hard freeze by 6am tomorrow', 'danger']);
+  H = hours(EVE, 18, i => ({t: i === 0 ? 60 : (i === 12 ? 24 : 40), fl: i === 0 ? 60 : (i === 12 ? 24 : 40)}));
+  check('24 degrees is the hard-freeze edge', topic(weather(H, {now: EVE}), 'cold').tone, 'danger');
+  H = hours(EVE, 18, i => ({t: i === 0 ? 60 : (i === 12 ? 25 : 40), fl: i === 0 ? 60 : (i === 12 ? 25 : 40)}));
+  check('25 degrees stays amber', topic(weather(H, {now: EVE}), 'cold').tone, 'warning');
   H = hours(NOW, 12, i => ({t: i === 0 ? 72 : (i === 6 ? 45 : 65), fl: i === 0 ? 72 : (i === 6 ? 45 : 65)}));
   check('a real temperature crash becomes one trend candidate', topic(weather(H), 'cold').headline, 'Sharp temperature drop');
   H = hours(new Date(2026, 7, 14, 0), 12, i => ({t: i === 6 ? 40 : 48, fl: i === 6 ? 40 : 48}));
@@ -1036,6 +1048,49 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
     {event:'High Wind Warning',family:'wind',level:'warning',ends:0});
 }
 
+/* ============ temperature ramp ============ */
+{
+  const R = SUBJECT.tRamp;
+  const greens = [];
+  for (let t = -30; t <= 120; t += 0.5) {
+    const {h, k} = R(t), hue = ((h % 360) + 360) % 360;
+    if (hue > 70 && hue < 170 && k > 0.12) greens.push(t);
+  }
+  check('the temperature ramp never shows a saturated green', greens, []);
+  check('tonight-style cold reads blue/teal', [R(31).h >= 185 && R(31).h <= 215, R(41).h >= 185 && R(41).h <= 215], [true, true]);
+  check('hot reads red', R(95).h <= 10, true);
+  check('the hand-off is grey', [R(55).k <= 0.1, R(56).k <= 0.1], [true, true]);
+  check('the ramp clamps beyond its ends', [R(-40), R(130)], [R(-10), R(100)]);
+  check('a missing value does not produce NaN', Number.isFinite(R(undefined).h), true);
+}
+
+/* ============ glanceWear ============ */
+{
+  const G = SUBJECT.glanceWear;
+  const hr = (h, fl, pop, extra) => Object.assign({hr: h, t: fl, fl, pop, wint: false}, extra || {});
+  const day = (fls, pop, extra) => fls.map((f, i) => hr(7 + i, f, pop, extra));
+  check('wear withholds with fewer than three waking hours', G([hr(3,40,0),hr(4,40,0),hr(8,40,0)]), null);
+  check('wear ignores overnight hours entirely', G([0,1,2,3,4,5].map(h => hr(h,10,0))), null);
+  check('wear: bitter cold asks for hat and gloves', G(day([12,15,18],0)).headline, 'Heavy coat, hat and gloves');
+  check('wear: freezing day is a winter coat', G(day([28,31,34],0)).headline, 'Winter coat');
+  check('wear: chilly day is a warm jacket', G(day([42,46,48],0)).headline, 'Warm jacket');
+  check('wear: cool day is a light jacket', G(day([55,58,60],0)).headline, 'Light jacket or sweater');
+  check('wear: mild day is short sleeves', G(day([68,74,78],0)).headline, 'Short sleeves');
+  check('wear: hot day goes breathable', G(day([80,88,94],0)).headline, 'Light, breathable clothes');
+  const swing = G(day([40,50,60,62],0));
+  check('wear: a big swing on a cool day says layers', [swing.layers, /dress in layers/.test(swing.detail)], [true, true]);
+  check('wear: a big swing on a hot day does not', G(day([64,75,90],0)).layers, false);
+  const wet = G(day([50,52,54],60));
+  check('wear: rain likely adds an umbrella', [wet.umbrella, /bring an umbrella/.test(wet.detail)], [true, true]);
+  const snow = G(day([28,30,31],50,{wint:true}));
+  check('wear: wintry precip means boots, not an umbrella', [snow.boots, snow.umbrella], [true, false]);
+  check('wear: feels-like range is reported', G(day([50,52,54],0)).detail, "Feels like 50–54° while you're out.");
+  check('wear falls back to air temperature when feels-like is missing',
+    G([7,8,9].map(h => ({hr:h, t:30, fl:null, pop:0, wint:false}))).headline, 'Winter coat');
+  check('wear only looks 15 hours ahead',
+    G(day([70,70,70,70,70,70,70,70,70,70,70,70,70,70,70,20],0)).headline, 'Short sleeves');
+}
+
 /* ============ buildBottomLine ============ */
 // Feed completion order cannot decide the visible hierarchy. One topic earns one slot; wet timing
 // is protected, dry timing competes normally, and climate context is reserved for a quiet lead.
@@ -1238,7 +1293,7 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
       expected: 'Allow extra time for winter travel'},
     {name: 'winter outlook', topic: 'winter', headline: 'Major winter impacts', alert: {family: 'winter', event: 'Winter Storm Watch'},
       expected: 'Allow extra time for winter travel'},
-    {name: 'freezing cold', topic: 'cold', headline: 'Freezing early', alert: {family: 'winter', event: 'Freeze Warning'},
+    {name: 'freezing cold', topic: 'cold', headline: 'Below freezing by 6am', alert: {family: 'winter', event: 'Freeze Warning'},
       expected: 'Plan around freezing or dangerous cold'},
     {name: 'flooding', topic: 'flood', headline: 'Flash flooding likely', alert: {family: 'flood', event: 'Flash Flood Warning'},
       expected: 'Avoid flood-prone travel during heavy rain'},

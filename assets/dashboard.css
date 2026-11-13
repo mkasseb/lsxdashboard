@@ -128,8 +128,9 @@
      temperature should be. */
   :root{--t-s:80%;--t-l:73%}
   :root[data-theme="light"]{--t-s:70%;--t-l:22%}
-  .tv{color:hsl(var(--th),var(--t-s),var(--t-l))}
-  text.tv{fill:hsl(var(--th),var(--t-s),var(--t-l))}
+  /* --tk is the ramp's saturation factor (1 everywhere except the grey 54–57°F hand-off). */
+  .tv{color:hsl(var(--th),calc(var(--t-s) * var(--tk,1)),var(--t-l))}
+  text.tv{fill:hsl(var(--th),calc(var(--t-s) * var(--tk,1)),var(--t-l))}
 
   /* ===== Icons =====
      One sprite, drawn as strokes, sized in em and inheriting currentColor. The em sizing is the
@@ -2054,3 +2055,61 @@ footer{border-top:2px solid var(--text);padding-top:12px;font-family:var(--fm);f
    at a specificity they cannot beat (the doubled ID is deliberate). */
 body.radar-full #radarCard#radarCard{background:var(--bg);border:0;
   padding:max(12px, env(safe-area-inset-top,0px)) 14px calc(12px + env(safe-area-inset-bottom,0px))}
+
+/* --- Your Day (#glanceCard): the answer before the evidence ---
+   Sits on the page under the same 2px rule as the hero, so it reads as part of the log rather
+   than as another panel. Colour appears only as the severity tone on the lead's left rule and
+   icons, the one place this card is saying something about danger. */
+#main #glanceCard{background:none;border:0;border-top:2px solid var(--text);border-radius:0;
+  padding:14px 0 4px;margin:0}
+.glance-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.glance-scope{font-family:var(--fm);font-size:12px;letter-spacing:.02em;color:var(--muted)}
+#glance{margin-top:10px}
+.glance-lead{display:grid;grid-template-columns:auto minmax(0,1fr);gap:14px;align-items:start;
+  padding:4px 0 4px 14px;border-left:4px solid var(--border)}
+.glance-lead.tone-danger{border-left-color:var(--danger)}
+.glance-lead.tone-warning{border-left-color:var(--warn)}
+.glance-lead.tone-good{border-left-color:var(--good)}
+.glance-lead-ico .ic{width:40px;height:40px;color:var(--text)}
+.glance-lead.tone-danger .glance-lead-ico .ic{color:var(--danger)}
+.glance-lead.tone-warning .glance-lead-ico .ic{color:var(--warn)}
+.glance-lead.tone-good .glance-lead-ico .ic{color:var(--good)}
+.glance-label{font-family:var(--fm);font-size:12px;letter-spacing:.02em;color:var(--muted);margin:0}
+.glance-headline{font-family:var(--fd);font-size:32px;font-weight:600;line-height:1.1;margin:2px 0 4px;
+  overflow-wrap:anywhere}
+.glance-detail{font-family:var(--fm);font-size:14px;margin:0 0 4px;overflow-wrap:anywhere}
+.glance-action{font-size:16px;line-height:1.45;margin:0}
+.glance-list{list-style:none;margin:14px 0 0;padding:0;display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0 20px}
+.glance-list li{display:grid;grid-template-columns:22px minmax(0,1fr);gap:2px 10px;align-items:start;
+  padding:10px 0;border-top:1px solid var(--border);font-size:15px;line-height:1.45}
+.glance-list .ic{width:20px;height:20px;margin-top:1px;color:var(--muted)}
+.glance-list li.tone-danger .ic{color:var(--danger)}
+.glance-list li.tone-warning .ic{color:var(--warn)}
+.glance-list li.tone-good .ic{color:var(--good)}
+.glance-row-label{font-family:var(--fm);font-size:12px;letter-spacing:.02em;color:var(--muted);line-height:22px}
+.glance-row-text{grid-column:2;overflow-wrap:anywhere}
+.glance-row-text span{color:var(--muted)}
+.glance-empty{font-size:15px;line-height:1.5;margin:0}
+#glanceWhy{margin-top:4px}
+/* Wide screens: answer on the left, the supporting rows stacked beside it, so the card costs
+   one short band of height instead of pushing Now below the fold. */
+@media (min-width:1000px){
+  #glance{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 32px;align-items:start}
+  #glance>.loading,#glance>.glance-empty{grid-column:1 / -1}
+  .glance-list{margin-top:0;grid-template-columns:1fr}
+  .glance-list li:first-child{border-top:0;padding-top:4px}
+}
+.glance-more{display:none}
+@media (max-width:640px){
+  /* Phones: lead + one row; the others wait behind a full-width 44px button. */
+  #glance:not(.glance-open) .glance-list li:not(.glance-keep){display:none}
+  #glance:not(.glance-open) .glance-list li.glance-keep{border-top:1px solid var(--border)}
+  .glance-more{display:block;width:100%;min-height:44px;margin-top:2px;padding:10px 0;text-align:left;
+    border:0;border-top:1px solid var(--border);border-radius:0;font-family:var(--fm);font-size:13px;
+    color:var(--text);text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+  .glance-list li{padding:8px 0}
+  .glance-headline{font-size:27px}
+  .glance-lead{gap:10px;padding-left:10px}
+  .glance-lead-ico .ic{width:30px;height:30px}
+}

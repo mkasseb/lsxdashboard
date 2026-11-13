@@ -27,7 +27,7 @@ const lum=rgb=>rgb.map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4)
     const e=document.createElement('span');document.body.appendChild(e);const colors=[];
     for(const name of ['text','muted','accent','good','warn','sev','danger']){e.style.color='var(--'+name+')';colors.push({name,rgb:getComputedStyle(e).color.match(/[\d.]+/g).slice(0,3).map(Number)});}
     e.style.color='';e.className='tv';
-    for(const temperature of [-10,0,32,50,72,85,95]){e.style.setProperty('--th',tHue(temperature));colors.push({name:temperature+'F text',rgb:getComputedStyle(e).color.match(/[\d.]+/g).slice(0,3).map(Number)});}
+    for(const temperature of [-10,0,32,50,55,56,60,72,85,95,100]){const r=tRamp(temperature);e.style.setProperty('--th',r.h);e.style.setProperty('--tk',r.k);colors.push({name:temperature+'F text',rgb:getComputedStyle(e).color.match(/[\d.]+/g).slice(0,3).map(Number)});}
     e.remove();return colors;
    });
    for(const c of palette){const l=lum(c.rgb);c.contrast=(Math.max(background,l)+.05)/(Math.min(background,l)+.05);assert(c.contrast>=4.5,`${theme} ${c.name}: text contrast ${c.contrast}`);}

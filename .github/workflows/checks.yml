@@ -73,6 +73,10 @@ jobs:
         env:
           WEATHER_BROWSER: ${{ matrix.browser }}
         run: NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" xvfb-run -a node tools/dashboard-regression-tests.js
+      - name: Verify the Your Day card's phone collapse, wide layout and freeze severity
+        env:
+          WEATHER_BROWSER: ${{ matrix.browser }}
+        run: NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" xvfb-run -a node tools/glance-browser-tests.js
       - name: Audit WCAG accessibility in both themes, phone and desktop, warnings and outages
         env:
           WEATHER_BROWSER: ${{ matrix.browser }}

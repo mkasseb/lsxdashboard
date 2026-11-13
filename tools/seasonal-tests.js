@@ -46,7 +46,7 @@ assert(!core.bottomLineHourlyCandidates(future,{now,aqi:35}).some(c=>c.tone==='g
 const rainFuture=hours(new Date(+now+4*3600000),65,40,5,'Thunderstorms');
 assert(!core.bottomLineHourlyCandidates(rainFuture,{now,aqi:35}).some(c=>/\bnow\b/.test(c.detail)));
 const flash=hours(now,40,50,10,'Clear');flash[8].t=20;flash[8].fl=10;
-assert(core.bottomLineHourlyCandidates(flash,{now,aqi:35}).some(c=>c.topic==='cold'&&/Freezing near/.test(c.headline)));
+assert(core.bottomLineHourlyCandidates(flash,{now,aqi:35}).some(c=>c.topic==='cold'&&/^(Below freezing|Hard freeze) by /.test(c.headline)));
 for(const event of ['High Wind Warning','Dense Smoke Advisory','Dense Fog Advisory','Air Quality Alert']){
  const cs=core.bottomLineHourlyCandidates(hours(now,65,40,5,'Clear'),{now,aqi:35});
  const model=core.buildBottomLine(cs,{event,family:core.eventFamily(event),level:/Warning/.test(event)?'warning':'advisory'});
