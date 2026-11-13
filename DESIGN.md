@@ -772,5 +772,7 @@ because "early" read as early in the season. A first-freeze-of-season rule would
 season's observed minimums, which no current feed loads.
 
 On phones the card shows the lead and one row (Wear when present); the rest sits behind a
-44px "Show N more for today" button whose state survives refreshes. Wider screens ignore the
+44px "Show N more for today" button whose state survives refreshes. The collapse starts at two
+hidden rows: hiding one row behind a button of the same height saves nothing. The freeze detail
+reads "Low 31°." because the headline already names the time. Wider screens ignore the
 collapse. `tools/glance-browser-tests.js` covers the toggle, the wide layout and both freeze tones.

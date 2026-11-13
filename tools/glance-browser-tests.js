@@ -21,10 +21,19 @@ async function card(p){
   const browser=await playwright[engine].launch({headless:engine!=='firefox',...(engine==='chromium'?{executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']}:{})});
   setBrowser(browser);
   try{
-    let s=await open(config('Glance phone'),390),p=s.page;
+    // A quiet day yields two rows, which stay visible. Then a busy day (extreme UV, storms later
+    // in the week) that has enough rows to collapse.
+    let s=await open(config('Glance phone quiet'),390),p=s.page;
+    try{
+      const c=await card(p);
+      assert(c.rows<=2,'quiet scenario has at most two rows');
+      assert.deepEqual([c.shown,c.button],[c.rows,null],'two rows show without a toggle');
+      console.log('PASS glance phone shows two rows without a toggle');
+    }finally{await s.context.close();}
+    s=await open(config('Glance phone',{uv:11,weekRain:true}),390);p=s.page;
     try{
       let c=await card(p);
-      assert(c.rows>=2,'phone scenario has rows to collapse');
+      assert(c.rows>=3,'busy phone scenario has rows to collapse (got '+c.rows+')');
       assert.equal(c.shown,1,'phone shows exactly one support row');
       assert(c.wearShown,'the kept phone row is Wear');
       assert.deepEqual([c.button.expanded,c.button.text],['false','Show '+(c.rows-1)+' more for today']);
@@ -61,7 +70,9 @@ async function card(p){
         const c=await card(p);
         assert.equal(c.tone,tone,temp+'° freeze tone');
         assert(c.lead.startsWith(word),temp+'° freeze wording: '+c.lead);
-        console.log('PASS glance '+temp+'° freeze is '+tone);
+        assert(!/\d(am|pm)/.test(await p.locator('#glance .glance-detail').textContent()),'freeze detail names no time twice');
+        if(c.rows<=2) assert.deepEqual([c.shown,c.button],[c.rows,null],'one extra row is shown, not hidden behind a button');
+        console.log('PASS glance '+temp+'° freeze is '+tone+' ('+c.rows+' rows, '+c.shown+' shown)');
       }finally{await s.context.close();}
     }
   }finally{await browser.close();}

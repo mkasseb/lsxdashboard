@@ -813,7 +813,7 @@ function bottomLineHourlyCandidates(H,opts){
   var cold=coldVerdict(H[0]&&H[0].t,mAt?mMin:null,cAt?cMin:null);
   if(cold==="freezing") push(85,"cold","cold","Cold",
     (mMin<=24?"Hard freeze by ":"Below freezing by ")+when(mAt),
-    mMin+"° near "+when(mAt)+".",mMin<=24?"Protect plants, pipes and pets; cover exposed skin.":"Expect frost; scrape windshields and watch for slick spots.",freezeTone(mMin));
+    "Low "+mMin+"°.",mMin<=24?"Protect plants, pipes and pets; cover exposed skin.":"Expect frost; scrape windshields and watch for slick spots.",freezeTone(mMin));
   else if(cold==="falling") push(66,"trend-down","cold","Temperature trend","Sharp temperature drop",
     "Falling "+(H[0].t-cMin)+"° to "+cMin+"° by "+when(cAt)+".","Bring a layer if you'll be out late.","warning");
   else if(cold==="cold") push(70,"cold","cold","Cold","Cold morning",

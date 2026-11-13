@@ -1575,10 +1575,12 @@ function renderGlance(H,hourlyReady,candidates){
       // Clothing is a constant question, so it always gets a row, unless a warning has the lead.
       if(wear&&!L.alertAware) rows.splice(Math.min(rows.length,2),0,wear);
       /* Phones show the lead plus ONE row (Wear when there is one) so Now stays near the fold;
-         the rest sits behind a button. Wider screens ignore the collapse entirely (CSS). */
+         the rest sits behind a button. Hiding a single row would cost a button of the same
+         height, so the collapse only starts at two hidden rows. Wider screens ignore it (CSS). */
       var keep=rows.indexOf(wear)>=0?rows.indexOf(wear):0, extra=rows.length-1;
+      if(extra<2){ keep=-1; extra=0; }
       if(rows.length) html+='<ul class="glance-list" id="glanceList">'+rows.map(function(c,i){
-        return '<li class="tone-'+esc(c.tone||"neutral")+(i===keep?' glance-keep':'')+'">'+glanceIcon(c.icon)
+        return '<li class="tone-'+esc(c.tone||"neutral")+(i===keep||keep<0?' glance-keep':'')+'">'+glanceIcon(c.icon)
           +'<span class="glance-row-label">'+esc(c.label)+'</span>'
           +'<span class="glance-row-text"><strong>'+esc(c.headline)+'</strong>'
           +(c.detail?' <span>'+esc(c.detail)+'</span>':'')+'</span></li>';

@@ -814,6 +814,7 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
   H = hours(EVE, 18, i => ({t: i === 0 ? 72 : (i === 12 ? 28 : 60), fl: i === 0 ? 72 : (i === 12 ? 28 : 60)}));
   check('a freezing morning becomes the cold lead candidate', topic(weather(H, {now: EVE}), 'cold').headline, 'Below freezing by 6am tomorrow');
   check('an ordinary freeze is amber, not red', topic(weather(H, {now: EVE}), 'cold').tone, 'warning');
+  check('the freeze detail does not repeat the time', topic(weather(H, {now: EVE}), 'cold').detail, 'Low 28°.');
   H = hours(EVE, 18, i => ({t: i === 0 ? 60 : (i === 12 ? 22 : 40), fl: i === 0 ? 60 : (i === 12 ? 22 : 40)}));
   check('a hard freeze is named and red', [topic(weather(H, {now: EVE}), 'cold').headline, topic(weather(H, {now: EVE}), 'cold').tone],
     ['Hard freeze by 6am tomorrow', 'danger']);
