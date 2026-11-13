@@ -728,5 +728,6 @@ section headings are generated content. Both use the `content: "02" / ""` altern
 so they stay out of accessible names. Adding or reordering a navigation section means updating
 the heading numbers by hand.
 
-`og-image.png` still shows the previous palette and logo; re-run `tools/og-image.py` after
-updating its palette constants.
+`og-image.png` is regenerated in the same identity. `tools/og-image.py` now draws with the two
+faces in `assets/fonts/` instead of a macOS system font, so it runs on any machine with Pillow
+and numpy. The favicon and the `icon-*.png` home-screen icons still carry the earlier blue tile.
