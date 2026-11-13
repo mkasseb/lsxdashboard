@@ -1878,6 +1878,8 @@ a.cpc-item:hover{border-color:var(--accent)}
 /* ===== November 2026 "Station Log" identity =====
    A reskin, not a re-layout: every rule below changes surface, colour or type and leaves the
    geometry the layout tests measure (column split, gaps, radar height, row heights) alone.
+   Nothing here uses text-transform: the browser suites (and anyone copying text off the page)
+   read rendered text, and an uppercased heading is a different string to both.
    Three ideas carry it:
    · The chrome is monochrome. --accent now resolves to the text colour, so links are underlined
      text and a selected control is an inverted block. Saturated colour is left for data only:
@@ -1928,14 +1930,13 @@ a:hover{text-decoration-thickness:2px}
 /* --- Masthead --- */
 header{padding-bottom:12px;border-bottom:2px solid var(--text)}
 .brand h1{font-family:var(--fd);font-size:30px;font-weight:600;letter-spacing:.02em;line-height:1}
-.brand-word{font-family:var(--fm);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+.brand-word{font-family:var(--fm);font-size:11px;letter-spacing:.03em}
 .logo{border-radius:3px;box-shadow:none}
 .logo .lg-sweep,.logo .lg-rings{display:none}
-.top .locNow-label{font-family:var(--fm);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.top .locNow-label{font-family:var(--fm);font-size:11px;letter-spacing:.03em;color:var(--muted)}
 .top .locNow-place strong{font-family:var(--fd);font-size:24px;font-weight:600;line-height:1.05}
 .clock{font-family:var(--fm)}
 .clock .time{color:var(--text);font-weight:500;letter-spacing:0}
-.clock .date{text-transform:uppercase}
 select,button:where(:not(.ab-head)),.locsearch #locSearch,header .header-right button,header .locsearch #locSearch{
   background:transparent;border-color:var(--border);box-shadow:none;
   -webkit-backdrop-filter:none;backdrop-filter:none}
@@ -1948,7 +1949,7 @@ header .locsearch #locSearch{background:var(--panel)}
 /* --- Section navigation: numbered like log entries, selected entry inverted --- */
 .jump-wrap{border-block:1px solid var(--border)}
 .jump{counter-reset:lsxsec;gap:2px}
-.jump a{font-family:var(--fd);font-size:17px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;
+.jump a{font-family:var(--fd);font-size:19px;font-weight:600;letter-spacing:.02em;
   gap:8px;border-bottom:0;border-radius:3px;color:var(--text)}
 .jump a::before{counter-increment:lsxsec;content:counter(lsxsec,decimal-leading-zero);
   content:counter(lsxsec,decimal-leading-zero) / "";
@@ -1958,7 +1959,7 @@ header .locsearch #locSearch{background:var(--panel)}
 .jump-prev{background:linear-gradient(to left,transparent,var(--bg) 45%);border-radius:0}
 .jump-next{background:linear-gradient(to right,transparent,var(--bg) 45%);border-radius:0}
 #stickyLocation{font-family:var(--fd);font-size:19px;font-weight:600;letter-spacing:.02em}
-.sticky-kind{font-family:var(--fm);font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+.sticky-kind{font-family:var(--fm);font-size:11px;letter-spacing:.02em}
 
 /* --- Cards: quiet panels by default, rules-not-boxes for the hero and planning cards --- */
 .card,.card.hero,#callCard,#afdCard,#h24Card,#alertsCard.calm{
@@ -1977,13 +1978,13 @@ header .locsearch #locSearch{background:var(--panel)}
 #main .weather-hero #callCard{border-top:1px solid var(--border)}
 #main .planning-grid>.card,#main .desktop-planning .planning-column>.card{padding-block:14px 0}
 .card h2,.masonry .card h2,#radarCard .rs-head h2,.desktop-planning .planning-support>.card h2{
-  font-family:var(--fd);font-size:22px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;line-height:1.15}
-.masonry .card h2{font-size:20px}
+  font-family:var(--fd);font-size:25px;font-weight:600;letter-spacing:.015em;line-height:1.15}
+.masonry .card h2{font-size:22px}
 .card h2 .link,.card h2 .forecast-primary-source,.call-head .link,.rs-right .link,.hourly-duration{
-  font-family:var(--fm);font-size:12px;font-weight:400;letter-spacing:.04em;text-transform:uppercase}
+  font-family:var(--fm);font-size:12px;font-weight:400;letter-spacing:.02em}
 .card h2 abbr[title]{text-decoration:none}
 .railhead{align-items:center}
-.rail-t{font-family:var(--fd);font-size:24px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}
+.rail-t{font-family:var(--fd);font-size:27px;font-weight:600;letter-spacing:.015em}
 .railhead::after{background:var(--border)}
 /* The same numbers the navigation shows, on the sections it points at. Decorative: the
    alternative-text form keeps them out of the heading's accessible name. */
@@ -2005,7 +2006,7 @@ header .locsearch #locSearch{background:var(--panel)}
 .cc-desc{font-family:var(--fd);font-size:26px;font-weight:600;line-height:1.05}
 .cc-item,.cc-uv,.aqi-mini{border-radius:3px}
 #currentCard .cc-item{border-bottom:1px solid var(--border);padding:6px 0}
-.cc-item .k,.cc-expo .k{font-family:var(--fm);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+.cc-item .k,.cc-expo .k{font-family:var(--fm);font-size:11px;letter-spacing:.03em}
 #currentCard .cc-item .k{font-size:11px}
 .cc-item .v,.cc-expo .v{font-family:var(--fm);font-weight:500}
 .cc-uv,.aqi-mini{background:var(--panel);border:0}
@@ -2016,7 +2017,7 @@ header .locsearch #locSearch{background:var(--panel)}
 .feed-sources>summary,.day .dt,.day .dnd,.rlink .rval,.h24-pill b,.resource-note,.brief-author,.stn{
   font-family:var(--fm);font-variant-numeric:normal}
 .feed-status,.imgcap,.nws-message-meta,.hourly-forecast-source,.resource-note,.brief-author{letter-spacing:-.01em}
-.day .dn{font-family:var(--fd);font-size:19px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;line-height:1.1}
+.day .dn{font-family:var(--fd);font-size:20px;font-weight:600;letter-spacing:.015em;line-height:1.1}
 .day .dnd,.daily.no-dnd .dnd{font-family:var(--fm);font-weight:400;letter-spacing:0;text-transform:none}
 .day .dt{font-weight:500;letter-spacing:-.02em}
 .rlink .rval{font-weight:500}
@@ -2026,7 +2027,7 @@ header .locsearch #locSearch{background:var(--panel)}
 .hourly-options button[aria-pressed="true"],.rs-tab.on,.stn-tools button.on,.river-pin[aria-pressed="true"]{
   background:var(--text);color:var(--bg);border-color:var(--text)}
 .hourly-options button,.rs-tab,#radarPlay,.rs-full,.stn-tools button,.river-pin{
-  font-family:var(--fm);font-size:12px;font-weight:500;letter-spacing:.02em;text-transform:uppercase}
+  font-family:var(--fm);font-size:12px;font-weight:500;letter-spacing:.02em}
 .h24-pill{background:none;border-color:var(--border)}
 .h24-pill.h24-now{background:var(--panel)}
 .nbm-daily-toggle input,.nbm-hourly-controls input{accent-color:var(--text)}

@@ -718,6 +718,11 @@ a download. Self-hosting is not optional: the CSP's `default-src 'self'` covers 
 CDN would be a new origin for a cosmetic gain. `tools/source.js` serves the font files to the
 browser suites so layout and contrast are measured with the real faces.
 
+No rule in the layer uses `text-transform`. The first draft set headings in capitals, and the
+browser suites (like anyone copying text off the page) read rendered text, so "WENTZVILLE, MO"
+was a different string from the one the page was given. Title case in the condensed face carries
+the look without changing what the text says.
+
 Section numbers in the navigation come from a CSS counter and the matching numbers on the six
 section headings are generated content. Both use the `content: "02" / ""` alternative-text form,
 so they stay out of accessible names. Adding or reordering a navigation section means updating
