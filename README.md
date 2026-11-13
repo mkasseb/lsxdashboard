@@ -608,6 +608,8 @@ repository is public:
 |---|---|
 | [Meteocons](https://github.com/basmilius/weather-icons) sky icons | MIT, © Bas Milius |
 | Interface & generic data glyphs, drawn from or after [Feather](https://feathericons.com) | MIT, © 2013–2023 Cole Bemis |
+| [Barlow Condensed](https://github.com/jpt/barlow) heading face, self-hosted latin subset in `assets/fonts/` | [SIL OFL 1.1](assets/fonts/OFL-barlow-condensed.txt), © 2017 The Barlow Project Authors |
+| [IBM Plex Mono](https://github.com/IBM/plex) numeral face, self-hosted latin subset in `assets/fonts/` | [SIL OFL 1.1](assets/fonts/OFL-ibm-plex-mono.txt), © 2017 IBM Corp. |
 | [Leaflet](https://leafletjs.com) 1.9.4 | BSD-2-Clause |
 | [MapLibre GL JS](https://maplibre.org/) 5.24.0 | BSD-3-Clause |
 | [MapLibre GL Leaflet](https://github.com/maplibre/maplibre-gl-leaflet) 0.1.4 | ISC |

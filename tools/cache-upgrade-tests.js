@@ -6,7 +6,8 @@ const playwright=require('playwright'),root=path.join(__dirname,'..');
 const legacy='f8976ef0d8101528cec520ff886bb278096f271c';
 const names=['dashboard.css','weather-core.js','weather-feeds.js','forecast-view.js','dashboard-context.js','dashboard.js'];
 const historicalNames=[...names,'forecast-range.js','hourly-range.js'];
-const currentNames=Object.keys(require('./source').assets).map(p=>path.basename(p));
+// Content-versioned scripts and styles only: fonts are loaded by the stylesheet at a stable URL.
+const currentNames=Object.keys(require('./source').assets).filter(p=>/\.(?:js|css)$/.test(p)).map(p=>path.basename(p));
 const quartileLegacy='3e4ed1634acd2b3caefd86cca94a08d43f1fb18f';
 const old=Object.fromEntries(names.map(name=>[name,cp.execFileSync('git',['show',legacy+':assets/'+name],{cwd:root,maxBuffer:10*1024*1024})]));
 const vendors=[['leaflet/1.9.4/leaflet.min.js','leaflet/dist/leaflet.js'],['leaflet/1.9.4/leaflet.min.css','leaflet/dist/leaflet.css'],['maplibre-gl@5.24.0/dist/maplibre-gl.js','maplibre-gl/dist/maplibre-gl.js'],['maplibre-gl@5.24.0/dist/maplibre-gl.css','maplibre-gl/dist/maplibre-gl.css'],['@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js','@maplibre/maplibre-gl-leaflet/leaflet-maplibre-gl.js']];
@@ -23,6 +24,12 @@ const server=http.createServer((req,res)=>{
     let html=(priming?cp.execFileSync('git',['show',(quartileMode?quartileLegacy:legacy)+':index.html'],{cwd:root,maxBuffer:10*1024*1024}).toString():fs.readFileSync(path.join(root,'index.html'),'utf8')).replace(/integrity="[^"]*"/g,'');
     if(unversioned)html=html.replace(/\?v=[a-f0-9]+/g,'');
     res.setHeader('Cache-Control','public, max-age=0, must-revalidate');res.setHeader('Content-Type','text/html');res.end(controlled(html));return;
+  }
+  if(p.startsWith('/assets/fonts/')){
+    // Fonts are binary, live one directory down and did not exist in the primed (old) site.
+    const font=path.join(root,'assets','fonts',path.basename(p));
+    if(priming||!p.endsWith('.woff2')||!fs.existsSync(font)){res.writeHead(404).end();return;}
+    res.setHeader('Cache-Control','no-cache, max-age=0, must-revalidate');res.setHeader('Content-Type','font/woff2');res.end(fs.readFileSync(font));return;
   }
   if(p.startsWith('/assets/')){
     const name=path.basename(p);if(!(priming?(quartileMode?historicalNames:names):currentNames).includes(name)){res.writeHead(404).end();return;}

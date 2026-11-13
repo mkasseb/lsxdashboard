@@ -691,3 +691,53 @@ used, or station context is requested. The scheduler and refresh do not create d
 explicitly identifies unloaded radar and offers Load radar; it never implies clear skies. Browsers
 without IntersectionObserver start immediately. Existing bounded retry, layer health, freshness,
 camera, fullscreen, SRI and location-generation behavior remain in place after activation.
+
+## November 2026 "Station Log" identity
+
+A reskin layered at the end of `assets/dashboard.css`. It changes surface, colour and type and
+leaves the measured geometry alone: column split, gaps, radar height and row heights are the
+October values, and the layout suites pass unchanged.
+
+The chrome is monochrome. `--accent` now resolves to the text colour, so a link is underlined
+text and a selected control is an inverted block rather than a blue tint. This supersedes "links
+are blue" above; the rest of that rule is stricter than before, because saturated colour is now
+*only* data: temperature, severity, radar and rain. The hourly chart draws rain with `--accent`,
+so `#hourly24` and `#precipEvents` re-scope it to `--rain` instead of the chart learning a new
+token.
+
+The hero and the planning cards drop their panels and sit on the page under a 2px rule. The lower
+context cards stay quiet panels: three packed lanes of unboxed text 16px apart do not read as
+separate objects. Radii fall to 2–3px everywhere, including the old pills. The ambient weather
+background (`#wxbg`) is hidden; it tinted a page whose point is that the chrome has no colour.
+
+Two faces are self-hosted from `assets/fonts/` as latin-subset woff2 (about 52 KB together, SIL
+OFL, credited in the README): Barlow Condensed for headings, day names and the current
+temperature, and IBM Plex Mono for numerals, clocks, station codes and source lines. Body copy
+stays on the system font. Both faces are preloaded from `index.html` and declared
+`font-display:optional`: a face is either there for the first paint or sits that visit out and is
+cached for the next one. The first version used `swap`, and the late swap moved every card below
+the header; in WebKit CI a checkbox click landed where the checkbox had been. A first visit on a
+slow connection therefore shows the fallback faces, which is the price of a page that does not
+move under a finger. Self-hosting is not optional: the CSP's `default-src 'self'` covers fonts, and a font
+CDN would be a new origin for a cosmetic gain. `tools/source.js` serves the font files to the
+browser suites so layout and contrast are measured with the real faces.
+
+No rule in the layer uses `text-transform`. The first draft set headings in capitals, and the
+browser suites (like anyone copying text off the page) read rendered text, so "WENTZVILLE, MO"
+was a different string from the one the page was given. Title case in the condensed face carries
+the look without changing what the text says.
+
+Section numbers in the navigation come from a CSS counter and the matching numbers on the six
+section headings are generated content. Both use the `content: "02" / ""` alternative-text form,
+so they stay out of accessible names. Adding or reordering a navigation section means updating
+the heading numbers by hand.
+
+`og-image.png` is regenerated in the same identity. `tools/og-image.py` now draws with the two
+faces in `assets/fonts/` instead of a macOS system font, so it runs on any machine with Pillow
+and numpy.
+
+The favicon is an inline SVG that follows the browser's colour scheme the way the header mark
+follows the theme: a graphite tile with the gold bolt on light, an off-white tile with a graphite
+bolt on dark, so it never disappears into a dark tab strip. The home-screen icons cannot follow
+a theme, so `tools/icons.py` draws one fixed colourway, graphite with the gold bolt, full-bleed
+with the bolt inside the maskable safe zone.

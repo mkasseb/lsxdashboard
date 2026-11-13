@@ -1874,3 +1874,183 @@ a.cpc-item:hover{border-color:var(--accent)}
   #hourly24 .h24-sum{grid-template-columns:repeat(2,minmax(0,1fr))}
   #hourly24 .h24-pill:last-child{grid-column:1/-1}
 }
+
+/* ===== November 2026 "Station Log" identity =====
+   A reskin, not a re-layout: every rule below changes surface, colour or type and leaves the
+   geometry the layout tests measure (column split, gaps, radar height, row heights) alone.
+   Nothing here uses text-transform: the browser suites (and anyone copying text off the page)
+   read rendered text, and an uppercased heading is a different string to both.
+   Three ideas carry it:
+   · The chrome is monochrome. --accent now resolves to the text colour, so links are underlined
+     text and a selected control is an inverted block. Saturated colour is left for data only:
+     temperature, severity, radar, rain.
+   · Rules instead of boxes. The hero and the planning cards lose their panel and sit on the page
+     under a 2px rule; the lower context cards stay quiet panels so three packed lanes still read
+     as separate objects.
+   · Two self-hosted faces (latin subsets, SIL OFL — credited in the README): Barlow Condensed for
+     headings and the big temperature, IBM Plex Mono for numerals, clocks and source lines. Body
+     copy stays on the system font so first paint never waits on a download. The faces are
+     preloaded from index.html and font-display:optional: present at first paint or not used on
+     this visit, never swapped in afterwards, because a late swap moves the page under a finger. */
+@font-face{font-family:"Barlow Condensed";font-style:normal;font-weight:500 800;font-display:optional;
+  src:url("fonts/barlow-condensed-latin-600-normal.woff2") format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:400;font-display:optional;
+  src:url("fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2")}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:500 800;font-display:optional;
+  src:url("fonts/ibm-plex-mono-latin-500-normal.woff2") format("woff2")}
+:root{
+  --fd:"Barlow Condensed","Arial Narrow","Helvetica Neue",Arial,sans-serif;
+  --fm:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --bg:#0e0f11;--panel:#17191c;--panel-2:#1f2226;--border:#33373d;
+  --text:#eeede9;--muted:#a8aba6;--accent:#eeede9;--rain:#7cc7e8;
+  --glass1:#17191c;--glass2:#17191c;--gline:#33373d;--gspec:transparent;
+  --reading-top:#17191c;--reading-bottom:#17191c;
+  --inset:rgba(255,255,255,.04);--chip:rgba(255,255,255,.10);--glow:rgba(255,255,255,.06);
+  --h24night:rgba(138,180,255,.07);
+  --r-sm:2px;--r-md:3px;--r-lg:3px;--r-pill:3px;
+  --logo-bg1:#eeede9;--logo-bg2:#eeede9;--logo-ring:#0e0f11;--logo-bolt:#0e0f11;
+}
+:root[data-theme="light"]{
+  --bg:#f1f2f3;--panel:#ffffff;--panel-2:#e7e9ec;--border:#c6cad0;
+  --text:#121315;--muted:#50555c;--accent:#121315;--rain:#0b6a8f;
+  --glass1:#fff;--glass2:#fff;--gline:#c6cad0;--gspec:transparent;
+  --reading-top:#fff;--reading-bottom:#fff;
+  --inset:rgba(18,19,21,.04);--chip:rgba(18,19,21,.08);--glow:rgba(18,19,21,.05);
+  --h24night:rgba(31,85,176,.07);
+  --logo-bg1:#121315;--logo-bg2:#121315;--logo-ring:#f1f2f3;--logo-bolt:#ffcf3d;
+}
+body{background:var(--bg)}
+#wxbg{display:none}
+/* Links are text-coloured now, so the underline is what says "link". Component links that are
+   already whole buttons or rows (jump links, gauge rows, outlook tiles) opt out in their own rules. */
+a{text-decoration:underline;text-underline-offset:3px;text-decoration-thickness:1px}
+a:hover{text-decoration-thickness:2px}
+.jump a,.jump a:hover,#stickyLocation,.rlink,a.cpc-item{text-decoration:none}
+/* Rain is data, and the hourly chart draws it with --accent. Give it back its blue there only. */
+#hourly24,#precipEvents{--accent:var(--rain)}
+
+/* --- Masthead --- */
+header{padding-bottom:12px;border-bottom:2px solid var(--text)}
+.brand h1{font-family:var(--fd);font-size:30px;font-weight:600;letter-spacing:.02em;line-height:1}
+.brand-word{font-family:var(--fm);font-size:11px;letter-spacing:.03em}
+.logo{border-radius:3px;box-shadow:none}
+.logo .lg-sweep,.logo .lg-rings{display:none}
+.top .locNow-label{font-family:var(--fm);font-size:11px;letter-spacing:.03em;color:var(--muted)}
+.top .locNow-place strong{font-family:var(--fd);font-size:24px;font-weight:600;line-height:1.05}
+.clock{font-family:var(--fm)}
+.clock .time{color:var(--text);font-weight:500;letter-spacing:0}
+select,button:where(:not(.ab-head)),.locsearch #locSearch,header .header-right button,header .locsearch #locSearch{
+  background:transparent;border-color:var(--border);box-shadow:none;
+  -webkit-backdrop-filter:none;backdrop-filter:none}
+select{background:var(--bg)}
+select:hover,button:hover{border-color:var(--text)}
+header .locsearch #locSearch{background:var(--panel)}
+.dot,.dot[data-state="partial"],.dot.stale,.calmrow .cdot{box-shadow:none}
+.location-tools summary{color:var(--text);text-decoration:underline;text-underline-offset:3px}
+
+/* --- Section navigation: numbered like log entries, selected entry inverted --- */
+.jump-wrap{border-block:1px solid var(--border)}
+.jump{counter-reset:lsxsec;gap:2px}
+.jump a{font-family:var(--fd);font-size:19px;font-weight:600;letter-spacing:.02em;
+  gap:8px;border-bottom:0;border-radius:3px;color:var(--text)}
+.jump a::before{counter-increment:lsxsec;content:counter(lsxsec,decimal-leading-zero);
+  content:counter(lsxsec,decimal-leading-zero) / "";
+  font-family:var(--fm);font-size:11px;font-weight:500;letter-spacing:0;color:var(--muted)}
+.jump a[aria-current="location"]{background:var(--text);color:var(--bg);border-bottom-color:transparent}
+.jump a[aria-current="location"]::before{color:inherit;opacity:.75}
+.jump-prev{background:linear-gradient(to left,transparent,var(--bg) 45%);border-radius:0}
+.jump-next{background:linear-gradient(to right,transparent,var(--bg) 45%);border-radius:0}
+#stickyLocation{font-family:var(--fd);font-size:19px;font-weight:600;letter-spacing:.02em}
+.sticky-kind{font-family:var(--fm);font-size:11px;letter-spacing:.02em}
+
+/* --- Cards: quiet panels by default, rules-not-boxes for the hero and planning cards --- */
+.card,.card.hero,#callCard,#afdCard,#h24Card,#alertsCard.calm{
+  background:var(--panel);border:0;border-radius:3px;box-shadow:none;
+  -webkit-backdrop-filter:none;backdrop-filter:none}
+.masonry>.card{box-shadow:none}
+#alertsCard,#alertsCard.bannered:not(.calm){background:none}
+#alertsCard.calm{background:var(--panel)}
+#alertsCard.bannered:not(.calm) .calmrow{background:var(--panel);border:0;border-radius:3px;box-shadow:none}
+.weather-hero{border:0;border-radius:0;background:none}
+/* #main lifts these over the ID-level "reading surface" rule that paints #h24Card and #callCard. */
+#main .weather-hero>.card,#main .planning-grid>.card,#main .desktop-planning .planning-column>.card{
+  background:none;border-radius:0;padding-inline:0}
+#main .weather-hero #currentCard,#main .planning-grid>.card,#main .desktop-planning .planning-column>.card{
+  border-top:2px solid var(--text)}
+#main .weather-hero #callCard{border-top:1px solid var(--border)}
+#main .planning-grid>.card,#main .desktop-planning .planning-column>.card{padding-block:14px 0}
+.card h2,.masonry .card h2,#radarCard .rs-head h2,.desktop-planning .planning-support>.card h2{
+  font-family:var(--fd);font-size:25px;font-weight:600;letter-spacing:.015em;line-height:1.15}
+.masonry .card h2{font-size:22px}
+.card h2 .link,.card h2 .forecast-primary-source,.call-head .link,.rs-right .link,.hourly-duration{
+  font-family:var(--fm);font-size:12px;font-weight:400;letter-spacing:.02em}
+.card h2 abbr[title]{text-decoration:none}
+.railhead{align-items:center}
+.rail-t{font-family:var(--fd);font-size:27px;font-weight:600;letter-spacing:.015em}
+.railhead::after{background:var(--border)}
+/* The same numbers the navigation shows, on the sections it points at. Decorative: the
+   alternative-text form keeps them out of the heading's accessible name. */
+#currentCard>h2::before,#h24Card h2::before,#radarCard h2::before,#forecastCard>h2::before,
+#riversCard>h2::before,#climateCard>h2::before{
+  font-family:var(--fm);font-size:12px;font-weight:500;letter-spacing:0;color:var(--muted);
+  margin-right:10px;flex:0 0 auto;align-self:center}
+#currentCard>h2::before{content:"02";content:"02" / ""}
+#h24Card h2::before{content:"03";content:"03" / ""}
+#radarCard h2::before{content:"04";content:"04" / ""}
+#forecastCard>h2::before{content:"05";content:"05" / ""}
+#riversCard>h2::before{content:"06";content:"06" / ""}
+#climateCard>h2::before{content:"07";content:"07" / ""}
+#currentCard>h2,#h24Card h2,#radarCard h2,#forecastCard>h2,#riversCard>h2,#climateCard>h2{justify-content:flex-start}
+#currentCard>h2>.link,#forecastCard>h2>.forecast-primary-source,#riversCard>h2>.link,#climateCard>h2>.link{margin-left:auto}
+
+/* --- Now: the reading is the headline --- */
+.cc-temp{font-family:var(--fd);font-size:120px;font-weight:600;line-height:.82;letter-spacing:-.01em}
+.cc-desc{font-family:var(--fd);font-size:26px;font-weight:600;line-height:1.05}
+.cc-item,.cc-uv,.aqi-mini{border-radius:3px}
+#currentCard .cc-item{border-bottom:1px solid var(--border);padding:6px 0}
+.cc-item .k,.cc-expo .k{font-family:var(--fm);font-size:11px;letter-spacing:.03em}
+#currentCard .cc-item .k{font-size:11px}
+.cc-item .v,.cc-expo .v{font-family:var(--fm);font-weight:500}
+.cc-uv,.aqi-mini{background:var(--panel);border:0}
+@media(max-width:680px){.cc-temp{font-size:96px}.cc-desc{font-size:22px}}
+
+/* --- Numerals, clocks and source lines are set in mono --- */
+.feed-status,.imgcap,.radar-time,.radar-ctl .rc-t,.nws-message-meta,.hourly-forecast-source,
+.feed-sources>summary,.day .dt,.day .dnd,.rlink .rval,.h24-pill b,.resource-note,.brief-author,.stn{
+  font-family:var(--fm);font-variant-numeric:normal}
+.feed-status,.imgcap,.nws-message-meta,.hourly-forecast-source,.resource-note,.brief-author{letter-spacing:-.01em}
+.day .dn{font-family:var(--fd);font-size:20px;font-weight:600;letter-spacing:.015em;line-height:1.1}
+.day .dnd,.daily.no-dnd .dnd{font-family:var(--fm);font-weight:400;letter-spacing:0;text-transform:none}
+.day .dt{font-weight:500;letter-spacing:-.02em}
+.rlink .rval{font-weight:500}
+@media(max-width:680px){.day .dn{font-size:17px}}
+
+/* --- Controls: a pressed control is an inverted block, not a tint --- */
+.hourly-options button[aria-pressed="true"],.rs-tab.on,.stn-tools button.on,.river-pin[aria-pressed="true"]{
+  background:var(--text);color:var(--bg);border-color:var(--text)}
+.hourly-options button,.rs-tab,#radarPlay,.rs-full,.stn-tools button,.river-pin{
+  font-family:var(--fm);font-size:12px;font-weight:500;letter-spacing:.02em}
+.h24-pill{background:none;border-color:var(--border)}
+.h24-pill.h24-now{background:var(--panel)}
+.nbm-daily-toggle input,.nbm-hourly-controls input{accent-color:var(--text)}
+.source-link,.nbm-timing summary,.record-source summary,.nbm-hourly-controls summary{color:var(--text)}
+.skip{border-radius:0 0 3px 3px;box-shadow:none}
+
+/* --- Footer --- */
+footer{border-top:2px solid var(--text);padding-top:12px;font-family:var(--fm);font-size:12px;line-height:1.9}
+/* The masthead's 2px rule already closes the header; the navigation only needs its lower line. */
+.jump-wrap{border-top:0}
+/* At 320px with text doubled, "Visibility" in tracked mono ran 3px past its tile. Labels in the
+   observation grid get no tracking and may break rather than cross into the neighbouring value. */
+#currentCard .cc-item .k{letter-spacing:0;min-width:0;overflow-wrap:anywhere}
+/* The same test at 681px: a mono "29.92"" is 10px wider than its cell once text is doubled.
+   Mono cannot be the face for values in a three-up grid, so the readings use the condensed face,
+   which is narrower than the system font these cells were originally sized for. */
+.cc-item .v,.cc-expo .v{font-family:var(--fd);font-weight:600;letter-spacing:.01em}
+#currentCard .cc-item .v{font-size:19px}
+@media(max-width:680px){#currentCard .cc-item .v{font-size:17px}}
+/* Fullscreen radar covers a page that is inert but still painted. The rules-not-boxes selectors
+   above out-rank the original fullscreen rule, so restate its opaque surface, edges and padding
+   at a specificity they cannot beat (the doubled ID is deliberate). */
+body.radar-full #radarCard#radarCard{background:var(--bg);border:0;
+  padding:max(12px, env(safe-area-inset-top,0px)) 14px calc(12px + env(safe-area-inset-bottom,0px))}
