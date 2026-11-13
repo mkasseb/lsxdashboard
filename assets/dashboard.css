@@ -1889,12 +1889,14 @@ a.cpc-item:hover{border-color:var(--accent)}
      as separate objects.
    · Two self-hosted faces (latin subsets, SIL OFL — credited in the README): Barlow Condensed for
      headings and the big temperature, IBM Plex Mono for numerals, clocks and source lines. Body
-     copy stays on the system font so first paint never waits on a download. */
-@font-face{font-family:"Barlow Condensed";font-style:normal;font-weight:500 800;font-display:swap;
+     copy stays on the system font so first paint never waits on a download. The faces are
+     preloaded from index.html and font-display:optional: present at first paint or not used on
+     this visit, never swapped in afterwards, because a late swap moves the page under a finger. */
+@font-face{font-family:"Barlow Condensed";font-style:normal;font-weight:500 800;font-display:optional;
   src:url("fonts/barlow-condensed-latin-600-normal.woff2") format("woff2")}
-@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:400;font-display:swap;
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:400;font-display:optional;
   src:url("fonts/ibm-plex-mono-latin-400-normal.woff2") format("woff2")}
-@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:500 800;font-display:swap;
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:500 800;font-display:optional;
   src:url("fonts/ibm-plex-mono-latin-500-normal.woff2") format("woff2")}
 :root{
   --fd:"Barlow Condensed","Arial Narrow","Helvetica Neue",Arial,sans-serif;

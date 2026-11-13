@@ -49,7 +49,15 @@
   integrity="sha384-c6Rcwz4e4CITMbu/NBmnNS8yN2sC3cUElMEMfP3vqqKFp7GOYaaBBCqmaWBjmkjb" crossorigin="anonymous">
 <link data-map-style href="https://cdn.jsdelivr.net/npm/maplibre-gl@5.24.0/dist/maplibre-gl.css"
   integrity="sha384-uTttxo/aOKbdE5RlD/SPzSDoDmNvGlUYPjONi2MN/b7c9HPSvW07OIuyP7uL6jxK" crossorigin="anonymous">
-<link rel="stylesheet" href="/assets/dashboard.css?v=cbb509d7533c02d6">
+<!-- The three faces are fetched alongside the stylesheet and declared font-display:optional, so
+     each one is either there for the first paint or sits this visit out. A face that swapped in
+     late moved every card below the header, and a control that moves between pointer-down and
+     click is the failure this page has already had to engineer around once. crossorigin is
+     required on a font preload even for a same-origin file, or the browser fetches it twice. -->
+<link rel="preload" href="/assets/fonts/barlow-condensed-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/ibm-plex-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/ibm-plex-mono-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/assets/dashboard.css?v=b9382904a84003f3">
 </head>
 <body>
 <!-- First focusable thing on the page, and deliberately ahead of the sprite so it stays that way.

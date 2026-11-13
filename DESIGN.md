@@ -713,8 +713,12 @@ background (`#wxbg`) is hidden; it tinted a page whose point is that the chrome 
 Two faces are self-hosted from `assets/fonts/` as latin-subset woff2 (about 52 KB together, SIL
 OFL, credited in the README): Barlow Condensed for headings, day names and the current
 temperature, and IBM Plex Mono for numerals, clocks, station codes and source lines. Body copy
-stays on the system font, and both faces use `font-display:swap`, so first paint never waits on
-a download. Self-hosting is not optional: the CSP's `default-src 'self'` covers fonts, and a font
+stays on the system font. Both faces are preloaded from `index.html` and declared
+`font-display:optional`: a face is either there for the first paint or sits that visit out and is
+cached for the next one. The first version used `swap`, and the late swap moved every card below
+the header; in WebKit CI a checkbox click landed where the checkbox had been. A first visit on a
+slow connection therefore shows the fallback faces, which is the price of a page that does not
+move under a finger. Self-hosting is not optional: the CSP's `default-src 'self'` covers fonts, and a font
 CDN would be a new origin for a cosmetic gain. `tools/source.js` serves the font files to the
 browser suites so layout and contrast are measured with the real faces.
 
