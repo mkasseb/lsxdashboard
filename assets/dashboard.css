@@ -2047,3 +2047,8 @@ footer{border-top:2px solid var(--text);padding-top:12px;font-family:var(--fm);f
 .cc-item .v,.cc-expo .v{font-family:var(--fd);font-weight:600;letter-spacing:.01em}
 #currentCard .cc-item .v{font-size:19px}
 @media(max-width:680px){#currentCard .cc-item .v{font-size:17px}}
+/* Fullscreen radar covers a page that is inert but still painted. The rules-not-boxes selectors
+   above out-rank the original fullscreen rule, so restate its opaque surface, edges and padding
+   at a specificity they cannot beat (the doubled ID is deliberate). */
+body.radar-full #radarCard#radarCard{background:var(--bg);border:0;
+  padding:max(12px, env(safe-area-inset-top,0px)) 14px calc(12px + env(safe-area-inset-bottom,0px))}
