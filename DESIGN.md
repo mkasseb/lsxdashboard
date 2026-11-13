@@ -730,4 +730,10 @@ the heading numbers by hand.
 
 `og-image.png` is regenerated in the same identity. `tools/og-image.py` now draws with the two
 faces in `assets/fonts/` instead of a macOS system font, so it runs on any machine with Pillow
-and numpy. The favicon and the `icon-*.png` home-screen icons still carry the earlier blue tile.
+and numpy.
+
+The favicon is an inline SVG that follows the browser's colour scheme the way the header mark
+follows the theme: a graphite tile with the gold bolt on light, an off-white tile with a graphite
+bolt on dark, so it never disappears into a dark tab strip. The home-screen icons cannot follow
+a theme, so `tools/icons.py` draws one fixed colourway, graphite with the gold bolt, full-bleed
+with the bolt inside the maskable safe zone.
