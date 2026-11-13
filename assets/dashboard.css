@@ -2038,3 +2038,12 @@ header .locsearch #locSearch{background:var(--panel)}
 footer{border-top:2px solid var(--text);padding-top:12px;font-family:var(--fm);font-size:12px;line-height:1.9}
 /* The masthead's 2px rule already closes the header; the navigation only needs its lower line. */
 .jump-wrap{border-top:0}
+/* At 320px with text doubled, "Visibility" in tracked mono ran 3px past its tile. Labels in the
+   observation grid get no tracking and may break rather than cross into the neighbouring value. */
+#currentCard .cc-item .k{letter-spacing:0;min-width:0;overflow-wrap:anywhere}
+/* The same test at 681px: a mono "29.92"" is 10px wider than its cell once text is doubled.
+   Mono cannot be the face for values in a three-up grid, so the readings use the condensed face,
+   which is narrower than the system font these cells were originally sized for. */
+.cc-item .v,.cc-expo .v{font-family:var(--fd);font-weight:600;letter-spacing:.01em}
+#currentCard .cc-item .v{font-size:19px}
+@media(max-width:680px){#currentCard .cc-item .v{font-size:17px}}
