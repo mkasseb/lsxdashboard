@@ -991,6 +991,12 @@ scroll here" with a Load station map button (which calls `requestContext("statio
 "Loading station map…" while the libraries arrive. An empty grey box looked like a map with no
 stations. Map failure still replaces it with the retry panel.
 
+**A retry never drops focus.** While maps retry, the radar's Retry button is `aria-disabled`, not
+`disabled`: a focused button that becomes disabled drops focus to `<body>`, and an automatic retry
+(the station card coming into range) could start while a keyboard reader sat on it, including in
+the fullscreen dialog, which then no longer contained focus. A failed retry rebuilds the panel and
+hands focus to the new Retry button when the old one had it.
+
 **Map diagnostics behind `?debug`.** The disclosure under the radar was for whoever debugs map
 tiles. `initMapDiagnostics()` now builds it only when the URL has `?debug`. The boot log behind it
 records every stage regardless, so turning the flag on after a failure loses nothing.

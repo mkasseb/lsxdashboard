@@ -30,7 +30,11 @@ function mapFallback(id){
   var el=document.getElementById(id);
   if(el&&el.closest(".maplock-wrap"))el.closest(".maplock-wrap").classList.add("map-unavailable");
   var href=id==="radar"?"https://radar.weather.gov/station/KLSX/standard":"https://www.weather.gov/wrh/timeseries?site=KSTL";
-  if(el) el.innerHTML='<div class="imgfail">Map didn’t load. <button type="button" data-retry-maps>Retry maps</button> <a href="'+href+'" target="_blank" rel="noopener">'+(id==="radar"?"Open NWS radar":"Open NWS obs")+' ↗</a></div>';
+  if(!el) return;
+  // Rebuilding the panel replaces the focused retry button; hand focus to its replacement.
+  var hadFocus=el.contains(document.activeElement)&&document.activeElement!==el;
+  el.innerHTML='<div class="imgfail">Map didn’t load. <button type="button" data-retry-maps>Retry maps</button> <a href="'+href+'" target="_blank" rel="noopener">'+(id==="radar"?"Open NWS radar":"Open NWS obs")+' ↗</a></div>';
+  if(hadFocus) el.querySelector('[data-retry-maps]').focus({preventScroll:true});
 }
 function ensureMapLibraries(){
   var libraries=[
@@ -101,7 +105,10 @@ function ensureMaps(){
     // Approaching the station context can retry dependencies after a radar failure. Keep the
     // compact error layout and official link until recovery succeeds; replacing Retry with the
     // initial loading panel expands the planning grid underneath a pressed context disclosure.
-    if(retry){retry.textContent="Retrying maps…";retry.disabled=true;radarEl.setAttribute("aria-busy","true");}
+    // aria-disabled, not disabled: a focused button that becomes disabled drops focus to <body>,
+    // which strands a keyboard user (and escapes the fullscreen dialog) whenever an automatic
+    // retry starts. A click while busy is harmless: ensureMaps() returns the attempt in flight.
+    if(retry){retry.textContent="Retrying maps…";retry.setAttribute("aria-disabled","true");radarEl.setAttribute("aria-busy","true");}
     else radarEl.innerHTML='<div class="imgfail" role="status">Loading map…</div>';
   }
   if(!stnMap&&feedRequested("stations")){
@@ -133,7 +140,7 @@ function ensureMaps(){
     mapsInFlight=null;if(rvMap)mapBoot.phase="ready";
     var radarEl=document.getElementById("radar"), retry=radarEl.querySelector('[data-retry-maps]');
     radarEl.removeAttribute("aria-busy");
-    if(retry){retry.textContent="Retry maps";retry.disabled=false;}
+    if(retry){retry.textContent="Retry maps";retry.removeAttribute("aria-disabled");}
     syncRadarBadge();syncSkyMeta();
   });
   return mapsInFlight;

@@ -418,6 +418,20 @@ async function main() {
       await page.locator('#riskHelp summary').click();await noCardOverlap(page);
       assert.equal(await page.evaluate(()=>document.activeElement.parentElement.id),'riskHelp');
     },width);
+    await run('an automatic map retry keeps keyboard focus on the retry button',config('retry focus',{maps:true,mapLibrariesDown:true}),async({page})=>{
+      const retry=page.locator('#radar [data-retry-maps]');await retry.waitFor();
+      await page.evaluate(()=>{deferredFeeds.stations=true;});
+      let release;
+      await page.route('**/leaflet/1.9.4/leaflet.min.js',async route=>{await new Promise(resolve=>release=resolve);await route.fulfill({status:503,body:''});});
+      await retry.focus();
+      const pending=page.waitForRequest('**/leaflet/1.9.4/leaflet.min.js');
+      // An approach-triggered retry, not a click: the reader's focus must stay where it was.
+      await page.evaluate(()=>{window.autoRetry=ensureMaps();});await pending;
+      assert.equal(await retry.getAttribute('aria-disabled'),'true','The busy retry is exposed as unavailable');
+      assert(await retry.evaluate(b=>b===document.activeElement),'Focus stays on the busy retry button');
+      release();await page.evaluate(()=>window.autoRetry);
+      assert(await retry.isEnabled());assert(await retry.evaluate(b=>b===document.activeElement),'Focus survives the failed retry');
+    });
     await run('risk explanations keep their pressed target during a failed radar retry',config('risk retry',{maps:true,mapLibrariesDown:true}),async({page})=>{
       await page.locator('#radar [data-retry-maps]').waitFor();
       // Keep the lazy station observer from starting this retry before pointerdown.
