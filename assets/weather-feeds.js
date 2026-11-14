@@ -961,13 +961,14 @@ var LSR_URL="https://mesonet.agron.iastate.edu/geojson/lsr.geojson?states=MO,IL&
 function loadReports(){
   var fresh=locGuard("reports");
   return getJSON(LSR_URL,{},locSignal()).then(function(fc){
-    if(!fresh()) return;
+    // Leaving the storm layout ends demand: a response that lands afterwards must not repaint.
+    if(!fresh()||!feedRequested("reports")) return;
     var rows=stormReportRows(fc,Date.now(),current);
     if(!rows) throw new Error("Invalid storm reports");
-    feedUpdate("reports","ready");
+    feedUpdate("reports",rows.invalid?"partial":"ready");
     renderStormReports(rows);
   }).catch(function(e){
-    if(isAbort(e)||!fresh()) return;
+    if(isAbort(e)||!fresh()||!feedRequested("reports")) return;
     feedUpdate("reports","unavailable");
     renderStormReports(false);
   });

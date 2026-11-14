@@ -88,6 +88,8 @@ function outlookCurrent(c){
   var f=outlookFeedState(c.feed);
   if(f==="stale") return {state:"partial",value:s.value,sub:"Check overdue",verified:false};
   if(f==="saved") return {state:"partial",value:s.value,sub:"Saved · re-checking",verified:false};
+  if(f==="unavailable") return {state:"unavailable",value:s.value,sub:"Check failed",verified:false};
+  if(f==="partial"&&s.verified) return {state:"partial",value:s.value,sub:"Some data unavailable",verified:false};
   return s;
 }
 function outlookCardFolds(card){
@@ -138,6 +140,8 @@ function outlookOpen(id){
   var card=document.getElementById(id); if(!card) return;
   var was=card.hidden;
   if(was){ outlookOpened[id]=true; renderOutlook(); }
+  // In the storm layout the whole context pack may be folded; open it first or the card stays unreachable.
+  if(card.closest("#contextPack")&&typeof showFolded==="function") showFolded("context",false);
   if(typeof layoutMasonry==="function") layoutMasonry();
   card.scrollIntoView({block:"start",behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});
   var h=card.querySelector("h2");
@@ -237,6 +241,7 @@ function syncActiveMode(){
 function resetActiveMode(){
   activeState={active:false,lastHit:0,event:"",optOut:false,until:0,unverified:false};
   applyActiveMode();
+  if(typeof renderStormReports==="function") renderStormReports(null);   // the old place's reports and dots
 }
 function activeBarText(){
   if(!activeState.active) return "";
@@ -293,7 +298,8 @@ function placeRadar(on){
 function syncFoldChips(){
   var o=document.getElementById("foldOutlook");
   if(o){
-    var r=outlookState.risk, words=r?r.value:"";
+    // The same freshness-aware reading the hidden cell would show, qualifier included.
+    var cell=OUTLOOK_CELLS[0], r=outlookCurrent(cell), words=r?r.value+(r.state==="partial"||r.state==="unavailable"?" ("+(r.sub||"unverified").toLowerCase()+")":""):"";
     if(o.textContent!==words) o.textContent=words;
   }
   document.querySelectorAll("#activeFoldChips .fold-chip").forEach(function(b){
@@ -310,6 +316,9 @@ function showFolded(key,scroll){
   if(scroll&&target){
     if(key==="context"&&typeof layoutMasonry==="function") layoutMasonry();
     target.scrollIntoView({block:"start",behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});
+    // Move focus with the view, so Tab continues through what was just revealed.
+    var h=key==="context"?document.querySelector(".railhead"):target.querySelector("h2");
+    if(h){ if(!h.hasAttribute("tabindex")) h.setAttribute("tabindex","-1"); h.focus({preventScroll:true}); }
   }
 }
 (function initActiveMode(){
@@ -317,6 +326,12 @@ function showFolded(key,scroll){
   if(toggle) toggle.addEventListener("click",function(){
     activeState.optOut=!activeState.optOut; applyActiveMode();
     if(!activeState.optOut){ var r=document.getElementById("radarCard"); if(r) r.scrollIntoView({block:"start"}); }
+  });
+  document.addEventListener("radarfullscreenchange",function(){
+    if(typeof radarFull!=="undefined"&&!radarFull){
+      placeRadar(document.documentElement.classList.contains("lsx-active"));
+      if(typeof rvMap!=="undefined"&&rvMap) setTimeout(function(){ if(rvMap) rvMap.invalidateSize(); },0);
+    }
   });
   var chips=document.getElementById("activeFoldChips");
   if(chips) chips.addEventListener("click",function(e){

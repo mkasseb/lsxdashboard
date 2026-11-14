@@ -917,6 +917,25 @@ folded changes:
 - `#activeBar` says why the page looks different and offers **Show the usual layout**. That choice
   lasts until the episode ends; the next covering warning re-arms the layout.
 
+**Review fixes (Codex, before merge).** Each of these was a state that could outlive its evidence:
+
+- The fold button's outlook summary reads `outlookCurrent()`, the same freshness-aware value as
+  the hidden cell, so an overdue Risk check says so on the button too.
+- A summary folds its card only while its feed is ready (or refreshing after a ready check). A
+  `partial`, `unavailable`, `stale` or `saved` feed unfolds it.
+- A storm-reports response that lands after the reader leaves the layout is dropped
+  (`feedRequested("reports")` is checked before painting), and a location reset clears reports
+  and map dots whether or not the layout was on.
+- An LSX record with no readable time or coordinates is counted, not dropped. Any unreadable
+  record leaves the feed `partial`; if nothing else is readable the card says the reports
+  "could not be read", never "No reports". Coordinates must be present and regional, so a null
+  pair is not plotted at (0, 0). Past 12 rows the card says how many it is showing.
+- During an alert outage a retained warning neither renews the 30-minute hold nor lets the bar
+  claim it is current; the outage branch runs first.
+- "Show card" opens the folded context pack before scrolling to a card inside it, fold buttons
+  move focus to what they reveal, and a radar move deferred by fullscreen is applied when
+  fullscreen closes.
+
 There is no auto-play of the radar loop and no camera change. A moving map nobody asked for costs
 bandwidth on a phone in a storm, and `prefers-reduced-motion` readers would need a separate path.
 The loop button is right under the map.

@@ -41,13 +41,13 @@ async function main(){
    await risk.click();for(const day of await p.locator('#daily .day').all())await day.click();
    await p.locator('#forecastRecordSource > summary').click();await check('forecast-expanded',true);
    for(const day of await p.locator('#daily .day').all())await day.click();await p.locator('#forecastRecordSource > summary').click();
-   // Toggles inside cards folded behind the outlook row are not on the page to press.
-   for(const toggle of await p.locator('.context-toggle:visible').all())await toggle.click();await check('context-collapsed',true);
-   for(const toggle of await p.locator('.context-toggle:visible').all())await toggle.click();await check('context-expanded');
-   // Opening a folded outlook card from its cell must reserve its height in the pack.
+   // Opening a folded outlook card from its cell must reserve its height in the pack. Open them
+   // first, so every card's own collapse and expand is still exercised below.
    const foldedIds=await p.locator('#outlookCells .ol-cell[aria-expanded="false"]').evaluateAll(cs=>[...new Set(cs.map(c=>c.getAttribute('aria-controls')))]);
    for(const id of foldedIds){await p.locator('#outlookCells [aria-controls="'+id+'"]').first().click();assert(await p.locator('#'+id).isVisible(),id+' opens from its outlook cell');}
    if(foldedIds.length)await check('outlook-opened');
+   for(const toggle of await p.locator('.context-toggle').all())await toggle.click();await check('context-collapsed',true);
+   for(const toggle of await p.locator('.context-toggle').all())await toggle.click();await check('context-expanded');
    // A later river response must reserve its new height before lower cards can overlap it.
    s.change(config('later river response',{maps:true,aqi:32,uv:4,river:[35,40,38],climateFixture:true,datedRecords:true}));await p.evaluate(()=>loadRivers());await check('river-refresh');
    await p.locator('#climateCard .context-toggle').focus();await p.setViewportSize({width:1000,height:900});await stable(p);

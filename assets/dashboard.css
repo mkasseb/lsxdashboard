@@ -2218,4 +2218,5 @@ body.radar-full #radarCard#radarCard{background:var(--bg);border:0;
 .lsr-src{display:block;font-size:var(--fs-2xs);color:var(--muted);margin-top:2px}
 .lsr-t{font-family:var(--fm);font-size:var(--fs-2xs);color:var(--muted);white-space:nowrap}
 .reports-none{margin:0;color:var(--muted)}
+.reports-cap{margin:8px 0 0;font-size:var(--fs-2xs);color:var(--muted)}
 .reports-note{margin:10px 0 0;font-size:var(--fs-2xs);color:var(--muted)}

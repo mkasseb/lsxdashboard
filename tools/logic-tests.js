@@ -1922,6 +1922,8 @@ async function checkGridLoaderIsolation() {
   check('storm layout: releases after the hold',am.next(held,null,t0+31*60000,true).active,false);
   check('storm layout: an alert outage never releases it',am.next(on,null,t0+5*H,false).active,true);
   check('storm layout: an outage alone never enters it',am.next({},null,t0,false).active,false);
+  const outage=am.next(on,tor,t0+10*60000,false);
+  check('storm layout: a retained warning during an outage is unverified and does not renew the hold',[outage.active,outage.unverified,outage.lastHit].join(),'true,true,'+t0);
   const fc={features:[
     {properties:{wfo:'LSX',typetext:'HAIL',magnitude:1.75,unit:'INCH',valid:new Date(t0-20*60000).toISOString(),lat:38.8,lon:-90.7,city:'Wentzville'}},
     {properties:{wfo:'LSX',typetext:'TORNADO',magnitude:'',valid:new Date(t0-5*60000).toISOString(),lat:38.9,lon:-90.8,city:'Foristell'}},
@@ -1935,6 +1937,11 @@ async function checkGridLoaderIsolation() {
   check('storm reports: hail keeps its size',rows[1].mag,'1.75 INCH');
   check('storm reports: distance is about 8 miles east',[Math.round(rows[1].mi),Math.round(rows[1].deg/10)*10].join(),'8,90');
   check('storm reports: a malformed response is not an empty list',am.rows({},t0,null),null);
+  check('storm reports: an unreadable LSX record is counted, not dropped',rows.invalid,1);
+  const blank=am.rows({features:[{properties:{wfo:'LSX',typetext:'HAIL',valid:new Date(t0-60000).toISOString(),lat:null,lon:null,city:'Null Island'}}]},t0,null);
+  check('storm reports: null coordinates are invalid, not (0, 0)',[blank.length,blank.invalid].join(),'0,1');
+  const many=am.rows({features:Array.from({length:15},(_,i)=>({properties:{wfo:'LSX',typetext:'HAIL',valid:new Date(t0-i*60000).toISOString(),lat:38.8,lon:-90.7,city:'C'+i}}))},t0,null);
+  check('storm reports: the cap keeps the true total',[many.length,many.total].join(),'12,15');
 }
 
 checkLiveFeedFailures().then(checkSpcThreatProducts).then(checkForecastRefreshFailure).then(checkGridLoaderIsolation).then(() => {

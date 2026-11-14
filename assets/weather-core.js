@@ -1701,8 +1701,10 @@ function activeModeTrigger(local,nowMs){
 function activeModeNext(prev,local,nowMs,alertsHealthy){
   prev=prev||{};
   var event=activeModeTrigger(local,nowMs);
+  // An outage is checked first: a retained warning is old evidence, not a new observation, so it
+  // neither renews the hold nor lets the bar claim the warning is current.
+  if(prev.active&&alertsHealthy===false) return {active:true,lastHit:prev.lastHit||nowMs,event:event||prev.event||"",holding:false,unverified:true};
   if(event) return {active:true,lastHit:nowMs,event:event,holding:false};
-  if(prev.active&&alertsHealthy===false) return {active:true,lastHit:prev.lastHit||nowMs,event:prev.event||"",holding:false,unverified:true};
   var held=prev.lastHit>0&&nowMs-prev.lastHit<ACTIVE_HOLD_MS;
   return {active:!!held,lastHit:held?prev.lastHit:0,event:held?prev.event||"":"",holding:!!held,until:held?prev.lastHit+ACTIVE_HOLD_MS:0};
 }
@@ -1731,16 +1733,21 @@ function lsrDistance(lat1,lon1,lat2,lon2){
 function stormReportRows(fc,nowMs,point,maxAgeMs){
   if(!fc||!Array.isArray(fc.features)) return null;
   maxAgeMs=maxAgeMs||3*3600000;
-  var rows=[];
+  var rows=[], invalid=0;
   fc.features.forEach(function(f){
     var p=f&&f.properties; if(!p||p.wfo!=="LSX") return;
-    var t=Date.parse(p.valid||""); if(!isFinite(t)||t>nowMs+10*60000||nowMs-t>maxAgeMs) return;
-    var lat=+p.lat, lon=+p.lon; if(!isFinite(lat)||!isFinite(lon)) return;
+    var t=Date.parse(p.valid||"");
+    var lat=p.lat==null||p.lat===""?NaN:+p.lat, lon=p.lon==null||p.lon===""?NaN:+p.lon;
+    // An LSX record that cannot be read is a gap, never a "no reports" answer.
+    if(!isFinite(t)||!isFinite(lat)||!isFinite(lon)||lat<34||lat>43||lon<-96.5||lon>-85){ invalid++; return; }
+    if(t>nowMs+10*60000||nowMs-t>maxAgeMs) return;
     var kind=lsrKind(p.typetext), d=point?lsrDistance(point.lat,point.lon,lat,lon):null;
     var mag=p.magnitude!=null&&p.magnitude!==""?String(p.magnitude)+(p.unit?" "+p.unit:""):"";
     rows.push({kind:kind,type:p.typetext||kind.label,mag:mag,city:p.city||"",county:p.county||"",st:p.st||p.state||"",
       source:p.source||"",remark:p.remark||"",time:t,lat:lat,lon:lon,mi:d?d.mi:null,deg:d?d.deg:null});
   });
   rows.sort(function(a,b){ return b.time-a.time; });
-  return rows.slice(0,12);
+  var shown=rows.slice(0,12);
+  shown.total=rows.length; shown.invalid=invalid;
+  return shown;
 }

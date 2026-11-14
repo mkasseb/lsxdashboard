@@ -1287,6 +1287,48 @@ async function main() {
       assert.equal(await page.evaluate(()=>deferredFeeds.reports),false,'Storm reports stop polling with the layout');
       assert(await page.locator('#forecastCard').isVisible());
     },width);
+    await run('storm layout transitions keep every state honest',config('storm transitions',{alerts:[alert('Tornado Warning',base)],reports:stormReports}),async session=>{
+      const {page}=session;
+      await page.waitForFunction(()=>document.querySelectorAll('#reports .lsr-row').length===3);
+      // A fold button moves focus into what it reveals.
+      await page.locator('#activeFoldChips [data-show="outlook"]').focus();await page.keyboard.press('Enter');
+      assert.equal(await page.evaluate(()=>document.activeElement.id),'outlookTitle','Focus follows the revealed section');
+      // "Show card" reaches a card inside the folded context pack.
+      const cell=page.locator('#outlookCells .ol-cell[aria-expanded="false"]').first();
+      if(await cell.count()){
+        const id=await cell.getAttribute('aria-controls');await cell.click();
+        assert(await page.locator('#'+id).isVisible(),id+' is reachable from its cell during the storm layout');
+        assert(await page.evaluate(id=>document.getElementById(id).contains(document.activeElement),id),'Focus lands in the opened card');
+      }
+      // The visible fold summary carries the same overdue qualifier as the hidden cell.
+      await page.evaluate(()=>{feedChecks.risk.status='ready';feedChecks.risk.successAt=Date.now()-FEEDS.risk.age-1;freshnessCheck();});
+      await expectText(page,'#foldOutlook',/check overdue/);
+      await page.evaluate(()=>{feedChecks.risk.successAt=Date.now();freshnessCheck();});
+      // A reports response landing after the reader leaves the layout cannot repaint.
+      await page.evaluate(()=>{const job=loadReports();document.getElementById('activeToggle').click();return job;});
+      assert.equal(await page.evaluate(()=>lastReports.length),0,'No reports or dots after exit');
+      // Storm layout switched on while fullscreen was open takes effect when fullscreen closes.
+      // Fullscreen makes the rest of the page inert, so the switch arrives as a state change (as a new warning would).
+      await page.evaluate(()=>{setRadarFull(true);activeState.optOut=false;applyActiveMode();});
+      assert.deepEqual(await page.evaluate(()=>[...document.querySelector('.top-band').children].map(e=>e.id||e.className)),['now-stack','radarCard'],'Fullscreen defers the move');
+      await page.evaluate(()=>setRadarFull(false));
+      assert.deepEqual(await page.evaluate(()=>[...document.querySelector('.top-band').children].map(e=>e.id||e.className)),['radarCard','now-stack'],'Closing fullscreen applies it');
+      // An alert outage with the warning still retained: the bar says it cannot be confirmed.
+      session.change(config('storm alerts down',{alerts:[alert('Tornado Warning',base)],alertsDown:true,reports:stormReports}));
+      await page.evaluate(()=>{feedChecks.alerts.successAt=Date.now()-FEEDS.alerts.age-1;return loadAlerts();});
+      await expectText(page,'#activeBarText',/cannot be confirmed/);
+      assert(await page.evaluate(()=>document.documentElement.classList.contains('lsx-active')),'An outage keeps the storm layout');
+      // A location reset clears the old place's reports even when nothing toggles.
+      await page.evaluate(()=>{renderStormReports([{kind:{k:'H',label:'Hail',tone:'hail'},type:'HAIL',mag:'',city:'Old',county:'',st:'',source:'',remark:'',time:Date.now(),lat:38.8,lon:-90.7,mi:1,deg:0}]);resetActiveMode();});
+      assert.equal(await page.evaluate(()=>lastReports.length),0,'A location reset clears reports and dots');
+    },1280);
+    await run('unreadable storm reports are a gap, not an all-clear',config('bad reports',{alerts:[alert('Tornado Warning',base)],reports:[['HAIL',5,null,null,1,'Nowhere']]}),async session=>{
+      const {page}=session;
+      await page.waitForFunction(()=>/could not be read/.test(document.getElementById('reports').innerText));
+      assert(!/No reports/.test(await page.locator('#reports').innerText()));
+      assert.equal(await page.locator('#fresh-reports').getAttribute('data-state'),'partial');
+      assert(await page.locator('#reportsCard #fresh-reports').isVisible(),'The partial check stays on its card');
+    });
     await run('storm layout ignores distant warnings and keeps a report outage visible',config('distant storm',{alerts:[alert('Tornado Warning',base,true)]}),async session=>{
       const {page}=session;
       assert(!(await page.evaluate(()=>document.documentElement.classList.contains('lsx-active'))),'A warning elsewhere keeps the usual layout');
@@ -1305,10 +1347,13 @@ async function main() {
       assert.equal(await page.locator('#compactView').count(),0);
       for(const id of ['afdCard','obsCard','climateCard','droughtCard','cpcCard']){
         assert.equal(await page.locator('#'+id+' .context-toggle').getAttribute('aria-expanded'),'true');
-        // A verified calm outlook card folds behind its outlook cell; that cell is the way back in.
-        const folded=await page.locator('#'+id).evaluate(e=>e.hidden);
-        if(folded)assert.equal(await page.locator('#outlookCells [aria-controls="'+id+'"]').first().getAttribute('aria-expanded'),'false',id+' is reachable from its outlook cell');
-        else assert(await page.locator('#'+id+'Body').isVisible());
+        // A verified calm outlook card folds behind its outlook cell; prove the cell is the way back in.
+        if(await page.locator('#'+id).evaluate(e=>e.hidden)){
+          const feed={droughtCard:'drought',cpcCard:'cpc'}[id];
+          assert.equal(await page.evaluate(feed=>feedState(feedChecks[feed],Date.now(),FEEDS[feed].age),feed),'ready',id+' folds only after a live check');
+          await page.locator('#outlookCells [aria-controls="'+id+'"]').first().click();
+        }
+        assert(await page.locator('#'+id+'Body').isVisible(),id+' saved content is reachable');
       }
     });
     await run('deferred station and climate work starts on approach or request',config('deferral',{maps:true,climateFixture:true}),async({page,requests})=>{

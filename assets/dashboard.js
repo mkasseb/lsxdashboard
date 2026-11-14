@@ -1243,6 +1243,7 @@ function renderStormReports(rows){
   if(el){
     if(rows===false) el.innerHTML='<div class="empty">Storm reports unavailable. <a href="https://mesonet.agron.iastate.edu/lsr/#LSX/-180/0" target="_blank" rel="noopener">Open IEM ↗</a></div>';
     else if(rows===null) el.innerHTML='<div class="loading">Checking storm reports…</div>';
+    else if(!rows.length&&rows.invalid) el.innerHTML='<p class="reports-none">'+rows.invalid+' report'+(rows.invalid>1?'s':'')+' from the St. Louis office could not be read. <a href="https://mesonet.agron.iastate.edu/lsr/#LSX/-180/0" target="_blank" rel="noopener">Open IEM ↗</a></p>';
     else if(!rows.length) el.innerHTML='<p class="reports-none">No reports from the St. Louis office in the last 3 hours.</p>';
     else el.innerHTML='<ol class="lsr-list">'+rows.map(function(r){
       var where=[r.city,r.county?r.county+" Co.":"",r.st].filter(Boolean).join(", ");
@@ -1252,7 +1253,9 @@ function renderStormReports(rows){
         +(near?' <span class="lsr-near">'+esc(near)+' of you</span>':'')
         +(r.source?'<span class="lsr-src">'+esc(r.source)+(r.remark?' · '+esc(r.remark):'')+'</span>':'')+'</span>'
         +'<time class="lsr-t" datetime="'+new Date(r.time).toISOString()+'">'+esc(weatherTime(r.time,{hour:"numeric",minute:"2-digit"}))+'<span class="sr"> CT, '+esc(lsrAgo(r.time))+'</span></time></li>';
-    }).join("")+'</ol>';
+    }).join("")+'</ol>'
+      +(rows.total>rows.length?'<p class="reports-cap">Showing the latest '+rows.length+' of '+rows.total+' reports.</p>':'')
+      +(rows.invalid?'<p class="reports-cap">'+rows.invalid+' more could not be read.</p>':'');
   }
   drawStormReports();
 }
