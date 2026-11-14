@@ -2220,5 +2220,5 @@ body.radar-full #radarCard#radarCard{background:var(--bg);border:0;
 }
 /* Air quality is CAMS model output, never a monitor reading: the word rides with every value. */
 .aqi-modeled{font-family:var(--fm);font-size:11px;font-weight:400;letter-spacing:.02em;color:var(--muted)}
-.aqi-measured{white-space:nowrap}
+.aqi-measured{overflow-wrap:anywhere}
 .aqi-model-note{margin-top:4px}
