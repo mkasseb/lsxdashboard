@@ -820,8 +820,13 @@ seven-day, Key Messages, discussion, context. Section numbers in the jump bar fo
 does should not be buried. `setAttention(id, on)` moves a card between the context pack and
 `#attentionCards`, keeping its node (handlers, disclosures, pins, focus). Two cards use it:
 
-- **Rivers.** `riverState()` reads the rendered gauge rows. Any gauge at action stage or above, or
-  a fresh forecast reaching a flood category, is *attention*. Every gauge with a live reading below
+- **Rivers.** `riverState()` reads markers `loadRivers()` writes on each gauge row. Any gauge at
+  action stage or above, or any usable forecast point reaching a category, is *attention*. Both use
+  the numeric thresholds (`stageCategory`), never only the label: an "unknown" category at 16.2 ft
+  over a 16 ft line is at action stage, and a 15.8 → 16.1 ft forecast crosses it even though the
+  trend wording ignores rises under 0.5 ft. "Below action stage" needs positive evidence
+  (`data-below`): under a numeric threshold, or an explicit no-flooding category when the gauge
+  publishes none. A current issuance with no usable future points counts as no forecast. Every gauge with a live reading below
   action stage is *calm*: one line, rows behind "Show all gauges". Forecasts only decide what that
   line may claim: "none forecast to reach it" needs every forecast current; otherwise it counts the
   current ones and names the gauges without one (Eureka's is often stale), so a gap is visible but

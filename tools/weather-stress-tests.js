@@ -169,7 +169,7 @@ async function open(c, width=390) {
     if(u.hostname==='api.open-meteo.com'&&c.uv!=null) return reply({hourly:{time:[c.now/1000,(c.now+H)/1000],uv_index:[c.uv,c.uv+1]},daily:{time:Array.from({length:7},(_,i)=>stamp(c.now+i*24*H).slice(0,10)),uv_index_max:Array(7).fill(c.uv+1)}});
     if(u.hostname==='api.water.noaa.gov'&&c.river){
       if(u.pathname.endsWith('/stageflow/forecast')) return reply({issuedTime:c.riverForecastMissingTime?undefined:new Date(c.now-(c.riverForecastAgeHours||1)*H).toISOString(),data:c.river.map((primary,i)=>({primary,validTime:new Date(c.now+i*24*H).toISOString()}))});
-      return reply({status:{observed:{primary:c.riverStage||20,primaryUnit:'ft',floodCategory:c.riverCategory||'minor',validTime:c.riverMissingTime?undefined:new Date(c.now-(c.riverAgeMinutes||5)*60000).toISOString()}},flood:{categories:{action:{stage:16},minor:{stage:18},moderate:{stage:24},major:{stage:30}}}});
+      return reply({status:{observed:{primary:c.riverStage||20,primaryUnit:'ft',floodCategory:c.riverCategory||'minor',validTime:c.riverMissingTime?undefined:new Date(c.now-(c.riverAgeMinutes||5)*60000).toISOString()}},flood:{categories:c.riverNoThresholds?{}:{action:{stage:16},minor:{stage:18},moderate:{stage:24},major:{stage:30}}}});
     }
     if(u.hostname==='api.weather.gov') {
       let id='0';
@@ -554,6 +554,28 @@ async function main() {
       await page.evaluate(()=>loadRivers());
       assert(await page.locator('#riversCard').evaluate(e=>e.parentElement.classList.contains('masonry')&&!e.classList.contains('rivers-calm')),'Unverified gauges keep full rows in context');
       assert(await page.locator('#attention').isHidden());
+    },1280);
+    // Each case is one gauge state applied to all six fixture gauges; action stage is 16 ft.
+    const riverHome=page=>page.locator('#riversCard').evaluate(e=>({calm:e.classList.contains('rivers-calm'),promoted:e.parentElement.id==='attentionCards',line:document.querySelector('.river-calm-line')?.textContent||''}));
+    await run('a forecast rise under 0.5 ft that crosses action stage promotes the gauges',config('river small rise',{river:[15.8,16.1,15.9],riverStage:15.8,riverCategory:'no_flooding'}),async({page})=>{
+      await expectText(page,'#rivers',/Forecast reaches/);
+      const home=await riverHome(page);assert(home.promoted&&!home.calm,'16.1 ft forecast over a 16 ft action stage: '+JSON.stringify(home));
+      await expectText(page,'#rivers',/16\.1 ft by .*action stage/i);
+    },1280);
+    await run('a reading over action stage with an unknown category is not called calm',config('river unknown category',{river:[15,14,13],riverStage:16.2,riverCategory:'unknown'}),async({page})=>{
+      const home=await riverHome(page);assert(home.promoted&&!home.calm,'16.2 ft over a 16 ft action stage: '+JSON.stringify(home));
+      assert(!/below action stage/.test(home.line));
+      await expectText(page,'#rivers',/Action Stage/);
+    },1280);
+    await run('an unknown category with no thresholds stays unverified',config('river no thresholds',{river:[10,9,8],riverStage:10,riverCategory:'unknown',riverNoThresholds:true}),async({page})=>{
+      await page.waitForFunction(()=>feedChecks.rivers.status!=='loading');
+      const home=await riverHome(page);assert(!home.calm&&!home.promoted,'Nothing establishes "below action stage": '+JSON.stringify(home));
+    },1280);
+    await run('a current issuance with no usable forecast points is not counted as clear',config('river empty forecast',{river:[],riverStage:10,riverCategory:'no_flooding'}),async({page})=>{
+      await expectText(page,'.river-calm-line',/no current forecasts/);
+      const home=await riverHome(page);assert(home.calm&&!/none forecast to reach it/.test(home.line),JSON.stringify(home));
+      await page.locator('#rivers .river-all summary').click();
+      await expectText(page,'#rivers',/Forecast issued with no usable stages/);
     },1280);
     await run('river pins persist and keep all regional gauges available',config('river pins',{river:[20,22,25]}),async({page})=>{
       const pin=page.locator('[data-pin-gauge="ERKM7"]');await pin.click();

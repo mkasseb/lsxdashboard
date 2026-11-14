@@ -840,8 +840,10 @@ function riverState(){
   var calm=true;
   for(var i=0;i<RIVERS.length;i++){
     var row=riverRows[RIVERS[i].id];
-    if(row&&(/rlink c-(action|minor|moderate|major)/.test(row)||row.indexOf("rfcat")>=0)) return "attention";
-    if(!row||row.indexOf("r-now-label")<0||row.indexOf("rlink c-none")<0) calm=false;
+    if(row&&(/rlink c-(action|minor|moderate|major)/.test(row)||row.indexOf("rfcat")>=0||row.indexOf('data-reach="1"')>=0)) return "attention";
+    // Calm needs positive evidence the gauge is below action stage (data-below="1"), not merely the
+    // absence of a flood label: an "unknown" category with no usable threshold proves nothing.
+    if(!row||row.indexOf("r-now-label")<0||row.indexOf("rlink c-none")<0||row.indexOf('data-below="1"')<0) calm=false;
   }
   return calm?"calm":"unknown";
 }
@@ -883,15 +885,20 @@ function crestWhen(iso){
     ? d.toLocaleDateString("en-US", {timeZone:WEATHER_TZ,weekday:"short",month:"short",day:"numeric"})
     : d.toLocaleString("en-US", {timeZone:WEATHER_TZ,weekday:"short",hour:"numeric"});
 }
-function crestInfo(fcJson,now){
-  if(!fcJson) return null;
-  // Series are issued hours before we read them, so drop points that have already elapsed —
-  // otherwise a peak from earlier this morning gets announced as an upcoming crest.
+/* The usable part of a stageflow series: finite stages (−9999 is the NWPS sentinel) at valid times
+   that have not already elapsed. Series are issued hours before we read them, so a peak from
+   earlier this morning must not be announced as upcoming. Shared by the crest wording and the
+   calm rule, so the two can never disagree about what the forecast contains. */
+function forecastPoints(fcJson){
+  if(!fcJson) return [];
   var cutoff=Date.now()-30*60000;
-  var pts=(fcJson.data||[]).filter(function(p){
-    return p&&typeof p.primary==="number"&&p.primary>-500&&p.validTime   // -9999 is the NWPS sentinel
-      && new Date(p.validTime).getTime()>cutoff;
+  return (fcJson.data||[]).filter(function(p){
+    var t=p&&p.validTime?new Date(p.validTime).getTime():NaN;
+    return p&&typeof p.primary==="number"&&isFinite(p.primary)&&p.primary>-500&&isFinite(t)&&t>cutoff;
   });
+}
+function crestInfo(fcJson,now){
+  var pts=forecastPoints(fcJson);
   if(pts.length<2) return null;
   var base=(typeof now==="number")?now:pts[0].primary;
   var maxI=0, i;

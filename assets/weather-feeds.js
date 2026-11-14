@@ -721,6 +721,14 @@ function loadRivers(){
       var sub=["Observed "+weatherTime(age.time,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT"];
       var cats=(d.flood&&d.flood.categories)||{};
       var act=cats.action&&cats.action.stage, minor=cats.minor&&cats.minor.stage;
+      // The numeric thresholds outrank the category label: a reading at or over action stage is
+      // shown as such even if NWPS labels it "unknown" or omits the category.
+      var observedCat=stageCategory(val,cats);
+      if(observedCat&&info.cls==="c-none") info=catInfo(observedCat.label);
+      // Positive evidence of "below action stage": under a numeric action (else flood) threshold,
+      // or, with no threshold at all, an explicit no-flooding category. Anything else is unverified.
+      var lowest=(typeof act==="number"&&act>0)?act:((typeof minor==="number"&&minor>0)?minor:null);
+      var below=lowest!=null?val<lowest:/no[\s_-]*flood/i.test(ob.floodCategory||"");
       var ref=(typeof act==="number"&&act>0)?{v:act,n:"action stage"}
              :((typeof minor==="number"&&minor>0)?{v:minor,n:"flood stage"}:null);
       if(ref){
@@ -732,7 +740,15 @@ function loadRivers(){
       var issue=Date.parse(fcSeries&&fcSeries.issuedTime||"");
       var forecastFresh=WeatherContracts.sourceState(issue,Date.now(),WeatherContracts.policy.riverForecastAge).state==="ready";
       var cr=forecastFresh?crestInfo(fcSeries,val):null;
-      if(fcSeries) sub.push(forecastFresh?"Forecast issued "+weatherTime(issue,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"Forecast issuance unavailable or stale");
+      // A current issuance with no usable future points is not a forecast of anything.
+      var points=forecastFresh?forecastPoints(fcSeries):[];
+      var forecastUsable=points.length>0;
+      if(fcSeries) sub.push(forecastFresh?(forecastUsable?"Forecast issued "+weatherTime(issue,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"Forecast issued with no usable stages"):"Forecast issuance unavailable or stale");
+      // Any usable point reaching a category promotes the gauge, independently of the trend wording
+      // (which ignores rises under 0.5 ft): 15.8 ft forecast to 16.1 ft still crosses a 16 ft line.
+      var reachPt=null;
+      points.forEach(function(p){ if(stageCategory(p.primary,cats)&&(!reachPt||p.primary>reachPt.primary)) reachPt=p; });
+      var reachCat=reachPt?stageCategory(reachPt.primary,cats):null;
       var crestCat=null;
       if(cr){
         var st1=Math.round(cr.stage*10)/10;
@@ -743,8 +759,9 @@ function loadRivers(){
           +(crestCat?' <span class="rfcat c-'+crestCat.key+'">'+esc(crestCat.label)+'</span>':''));
       }
       // data-fc lets the calm rule tell a verified forecast from a missing or stale one.
-      var fcState=!fcSeries?"none":forecastFresh?"fresh":"stale";
-      return '<a class="rlink '+info.cls+'" data-fc="'+fcState+'" href="https://water.noaa.gov/gauges/'+r.id+'" target="_blank" rel="noopener">'
+      var fcState=!fcSeries?"none":!forecastFresh?"stale":forecastUsable?"fresh":"empty";
+      if(reachCat&&!crestCat) sub.push('<span class="r-forecast-label">Forecast reaches: </span><span class="rup">▲ '+(Math.round(reachPt.primary*10)/10)+' ft by '+esc(crestWhen(reachPt.validTime))+'</span> <span class="rfcat c-'+reachCat.key+'">'+esc(reachCat.label)+'</span>');
+      return '<a class="rlink '+info.cls+'" data-fc="'+fcState+'" data-below="'+(below?1:0)+'" data-reach="'+(reachCat?1:0)+'" href="https://water.noaa.gov/gauges/'+r.id+'" target="_blank" rel="noopener">'
         +'<span class="rname"><span class="rn-top">'+ic("flood")+esc(r.name)+'</span>'
           +(sub.length?'<span class="rsub">'+sub.join(" · ")+'</span>':'')
         +'</span><span class="rmeta"><span class="rval"><span class="r-now-label">Now</span>'+(Math.round(val*10)/10)+' '+unit+'</span>'
