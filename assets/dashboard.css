@@ -2117,6 +2117,7 @@ body.radar-full #radarCard#radarCard{background:var(--bg);border:0;
 .river-calm-line{display:flex;align-items:center;gap:10px;margin:0;font-weight:600;color:var(--good)}
 .river-calm-dot{width:9px;height:9px;border-radius:50%;background:var(--good);flex:0 0 auto}
 #riversCard.rivers-calm #rivers{display:block}
+.river-calm-gap{margin:6px 0 0 19px;font-family:var(--fm);font-size:12px;color:var(--muted)}
 .river-all{margin-top:10px}
 .river-all-rows{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin-top:10px}
 

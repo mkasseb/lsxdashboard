@@ -540,8 +540,10 @@ async function main() {
       // A stale forecast is not evidence that nothing is coming.
       session.change(config('river stale forecast',{river:[10,9,8],riverStage:10,riverCategory:'none',riverForecastAgeHours:72}));
       await page.evaluate(()=>loadRivers());
-      assert(await page.locator('#riversCard').evaluate(e=>!e.classList.contains('rivers-calm')&&e.parentElement.classList.contains('masonry')),'Stale forecasts keep full rows');
-      await expectText(page,'#rivers',/Forecast issuance unavailable or stale/);
+      // Readings decide the collapse; the line just stops claiming anything about forecasts.
+      assert(await page.locator('#riversCard').evaluate(e=>e.classList.contains('rivers-calm')),'Stale forecasts do not reopen six calm rows');
+      await expectText(page,'.river-calm-line',/no current forecasts/);
+      assert(!/none forecast to reach it/.test(await page.locator('.river-calm-line').innerText()),'A stale forecast is never counted as clear');
       session.change(config('river crest forecast',{river:[10,17,12],riverStage:10,riverCategory:'none'}));
       await page.evaluate(()=>loadRivers());
       assert(await page.locator('#riversCard').evaluate(e=>e.parentElement.id==='attentionCards'&&!e.classList.contains('rivers-calm')),'A forecast reaching action stage promotes the gauges');

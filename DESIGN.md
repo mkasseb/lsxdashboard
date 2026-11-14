@@ -821,9 +821,12 @@ does should not be buried. `setAttention(id, on)` moves a card between the conte
 `#attentionCards`, keeping its node (handlers, disclosures, pins, focus). Two cards use it:
 
 - **Rivers.** `riverState()` reads the rendered gauge rows. Any gauge at action stage or above, or
-  a fresh forecast reaching a flood category, is *attention*. Every gauge verified below action
-  stage with no such forecast is *calm*: one line, rows behind "Show all gauges". Anything else
-  (loading, stale, failed) is *unknown* and keeps the full rows where they were.
+  a fresh forecast reaching a flood category, is *attention*. Every gauge with a live reading below
+  action stage is *calm*: one line, rows behind "Show all gauges". Forecasts only decide what that
+  line may claim: "none forecast to reach it" needs every forecast current; otherwise it counts the
+  current ones and names the gauges without one (Eureka's is often stale), so a gap is visible but
+  doesn't hold six "No Flooding" rows open. Restored, loading, stale or failed *readings* are
+  *unknown* and keep the full rows where they were.
 - **Risk Outlook.** Promoted only when a verified SPC category is Marginal or higher, an ERO is
   Marginal or higher, fire weather is Elevated or higher, or a severe probability is non-zero.
   General thunder, zeros and missing categories never promote.

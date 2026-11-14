@@ -809,13 +809,18 @@ function renderRiverRows(){
   html+=rows(regional);
   var state=riverState(), card=document.getElementById("riversCard"), all=el.querySelector(".river-all");
   if(state==="calm"){
-    // Every gauge verified and below action stage, no current forecast reaching it: one line, and
-    // the full rows one tap away. Pins still work inside the disclosure. The forecast clause claims
-    // only the gauges that have a fresh forecast; a gauge without one is not counted as clear.
-    var forecasted=RIVERS.filter(function(r){return riverRows[r.id].indexOf('data-fc="fresh"')>=0;}).length;
-    var clause=forecasted===RIVERS.length?"none forecast to reach it"
-      :forecasted?forecasted+" with a current forecast, none reaching it":"no current forecasts";
-    html='<p class="river-calm-line"><span class="river-calm-dot" aria-hidden="true"></span>All '+RIVERS.length+' gauges below action stage · '+clause+'</p>'
+    // Every gauge has a live reading below action stage and no current forecast reaches it: one
+    // line, with the full rows one tap away (pins still work inside). Current readings decide the
+    // collapse; forecasts only decide what the line may claim. A gauge whose forecast is stale or
+    // missing is named rather than counted as clear, so it never reads as reassurance, but it
+    // doesn't keep six "No Flooding" rows open either (Eureka's forecast is often stale).
+    var unforecast=RIVERS.filter(function(r){return riverRows[r.id].indexOf('data-fc="fresh"')<0;});
+    var clause=!unforecast.length?"none forecast to reach it"
+      :unforecast.length===RIVERS.length?"no current forecasts"
+      :(RIVERS.length-unforecast.length)+" of "+RIVERS.length+" forecasts current, none reaching it";
+    var gap=unforecast.length&&unforecast.length<RIVERS.length
+      ?'<p class="river-calm-gap">No current forecast: '+unforecast.map(function(r){return esc(r.name);}).join(", ")+'</p>':"";
+    html='<p class="river-calm-line"><span class="river-calm-dot" aria-hidden="true"></span>All '+RIVERS.length+' gauges below action stage · '+clause+'</p>'+gap
       +'<details class="disclosure river-all"'+(all&&all.open?' open':'')+'><summary>Show all gauges</summary><div class="river-all-rows">'+html+'</div></details>';
   }
   el.innerHTML=html;
@@ -824,8 +829,9 @@ function renderRiverRows(){
   if(focus){var button=el.querySelector('[data-pin-gauge="'+focus+'"]');if(button) button.focus({preventScroll:true});}
 }
 /* "attention" when any live gauge is at action stage or above now, or forecast to reach a category;
-   "calm" only when every gauge has a live, verified reading below action stage and no forecast is
-   stale; anything else (restored, loading, stale, failed) is "unknown" and keeps the rows in place. */
+   "calm" only when every gauge has a live, verified reading below action stage (forecast gaps are
+   named in the summary, not hidden); anything else (restored, loading, stale or failed readings)
+   is "unknown" and keeps the rows in place. */
 function riverState(){
   // Restored snapshot rows (up to three hours old) have not passed the live freshness checks yet:
   // they stay expanded where they are until loadRivers has verified them.
@@ -835,7 +841,7 @@ function riverState(){
   for(var i=0;i<RIVERS.length;i++){
     var row=riverRows[RIVERS[i].id];
     if(row&&(/rlink c-(action|minor|moderate|major)/.test(row)||row.indexOf("rfcat")>=0)) return "attention";
-    if(!row||row.indexOf("r-now-label")<0||row.indexOf("rlink c-none")<0||row.indexOf('data-fc="stale"')>=0) calm=false;
+    if(!row||row.indexOf("r-now-label")<0||row.indexOf("rlink c-none")<0) calm=false;
   }
   return calm?"calm":"unknown";
 }
