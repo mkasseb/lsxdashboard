@@ -1007,7 +1007,16 @@ async function main() {
     for(const extra of [{riverAgeMinutes:180},{riverMissingTime:true}])await run('river timestamp validation '+JSON.stringify(extra),config('river age',{river:[22,28,32],...extra}),async({page})=>{
       await expectText(page,'#rivers',/current level unverified/);
       assert.equal(await page.evaluate(()=>feedChecks.rivers.status),'unavailable');
+      // The crest wording is relative to the unverified reading, so it stays withheld...
       assert(!/cresting|rising to/.test(await page.locator('#rivers').innerText()));
+      // ...but the fresh forecast's own threshold crossing (32 ft over 30 ft major) is shown and promoted.
+      await expectText(page,'#rivers',/Forecast reaches: ▲ 32 ft by .*major flood/i);
+      assert(await page.locator('#riversCard').evaluate(e=>e.parentElement.id==='attentionCards'&&!e.classList.contains('rivers-calm')),'A verified forecast exceedance promotes the card despite an unverified reading');
+    });
+    await run('stale observation with a stale forecast is neither calm nor promoted',config('river age stale forecast',{river:[22,28,32],riverAgeMinutes:180,riverForecastAgeHours:72}),async({page})=>{
+      await expectText(page,'#rivers',/current level unverified/);
+      assert(!/Forecast reaches/.test(await page.locator('#rivers').innerText()),'A stale forecast certifies nothing');
+      assert(await page.locator('#riversCard').evaluate(e=>e.parentElement.classList.contains('masonry')&&!e.classList.contains('rivers-calm')));
     });
     await run('old river forecast issuance cannot certify a new crest',config('old river forecast',{river:[22,28,32],riverForecastAgeHours:72}),async({page})=>{
       await expectText(page,'#rivers',/Forecast issuance unavailable or stale/);

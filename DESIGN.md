@@ -829,7 +829,11 @@ does should not be buried. `setAttention(id, on)` moves a card between the conte
   stage, an explicit no-flooding category. A forecast counts toward "none forecast to reach it" only
   with usable future points *and* an action-stage threshold to compare them against; otherwise the
   row says why it is unverified. When any gauge lacks an action stage, the summary says "no
-  flooding reported" in place of "below action stage", claiming only what the data shows. Every gauge with a live reading below
+  flooding reported" in place of "below action stage", claiming only what the data shows.
+  The forecast is judged before the reading (`forecastReach`): a stale, undated or missing
+  observation still shows a fresh forecast's threshold crossing and promotes the card, with the
+  current level labelled unverified. Crest wording stays withheld there, since it is relative to
+  the reading. Every gauge with a live reading below
   action stage is *calm*: one line, rows behind "Show all gauges". Forecasts only decide what that
   line may claim: "none forecast to reach it" needs every forecast current; otherwise it counts the
   current ones and names the gauges without one (Eureka's is often stale), so a gap is visible but

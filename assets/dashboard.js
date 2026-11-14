@@ -899,6 +899,21 @@ function forecastPoints(fcJson){
     return p&&typeof p.primary==="number"&&isFinite(p.primary)&&p.primary>-500&&isFinite(t)&&t>cutoff;
   });
 }
+/* The highest usable point of a fresh forecast that reaches a flood category, judged on the
+   numeric thresholds alone. It needs no current reading, so a stale or missing observation can
+   never hide a verified forecast exceedance. Null when the forecast is missing, stale, empty or
+   reaches nothing. */
+function forecastReach(fcJson,cats){
+  if(!fcJson) return null;
+  var issue=Date.parse(fcJson.issuedTime||"");
+  if(WeatherContracts.sourceState(issue,Date.now(),WeatherContracts.policy.riverForecastAge).state!=="ready") return null;
+  var best=null;
+  forecastPoints(fcJson).forEach(function(p){ if(stageCategory(p.primary,cats)&&(!best||p.primary>best.primary)) best=p; });
+  return best?{point:best,cat:stageCategory(best.primary,cats)}:null;
+}
+function forecastReachNote(reach){
+  return '<span class="r-forecast-label">Forecast reaches: </span><span class="rup">▲ '+(Math.round(reach.point.primary*10)/10)+' ft by '+esc(crestWhen(reach.point.validTime))+'</span> <span class="rfcat c-'+reach.cat.key+'">'+esc(reach.cat.label)+'</span>';
+}
 function crestInfo(fcJson,now){
   var pts=forecastPoints(fcJson);
   if(pts.length<2) return null;
@@ -917,9 +932,12 @@ function crestInfo(fcJson,now){
   if(base-end.primary>=0.5) return {kind:"falling", stage:end.primary, when:end.validTime};
   return null;
 }
-function riverLinkOnly(r,note){
-  return '<a class="rlink c-none" href="https://water.noaa.gov/gauges/'+r.id+'" target="_blank" rel="noopener">'
-    +'<span class="rname"><span class="rn-top">'+ic("flood")+esc(r.name)+'</span>'+(note?'<span class="rsub">'+esc(note)+'</span>':'')+'</span><span class="rmeta"><span class="rval" style="color:var(--muted);font-size:13px">View ↗</span></span></a>';
+/* A gauge whose current reading can't be used. A verified forecast exceedance is still shown and
+   marked data-reach, so it promotes the card while the reading itself stays labelled unverified. */
+function riverLinkOnly(r,note,reach){
+  var sub=(note?esc(note):'')+(reach?(note?' · ':'')+forecastReachNote(reach):'');
+  return '<a class="rlink c-none"'+(reach?' data-reach="1"':'')+' href="https://water.noaa.gov/gauges/'+r.id+'" target="_blank" rel="noopener">'
+    +'<span class="rname"><span class="rn-top">'+ic("flood")+esc(r.name)+'</span>'+(sub?'<span class="rsub">'+sub+'</span>':'')+'</span><span class="rmeta"><span class="rval" style="color:var(--muted);font-size:13px">View ↗</span></span></a>';
 }
 
 
