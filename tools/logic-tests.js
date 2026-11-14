@@ -1894,6 +1894,8 @@ async function checkGridLoaderIsolation() {
   check('outlook: a missing CPC map is not verified',ol.cpc([{cat:'Above',prob:70},null,null,null]).verified,false);
   check('outlook: no drought anywhere is calm',ol.drought(-1,'','').state,'calm');
   check('outlook: unknown drought monitor is not calm',ol.drought(null,'','').state,'partial');
+  check('outlook: unknown drought monitor never claims no drought',ol.drought(null,'','').value,'Current drought unknown');
+  check('outlook: verified no drought with a missing outlook says so',ol.drought(-1,null,'').value,'No drought now');
   check('outlook: current drought is elevated',ol.drought(1,'','').state,'elevated');
   check('outlook: developing drought is elevated',ol.drought(-1,'Development','').value,'Drought developing');
 }

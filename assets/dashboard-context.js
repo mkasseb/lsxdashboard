@@ -205,6 +205,8 @@ function outlookDroughtSummary(now,month,season){
   if(o&&o[1]) return {state:"elevated",value:o[1].t,sub:o[0],verified:now!=null};
   if(now==null&&month==null&&season==null) return {state:"unavailable",value:"Unavailable",sub:"Drought Monitor & CPC",verified:false};
   if(now!=null&&month!=null&&season!=null) return {state:"calm",value:"No drought",sub:"None expected this season",verified:true};
+  // An unanswered monitor query is not a negative: only a verified reading may say "no drought".
+  if(now==null) return {state:"partial",value:"Current drought unknown",sub:"Drought Monitor unavailable",verified:false};
   return {state:"partial",value:"No drought now",sub:"Some outlooks missing",verified:false};
 }
 
