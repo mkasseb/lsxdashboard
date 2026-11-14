@@ -362,7 +362,7 @@ async function main() {
     await run('quiet outlook stays compact and expands for elevated or missing categories',config('quiet outlook'),async session=>{
       const {page}=session, breakdown=page.locator('#riskBreakdown'), toggle=breakdown.locator('summary');
       await expectText(page,'#riskQuiet',/through day 3/);
-      const riskHome=()=>page.locator('#riskCard').evaluate(e=>e.parentElement.id||(e.parentElement.classList.contains('masonry')?'masonry':e.parentElement.className));
+      const riskHome=()=>page.locator('#riskCard').evaluate(e=>e.parentElement.classList.contains('masonry')?'masonry':e.parentElement.id||e.parentElement.className);
       assert.equal(await riskHome(),'masonry','A verified quiet outlook stays in context');
       assert(await page.locator('#attention').isHidden());
       assert(await page.locator('#spc').isHidden());
