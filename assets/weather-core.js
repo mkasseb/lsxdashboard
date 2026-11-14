@@ -470,6 +470,22 @@ function compactDayName(name){
   return days[name]||name;
 }
 
+/* A bare "Rain" beside 20% reads as a wet day. At a displayed chance of 30% or less the label
+   carries a qualifier: NWS's own word when its wording has one (Slight chance, Chance, Isolated,
+   Scattered), otherwise "Slight chance". The band is the same nearest-ten value the row prints, so
+   "~30%" never sits beside a bare "Rain". An unknown chance keeps the plain label: it claims no
+   likelihood either way. Storms have their own coverage words and never come through here. */
+var PRECIP_CHANCE_BASES={"Rain":"rain","Showers":"showers","Snow":"snow","Wintry mix":"wintry mix"};
+function precipChanceLabel(base,text,pop){
+  var noun=PRECIP_CHANCE_BASES[base]; if(!noun) return base;
+  var chance=(pop==null||pop==="")?null:Number(pop);
+  if(chance==null||!isFinite(chance)||chance<0) return base;
+  if(Math.round(Math.min(100,chance)/10)*10>30) return base;
+  var t=String(text||"").toLowerCase();
+  var word=t.indexOf("slight chance")>=0?"Slight chance":t.indexOf("chance")>=0?"Chance"
+    :t.indexOf("isolated")>=0?"Isolated":t.indexOf("scattered")>=0?"Scattered":"Slight chance";
+  return word+" "+noun;
+}
 function compactCondition(text,pop){
   var t=String(text||"").toLowerCase();
   if(t.indexOf("tornado")>=0) return "Tornado";
@@ -484,10 +500,10 @@ function compactCondition(text,pop){
     if(band>=30&&band<=50) return "Scattered storms";
     return "Storms";
   }
-  if(t.indexOf("freezing")>=0||t.indexOf("sleet")>=0||t.indexOf("ice")>=0) return "Wintry mix";
-  if(t.indexOf("snow")>=0||t.indexOf("flurr")>=0) return "Snow";
-  if(t.indexOf("shower")>=0) return "Showers";
-  if(t.indexOf("rain")>=0||t.indexOf("drizzle")>=0) return "Rain";
+  if(t.indexOf("freezing")>=0||t.indexOf("sleet")>=0||t.indexOf("ice")>=0) return precipChanceLabel("Wintry mix",text,pop);
+  if(t.indexOf("snow")>=0||t.indexOf("flurr")>=0) return precipChanceLabel("Snow",text,pop);
+  if(t.indexOf("shower")>=0) return precipChanceLabel("Showers",text,pop);
+  if(t.indexOf("rain")>=0||t.indexOf("drizzle")>=0) return precipChanceLabel("Rain",text,pop);
   if(t.indexOf("fog")>=0) return "Fog";
   if(t.indexOf("haze")>=0||t.indexOf("smoke")>=0) return "Hazy";
   if(t.indexOf("wind")>=0||t.indexOf("breezy")>=0||t.indexOf("blustery")>=0) return "Windy";
@@ -845,7 +861,7 @@ function bottomLineHourlyCandidates(H,opts){
   if(opts.aqi!=null&&opts.aqi>100){
     var air=aqiInfo(opts.aqi);
     push(opts.aqi>300?110:opts.aqi>200?101:opts.aqi>150?90:75,"air","air","Air quality",
-      air.t+" air quality","AQI "+opts.aqi+".",air.s,opts.aqi>150?"danger":"warning");
+      air.t+" air quality","Modeled AQI "+opts.aqi+".",air.s,opts.aqi>150?"danger":"warning");
   }
 
   var n0=-1;

@@ -82,7 +82,8 @@ const server=http.createServer((req,res)=>{
       await page.waitForLoadState('networkidle');
       assert.deepEqual(errors,[],'old page loads before upgrade');
       priming=false;requests=[];
-      await page.goto(base+'/',{waitUntil:'domcontentloaded'});
+      // ?debug turns on the map diagnostics panel this check uses as its initialization witness.
+      await page.goto(base+'/?debug',{waitUntil:'domcontentloaded'});
       if(baseline){
         // Cached legacy initialization reaches five retained cards, then the retired linksCard.
         await page.waitForFunction(()=>document.querySelectorAll('.context-toggle').length===5);

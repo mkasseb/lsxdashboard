@@ -57,7 +57,7 @@
 <link rel="preload" href="/assets/fonts/barlow-condensed-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/ibm-plex-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/ibm-plex-mono-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/assets/dashboard.css?v=acea300ab07d2fb9">
+<link rel="stylesheet" href="/assets/dashboard.css?v=d0e4d1f835cdc7b4">
 </head>
 <body>
 <!-- First focusable thing on the page, and deliberately ahead of the sprite so it stays that way.
@@ -118,6 +118,7 @@
   <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3.5" y="10.5" width="17" height="11" rx="2"/><path d="M7.5 10.5V7a4.5 4.5 0 0 1 9 0v3.5"/></symbol>
   <symbol id="i-plane" viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></symbol>
   <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></symbol>
   <symbol id="i-theme-auto" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></symbol>
 </defs></svg>
 <div id="wxbg" aria-hidden="true"><i class="b1"></i><i class="b2"></i></div>
@@ -171,16 +172,11 @@
       <div class="sub">Eastern Missouri and Southwest Illinois Weather</div>
     </div>
   </div>
-  <span class="locNow" id="locNow"></span>
   <div class="header-right">
     <button class="refresh-btn" id="refresh" title="Refresh everything now">
       <span class="dot" id="statusDot" data-state="loading"></span><span id="refreshLabel">Refresh</span>
     </button>
     <button id="themeBtn" title="Theme: auto (tap to change)" aria-label="Toggle light/dark theme"><svg class="ic" aria-hidden="true"><use href="#i-theme-auto"/></svg></button>
-    <div class="clock">
-      <div class="time" id="clock">--:--</div>
-      <div class="date" id="cdate">&mdash;</div>
-    </div>
   </div>
 </div>
 
@@ -211,7 +207,7 @@
      scrolled away. The links keep their native horizontal scrolling; edge buttons appear only
      when a phone-width bar has more sections in that direction. -->
 <div class="jump-wrap">
-<div class="sticky-context"><a id="stickyLocation" href="#locForm" aria-label="Change selected forecast location">Lake St. Louis, MO</a><span class="sticky-kind" id="stickyKind">Town point</span></div>
+<div class="sticky-context"><a id="stickyLocation" href="#locForm" aria-label="Change selected forecast location"><svg class="ic" aria-hidden="true"><use href="#i-search"/></svg><span id="stickyPlace">Lake St. Louis, MO</span></a><span class="sticky-kind" id="stickyKind">Town point</span></div>
 <nav class="jump" id="jumpNav" aria-label="Jump to a section">
   <a href="#alertsCard">Alerts</a>
   <a href="#currentCard">Now</a>
@@ -480,8 +476,8 @@
       <div class="imgcap"><span id="spcLoc">SPC &middot; WPC</span><span>storm &middot; flood</span></div>
     </section>
 <section class="card" id="aqiCard">
-      <h2>Air Quality
-        <a class="link" href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a>
+      <h2>Air Quality <span class="aqi-modeled">modeled</span>
+        <a class="link" href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">Measured: AirNow ↗</a>
       </h2>
       <div id="aqi"></div>
     </section>
@@ -502,7 +498,8 @@
         <button type="button" data-m="dew"><svg class="ic" aria-hidden="true"><use href="#i-drop"/></svg>Dew</button>
         <button type="button" data-m="wind"><svg class="ic" aria-hidden="true"><use href="#i-wind"/></svg>Wind</button>
       </div>
-      <div id="stnmap" class="stnmap"></div>
+      <!-- Never an empty grey box: until the map starts, say so and offer to start it now. -->
+      <div id="stnmap" class="stnmap"><div class="imgfail stn-wait">Station map loads when you scroll here. <button type="button" data-load-stations>Load station map</button></div></div>
       <div class="stn-ex" id="stnEx"></div>
       <div class="imgcap"><span>NWS &middot; regional <abbr title="Automated Surface Observing System — the automated weather stations at airports">ASOS</abbr>/<abbr title="the routine surface weather report those stations file, usually hourly">METAR</abbr></span><span id="stnAge">tap a station for detail</span></div>
     </section>
@@ -555,7 +552,7 @@
   <details class="source-panel" id="sourcesPanel">
     <summary><span class="sp-dot" id="sourcesDot" data-state="loading" aria-hidden="true"></span><span id="lastUpdate">&mdash;</span> <span class="sp-more">Sources &amp; freshness</span></summary>
     <div class="sp-list" id="sourcesList">
-      <p class="stn">UV &amp; air quality: Open-Meteo · <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a></p>
+      <p class="stn">UV &amp; modeled air quality: Open-Meteo (CAMS model, not monitors) · measured AQI: <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a></p>
     </div>
   </details>
   Data: NOAA / National Weather Service (public domain) · air quality, UV &amp; geocoding by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>).<br>
@@ -572,19 +569,19 @@
 <script type="application/json" data-map-src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"
   integrity="sha384-tXYNKOHx4T02jMP7YYCtBxPIv1B5gaA5mcVPBzqMp6d7VzWzxJgI2aWF/nJLrQdS" crossorigin="anonymous"></script>
 <script src="/assets/weather-contracts.js?v=ad8b9553dc77bd53"></script>
-<script src="/assets/weather-core.js?v=b4025157f8c01600"></script>
-<script src="/assets/weather-feeds.js?v=77695ad9f8716a94"></script>
+<script src="/assets/weather-core.js?v=565144c53a5e92d2"></script>
+<script src="/assets/weather-feeds.js?v=43320fbf08444c84"></script>
 <script src="/assets/forecast-view.js?v=b6dd1f0e63226306"></script>
-<script src="/assets/dashboard-context.js?v=c56bf538157fd416"></script>
+<script src="/assets/dashboard-context.js?v=78dc16f9d68371b0"></script>
 <script src="/assets/model-data.js?v=aa9f38687b71f14d" data-worker-src="/assets/model-worker.js?v=3df9c3b9bd2c3bc4"></script>
 <script src="/assets/forecast-range.js?v=805a652762f3d938"></script>
 <script src="/assets/hourly-range.js?v=ee1dec6e184d1f77"></script>
 <script src="/assets/radar-map.js?v=aab6873635c5451a"></script>
 <script src="/assets/station-map.js?v=28a078d94c91ec8b"></script>
-<script src="/assets/map-runtime.js?v=714dc5d8d09a8907"></script>
-<script src="/assets/location-controls.js?v=6bc573d308c10cca"></script>
+<script src="/assets/map-runtime.js?v=079faeb4e93ecec3"></script>
+<script src="/assets/location-controls.js?v=731db14af7ae2b4a"></script>
 <script src="/assets/saved-view.js?v=6eab124901607437"></script>
 <script src="/assets/climate-view.js?v=d7b1e797b55b32ce"></script>
-<script src="/assets/dashboard.js?v=c33be1d8ffae70ae"></script>
+<script src="/assets/dashboard.js?v=5ddfba859f4f2ecd"></script>
 </body>
 </html>

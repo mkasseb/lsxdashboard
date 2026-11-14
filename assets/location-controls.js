@@ -44,19 +44,21 @@ function chooseVerifiedLocation(loc,opts){
   }).catch(function(){if(sequence===locSeq&&geo===geoSeq) locationFeedback("Couldn't verify this location. Try again when weather services are available.");return false;});
 }
 var TITLE_BASE="LSX Dashboard";
+/* The selected place is printed once on screen: the sticky label, which stays visible while the
+   page scrolls and is also the way into search. The header used to repeat it ("Forecast for …")
+   and so did Your day ("For …"), three copies of one name on the first phone screen. */
 function updateLocNow(){
-  var el=document.getElementById("locNow");
-  if(el) el.innerHTML='<span class="locNow-label">Forecast for</span><span class="locNow-place">'
-    +ic("pin")+'<strong>'+esc(current.name)+'</strong></span>';
   // A pinned tab should say WHOSE weather it is. Safe to write here rather than behind a
   // fresh() guard: this runs synchronously from setLocation with the location it just set,
   // never from a fetch that a later location could have superseded.
-  var place=(current.name||"").replace(" (home)","");
-  document.title=place?(place+" — "+TITLE_BASE):TITLE_BASE;
+  var tabPlace=(current.name||"").replace(" (home)","");
+  document.title=tabPlace?(tabPlace+" — "+TITLE_BASE):TITLE_BASE;
   // The hero band names the place too: a shared link should say whose weather this is without
   // the visitor having to find the location bar.
   var r=document.getElementById("railNowSub"); if(r) r.textContent=current.name.replace(" (home)","");
-  var sticky=document.getElementById("stickyLocation");if(sticky){sticky.textContent=current.name;sticky.setAttribute("aria-label","Change forecast location: "+current.name);}
+  var sticky=document.getElementById("stickyLocation"), place=document.getElementById("stickyPlace");
+  if(place) place.textContent=current.name;
+  if(sticky) sticky.setAttribute("aria-label","Change forecast location: "+current.name);
   var kind=document.getElementById("stickyKind");if(kind) kind.textContent=current.precision==="representative"?"Town point":current.precision==="device"?"Geolocated point":"Selected point";
   syncLocationTools();
 }
@@ -557,11 +559,23 @@ function fetchSuggestions(q){
 var STATE_ABBR={"Alabama":"AL","Alaska":"AK","Arizona":"AZ","Arkansas":"AR","California":"CA","Colorado":"CO","Connecticut":"CT","Delaware":"DE","Florida":"FL","Georgia":"GA","Hawaii":"HI","Idaho":"ID","Illinois":"IL","Indiana":"IN","Iowa":"IA","Kansas":"KS","Kentucky":"KY","Louisiana":"LA","Maine":"ME","Maryland":"MD","Massachusetts":"MA","Michigan":"MI","Minnesota":"MN","Mississippi":"MS","Missouri":"MO","Montana":"MT","Nebraska":"NE","Nevada":"NV","New Hampshire":"NH","New Jersey":"NJ","New Mexico":"NM","New York":"NY","North Carolina":"NC","North Dakota":"ND","Ohio":"OH","Oklahoma":"OK","Oregon":"OR","Pennsylvania":"PA","Rhode Island":"RI","South Carolina":"SC","South Dakota":"SD","Tennessee":"TN","Texas":"TX","Utah":"UT","Vermont":"VT","Virginia":"VA","Washington":"WA","West Virginia":"WV","Wisconsin":"WI","Wyoming":"WY","District of Columbia":"DC"};
 function abbrState(s){ return STATE_ABBR[s]||s; }
 function cleanPlace(s){ return String(s||"").replace(/[<>]/g,"").replace(/\s+/g," ").trim().slice(0,80); }
+function locationPanelFolds(){
+  return !!(window.matchMedia&&window.matchMedia("(max-width:680px)").matches);
+}
+/* Folding the panel must never strand focus inside it: whatever had focus in the header moves to
+   the place name that reopens it. */
+function closeLocationPanel(restoreFocus){
+  var header=document.querySelector("header"); if(!header||!header.classList.contains("loc-open")) return;
+  var inside=header.contains(document.activeElement);
+  header.classList.remove("loc-open");
+  if(locationPanelFolds()&&(restoreFocus||inside)) document.getElementById("stickyLocation").focus({preventScroll:true});
+}
 function pickSuggestion(i){
   var s=sugItems[i]; if(!s) return;
   hideSug();
   var inp=document.getElementById("locSearch");
   inp.value=""; inp.blur();
+  closeLocationPanel(true);
   setLocation({name:cleanPlace(s.name),lat:s.lat,lon:s.lon,station:null,precision:"representative"},{save:true});
 }
 /* The .hot style was in the sheet from the start with nothing ever applying it — the list could
@@ -583,7 +597,19 @@ function initLocationUI(){
   var inp=document.getElementById("locSearch"), form=document.getElementById("locForm"), box=document.getElementById("locSug");
   ensureLsxCounties();   // warm the LSX county whitelist so the first search is instant
   document.getElementById("geoBtn").addEventListener("click",function(){ useMyLocation(true); });
-  document.getElementById("stickyLocation").addEventListener("click",function(e){e.preventDefault();inp.scrollIntoView({block:"center"});inp.focus({preventScroll:true});});
+  /* On phones the search row and saved-location tools fold into the header until the place name
+     is tapped, so weather starts on the first screen. Opening unhides them before focusing:
+     focus cannot land in a display:none input. Desktop always shows them; the class is inert. */
+  document.getElementById("stickyLocation").addEventListener("click",function(e){
+    e.preventDefault();
+    var header=document.querySelector("header");
+    if(header.classList.contains("loc-open")&&locationPanelFolds()){closeLocationPanel(true);return;}
+    header.classList.add("loc-open");
+    inp.scrollIntoView({block:"center"});inp.focus({preventScroll:true});
+  });
+  document.querySelector("header").addEventListener("keydown",function(e){
+    if(e.key==="Escape"&&document.querySelector("header").classList.contains("loc-open")) closeLocationPanel(true);
+  });
   document.getElementById("favoriteToggle").addEventListener("click",function(){
     var key=locationKey(current), found=favoriteLocations.some(function(l){return locationKey(l)===key;});
     if(found) favoriteLocations=favoriteLocations.filter(function(l){return locationKey(l)!==key;});
@@ -624,7 +650,7 @@ function initLocationUI(){
     if(s){ e.preventDefault(); pickSuggestion(+s.dataset.i); }
   });
   inp.addEventListener("keydown",function(e){
-    if(e.key==="Escape"){ hideSug(); return; }
+    if(e.key==="Escape"){ if(box.classList.contains("show")) e.stopPropagation(); hideSug(); return; }
     if(e.key==="ArrowDown"||e.key==="ArrowUp"){ e.preventDefault(); moveHot(e.key==="ArrowDown"?1:-1); }
   });
   inp.addEventListener("blur",function(){ setTimeout(hideSug,250); });

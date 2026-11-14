@@ -2,7 +2,7 @@
 'use strict';
 // Actual served UI with recorded NWS text and clearly controlled outage/race scenarios.
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),playwright=require('playwright');
-const {open,config,setBrowser}=require('./weather-stress-tests');
+const {open,config,openLocationPanel,setBrowser}=require('./weather-stress-tests');
 const recording=require('./fixtures/weather/nws-afd-recorded.json'),now=Date.parse(recording.verifiedAt),H=3600000;
 const engine=process.env.WEATHER_BROWSER||'chromium',out=process.env.NWS_ARTIFACTS,results=[];
 const prod=recording.products[0],endpoint='**/products/11111111-1111-1111-1111-111111111111';
@@ -90,7 +90,7 @@ async function savedStartupCases(){
   const next={name:'New Belleville, IL',lat:38.52,lon:-89.98,precision:'representative'},nextId='38.5200,-89.9800';
   const s=await open(config('saved startup race',{now,afdProduct:prod,alerts:[warning],storage:{lsxLoc:savedPoint,lsxFavorites_v1:[next]},byId:{[savedId]:config('old saved',{now,holdPoints:true}),[nextId]:config('new selection',{now,holdPoints:true})}}),width),p=s.page;
   try{
-   await p.locator('#locationTools summary').click();const requested=p.waitForRequest('**/points/'+nextId);
+   await openLocationPanel(p);await p.locator('#locationTools summary').click();const requested=p.waitForRequest('**/points/'+nextId);
    await p.locator('#favoriteSelect').selectOption(next.lat.toFixed(5)+','+next.lon.toFixed(5));await requested;
    await s.releasePoints(savedId);await p.evaluate(id=>_pointsCache[id],savedId);
    assert.equal(await p.evaluate(()=>current.name),'Lake St. Louis, MO','Old successful validation cannot commit while newer choice is pending');

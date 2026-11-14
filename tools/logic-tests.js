@@ -77,6 +77,8 @@ const SUBJECT = new Function(`
   ${lift(/^function windChillF\(t,mph\)\{[\s\S]*?^\}/m, 'windChillF()')}
   ${lift(/^function feelsLikeF\(t,rh,mph\)\{[\s\S]*?^\}/m, 'feelsLikeF()')}
   ${lift(/^function compactDayName\(name\)\{[\s\S]*?^\}/m, 'compactDayName()')}
+  ${lift(/^var PRECIP_CHANCE_BASES=.*$/m, 'PRECIP_CHANCE_BASES')}
+  ${lift(/^function precipChanceLabel\(base,text,pop\)\{[\s\S]*?^\}/m, 'precipChanceLabel()')}
   ${lift(/^function compactCondition\(text,pop\)\{[\s\S]*?^\}/m, 'compactCondition()')}
   ${lift(/^function summaryPop\(pop\)\{[\s\S]*?^\}/m, 'summaryPop()')}
   ${lift(/^function forecastImpact\(feels,air\)\{[\s\S]*?^\}/m, 'forecastImpact()')}
@@ -125,7 +127,7 @@ const SUBJECT = new Function(`
   ${lift(/^function textOn\(bg\)\{[\s\S]*?^\}/m, 'textOn()')}
   return { weatherParts, weatherTime, calendarDate, weatherDay, feedState, climPeriods, sunTimes, cpcParse, cpcPill, rangeMark, rangeRow, alertLevel, isTakeCover, cardCmp, strongestHit, alertScope, scopeAttr,
            FAMILY_CFG, coldVerdict, parseMph, heatIndexF, windChillF, feelsLikeF,
-           compactDayName, compactCondition, summaryPop, forecastImpact,
+           compactDayName, compactCondition, precipChanceLabel, summaryPop, forecastImpact,
            summaryPopText, pairForecastPeriods, nwsWallTime, hourlyByDate, hrWord,
            whenWord, windowSpan, bottomLineHorizon, bottomLineWeekHorizon, bottomLineBriefingHorizon, dewF,
            OUTLOOK_CFG, outlookVerdict, precipChance, bottomLineHours, bottomLineHourlyCandidates, bottomLineWeekCandidates,
@@ -396,8 +398,21 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
     [cond('Thunderstorms'), cond('Thunderstorms', null), cond('Thunderstorms', 'bad'), cond('Thunderstorms', -4)],
     ['Storms', 'Storms', 'Storms', 'Storms']);
   check('storm probability does not override tornado or non-storm labels',
-    [cond('Tornado and Thunderstorms', 30), cond('Chance Rain Showers', 30)],
-    ['Tornado', 'Showers']);
+    [cond('Tornado and Thunderstorms', 30), cond('Chance Rain Showers', 30), cond('Rain Showers Likely', 60)],
+    ['Tornado', 'Chance showers', 'Showers']);
+  check('a low rain chance is never labelled plain rain',
+    [cond('Rain', 20), cond('Rain', 30), cond('Rain', 34), cond('Rain', 0), cond('Light Rain', 10)],
+    ['Slight chance rain', 'Slight chance rain', 'Slight chance rain', 'Slight chance rain', 'Slight chance rain']);
+  check('NWS qualifier wording is kept when it has one',
+    [cond('Slight Chance Rain Showers', 20), cond('Chance Rain', 30), cond('Isolated Rain Showers', 20),
+     cond('Scattered Snow Showers', 30), cond('Slight Chance Freezing Drizzle', 20), cond('Slight Chance Snow', 10)],
+    ['Slight chance showers', 'Chance rain', 'Isolated showers', 'Scattered snow', 'Slight chance wintry mix', 'Slight chance snow']);
+  check('above 30% (as displayed) the plain label stays',
+    [cond('Rain', 35), cond('Chance Rain', 40), cond('Rain', 100), cond('Snow', 80)],
+    ['Rain', 'Rain', 'Rain', 'Snow']);
+  check('an unknown chance claims no likelihood',
+    [cond('Rain'), cond('Rain', null), cond('Rain', ''), cond('Rain', 'bad'), cond('Rain', -5)],
+    ['Rain', 'Rain', 'Rain', 'Rain', 'Rain']);
   check('condition fallback preserves unfamiliar NWS wording', cond('Patchy Blowing Dust'), 'Patchy Blowing Dust');
 
   check('single-digit precip stays out of the collapsed scan', [pop(0), pop(4), pop(14)], [null, null, null]);

@@ -798,7 +798,9 @@ function loadAqi(){
       ?'<div class="aqi-main" data-aqibad="1"><div class="aqi-chip" style="background:'+info.c+'"></div><div>'
         +'<div class="aqi-num" style="color:'+exposureColor(info.c)+'">'+aqiState.val+'</div>'
         +'<div class="aqi-cat" style="color:'+exposureColor(info.c)+'">'+info.t+'</div>'
-        +'<div class="aqi-sub">'+info.s+(aqiState.pm!=null?' · PM2.5 '+aqiState.pm+' µg/m³':'')+'</div></div></div>'
+        +'<div class="aqi-sub">'+info.s+(aqiState.pm!=null?' · PM2.5 '+aqiState.pm+' µg/m³':'')+'</div>'
+        +'<div class="aqi-sub aqi-model-note">Modeled AQI (CAMS via Open-Meteo), not a monitor reading. '
+        +'<a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">Measured values: AirNow ↗</a></div></div></div>'
       :"";
     renderAqiMini();
     callAqi=aqiState.val;

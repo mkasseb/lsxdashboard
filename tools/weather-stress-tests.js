@@ -251,6 +251,11 @@ async function open(c, width=390) {
     releaseMapScripts:()=>Promise.all(delayedMapScripts.map(({route,asset})=>route.fulfill({contentType:asset[2],body:fs.readFileSync(require.resolve(asset[1]))}).catch(()=>{}))),
     releasePoints:id=>Promise.all(heldPoints.filter(p=>p.id===id&&!p.released).map(p=>{p.released=true;return p.route.fulfill({status:p.status,json:p.body}).catch(()=>{});}))};
 }
+/* Phones fold search and saved locations into the header until the place name is tapped. Tests
+   that use those controls open the panel the way a reader does; wider screens already show it. */
+async function openLocationPanel(page){
+  if(!await page.locator('#locSearch').isVisible()){await page.locator('#stickyLocation').click();await page.locator('#locSearch').waitFor({state:'visible'});}
+}
 async function expectText(page,selector,pattern) {
   assert.match(await page.locator(selector).innerText(),pattern);
 }
@@ -350,7 +355,7 @@ async function main() {
       assert.equal(await session.page.evaluate(()=>renderHourly24._selectedTime),selected);
     });
     await run('forecast refresh leaves focus outside the chart alone',config('external focus'),async({page})=>{
-      await page.locator('#geoBtn').focus();await page.evaluate(()=>loadForecast());
+      await openLocationPanel(page);await page.locator('#geoBtn').focus();await page.evaluate(()=>loadForecast());
       assert.equal(await page.evaluate(()=>document.activeElement.id),'geoBtn');
     });
     await run('hourly failure keeps keyboard focus in the forecast card',config('failure focus'),async session=>{
@@ -464,22 +469,61 @@ async function main() {
       await expectText(page,'#stickyLocation',/Lake St\. Louis/);
       await page.locator('#stickyLocation').click();assert.equal(await page.evaluate(()=>document.activeElement.id),'locSearch');
     },320);
+    await run('phone header folds search behind the one place name',config('phone header',{maps:true}),async({page})=>{
+      // One copy of the place and no wall clock: the sticky label is the only place name on screen.
+      assert.equal(await page.locator('#locNow').count(),0);assert.equal(await page.locator('#clock').count(),0);
+      await expectText(page,'#glanceScope',/^Next 24 hours$/);
+      const names=await page.evaluate(()=>[...document.querySelectorAll('header *, .jump-wrap *, #glanceCard *')].filter(e=>e.children.length===0&&/Lake St\. Louis/.test(e.textContent)&&e.getClientRects().length).length);
+      assert.equal(names,1,'The selected place is printed once');
+      assert(!await page.locator('#locSearch').isVisible(),'Search waits behind the place name on a phone');
+      assert(!await page.locator('#locationTools').isVisible(),'Saved locations wait behind the place name on a phone');
+      await page.evaluate(()=>document.fonts.ready);
+      const jump=await page.locator('#jumpNav').evaluate(e=>({scroll:e.scrollWidth,client:e.clientWidth}));
+      assert(jump.scroll<=jump.client+1,'Every section link fits a 390px bar: '+JSON.stringify(jump));
+      await page.locator('#stickyLocation').click();
+      assert(await page.locator('#locSearch').isVisible());assert.equal(await page.evaluate(()=>document.activeElement.id),'locSearch');
+      assert(await page.locator('#locationTools').isVisible());
+      await page.locator('#locSearch').press('Escape');
+      assert(!await page.locator('#locSearch').isVisible(),'Escape folds the panel');
+      assert.equal(await page.evaluate(()=>document.activeElement.id),'stickyLocation','Folding never strands focus');
+      await page.locator('#stickyLocation').click();
+      await page.evaluate(()=>renderSuggestions([{name:'Wentzville',latitude:38.81,longitude:-90.86,country_code:'US',admin1:'Missouri',admin2:'St. Charles',feature_code:'PPL'}],{keys:['wentzville']}));
+      await page.locator('#locSug .sug').first().dispatchEvent('mousedown');
+      await page.waitForFunction(()=>current.name.startsWith('Wentzville'));
+      assert(!await page.locator('#locSearch').isVisible(),'Choosing a place folds the panel');
+      assert.equal(await page.evaluate(()=>document.activeElement.id),'stickyLocation');
+      await expectText(page,'#stickyLocation',/Wentzville/);
+      // Map diagnostics are for debugging only.
+      await page.waitForFunction(()=>typeof rvMap!=='undefined'&&rvMap);
+      assert.equal(await page.locator('.map-diagnostics').count(),0,'No diagnostics panel without ?debug');
+      // The station plot never shows an empty box before its map starts.
+      assert.equal(await page.evaluate(()=>stnMap),null);
+      await expectText(page,'#stnmap',/loads when you scroll here/i);
+      await page.locator('#stnmap [data-load-stations]').click();
+      await page.waitForFunction(()=>stnMap&&document.querySelector('#stnmap .leaflet-map-pane'));
+    },390);
+    await run('desktop keeps search open and diagnostics behind ?debug',config('desktop header',{maps:true,search:'?debug'}),async({page})=>{
+      assert(await page.locator('#locSearch').isVisible(),'Desktop shows search without a tap');
+      assert(await page.locator('#locationTools').isVisible());
+      await page.waitForFunction(()=>typeof rvMap!=='undefined'&&rvMap);
+      assert.equal(await page.locator('#radarCard .map-diagnostics').count(),1,'?debug turns the diagnostics panel on');
+    },1440);
     await run('expanded location and briefing controls fit a narrow screen in both themes',config('narrow controls',{
       search:'?lat=38.81000&lon=-90.86000&place='+encodeURIComponent('A long shared location name '.repeat(4)),weekRain:true
     }),async({page})=>{
-      await page.locator('#locationTools summary').click();await page.locator('#favoriteToggle').click();
+      await openLocationPanel(page);await page.locator('#locationTools summary').click();await page.locator('#favoriteToggle').click();
       await page.locator('#briefWhy summary').click();
       await page.locator('#riskHelp summary').click();
       for(const theme of ['light','dark']){await page.evaluate(theme=>applyTheme(theme),theme);await noOverflow(page);}
       assert.equal(new URL(await page.locator('#locationLink').inputValue()).searchParams.get('place'),'A long shared location name '.repeat(4).trim());
     },320);
     await run('favorites persist, switch locations, and can be removed',config('favorites'),async({page})=>{
-      await page.locator('#locationTools summary').click();await page.locator('#favoriteToggle').click();
+      await openLocationPanel(page);await page.locator('#locationTools summary').click();await page.locator('#favoriteToggle').click();
       await page.evaluate(()=>setLocation({name:'Wentzville, MO',lat:38.81,lon:-90.86,precision:'representative'},{save:true}));
       await page.waitForFunction(()=>snapSafeSeq===locSeq);await page.locator('#favoriteToggle').click();
       assert.equal(await page.locator('#favoriteSelect option').count(),3);
       await page.reload();await page.waitForFunction(()=>refreshInFlight===null&&snapSafeSeq===locSeq);
-      await page.locator('#locationTools summary').click();assert.equal(await page.locator('#favoriteSelect option').count(),3);
+      await openLocationPanel(page);await page.locator('#locationTools summary').click();assert.equal(await page.locator('#favoriteSelect option').count(),3);
       await page.locator('#favoriteSelect').selectOption('38.80000,-90.79000');
       await page.waitForFunction(()=>current.name==='Lake St. Louis, MO'&&snapSafeSeq===locSeq);
       await expectText(page,'#stickyLocation',/Lake St\. Louis/);
@@ -495,7 +539,7 @@ async function main() {
       const link=await page.locator('#locationLink').inputValue();assert.equal(new URL(link).searchParams.get('place'),'Wentzville, MO');
     });
     await run('location sharing offers a selected link when clipboard access fails',config('copy fallback'),async({page})=>{
-      await page.locator('#locationTools summary').click();
+      await openLocationPanel(page);await page.locator('#locationTools summary').click();
       await page.evaluate(()=>Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:()=>Promise.reject(new Error('Clipboard unavailable'))}}));
       await page.locator('#shareLocation').click();await page.waitForFunction(()=>document.activeElement.id==='locationLink');
       const selection=await page.locator('#locationLink').evaluate(el=>({start:el.selectionStart,end:el.selectionEnd,length:el.value.length}));
@@ -908,7 +952,7 @@ async function main() {
       await run('Central weather timing in '+timezone,config('Central timing',{timezone,delayedRain:true,uv:6,aqi:35}),async({page})=>{
         await expectGuidance(page,/~7pm–1am tomorrow/);
         await expectText(page,'#hourlyDetail',/Wed 1:00 PM/);
-        await expectText(page,'#clock',/01:00 PM CT/);
+        await expectText(page,'#fresh-alerts',/checked 1:00 PM CT/);
         assert.equal(await page.evaluate(()=>uv.now),6);
         assert.equal(await page.evaluate(()=>ctxTodayKey()),'2026-09-30');
         assert.deepEqual(await page.evaluate(()=>climPeriods()),{mtd:30,ytd:273,std:92});
@@ -1077,7 +1121,7 @@ async function main() {
       const mapStyles=await page.evaluate(()=>[...document.querySelectorAll('link[rel="stylesheet"]')].map(n=>({href:n.href,media:n.media,loaded:!!n.sheet})));
       assert.equal(await page.locator('#radar .leaflet-map-pane').evaluate(el=>getComputedStyle(el).position),'absolute',JSON.stringify(mapStyles));
     },1280);
-    await run('map bootstrap rejects integrity-mismatched dependency bytes',config('bad integrity',{maps:true,badMapIntegrity:true,productionCsp:true}),async({page,errors})=>{
+    await run('map bootstrap rejects integrity-mismatched dependency bytes',config('bad integrity',{maps:true,badMapIntegrity:true,productionCsp:true,search:'?debug'}),async({page,errors})=>{
       await page.waitForFunction(()=>mapsInFlight===null);
       await expectText(page,'#radar',/Retry maps/);
       await page.locator('#radarCard .map-diagnostics summary').click();await page.waitForFunction(()=>document.querySelector('.map-diagnostics pre').textContent.length>0);
@@ -1087,7 +1131,7 @@ async function main() {
       assert(errors.every(e=>/cdnjs\.cloudflare\.com\/ajax\/libs\/leaflet\/1\.9\.4\/leaflet\.min\.js due to access control checks\.$/.test(e)));errors.length=0;
       assert.equal(await page.locator('#radar .leaflet-map-pane').count(),0);
     });
-    await run('mobile map bootstrap timeout retry and late script completion',config('script stalled',{maps:true,mapScriptHang:true,skipWait:true,touch:true,productionCsp:true}),async session=>{
+    await run('mobile map bootstrap timeout retry and late script completion',config('script stalled',{maps:true,mapScriptHang:true,skipWait:true,touch:true,productionCsp:true,search:'?debug'}),async session=>{
       const {page}=session;
       await page.waitForFunction(()=>mapBoot.events.some(x=>x.includes('Requesting leaflet')));
       assert.notEqual(await page.evaluate(()=>document.readyState),'loading');
@@ -1235,6 +1279,11 @@ async function main() {
       for(const id of ['droughtCard','cpcCard'])if(await page.locator('#'+id).evaluate(e=>e.hidden)){
         await page.locator('#outlookCells [aria-controls="'+id+'"]').first().tap();assert(await page.locator('#'+id).isVisible(),id+' opens from its outlook cell on touch');
       }
+      // The forecast discussion starts folded; every other context card starts open.
+      const afdToggle=page.locator('#afdCard .context-toggle');
+      assert.equal(await afdToggle.getAttribute('aria-expanded'),'false');assert(await page.locator('#afdCardBody').isHidden(),'Forecast discussion starts folded');
+      assert(await page.locator('#afdDiscussionLink').isVisible(),'Full discussion link stays visible while folded');
+      await afdToggle.tap();assert(await page.locator('#afdCardBody').isVisible(),'Forecast discussion opens on a touch tap');
       for(const id of ['afdCard','obsCard','climateCard','droughtCard','cpcCard']){
         const toggle=page.locator('#'+id+' .context-toggle'),body=page.locator('#'+id+'Body');
         assert.equal(await toggle.getAttribute('aria-controls'),id+'Body');
@@ -1371,6 +1420,8 @@ async function main() {
       await page.reload();await page.waitForFunction(()=>!!document.querySelector('#climateCard .context-toggle'));
       assert.equal(await page.locator('#compactView').count(),0);
       for(const id of ['afdCard','obsCard','climateCard','droughtCard','cpcCard']){
+        // The discussion starts folded by design; its saved content is one tap away.
+        if(id==='afdCard'){assert.equal(await page.locator('#afdCard .context-toggle').getAttribute('aria-expanded'),'false');await page.locator('#afdCard .context-toggle').click();}
         assert.equal(await page.locator('#'+id+' .context-toggle').getAttribute('aria-expanded'),'true');
         // A verified calm outlook card folds behind its outlook cell; prove the cell is the way back in.
         if(await page.locator('#'+id).evaluate(e=>e.hidden)){
@@ -1484,4 +1535,4 @@ async function main() {
   if(report.failed)process.exitCode=1;
 }
 if(require.main===module)main().catch(e=>{console.error(e);process.exitCode=1;});
-module.exports={open,config,alert,setBrowser:value=>{browser=value;}};
+module.exports={open,config,alert,openLocationPanel,setBrowser:value=>{browser=value;}};

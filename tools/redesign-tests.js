@@ -50,7 +50,8 @@ async function main(){
    await p.locator('#briefWhy summary').click();await p.evaluate(()=>renderTheCall());assert(await p.locator('#briefWhy').evaluate(e=>e.open));
    await p.locator('#briefWhy summary').click();
    // Repacking after an independently collapsed card must preserve the visible navigation target.
-   await p.locator('#afdCard .context-toggle').click();await p.evaluate(()=>layoutMasonry());await p.clock.runFor(500);
+   // The discussion starts folded: open it, then fold it again, before the repack.
+   await p.locator('#afdCard .context-toggle').click();await p.locator('#afdCard .context-toggle').click();await p.evaluate(()=>layoutMasonry());await p.clock.runFor(500);
    // A reader who folds the lower context brings the final section to the page end: the state the
    // clamped-jump scenario below needs, whichever way the pack happens to fall at this width.
    // Calm, verified outlooks are already folded into the outlook row; their cells say so.
@@ -168,7 +169,8 @@ async function main(){
  try{
   await p.waitForFunction(()=>rvMap&&document.querySelector('#radar .leaflet-tile-loaded'));
   await p.locator('#daily .day').first().click();await p.locator('#riskHelp summary').click();
-  await p.locator('#afdCard .context-toggle').click();
+  // The discussion starts folded; open and refold it so the retained state is a reader's choice.
+  await p.locator('#afdCard .context-toggle').click();await p.locator('#afdCard .context-toggle').click();
   await p.evaluate(()=>{window.layoutRefs={map:rvMap,cards:['h24Card','forecastCard','radarCard','riskCard','riversCard'].map(id=>document.getElementById(id)),days:JSON.stringify(smart.days)};});
   // Repeated native resizes expose late map-class mutations during observer delivery.
   for(let pass=0;pass<3;pass++)for(const width of [390,768,1000,1001,1180,1920,1440]){

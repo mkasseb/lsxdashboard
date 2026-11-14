@@ -690,7 +690,7 @@ function renderCurrentUnavailable(message){
   heroNow.temp=null;
   document.body.removeAttribute("data-wx");
   document.getElementById("current").innerHTML='<div class="empty" role="status"><b>Current observation unavailable.</b> '+message+'</div>'
-    +currentExposure()+'<div class="stn">UV &amp; air Open-Meteo · <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a></div>';
+    +currentExposure()+'<div class="stn">UV &amp; modeled air quality: Open-Meteo (CAMS) · measured AQI: <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a></div>';
   renderUvNow(); renderAqiMini();
 }
 
@@ -951,9 +951,12 @@ function renderAqiMini(){
     return;
   }
   var i=aqiInfo(aqiState.val);
-  el.innerHTML='<div class="k"><span class="ex-dot" style="background:'+i.c+'"></span>Air Quality</div>'
+  // The value is CAMS model output via Open-Meteo, not a monitor reading, so it says "modeled"
+  // wherever it is printed and points to AirNow for measured values.
+  el.innerHTML='<div class="k"><span class="ex-dot" style="background:'+i.c+'"></span>Air Quality <span class="aqi-modeled">(modeled)</span></div>'
     +'<div class="v" style="color:'+exposureColor(i.c)+'">'+aqiState.val+' <span class="ex-cat">'+i.t+'</span></div>'
-    +'<div class="s">'+(aqiState.pm!=null?'PM2.5 <b>'+aqiState.pm+'</b>':'')+'</div>';
+    +'<div class="s">'+(aqiState.pm!=null?'PM2.5 <b>'+aqiState.pm+'</b> · ':'')
+    +'<a class="aqi-measured" href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">Measured: AirNow ↗</a></div>';
 }
 
 
@@ -1712,7 +1715,7 @@ function renderGlance(H,hourlyReady,candidates){
         +(renderGlance._open?'true':'false')+'">'+(renderGlance._open?'Show less':'Show '+extra+' more for today')+'</button>';
     }
   }
-  var scope=document.getElementById("glanceScope"), scopeText=current.name?"For "+current.name:"Next 24 hours";
+  var scope=document.getElementById("glanceScope"), scopeText="Next 24 hours";
   if(scope&&scope.textContent!==scopeText) scope.textContent=scopeText;
   var noteText=notes.join(" ");
   if(statusEl&&statusEl.textContent!==noteText){statusEl.textContent=noteText;statusEl.hidden=!noteText;}
@@ -1797,9 +1800,8 @@ function tickCountdowns(){
 
 /* ============ CLOCK ============ */
 function tick(){
-  var d=new Date();
-  document.getElementById("clock").textContent=d.toLocaleTimeString("en-US", {timeZone:WEATHER_TZ,hour:"2-digit",minute:"2-digit"})+" CT";
-  document.getElementById("cdate").textContent=d.toLocaleDateString("en-US", {timeZone:WEATHER_TZ,weekday:"long",month:"short",day:"numeric"});
+  // No header clock: every time on the page is a data time (alerts checked, latest sweep,
+  // observed), and a wall clock beside them printed "1:00 PM CT" twice on the first screen.
   tickCountdowns();
   syncRadarBadge();
 }

@@ -13,7 +13,13 @@ function mapDiagnosticsText(){
     +", loaded tiles "+document.querySelectorAll('#radar .leaflet-tile-loaded').length+"\n"
     +mapBoot.events.join("\n");
 }
+/* Readers never need this; whoever is debugging map tiles adds ?debug to the URL. The boot log
+   above still records every stage either way, so turning it on after a failure loses nothing. */
+function mapDiagnosticsEnabled(search){
+  try{ return new URLSearchParams(search==null?location.search:search).has("debug"); }catch(e){ return false; }
+}
 function initMapDiagnostics(){
+  if(!mapDiagnosticsEnabled()) return;
   var panel=document.createElement("details");panel.className="map-diagnostics";
   panel.innerHTML='<summary>Map diagnostics</summary><pre></pre><small>Diagnostic text stays on this device.</small>';
   panel.addEventListener("toggle",function(){if(panel.open)panel.querySelector('pre').textContent=mapDiagnosticsText();});
@@ -98,6 +104,10 @@ function ensureMaps(){
     if(retry){retry.textContent="Retrying maps…";retry.disabled=true;radarEl.setAttribute("aria-busy","true");}
     else radarEl.innerHTML='<div class="imgfail" role="status">Loading map…</div>';
   }
+  if(!stnMap&&feedRequested("stations")){
+    var stnEl=document.getElementById("stnmap");
+    if(stnEl&&!stnEl.querySelector('[data-retry-maps]')) stnEl.innerHTML='<div class="imgfail" role="status">Loading station map…</div>';
+  }
   syncRadarBadge();syncSkyMeta();
   mapsInFlight=ensureMapLibraries().then(function(){mapStage("Requesting basemap style (tiles.openfreemap.org)");return loadMapStyle(theme);}).then(function(style){
     if(!rvMap){
@@ -151,3 +161,4 @@ document.addEventListener("click",function(e){
   if(e.target.closest('[data-retry-maps],[data-load-maps],#rsTabs,#rsFull,[data-radar-source],#jumpNav a[href="#radarCard"]')) requestMaps();
 });
 document.addEventListener('change',function(e){if(e.target.id==='radarProduct')requestMaps();});
+document.addEventListener("click",function(e){if(e.target.closest('[data-load-stations]'))requestContext("stations");});

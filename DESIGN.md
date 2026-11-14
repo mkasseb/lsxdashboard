@@ -728,10 +728,8 @@ browser suites (like anyone copying text off the page) read rendered text, so "W
 was a different string from the one the page was given. Title case in the condensed face carries
 the look without changing what the text says.
 
-Section numbers in the navigation come from a CSS counter and the matching numbers on the six
-section headings are generated content. Both use the `content: "02" / ""` alternative-text form,
-so they stay out of accessible names. Adding or reordering a navigation section means updating
-the heading numbers by hand.
+The navigation and section headings used to carry log-entry numbers (01–08). They are gone;
+see "November 2026: one of each, and less to open" below.
 
 `og-image.png` is regenerated in the same identity. `tools/og-image.py` now draws with the two
 faces in `assets/fonts/` instead of a macOS system font, so it runs on any machine with Pillow
@@ -817,7 +815,7 @@ band and the reparenting that served them). The page is now a stack of bands pla
 No script moves cards between breakpoints any more, so `initPlanningLayout()` and
 `layoutPlanningContext()` are gone, along with the transparent-container pointer workaround they
 needed. Mobile DOM order is the reading order: Now, Your day, radar, promoted cards, hourly,
-seven-day, Key Messages, discussion, context. Section numbers in the jump bar follow that order.
+seven-day, Key Messages, discussion, context. The jump bar follows that order.
 
 **The calm rule.** A context card that shows nothing remarkable should cost one line, and one that
 does should not be buried. `setAttention(id, on)` moves a card between the context pack and
@@ -944,3 +942,56 @@ folded changes:
 There is no auto-play of the radar loop and no camera change. A moving map nobody asked for costs
 bandwidth on a phone in a storm, and `prefers-reduced-motion` readers would need a separate path.
 The loop button is right under the map.
+
+## November 2026: one of each, and less to open
+
+A cleanup pass over the first screen and the wording. No new data sources.
+
+**One place name, no wall clock.** The selected place was printed three times on the first phone
+screen (header, sticky bar, "For <town>" in Your day) and the time twice on desktop (header clock,
+alert check). The sticky label is now the only copy of the place: it stays visible while the page
+scrolls, the sticky-navigation tests already lean on it, and it is the way into search (a search
+glyph says so). Your day's scope line is back to "Next 24 hours". The header clock is gone because
+every other time on the page is a *data* time (alerts checked, latest sweep, observed) and a wall
+clock beside them only repeated one of them. The Central-time test that read the clock now reads
+the alert check line, which is formatted the same way.
+
+**Phone header.** Below 681px the search row and the saved-locations disclosure fold into the
+header until the place name is tapped (`header.loc-open`), so a phone shows one row of controls,
+the place and the section links, then weather. Opening unhides the panel before focusing the
+input, since focus cannot land in a `display:none` element. Escape (after a first Escape has
+closed any suggestions) and choosing a suggestion fold it again, and folding moves focus that was
+inside it to the place name so nothing is stranded. Favorites and sharing leave the panel open:
+their next control is in it. Desktop always shows the row; the class does nothing there. Tests
+that use those controls open the panel the way a reader does (`openLocationPanel()`).
+
+**No section numbers.** The jump bar's 01–08 and the matching heading numbers are removed rather
+than renumbered. They had already drifted (Rivers was 07 and Climate 08 while the other context
+cards had none), they named nothing a reader acts on, and the space they took is what pushed the
+390px bar into cutting "Hourly" in half. With them gone, and the phone links set at 15px with 6px
+padding, all eight links fit a 390px bar; a stress test checks that after the faces load.
+
+**Forecast discussion starts folded.** `#afdCard` is the longest block on the page and explains
+the Key Messages beside it, so `CONTEXT_START_COLLAPSED` folds it at startup. The heading, its
+"Full discussion" link and the Key Messages card stay visible. Its feed-status line is appended to
+the card, outside `.context-body`, so an outage or overdue check still shows while folded.
+
+**"Slight chance rain".** The seven-day row printed a bare "Rain" beside 20%. `precipChanceLabel()`
+in `weather-core.js` qualifies rain, showers, snow and wintry mix when the *displayed* chance (the
+same nearest-ten band the row prints) is 30% or less: NWS's own word when its wording has one
+(Slight chance, Chance, Isolated, Scattered), otherwise "Slight chance". An unknown chance keeps
+the plain label, which claims no likelihood either way. Storms keep their own coverage words.
+
+**Air quality is modeled.** The AQI comes from CAMS model output via Open-Meteo, not monitors. The
+Now tile, the dedicated card, the Your day row ("Modeled AQI 155.") and the source lines say
+"modeled", and each points to AirNow for measured values.
+
+**Station plot placeholder.** Before its map starts, `#stnmap` says "Station map loads when you
+scroll here" with a Load station map button (which calls `requestContext("stations")`), and says
+"Loading station map…" while the libraries arrive. An empty grey box looked like a map with no
+stations. Map failure still replaces it with the retry panel.
+
+**Map diagnostics behind `?debug`.** The disclosure under the radar was for whoever debugs map
+tiles. `initMapDiagnostics()` now builds it only when the URL has `?debug`. The boot log behind it
+records every stage regardless, so turning the flag on after a failure loses nothing.
+

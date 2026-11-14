@@ -192,7 +192,7 @@ All feeds are keyless. The sources have different attribution and reuse terms; s
 | `services5.arcgis.com` | Current U.S. Drought Monitor classification |
 | `api.water.noaa.gov` (NWPS) | River gauge stages and crest forecasts |
 | `data.rcc-acis.org` | 1991–2020 normals, daily records, rankings, dry streaks |
-| Open-Meteo | Air quality from Copernicus Atmosphere Monitoring Service (CAMS), UV index, and the location geocoder using GeoNames data |
+| Open-Meteo | Modeled air quality from Copernicus Atmosphere Monitoring Service (CAMS), labelled "modeled" on the page with AirNow linked for measured values; UV index; and the location geocoder using GeoNames data |
 | `gibs.earthdata.nasa.gov` (WMTS) | GOES-19 ABI GeoColor satellite tiles, in the map's own projection |
 | `mesonet.agron.iastate.edu` (Iowa Environmental Mesonet) | Local Storm Reports for the St. Louis office, requested only while the storm layout is on |
 
@@ -259,7 +259,8 @@ The full design rationale — what each decision replaced, and why — lives in
 - **Official message provenance.** NWS Key Messages preserves NWS St. Louis AFD wording
   and bullet order. “Source and freshness” separates AFD product issuance from explicit section
   time, and identifies the current local NWS forecast fallback when messages cannot be verified.
-- **Visible, shareable locations.** The sticky navigation retains the selected town. Favorites
+- **Visible, shareable locations.** The sticky navigation retains the selected town, the only copy of
+  its name on screen, and opens search; phones fold search and saved locations behind it. Favorites
   and river pins persist locally; location URLs carry the selected point and override a saved
   location after LSX validation. City searches use representative points; geolocation is more precise.
 - **Refresh preserves interaction.** The hourly slider retains its forecast timestamp and focus;
@@ -865,7 +866,7 @@ advice is never labeled NWS Key Messages. Local active warnings remain above the
 and take precedence; the regional bullets keep their geographic qualifiers.
 
 The lower **NWS Forecast Details** card retains short-term/synopsis reasoning without repeating the
-hero bullets. Multi-paragraph details show the first paragraph with a native **Read more** / **Show less**
+hero bullets. It starts folded behind **Show details**; its heading and **Full discussion** link stay visible. Multi-paragraph details show the first paragraph with a native **Read more** / **Show less**
 disclosure for the rest; single-paragraph details stay fully visible. An unchanged refresh preserves
 the disclosure's open state and keyboard focus. NWS Key Messages and its fallback remain independent of native daily/hourly NBM quartiles.
 The former optional P10/P90 threshold commentary has been removed; quartiles do not inherit those tail heuristics. Stable disclosures preserve keyboard focus and open state; unchanged live-status
