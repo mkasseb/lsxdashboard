@@ -742,7 +742,9 @@ function loadRivers(){
         sub.push('<span class="r-forecast-label">'+(cr.kind==="falling"?"Forecast trend: ":"Forecast peak in window: ")+'</span><span class="'+(cr.kind==="falling"?"rdn":"rup")+'">'+word+st1+" ft"+join+esc(crestWhen(cr.when))+'</span>'
           +(crestCat?' <span class="rfcat c-'+crestCat.key+'">'+esc(crestCat.label)+'</span>':''));
       }
-      return '<a class="rlink '+info.cls+'" href="https://water.noaa.gov/gauges/'+r.id+'" target="_blank" rel="noopener">'
+      // data-fc lets the calm rule tell a verified forecast from a missing or stale one.
+      var fcState=!fcSeries?"none":forecastFresh?"fresh":"stale";
+      return '<a class="rlink '+info.cls+'" data-fc="'+fcState+'" href="https://water.noaa.gov/gauges/'+r.id+'" target="_blank" rel="noopener">'
         +'<span class="rname"><span class="rn-top">'+ic("flood")+esc(r.name)+'</span>'
           +(sub.length?'<span class="rsub">'+sub.join(" · ")+'</span>':'')
         +'</span><span class="rmeta"><span class="rval"><span class="r-now-label">Now</span>'+(Math.round(val*10)/10)+' '+unit+'</span>'

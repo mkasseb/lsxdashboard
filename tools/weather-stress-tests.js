@@ -531,6 +531,17 @@ async function main() {
       assert(await page.locator('#rivers .river-row').first().isVisible());
       await page.locator('[data-pin-gauge="ERKM7"]').click();
       assert(await page.locator('#rivers .river-all').evaluate(e=>e.open),'Pinning inside the disclosure keeps it open');
+      await expectText(page,'#rivers',/none forecast to reach it/);
+      // Restored snapshot rows have not passed live freshness checks: never calm, never promoted.
+      await page.evaluate(()=>{feedChecks.rivers.saved=true;renderRiverRows();});
+      assert(await page.locator('#riversCard').evaluate(e=>!e.classList.contains('rivers-calm')&&e.parentElement.classList.contains('masonry')),'Saved rows stay expanded in context');
+      await page.evaluate(()=>loadRivers());
+      assert(await page.locator('#riversCard').evaluate(e=>e.classList.contains('rivers-calm')),'A live check restores the calm summary');
+      // A stale forecast is not evidence that nothing is coming.
+      session.change(config('river stale forecast',{river:[10,9,8],riverStage:10,riverCategory:'none',riverForecastAgeHours:72}));
+      await page.evaluate(()=>loadRivers());
+      assert(await page.locator('#riversCard').evaluate(e=>!e.classList.contains('rivers-calm')&&e.parentElement.classList.contains('masonry')),'Stale forecasts keep full rows');
+      await expectText(page,'#rivers',/Forecast issuance unavailable or stale/);
       session.change(config('river crest forecast',{river:[10,17,12],riverStage:10,riverCategory:'none'}));
       await page.evaluate(()=>loadRivers());
       assert(await page.locator('#riversCard').evaluate(e=>e.parentElement.id==='attentionCards'&&!e.classList.contains('rivers-calm')),'A forecast reaching action stage promotes the gauges');

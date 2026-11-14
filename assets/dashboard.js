@@ -809,9 +809,13 @@ function renderRiverRows(){
   html+=rows(regional);
   var state=riverState(), card=document.getElementById("riversCard"), all=el.querySelector(".river-all");
   if(state==="calm"){
-    // Every gauge verified and below action stage, with no forecast reaching it: one line, and the
-    // full rows one tap away. Pins still work inside the disclosure.
-    html='<p class="river-calm-line"><span class="river-calm-dot" aria-hidden="true"></span>All '+RIVERS.length+' gauges below action stage, none forecast to reach it</p>'
+    // Every gauge verified and below action stage, no current forecast reaching it: one line, and
+    // the full rows one tap away. Pins still work inside the disclosure. The forecast clause claims
+    // only the gauges that have a fresh forecast; a gauge without one is not counted as clear.
+    var forecasted=RIVERS.filter(function(r){return riverRows[r.id].indexOf('data-fc="fresh"')>=0;}).length;
+    var clause=forecasted===RIVERS.length?"none forecast to reach it"
+      :forecasted?forecasted+" with a current forecast, none reaching it":"no current forecasts";
+    html='<p class="river-calm-line"><span class="river-calm-dot" aria-hidden="true"></span>All '+RIVERS.length+' gauges below action stage · '+clause+'</p>'
       +'<details class="disclosure river-all"'+(all&&all.open?' open':'')+'><summary>Show all gauges</summary><div class="river-all-rows">'+html+'</div></details>';
   }
   el.innerHTML=html;
@@ -819,15 +823,19 @@ function renderRiverRows(){
   setAttention("riversCard",state==="attention");
   if(focus){var button=el.querySelector('[data-pin-gauge="'+focus+'"]');if(button) button.focus({preventScroll:true});}
 }
-/* "attention" when any gauge is at action stage or above now, or forecast to reach a category;
-   "calm" only when every gauge has a verified current reading below action stage; anything else
-   (loading, stale, failed) is "unknown" and keeps the full rows in place. */
+/* "attention" when any live gauge is at action stage or above now, or forecast to reach a category;
+   "calm" only when every gauge has a live, verified reading below action stage and no forecast is
+   stale; anything else (restored, loading, stale, failed) is "unknown" and keeps the rows in place. */
 function riverState(){
+  // Restored snapshot rows (up to three hours old) have not passed the live freshness checks yet:
+  // they stay expanded where they are until loadRivers has verified them.
+  var feed=typeof feedChecks!=="undefined"&&feedChecks.rivers;
+  if(!feed||feed.saved||feed.status==="loading") return "unknown";
   var calm=true;
   for(var i=0;i<RIVERS.length;i++){
     var row=riverRows[RIVERS[i].id];
     if(row&&(/rlink c-(action|minor|moderate|major)/.test(row)||row.indexOf("rfcat")>=0)) return "attention";
-    if(!row||row.indexOf("r-now-label")<0||row.indexOf("rlink c-none")<0) calm=false;
+    if(!row||row.indexOf("r-now-label")<0||row.indexOf("rlink c-none")<0||row.indexOf('data-fc="stale"')>=0) calm=false;
   }
   return calm?"calm":"unknown";
 }
