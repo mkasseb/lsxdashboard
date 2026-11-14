@@ -141,19 +141,10 @@ function startMapRuntime(){
     document.getElementById('radar').innerHTML='<div class="imgfail">Radar loads when this section approaches. <button type="button" data-load-maps>Load radar</button></div>';
     syncRadarBadge();
     if(mapsRequested||location.hash==='#radarCard'||!('IntersectionObserver' in window)){requestMaps();return;}
-    // Radar sits in the first band now. During startup the cards above it are still empty, so an
-    // observer attached at once would see radar "approaching" on every phone and spend the map
-    // download on readers who never scroll that far. Attach it once the first refresh has painted
-    // real heights; a direct link, the jump bar or a radar control still load it immediately.
-    function observe(){
-      if(mapsRequested||mapApproach) return;
-      mapApproach=new IntersectionObserver(function(entries){
-        if(entries.some(function(entry){return entry.isIntersecting;})) requestMaps();
-      },{rootMargin:'300px'});
-      mapApproach.observe(card);
-    }
-    var first=typeof refreshInFlight!=="undefined"&&refreshInFlight;
-    if(first) first.then(observe,observe); else observe();
+    mapApproach=new IntersectionObserver(function(entries){
+      if(entries.some(function(entry){return entry.isIntersecting;})) requestMaps();
+    },{rootMargin:'300px'});
+    mapApproach.observe(card);
   });
 }
 document.addEventListener("click",function(e){

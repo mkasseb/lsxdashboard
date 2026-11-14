@@ -79,6 +79,9 @@ async function open(c, width=390) {
   const page=await context.newPage();
   page.setDefaultTimeout(15000);
   if(c.noIntersectionObserver)await page.addInitScript(()=>{delete window.IntersectionObserver;});
+  // Radar now shares the first screen, so it is normally within approach range at startup. This
+  // pushes it well below the fold to exercise the deferred-loading triggers themselves.
+  if(c.radarBelowFold)await page.addInitScript(()=>{const o=new MutationObserver(()=>{const band=document.querySelector('.top-band');if(!band)return;o.disconnect();const s=document.createElement('div');s.id='testFoldSpacer';s.style.height='4000px';band.before(s);});o.observe(document,{childList:true,subtree:true});});
   if(c.measure){const cdp=await context.newCDPSession(page);await cdp.send('Emulation.setCPUThrottlingRate',{rate:4});}
   await page.clock.install({time:new Date(c.now)});
   if(c.webglBlocked)await page.addInitScript(()=>{

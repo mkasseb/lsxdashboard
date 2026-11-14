@@ -158,7 +158,7 @@ async function main() {
       else await p.evaluate(()=>requestContext('stations'));
       await p.waitForFunction(()=>rvMap&&mapsInFlight===null&&radarFrames.length>1);
       assert.equal(await p.locator('#radar [data-load-maps]').count(),0);
-    },{maps:true,deferMaps:true});
+    },{maps:true,deferMaps:true,radarBelowFold:true});
     await run('radar loads for a direct radar link',async p=>{
       await p.waitForFunction(()=>rvMap&&mapsInFlight===null);
     },{maps:true,deferMaps:true,search:'#radarCard'});
