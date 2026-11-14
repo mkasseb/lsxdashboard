@@ -825,8 +825,11 @@ does should not be buried. `setAttention(id, on)` moves a card between the conte
   the numeric thresholds (`stageCategory`), never only the label: an "unknown" category at 16.2 ft
   over a 16 ft line is at action stage, and a 15.8 → 16.1 ft forecast crosses it even though the
   trend wording ignores rises under 0.5 ft. "Below action stage" needs positive evidence
-  (`data-below`): under a numeric threshold, or an explicit no-flooding category when the gauge
-  publishes none. A current issuance with no usable future points counts as no forecast. Every gauge with a live reading below
+  (`data-below`): under the gauge's numeric action-stage threshold, or, when it publishes no action
+  stage, an explicit no-flooding category. A forecast counts toward "none forecast to reach it" only
+  with usable future points *and* an action-stage threshold to compare them against; otherwise the
+  row says why it is unverified. When any gauge lacks an action stage, the summary says "no
+  flooding reported" in place of "below action stage", claiming only what the data shows. Every gauge with a live reading below
   action stage is *calm*: one line, rows behind "Show all gauges". Forecasts only decide what that
   line may claim: "none forecast to reach it" needs every forecast current; otherwise it counts the
   current ones and names the gauges without one (Eureka's is often stale), so a gap is visible but
