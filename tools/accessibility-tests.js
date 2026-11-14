@@ -24,6 +24,10 @@ const engine=process.env.WEATHER_BROWSER||'chromium',report=[];
      // back through its own button, so the bar, storm reports and restored sections are all checked.
      assert(await p.evaluate(()=>document.documentElement.classList.contains('lsx-active')),'Warning scenario audits the storm layout');
      for(const key of ['forecast','outlook','context'])await p.locator('#activeFoldChips [data-show="'+key+'"]').click();
+     // A section shown again replays the card entrance (display:none restarts CSS animations).
+     // Wait it out in real time, as above: the fake clock does not advance CSS animations.
+     await p.evaluate(()=>Promise.all([...document.querySelectorAll('.grid > *')].flatMap(el=>
+      el.getAnimations({subtree:true}).filter(a=>Number.isFinite(a.effect.getComputedTiming().iterations)).map(a=>a.finished.catch(()=>{})))));
     }
     const day=p.locator('#daily .day').first();await day.click();
     await p.locator('#nbmDailyToggle').check();
