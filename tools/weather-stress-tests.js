@@ -1262,7 +1262,10 @@ async function main() {
       assert.equal(await page.locator('#compactView').count(),0);
       for(const id of ['afdCard','obsCard','climateCard','droughtCard','cpcCard']){
         assert.equal(await page.locator('#'+id+' .context-toggle').getAttribute('aria-expanded'),'true');
-        assert(await page.locator('#'+id+'Body').isVisible());
+        // A verified calm outlook card folds behind its outlook cell; that cell is the way back in.
+        const folded=await page.locator('#'+id).evaluate(e=>e.hidden);
+        if(folded)assert.equal(await page.locator('#outlookCells [aria-controls="'+id+'"]').first().getAttribute('aria-expanded'),'false',id+' is reachable from its outlook cell');
+        else assert(await page.locator('#'+id+'Body').isVisible());
       }
     });
     await run('deferred station and climate work starts on approach or request',config('deferral',{maps:true,climateFixture:true}),async({page,requests})=>{
