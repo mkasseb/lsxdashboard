@@ -165,6 +165,7 @@ async function open(c, width=390) {
     if(c.drought!=null&&u.href.includes('/USDM_current/'))return reply(features([{DM:c.drought}]));
     if(c.drought!=null&&u.href.includes('/cpc_drought_outlk/')&&u.pathname.includes('/query'))return reply(features([{outlook:'Persistence'}]));
     if(c.offline) return reply({error:'simulated outage'},503);
+    if(u.hostname==='mesonet.agron.iastate.edu')return c.reportsDown?reply({error:'storm reports outage'},503):reply({type:'FeatureCollection',features:(c.reports||[]).map(([typetext,minutes,lat,lon,magnitude,city,wfo='LSX'],i)=>({id:String(i),type:'Feature',properties:{wfo,typetext,magnitude:magnitude??'',unit:typetext==='HAIL'?'INCH':null,city,county:'St. Charles',st:'MO',source:'Trained Spotter',remark:'',valid:new Date(c.now-minutes*60000).toISOString(),lat,lon},geometry:{type:'Point',coordinates:[lon,lat]}}))});
     if(u.hostname==='air-quality-api.open-meteo.com'&&c.aqi!=null) return reply({current:{us_aqi:c.aqi,time:c.aqiMissingTime?undefined:(c.now-(c.aqiAgeHours||0)*H)/1000,pm2_5:75,pm10:90}});
     if(u.hostname==='api.open-meteo.com'&&c.uv!=null) return reply({hourly:{time:[c.now/1000,(c.now+H)/1000],uv_index:[c.uv,c.uv+1]},daily:{time:Array.from({length:7},(_,i)=>stamp(c.now+i*24*H).slice(0,10)),uv_index_max:Array(7).fill(c.uv+1)}});
     if(u.hostname==='api.water.noaa.gov'&&c.river){
@@ -1254,6 +1255,48 @@ async function main() {
       await noOverflow(page);await page.locator('#rsFull').tap();
       assert.equal(await page.evaluate(()=>document.activeElement.id),'rsFull');
     },width);
+    const stormReports=[['FUNNEL CLOUD',9,38.80,-90.88,'','2 W Lake St. Louis'],['HAIL',17,38.81,-90.85,1.75,'Wentzville'],['TSTM WND DMG',21,38.78,-90.70,'',"O'Fallon"],['HAIL',5,37.2,-93.3,1,'Springfield','SGF']];
+    for(const width of [390,1280])await run('storm layout follows a covering warning '+width,config('storm layout',{alerts:[alert('Tornado Warning',base),alert('Severe Thunderstorm Warning',base,true)],reports:stormReports}),async session=>{
+      const {page}=session;
+      await page.waitForFunction(()=>document.querySelectorAll('#reports .lsr-row').length===3);
+      assert(await page.evaluate(()=>document.documentElement.classList.contains('lsx-active')),'A covering Tornado Warning turns the storm layout on');
+      await expectText(page,'#activeBarText',/Tornado Warning covers this location/);
+      assert.deepEqual(await page.evaluate(()=>[...document.querySelector('.top-band').children].map(e=>e.id||e.className)),['radarCard','now-stack'],'Radar leads in the DOM, so reading and tab order match the screen');
+      await expectText(page,'#reports',/Funnel cloud.*Lake St. Louis.*of you/s);
+      assert(!/Springfield/.test(await page.locator('#reports').innerText()),'Only the St. Louis office reports');
+      for(const id of ['forecastCard','outlookCard','contextPack'])assert(await page.locator('#'+id).isHidden(),id+' folds during the warning');
+      for(const id of ['h24Card','callCard','alertsCard','activeFold'])assert(await page.locator('#'+id).isVisible(),id+' stays on the page');
+      await page.locator('#activeFoldChips [data-show="forecast"]').click();
+      assert(await page.locator('#forecastCard').isVisible(),'A fold chip puts its section back');
+      await page.evaluate(()=>document.querySelector('#jumpNav a[href="#riversCard"]').click());
+      assert(await page.locator('#contextPack').isVisible(),'A jump link into the folded context opens it');
+      await page.locator('#activeToggle').click();
+      assert(!(await page.evaluate(()=>document.documentElement.classList.contains('lsx-active'))),'The reader can switch back to the usual layout');
+      assert.deepEqual(await page.evaluate(()=>[...document.querySelector('.top-band').children].map(e=>e.id||e.className)),['now-stack','radarCard']);
+      assert(await page.locator('#reportsCard').isHidden());assert.equal(await page.locator('#activeToggle').innerText(),'Show the storm layout');
+      await page.evaluate(()=>loadAlerts());
+      assert(!(await page.evaluate(()=>document.documentElement.classList.contains('lsx-active'))),'The choice survives an alert refresh');
+      await page.locator('#activeToggle').click();
+      assert(await page.evaluate(()=>document.documentElement.classList.contains('lsx-active')));
+      session.change(config('storm over',{reports:stormReports}));await page.evaluate(()=>loadAlerts());
+      await expectText(page,'#activeBarText',/has ended.*stays until/);
+      assert(await page.evaluate(()=>document.documentElement.classList.contains('lsx-active')),'The layout holds after the warning ends');
+      await page.clock.runFor(31*60000);
+      await page.waitForFunction(()=>!document.documentElement.classList.contains('lsx-active'));
+      assert(await page.locator('#activeBar').isHidden());
+      assert.equal(await page.evaluate(()=>deferredFeeds.reports),false,'Storm reports stop polling with the layout');
+      assert(await page.locator('#forecastCard').isVisible());
+    },width);
+    await run('storm layout ignores distant warnings and keeps a report outage visible',config('distant storm',{alerts:[alert('Tornado Warning',base,true)]}),async session=>{
+      const {page}=session;
+      assert(!(await page.evaluate(()=>document.documentElement.classList.contains('lsx-active'))),'A warning elsewhere keeps the usual layout');
+      assert.equal(await page.evaluate(()=>deferredFeeds.reports),false,'A calm layout makes no storm report requests');
+      assert(!session.requests.some(u=>u.includes('mesonet.agron.iastate.edu')));
+      session.change(config('local storm, reports down',{alerts:[alert('Severe Thunderstorm Warning',base)],reportsDown:true}));await page.evaluate(()=>loadAlerts());
+      await page.waitForFunction(()=>/unavailable/.test(document.getElementById('reports').innerText));
+      assert(await page.locator('#fresh-reports').isVisible(),'A report outage stays on its card');
+      assert.equal(await page.locator('#reportsCard #fresh-reports').count(),1);
+    });
     await run('individual context reload keeps saved content accessible',config('context reload',{climateFixture:true,datedRecords:true}),async({page})=>{
       await page.evaluate(()=>requestContext('context'));
       await page.locator('#climateCard .context-toggle').click();

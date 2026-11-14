@@ -1684,3 +1684,63 @@ function calendarRecordFacts(rows,date,today){
     years:hi.count,hiCount:hi.count,loCount:lo.count,hiPeriod:[hi.first,hi.last],loPeriod:[lo.first,lo.last]};
 }
 function calendarRecordMinimum(date){ return date.slice(5)==="02-29"?10:30; }
+
+/* ---- Storm layout (active day) ----
+   The page reorders itself only for the hazards radar answers: a warning-level convective or
+   flash-flood product that covers this location. A river Flood Warning, a Heat Warning or a Winter
+   Storm Warning keeps the usual layout; radar is not what those readers need first. The layout
+   holds for 30 minutes after the last covering warning so a reissue does not flap the page, and it
+   never drops on an alert outage: a failure must not look like the storm has passed. */
+var ACTIVE_HOLD_MS=30*60000;
+function activeModeTrigger(local,nowMs){
+  if(!local||(local.level!=="warning"&&local.level!=="emergency")) return "";
+  if(local.ends>0&&local.ends<=nowMs) return "";
+  if(local.family!=="convective"&&!/flash flood/i.test(local.event||"")) return "";
+  return local.event||"Warning";
+}
+function activeModeNext(prev,local,nowMs,alertsHealthy){
+  prev=prev||{};
+  var event=activeModeTrigger(local,nowMs);
+  if(event) return {active:true,lastHit:nowMs,event:event,holding:false};
+  if(prev.active&&alertsHealthy===false) return {active:true,lastHit:prev.lastHit||nowMs,event:prev.event||"",holding:false,unverified:true};
+  var held=prev.lastHit>0&&nowMs-prev.lastHit<ACTIVE_HOLD_MS;
+  return {active:!!held,lastHit:held?prev.lastHit:0,event:held?prev.event||"":"",holding:!!held,until:held?prev.lastHit+ACTIVE_HOLD_MS:0};
+}
+
+/* Local Storm Reports (IEM). Only the St. Louis office's reports, newest first, with distance and
+   bearing from the selected point so "how close" is answered without opening the map. */
+var LSR_KINDS=[
+  {re:/tornado/i,           k:"T",label:"Tornado",     tone:"danger"},
+  {re:/funnel|wall cloud/i, k:"F",label:"Funnel cloud",tone:"danger"},
+  {re:/hail/i,              k:"H",label:"Hail",        tone:"hail"},
+  {re:/flash flood|flood/i, k:"R",label:"Flooding",    tone:"flood"},
+  {re:/wnd|wind|downburst|tstm|damage/i,k:"W",label:"Wind damage",tone:"wind"}
+];
+function lsrKind(typetext){
+  for(var i=0;i<LSR_KINDS.length;i++) if(LSR_KINDS[i].re.test(typetext||"")) return LSR_KINDS[i];
+  return {k:"•",label:"Report",tone:"other"};
+}
+function lsrDistance(lat1,lon1,lat2,lon2){
+  var R=3958.8,rad=Math.PI/180,dLat=(lat2-lat1)*rad,dLon=(lon2-lon1)*rad;
+  var a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(lat1*rad)*Math.cos(lat2*rad)*Math.sin(dLon/2)*Math.sin(dLon/2);
+  var mi=2*R*Math.asin(Math.min(1,Math.sqrt(a)));
+  var y=Math.sin(dLon)*Math.cos(lat2*rad), x=Math.cos(lat1*rad)*Math.sin(lat2*rad)-Math.sin(lat1*rad)*Math.cos(lat2*rad)*Math.cos(dLon);
+  var brg=(Math.atan2(y,x)/rad+360)%360;
+  return {mi:mi,deg:brg};
+}
+function stormReportRows(fc,nowMs,point,maxAgeMs){
+  if(!fc||!Array.isArray(fc.features)) return null;
+  maxAgeMs=maxAgeMs||3*3600000;
+  var rows=[];
+  fc.features.forEach(function(f){
+    var p=f&&f.properties; if(!p||p.wfo!=="LSX") return;
+    var t=Date.parse(p.valid||""); if(!isFinite(t)||t>nowMs+10*60000||nowMs-t>maxAgeMs) return;
+    var lat=+p.lat, lon=+p.lon; if(!isFinite(lat)||!isFinite(lon)) return;
+    var kind=lsrKind(p.typetext), d=point?lsrDistance(point.lat,point.lon,lat,lon):null;
+    var mag=p.magnitude!=null&&p.magnitude!==""?String(p.magnitude)+(p.unit?" "+p.unit:""):"";
+    rows.push({kind:kind,type:p.typetext||kind.label,mag:mag,city:p.city||"",county:p.county||"",st:p.st||p.state||"",
+      source:p.source||"",remark:p.remark||"",time:t,lat:lat,lon:lon,mi:d?d.mi:null,deg:d?d.deg:null});
+  });
+  rows.sort(function(a,b){ return b.time-a.time; });
+  return rows.slice(0,12);
+}

@@ -45,6 +45,7 @@ var FEEDS={
   climate:{label:"Climate",card:"climateCard",load:"loadClimate",every:6*3600000,age:12*3600000,local:true,reset:{cnToday:"",cnGrid:"Loading departures…",cnStation:"…",cnSrc:""},snapshot:[{id:"cnToday",ttl:12*3600000},{id:"cnGrid",ttl:12*3600000},{id:"cnStation",ttl:12*3600000}]},
   context:{label:"Records",card:"climateCard",load:"loadClimateContext",every:6*3600000,age:12*3600000,local:true,reset:{cnCtx:""},snapshot:[{id:"cnCtx",ttl:12*3600000}]},
   stations:{label:"Station plot",card:"obsCard",load:"loadStationPlot",every:12*60000,age:24*60000},
+  reports:{label:"Storm reports",card:"reportsCard",load:"loadReports",every:2*60000,age:6*60000,local:true,reset:{reports:"Checking storm reports…"}},
   qpf:{load:"loadQpf",every:60*60000,local:true,tracked:false,failure:"loader-owned",reset:{qpf7:""}},
   radar:{load:"refreshRadarLayer",every:4*60000,tracked:false,failure:"loader-owned"},
   satellite:{load:"refreshSatLayer",every:10*60000,tracked:false,failure:"loader-owned"},
@@ -950,6 +951,25 @@ function loadMcd(){
     /* A failed refresh must not read as "the discussion ended": keep what's already painted until
        its own valid time retires it. (An MD whose window never parsed rides until a fetch succeeds.) */
     renderMcd(lastMcds.filter(function(m){ return !m.end||m.end>Date.now(); }));
+  });
+}
+
+/* Local Storm Reports. The IEM endpoint filters by state, not office, so the request is the two
+   states this office covers and stormReportRows() keeps only LSX's own reports. Requested only
+   while the storm layout is on (deferredFeeds.reports). */
+var LSR_URL="https://mesonet.agron.iastate.edu/geojson/lsr.geojson?states=MO,IL&hours=3";
+function loadReports(){
+  var fresh=locGuard("reports");
+  return getJSON(LSR_URL,{},locSignal()).then(function(fc){
+    if(!fresh()) return;
+    var rows=stormReportRows(fc,Date.now(),current);
+    if(!rows) throw new Error("Invalid storm reports");
+    feedUpdate("reports","ready");
+    renderStormReports(rows);
+  }).catch(function(e){
+    if(isAbort(e)||!fresh()) return;
+    feedUpdate("reports","unavailable");
+    renderStormReports(false);
   });
 }
 

@@ -211,3 +211,123 @@ function outlookDroughtSummary(now,month,season){
 }
 
 renderOutlook();   // scripts load at the end of <body>, so the row exists; cells read "Checking…"
+
+/* ---- Storm layout controller ----
+   activeModeNext() (weather-core.js) decides; this only applies the decision. The order of things
+   on the page is kept: radar moves ahead of Now, storm reports appear beside Now, and the 7-day,
+   outlook row and context pack fold to one strip of buttons. Hourly, NWS text, alerts and any
+   card the calm rule promoted stay where they are. The reader can switch back to the usual layout
+   for the rest of the episode; the next warning re-arms it. */
+deferredFeeds.reports=false;
+var activeState={active:false,lastHit:0,event:"",optOut:false,until:0,unverified:false};
+var ACTIVE_SHOW=["forecast","outlook","context"];
+function syncActiveMode(){
+  var now=Date.now(), healthy=true;
+  if(typeof feedChecks!=="undefined"&&feedChecks.alerts&&typeof feedState==="function"){
+    var st=feedState(feedChecks.alerts,now,FEEDS.alerts.age);
+    healthy=st==="ready"||st==="partial";
+  }
+  var local=typeof callLocalAlert!=="undefined"?callLocalAlert:null;
+  var next=activeModeNext(activeState,local,now,healthy);
+  if(!next.active) activeState.optOut=false;
+  activeState.active=next.active; activeState.lastHit=next.lastHit; activeState.event=next.event;
+  activeState.until=next.until||0; activeState.unverified=!!next.unverified;
+  applyActiveMode();
+}
+function resetActiveMode(){
+  activeState={active:false,lastHit:0,event:"",optOut:false,until:0,unverified:false};
+  applyActiveMode();
+}
+function activeBarText(){
+  if(!activeState.active) return "";
+  var ev=activeState.event||"A warning";
+  if(activeState.unverified) return "Storm layout kept: alert updates are unavailable, so the end of the "+ev+" cannot be confirmed.";
+  if(activeState.until){
+    var t=typeof weatherTime==="function"?weatherTime(activeState.until,{hour:"numeric",minute:"2-digit"})+" CT":"shortly";
+    return "The "+ev+" has ended. The storm layout stays until "+t+" in case it is reissued.";
+  }
+  return activeState.optOut?"Usual layout. A "+ev+" covers this location."
+    :"Storm layout: radar and storm reports come first while a "+ev+" covers this location.";
+}
+function applyActiveMode(){
+  var root=document.documentElement, on=activeState.active&&!activeState.optOut;
+  var bar=document.getElementById("activeBar"), text=document.getElementById("activeBarText"),
+      toggle=document.getElementById("activeToggle"), fold=document.getElementById("activeFold"),
+      reports=document.getElementById("reportsCard");
+  if(!bar) return;
+  bar.hidden=!activeState.active;
+  var words=activeBarText(); if(text.textContent!==words) text.textContent=words;
+  toggle.textContent=on?"Show the usual layout":"Show the storm layout";
+  if(reports) reports.hidden=!on;
+  if(fold) fold.hidden=!on;
+  var was=root.classList.contains("lsx-active");
+  placeRadar(on);
+  if(on===was){ syncFoldChips(); return; }
+  root.classList.toggle("lsx-active",on);
+  if(!on) ACTIVE_SHOW.forEach(function(k){ root.classList.remove("show-"+k); });
+  if(on){
+    if(typeof requestContext==="function") requestContext("reports");
+    if(typeof requestMaps==="function") requestMaps();
+  }else{
+    deferredFeeds.reports=false;   // stop polling; the footer lists it as on demand again
+    if(typeof renderStormReports==="function") renderStormReports(null);
+  }
+  syncFoldChips();
+  if(typeof rvMap!=="undefined"&&rvMap){ rvMap.invalidateSize(); setTimeout(function(){ if(rvMap) rvMap.invalidateSize(); },260); }
+  if(typeof scheduleMasonry==="function") scheduleMasonry();
+  if(typeof freshnessCheck==="function") freshnessCheck();
+}
+/* Radar ahead of Now in the DOM, not only on screen, so reading and tab order follow the picture.
+   Moving the card keeps the Leaflet instance; fullscreen is fixed-position, so wait it out. */
+function placeRadar(on){
+  if(typeof radarFull!=="undefined"&&radarFull) return;
+  var radar=document.getElementById("radarCard"), band=radar&&radar.parentNode,
+      stack=band&&band.querySelector(".now-stack");
+  if(!stack) return;
+  var ahead=radar.nextElementSibling===stack;
+  if(ahead===on) return;
+  var focused=document.activeElement, keep=focused&&radar.contains(focused);
+  band.insertBefore(radar,on?stack:stack.nextSibling);
+  if(keep&&document.activeElement!==focused) focused.focus({preventScroll:true});
+}
+function syncFoldChips(){
+  var o=document.getElementById("foldOutlook");
+  if(o){
+    var r=outlookState.risk, words=r?r.value:"";
+    if(o.textContent!==words) o.textContent=words;
+  }
+  document.querySelectorAll("#activeFoldChips .fold-chip").forEach(function(b){
+    var shown=document.documentElement.classList.contains("show-"+b.getAttribute("data-show"));
+    b.setAttribute("aria-expanded",String(shown));
+  });
+}
+function showFolded(key,scroll){
+  var root=document.documentElement; if(!root.classList.contains("lsx-active")) return;
+  root.classList.add("show-"+key);
+  syncFoldChips();
+  if(typeof scheduleMasonry==="function") scheduleMasonry();
+  var target=document.getElementById(key==="forecast"?"forecastCard":key==="outlook"?"outlookCard":"contextPack");
+  if(scroll&&target){
+    if(key==="context"&&typeof layoutMasonry==="function") layoutMasonry();
+    target.scrollIntoView({block:"start",behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});
+  }
+}
+(function initActiveMode(){
+  var toggle=document.getElementById("activeToggle");
+  if(toggle) toggle.addEventListener("click",function(){
+    activeState.optOut=!activeState.optOut; applyActiveMode();
+    if(!activeState.optOut){ var r=document.getElementById("radarCard"); if(r) r.scrollIntoView({block:"start"}); }
+  });
+  var chips=document.getElementById("activeFoldChips");
+  if(chips) chips.addEventListener("click",function(e){
+    var b=e.target.closest(".fold-chip"); if(b) showFolded(b.getAttribute("data-show"),true);
+  });
+  // A jump link into a folded section puts that section back before the browser scrolls to it.
+  var nav=document.getElementById("jumpNav");
+  if(nav) nav.addEventListener("click",function(e){
+    var link=e.target.closest("a"); if(!link) return;
+    var t=document.querySelector(link.getAttribute("href")); if(!t) return;
+    if(t.id==="forecastCard") showFolded("forecast",false);
+    else if(t.closest("#contextPack")) showFolded("context",false);
+  },true);
+})();

@@ -880,3 +880,43 @@ moves the healthy ones (ready or on demand) into `#sourcesList` in the footer's 
 freshness** disclosure, whose summary is `#lastUpdate` plus a status dot. Loading, partial, overdue,
 unavailable and saved lines stay on their own card, visible, exactly as before. A problem belongs
 next to the data it affects. A healthy timestamp does not.
+
+## November 2026: the storm layout
+
+A visitor during a tornado warning needs the warning, then the radar, then what has been seen on
+the ground. The usual page puts radar beside Now and Your day, and on a phone it sits a screen
+below them. The storm layout (`html.lsx-active`) rearranges the page for that one case.
+
+**What switches it.** `activeModeTrigger()` in `weather-core.js`: the strongest alert covering this
+location (`callLocalAlert`, the same value Your day reads) is warning or emergency level *and* is
+convective or a Flash Flood Warning. A river Flood Warning, a Heat Warning or a Winter Storm Warning
+keeps the usual layout. Radar is not what those readers need first. `activeModeNext()` holds the
+layout 30 minutes after the last covering warning so a reissue does not flap the page, and it never
+releases while the alert feed is unhealthy: the bar says the end of the warning cannot be confirmed.
+An outage alone never enters it. In degraded flat mode (zones unresolved) every LSX alert counts as
+local, so a warning anywhere in the office's area switches the layout. That is the same fail-open
+choice the alert list makes.
+
+**What changes, and what does not.** The order of things is kept. Only what is big and what is
+folded changes:
+
+- Radar moves ahead of the Now stack *in the DOM* (`placeRadar()`), so tab and reading order match
+  the screen. The Leaflet instance survives the move; the move waits out fullscreen. Above 1000px
+  radar spans the band with a 560px viewport, and Now, storm reports and Your day share the row
+  beneath. Now gets its own size container there, because a third of the band is not the width the
+  `nowstack` container query assumes.
+- **Storm reports** (`#reportsCard`): IEM Local Storm Reports for the last 3 hours. The endpoint
+  filters by state, not office, so the request is MO and IL and `stormReportRows()` keeps only
+  `wfo === "LSX"`, newest first, with distance and bearing from the selected point. The same rows
+  draw dots on the radar (`drawStormReports()`). The feed is deferred (`deferredFeeds.reports`): a
+  calm day makes no request, and leaving the layout stops the polling.
+- The 7-day forecast, the outlook row and the context pack fold to `#activeFold`, one row of
+  buttons. Each button puts its section back; a jump-bar link into a folded section does the same
+  before the browser scrolls. Alerts, hourly, NWS text and anything the calm rule promoted to
+  `#attention` stay where they are.
+- `#activeBar` says why the page looks different and offers **Show the usual layout**. That choice
+  lasts until the episode ends; the next covering warning re-arms the layout.
+
+There is no auto-play of the radar loop and no camera change. A moving map nobody asked for costs
+bandwidth on a phone in a storm, and `prefers-reduced-motion` readers would need a separate path.
+The loop button is right under the map.

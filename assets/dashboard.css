@@ -2164,3 +2164,58 @@ body.radar-full #radarCard#radarCard{background:var(--bg);border:0;
 .source-panel[open] .sp-more::after{content:" \25B4"}
 .sp-list{display:grid;gap:2px;padding:6px 0 4px 18px;line-height:1.6}
 .sp-list .feed-status,.sp-list .stn{margin:0}
+
+/* ---- Storm layout (html.lsx-active, applied by applyActiveMode) ----
+   Radar spans the band ahead of Now and gets a taller fixed viewport; Now, storm reports and Your
+   day share the row beneath it. Below 1001px the band is already one column, so the DOM move
+   alone puts radar first. The 7-day, outlook row and context pack fold to #activeFold. */
+.active-bar[hidden],.active-fold[hidden]{display:none}
+.active-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:10px 14px;border:1px solid var(--danger);
+  border-radius:var(--r-md);background:color-mix(in srgb,var(--danger) 8%,var(--panel));font-size:var(--fs-md);font-weight:600}
+.active-dot{width:9px;height:9px;border-radius:50%;background:var(--danger);flex:none}
+#activeBarText{flex:1 1 260px;min-width:0}
+.active-toggle{font:inherit;font-weight:600;font-size:var(--fs-sm);color:var(--text);background:var(--panel);border:1px solid var(--border);
+  border-radius:8px;padding:8px 12px;min-height:44px;cursor:pointer}
+.active-toggle:focus-visible,.fold-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media(min-width:1001px){
+  :root.lsx-active{--radar-h:562px}
+  .lsx-active .top-band{grid-template-columns:minmax(0,1fr)}
+  .lsx-active .now-stack{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+}
+@media(min-width:681px) and (max-width:1000px){
+  .lsx-active .now-stack{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+  .lsx-active .now-stack #glanceCard{grid-column:1/-1}
+}
+/* In three columns Now is one of them, so it sizes by its own card, not the whole stack. */
+.lsx-active #currentCard{container:nowcard / inline-size}
+@container nowcard (max-width:600px){
+  .lsx-active #current{grid-template-columns:minmax(0,1fr)}
+  .lsx-active #currentCard .cc-main,.lsx-active #currentCard .cc-today,.lsx-active #currentCard .cc-grid,.lsx-active #currentCard .cc-expo{grid-column:1;grid-row:auto}
+}
+.lsx-active:not(.show-forecast) #forecastCard,
+.lsx-active:not(.show-outlook) #outlookCard,
+.lsx-active:not(.show-context) .railhead,
+.lsx-active:not(.show-context) #contextPack,
+.lsx-active:not(.show-context) #moreWeatherResources{display:none}
+.lsx-active:not(.show-forecast) .planning-grid{grid-template-columns:minmax(0,1fr)}
+.active-fold{display:flex;flex-direction:column;gap:10px;border-top:2px solid var(--text);padding-top:10px}
+.active-fold h2{font-family:var(--fd);font-size:22px;font-weight:600;letter-spacing:.015em;margin:0}
+.active-fold-chips{display:flex;flex-wrap:wrap;gap:8px}
+.fold-chip{font:inherit;font-size:var(--fs-sm);color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:8px;
+  padding:8px 12px;min-height:44px;cursor:pointer;text-align:left}
+.fold-chip span{color:var(--muted)}
+.fold-chip[aria-expanded="true"]{display:none}
+
+/* Storm reports */
+.reports-sub{font-family:var(--fm);font-size:var(--fs-2xs);font-weight:400;color:var(--muted);letter-spacing:var(--ls-eyebrow);text-transform:uppercase;margin-right:auto}
+#reportsCard h2{justify-content:flex-start;align-items:baseline;flex-wrap:wrap;gap:4px 12px}
+.lsr-list{list-style:none;margin:0;padding:0;display:grid}
+.lsr-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:10px;align-items:start;padding:8px 0;border-top:1px solid var(--border);font-size:var(--fs-md)}
+.lsr-row:first-child{border-top:0;padding-top:0}
+.lsr-k{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--lsr);color:#fff;font:700 11px var(--fm)}
+.lsr-body{min-width:0;overflow-wrap:anywhere}
+.lsr-near{color:var(--text);font-weight:600;white-space:nowrap}
+.lsr-src{display:block;font-size:var(--fs-2xs);color:var(--muted);margin-top:2px}
+.lsr-t{font-family:var(--fm);font-size:var(--fs-2xs);color:var(--muted);white-space:nowrap}
+.reports-none{margin:0;color:var(--muted)}
+.reports-note{margin:10px 0 0;font-size:var(--fs-2xs);color:var(--muted)}

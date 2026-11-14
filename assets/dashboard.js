@@ -69,6 +69,7 @@ function freshnessCheck(){
   if(typeof resolveSnapBar==="function") resolveSnapBar();
   renderBriefingStatus();
   if(typeof renderOutlook==="function") renderOutlook();   // an overdue feed unfolds its card
+  if(typeof syncActiveMode==="function"&&!freshnessCheck._inActive){ freshnessCheck._inActive=true; try{ syncActiveMode(); }finally{ freshnessCheck._inActive=false; } }
   if(renderTheCall._comfortAllowed!=null&&renderTheCall._comfortAllowed!==briefingComfortAllowed()) renderTheCall();
   renderNwsMessages();
 }
@@ -1228,6 +1229,44 @@ function drawMcdPolygons(){
     mcdLayer.bringToBack();   // under the warnings: a watch-likely outline must never cover a warning
   }catch(e){ mcdLayer=null; }
 }
+/* Storm reports: rows from stormReportRows(), false for an outage, null to clear. Dots on the radar
+   use the same rows, so a report is in the list exactly when it is on the map. */
+var lastReports=[], lsrLayer=null;
+var LSR_TONE={danger:"#d6492b",hail:"#2b7bd6",flood:"#1f9e89",wind:"#7a6f9b",other:"#6b6f78"};
+function lsrAgo(t){
+  var m=Math.max(0,Math.round((Date.now()-t)/60000));
+  return m<1?"just now":m<60?m+" min ago":Math.floor(m/60)+" h "+(m%60)+" min ago";
+}
+function renderStormReports(rows){
+  lastReports=rows||[];
+  var el=document.getElementById("reports");
+  if(el){
+    if(rows===false) el.innerHTML='<div class="empty">Storm reports unavailable. <a href="https://mesonet.agron.iastate.edu/lsr/#LSX/-180/0" target="_blank" rel="noopener">Open IEM ↗</a></div>';
+    else if(rows===null) el.innerHTML='<div class="loading">Checking storm reports…</div>';
+    else if(!rows.length) el.innerHTML='<p class="reports-none">No reports from the St. Louis office in the last 3 hours.</p>';
+    else el.innerHTML='<ol class="lsr-list">'+rows.map(function(r){
+      var where=[r.city,r.county?r.county+" Co.":"",r.st].filter(Boolean).join(", ");
+      var near=r.mi!=null?(r.mi<1?"under 1 mi":Math.round(r.mi)+" mi "+degToCompass(r.deg)):"";
+      return '<li class="lsr-row"><span class="lsr-k" style="--lsr:'+LSR_TONE[r.kind.tone]+'" aria-hidden="true">'+esc(r.kind.k)+'</span>'
+        +'<span class="lsr-body"><b>'+esc(r.kind.label)+(r.mag?' · '+esc(r.mag):'')+'</b> '+esc(where)
+        +(near?' <span class="lsr-near">'+esc(near)+' of you</span>':'')
+        +(r.source?'<span class="lsr-src">'+esc(r.source)+(r.remark?' · '+esc(r.remark):'')+'</span>':'')+'</span>'
+        +'<time class="lsr-t" datetime="'+new Date(r.time).toISOString()+'">'+esc(weatherTime(r.time,{hour:"numeric",minute:"2-digit"}))+'<span class="sr"> CT, '+esc(lsrAgo(r.time))+'</span></time></li>';
+    }).join("")+'</ol>';
+  }
+  drawStormReports();
+}
+function drawStormReports(){
+  if(!rvMap||typeof L==="undefined") return;
+  if(lsrLayer){ rvMap.removeLayer(lsrLayer); lsrLayer=null; }
+  if(!lastReports.length) return;
+  try{
+    lsrLayer=L.layerGroup(lastReports.map(function(r){
+      return L.circleMarker([r.lat,r.lon],{radius:7,color:"#0b0f16",weight:2,fillColor:LSR_TONE[r.kind.tone],fillOpacity:1,pane:"overlayPane"})
+        .bindTooltip(esc(r.kind.label+(r.mag?" · "+r.mag:"")+" — "+(r.city||"")+", "+weatherTime(r.time,{hour:"numeric",minute:"2-digit"})+" CT"),{className:"stn-tip",direction:"top"});
+    })).addTo(rvMap);
+  }catch(e){ lsrLayer=null; }
+}
 function renderMcd(list){
   lastMcds=list||[];
   lastMcds.sort(function(a,b){ return (b.hits?1:0)-(a.hits?1:0) || b.num-a.num; });
@@ -1564,6 +1603,7 @@ function renderBriefingStatus(){
   el.textContent=notes.join(" "); el.hidden=!notes.length;
 }
 function renderTheCall(){
+  if(typeof syncActiveMode==="function") syncActiveMode();   // every alert repaint ends here
   var card=document.getElementById("callCard"), row=document.getElementById("callRow");
   if(!card||!row) return;
   var now=new Date(), H=bottomLineHours(forecastWindowHours(smart.hourlyAll,24,Date.now()));

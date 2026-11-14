@@ -1900,6 +1900,43 @@ async function checkGridLoaderIsolation() {
   check('outlook: developing drought is elevated',ol.drought(-1,'Development','').value,'Drought developing');
 }
 
+/* The storm layout: only covering convective or flash-flood warnings switch the page; it holds
+   30 minutes after the last one and never drops on an alert outage. */
+{
+  const L=name=>lift(new RegExp('^function '+name+'\\([^\\n]*\\)\\{[\\s\\S]*?^\\}','m'),name+'()');
+  const am=new Function([lift(/^var ACTIVE_HOLD_MS=.*$/m,'ACTIVE_HOLD_MS'),lift(/^var LSR_KINDS=\[[\s\S]*?^\];/m,'LSR_KINDS'),
+    ...['activeModeTrigger','activeModeNext','lsrKind','lsrDistance','stormReportRows'].map(L)].join('\n')
+    +';return {trigger:activeModeTrigger,next:activeModeNext,rows:stormReportRows};')();
+  const t0=Date.parse('2026-05-20T22:00:00Z'), H=3600000;
+  const tor={event:'Tornado Warning',family:'convective',level:'emergency',ends:t0+H};
+  check('storm layout: covering tornado warning triggers',am.trigger(tor,t0),'Tornado Warning');
+  check('storm layout: flash flood warning triggers',am.trigger({event:'Flash Flood Warning',family:'flood',level:'warning',ends:t0+H},t0),'Flash Flood Warning');
+  check('storm layout: river flood warning does not',am.trigger({event:'Flood Warning',family:'flood',level:'warning',ends:t0+H},t0),'');
+  check('storm layout: winter storm warning does not',am.trigger({event:'Winter Storm Warning',family:'winter',level:'warning',ends:t0+H},t0),'');
+  check('storm layout: a watch does not',am.trigger({event:'Tornado Watch',family:'convective',level:'watch',ends:t0+H},t0),'');
+  check('storm layout: an expired warning does not',am.trigger(tor,t0+2*H),'');
+  const on=am.next({},tor,t0,true);
+  check('storm layout: enters on a covering warning',[on.active,on.event].join(),'true,Tornado Warning');
+  const held=am.next(on,null,t0+20*60000,true);
+  check('storm layout: holds after the warning ends',[held.active,held.holding,held.until].join(),'true,true,'+(t0+30*60000));
+  check('storm layout: releases after the hold',am.next(held,null,t0+31*60000,true).active,false);
+  check('storm layout: an alert outage never releases it',am.next(on,null,t0+5*H,false).active,true);
+  check('storm layout: an outage alone never enters it',am.next({},null,t0,false).active,false);
+  const fc={features:[
+    {properties:{wfo:'LSX',typetext:'HAIL',magnitude:1.75,unit:'INCH',valid:new Date(t0-20*60000).toISOString(),lat:38.8,lon:-90.7,city:'Wentzville'}},
+    {properties:{wfo:'LSX',typetext:'TORNADO',magnitude:'',valid:new Date(t0-5*60000).toISOString(),lat:38.9,lon:-90.8,city:'Foristell'}},
+    {properties:{wfo:'SGF',typetext:'HAIL',valid:new Date(t0-5*60000).toISOString(),lat:37,lon:-93,city:'Elsewhere'}},
+    {properties:{wfo:'LSX',typetext:'HAIL',valid:new Date(t0-4*H).toISOString(),lat:38.8,lon:-90.7,city:'Old'}},
+    {properties:{wfo:'LSX',typetext:'HAIL',valid:'not a time',lat:38.8,lon:-90.7,city:'Broken'}}
+  ]};
+  const rows=am.rows(fc,t0,{lat:38.79,lon:-90.85});
+  check('storm reports: only recent LSX reports, newest first',rows.map(r=>r.city).join(),'Foristell,Wentzville');
+  check('storm reports: tornado reads as a tornado',rows[0].kind.label,'Tornado');
+  check('storm reports: hail keeps its size',rows[1].mag,'1.75 INCH');
+  check('storm reports: distance is about 8 miles east',[Math.round(rows[1].mi),Math.round(rows[1].deg/10)*10].join(),'8,90');
+  check('storm reports: a malformed response is not an empty list',am.rows({},t0,null),null);
+}
+
 checkLiveFeedFailures().then(checkSpcThreatProducts).then(checkForecastRefreshFailure).then(checkGridLoaderIsolation).then(() => {
   if (failed) {
     console.error(`\n${failed} logic test(s) failed`);
