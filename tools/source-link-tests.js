@@ -55,6 +55,9 @@ async function contracts(page){
   await Promise.all(animations.filter(a=>Number.isFinite(a.effect.getComputedTiming().endTime))
    .map(a=>a.finished.catch(()=>{})));
  });
+ // Calm outlook cards fold behind the outlook row; a reader reaches their links through its cells.
+ for(const id of await page.locator('#outlookCells .ol-cell[aria-expanded="false"]').evaluateAll(cs=>[...new Set(cs.map(c=>c.getAttribute('aria-controls')))]))await page.locator('#outlookCells [aria-controls="'+id+'"]').first().click();
+ await page.evaluate(()=>layoutMasonry());
  for(const [selector,url,label] of expected){
   const a=page.locator(selector);
   assert.equal(await a.count(),1,selector);

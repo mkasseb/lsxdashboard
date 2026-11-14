@@ -681,8 +681,9 @@ band when present. Incomplete, expired or failed model guidance remains visible 
 Precipitation events follow the chart and retain accumulation-period caveats; a verified dry
 forecast becomes one sentence. Snapshot v25 retires older hourly summary markup.
 
-Healthy feed check/source clocks move into a per-card Sources & updates disclosure. Alerts retain
-their visible check time. Loading, partial, overdue, unavailable and saved states stay outside the
+Healthy feed check/source clocks move into one footer disclosure, **Sources & freshness**
+(superseding the per-card Sources & updates panels; see "One outlook row, one freshness line"
+below). Alerts retain their visible check time. Loading, partial, overdue, unavailable and saved states stay outside the
 closed source disclosure and move back inside only after validation succeeds. Observation labels
 identify the actual station by name and code; selected-town forecasts keep their own attribution.
 
@@ -807,9 +808,11 @@ band and the reparenting that served them). The page is now a stack of bands pla
    1000px, where it spans the page; beside radar it stacks.
 3. **Worth a look today** (`#attention`): empty and hidden on an ordinary day. See below.
 4. **Hourly | Seven-day**, one row on desktop.
-5. **NWS Key Messages | Forecast discussion**, one row on desktop. Both come from the same office
+5. **Outlook row** (`#outlookCard`): today to next season in one row. See "One outlook row, one
+   freshness line" below.
+6. **NWS Key Messages | Forecast discussion**, one row on desktop. Both come from the same office
    product, so they sit together instead of a screen apart.
-6. **Around your area**: the remaining context, packed by the existing masonry.
+7. **Around your area**: the remaining context, packed by the existing masonry.
 
 No script moves cards between breakpoints any more, so `initPlanningLayout()` and
 `layoutPlanningContext()` are gone, along with the transparent-container pointer workaround they
@@ -847,3 +850,97 @@ The asymmetry is deliberate: a failure can never look like an all-clear, and it 
 either. AQI already followed this rule (its card only appears above 100), so it is unchanged.
 `tools/layout-band-tests.js` (formerly the planning-gap test) checks that bands stack without
 overlap or dead space and that packed context never overlaps a card.
+
+## November 2026: one outlook row, one freshness line
+
+Four cards each answered one slice of "is anything coming": Risk (today to day 3), Hazards (days
+3–14), Week Ahead (6–14 day leanings) and Drought (now to the season). On a calm day they spent
+about 1,000px to say nothing was. `#outlookCard` sits between the forecasts and the NWS text and
+gives each horizon one cell: Today–Day 3, Days 3–7, Days 8–14, 6–14 day leaning, Drought.
+
+The row fetches nothing. Each loader hands its own result to a pure summary
+(`outlookRiskSummary`, `outlookHazardSummary`, `outlookCpcSummary`, `outlookDroughtSummary` in
+`dashboard-context.js`) and then to `setOutlook()`, so a cell can never disagree with its card.
+Each summary returns a state (`calm`, `elevated`, `info`, `partial`, `unavailable`) and whether
+every input answered (`verified`).
+
+**Folding follows the calm rule's asymmetry.** Hazards, Week Ahead and Drought fold away (hidden,
+not packed) only when every cell they feed is verified and calm, or, for the CPC leanings, verified
+and complete. A missing layer, a failure, a restored snapshot that has not been re-checked yet, or
+anything elevated leaves the card open. A cell for a folded card says "Show card" and opens it in
+place. A card opened that way stays open until the location changes. The Risk card never folds:
+its calm form is already one line plus the category explainer, and it is the card `setAttention()`
+promotes when a category is elevated, so its cell only jumps to it. General storms keep the risk
+cell `partial`. They are not severe, but "nothing elevated" with a thunderstorm in the forecast
+would read wrong.
+
+**One freshness line.** The per-card Sources & updates panels (about a dozen) are gone. Each
+feed's `#fresh-*` line still exists with the same text and `data-state`; `freshnessCheck()` now
+moves the healthy ones (ready or on demand) into `#sourcesList` in the footer's **Sources &
+freshness** disclosure, whose summary is `#lastUpdate` plus a status dot. Loading, partial, overdue,
+unavailable and saved lines stay on their own card, visible, exactly as before. A problem belongs
+next to the data it affects. A healthy timestamp does not.
+
+## November 2026: the storm layout
+
+A visitor during a tornado warning needs the warning, then the radar, then what has been seen on
+the ground. The usual page puts radar beside Now and Your day, and on a phone it sits a screen
+below them. The storm layout (`html.lsx-active`) rearranges the page for that one case.
+
+**What switches it.** `activeModeTrigger()` in `weather-core.js`: the strongest alert covering this
+location (`callLocalAlert`, the same value Your day reads) is warning or emergency level *and* is
+convective or a Flash Flood Warning. A river Flood Warning, a Heat Warning or a Winter Storm Warning
+keeps the usual layout. Radar is not what those readers need first. `activeModeNext()` holds the
+layout 30 minutes after the last covering warning so a reissue does not flap the page, and it never
+releases while the alert feed is unhealthy: the bar says the end of the warning cannot be confirmed.
+An outage alone never enters it. In degraded flat mode (zones unresolved) every LSX alert counts as
+local, so a warning anywhere in the office's area switches the layout. That is the same fail-open
+choice the alert list makes.
+
+**What changes, and what does not.** The order of things is kept. Only what is big and what is
+folded changes:
+
+- Radar moves ahead of the Now stack *in the DOM* (`placeRadar()`), so tab and reading order match
+  the screen. The Leaflet instance survives the move; the move waits out fullscreen. Above 1000px
+  radar spans the band with a 560px viewport, and Now, storm reports and Your day share the row
+  beneath. Now gets its own size container there, because a third of the band is not the width the
+  `nowstack` container query assumes.
+- **Storm reports** (`#reportsCard`): IEM Local Storm Reports for the last 3 hours. The endpoint
+  filters by state, not office, so the request is MO and IL and `stormReportRows()` keeps only
+  `wfo === "LSX"`, newest first, with distance and bearing from the selected point. The same rows
+  draw dots on the radar (`drawStormReports()`). The feed is deferred (`deferredFeeds.reports`): a
+  calm day makes no request, and leaving the layout stops the polling.
+- The 7-day forecast, the outlook row and the context pack fold to `#activeFold`, one row of
+  buttons. Each button puts its section back; a jump-bar link into a folded section does the same
+  before the browser scrolls. Alerts, hourly, NWS text and anything the calm rule promoted to
+  `#attention` stay where they are.
+- `#activeBar` says why the page looks different and offers **Show the usual layout**. That choice
+  lasts until the episode ends; the next covering warning re-arms the layout.
+
+**Review fixes (Codex, before merge).** Each of these was a state that could outlive its evidence:
+
+- The fold button's outlook summary reads `outlookCurrent()`, the same freshness-aware value as
+  the hidden cell, so an overdue Risk check says so on the button too.
+- A summary folds its card only while its feed is ready (or refreshing after a ready check). A
+  `partial`, `unavailable`, `stale` or `saved` feed unfolds it.
+- A storm-reports response that lands after the reader leaves the layout is dropped
+  (`feedRequested("reports")` is checked before painting, and again after `feedUpdate()`, which
+  re-synchronizes the layout and can itself end it when a hold runs out), and a location reset
+  clears reports and map dots whether or not the layout was on.
+- An LSX record with no readable time or coordinates is counted, not dropped, and so is a feature
+  with no office at all, since it could be LSX's. Any unreadable
+  record leaves the feed `partial`; if nothing else is readable the card says the reports
+  "could not be read", never "No reports". Coordinates must be present and regional, so a null
+  pair is not plotted at (0, 0). Past 12 rows the card says how many it is showing.
+- During an alert outage a retained warning neither renews the 30-minute hold nor lets the bar
+  claim it is current; the outage branch runs first.
+- `layoutMasonry()` skips a hidden pack (zero width) instead of writing zero-width cards, and the
+  pack is laid out synchronously when the storm layout ends or the context fold opens, so it
+  never shows a frame of squeezed cards on its way back.
+- "Show card" opens the folded context pack before scrolling to a card inside it, fold buttons
+  move focus to what they reveal, and a radar move deferred by fullscreen is applied when
+  fullscreen closes.
+
+There is no auto-play of the radar loop and no camera change. A moving map nobody asked for costs
+bandwidth on a phone in a storm, and `prefers-reduced-motion` readers would need a separate path.
+The loop button is right under the map.

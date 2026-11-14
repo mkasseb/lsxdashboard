@@ -25,6 +25,7 @@ The scripts retain explicit load order in `index.html` and share the existing gl
 | Bounded map-library bootstrap, diagnostics and retry | `assets/map-runtime.js` |
 | Location generations, search, favorites and sharing | `assets/location-controls.js` |
 | Saved-view provenance, TTLs and sanitization | `assets/saved-view.js` |
+| Outlook row, storm layout and context demand | `assets/dashboard-context.js` |
 | Climate and current-condition context | `assets/climate-view.js` |
 | Daily/hourly forecast UI and context | `assets/forecast-view.js`, `assets/dashboard-context.js` |
 | Model ingestion and selected-point presentation | `assets/model-data.js`, `assets/model-worker.js`, `assets/forecast-range.js`, `assets/hourly-range.js` |
@@ -108,7 +109,7 @@ final startup step so controls cannot call dependencies that are still downloadi
 compact phone hourly planning, source disclosures with visible outage/expiry states, and radar
 loading on viewport approach, direct navigation, station demand or explicit controls. Radar libraries,
 styles and tiles wait until demand; browsers without IntersectionObserver load maps immediately.
-Healthy check/source timestamps remain under **Sources & updates**; warnings stay outside it.
+Healthy check/source timestamps sit in the footer's **Sources & freshness** panel; warnings stay on their own card.
 The Now card identifies its observation station by name, while the hourly card identifies the
 selected town's NWS point forecast. Model settings follow the chart; model failures remain visible.
 It also covers
@@ -193,6 +194,7 @@ All feeds are keyless. The sources have different attribution and reuse terms; s
 | `data.rcc-acis.org` | 1991–2020 normals, daily records, rankings, dry streaks |
 | Open-Meteo | Air quality from Copernicus Atmosphere Monitoring Service (CAMS), UV index, and the location geocoder using GeoNames data |
 | `gibs.earthdata.nasa.gov` (WMTS) | GOES-19 ABI GeoColor satellite tiles, in the map's own projection |
+| `mesonet.agron.iastate.edu` (Iowa Environmental Mesonet) | Local Storm Reports for the St. Louis office, requested only while the storm layout is on |
 
 Basemap via OpenFreeMap: © OpenMapTiles, data from OpenStreetMap contributors.
 

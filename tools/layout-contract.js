@@ -1,11 +1,12 @@
 'use strict';
 const assert=require('node:assert/strict');
 // Serialize this function into either fixture or live-preview pages; inspect rendered boxes.
-// The page is a stack of bands (Now + radar, promoted cards, forecasts, NWS text, context pack);
+// The page is a stack of bands (Now + radar, promoted cards, forecasts, outlook row, NWS text,
+// context pack);
 // CSS places them, and only the context pack is packed by script.
 function layoutGeometry(){
  const box=e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,right:r.right,bottom:r.bottom};};
- const bands=['.top-band','#attention','.planning-grid','.nws-band'].map(s=>document.querySelector(s)).filter(e=>e&&!e.hidden).map(e=>({name:e.id||e.className,...box(e)}));
+ const bands=['.top-band','#attention','.planning-grid','#outlookCard','.nws-band'].map(s=>document.querySelector(s)).filter(e=>e&&!e.hidden).map(e=>({name:e.id||e.className,...box(e)}));
  return {width:innerWidth,scrollWidth:document.documentElement.scrollWidth,bands,heading:box(document.querySelector('.railhead')),masonry:box(document.querySelector('.masonry')),cards:[...document.querySelectorAll('.card')].map(e=>({id:e.id,...box(e)})).filter(r=>r.width&&r.height),context:[...document.querySelectorAll('.masonry>.card')].map(e=>({id:e.id,...box(e)})).filter(r=>r.width&&r.height)};
 }
 function assertLayout(g){

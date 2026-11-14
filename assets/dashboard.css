@@ -1836,11 +1836,6 @@ a.cpc-item:hover{border-color:var(--accent)}
 .nbm-hourly-controls details p{margin:8px 0}
 
 /* Put weather first; all original check and source clocks remain inspectable. */
-.feed-sources{margin-top:10px;border-top:1px solid var(--border);font-size:var(--fs-xs);color:var(--muted)}
-.feed-sources > summary{display:list-item;cursor:pointer;min-height:44px;padding:12px 0;box-sizing:border-box;font-weight:600}
-.feed-sources > summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.feed-source-list{padding-bottom:8px}
-.feed-source-list .stn{margin:4px 0 8px}
 .hourly-forecast-source{font-size:var(--fs-sm);color:var(--muted);line-height:1.5;margin:0 0 12px}
 .h24-range-key{font-size:var(--fs-xs);color:var(--muted);margin:0 0 6px;line-height:1.5}
 #h24Card .precip-details{margin:12px 0 0;padding:12px 0 0;border-bottom:0;border-top:1px solid var(--border)}
@@ -1994,7 +1989,7 @@ header .locsearch #locSearch{background:var(--panel)}
 
 /* --- Numerals, clocks and source lines are set in mono --- */
 .feed-status,.imgcap,.radar-time,.radar-ctl .rc-t,.nws-message-meta,.hourly-forecast-source,
-.feed-sources>summary,.day .dt,.day .dnd,.rlink .rval,.h24-pill b,.resource-note,.brief-author,.stn{
+.day .dt,.day .dnd,.rlink .rval,.h24-pill b,.resource-note,.brief-author,.stn{
   font-family:var(--fm);font-variant-numeric:normal}
 .feed-status,.imgcap,.nws-message-meta,.hourly-forecast-source,.resource-note,.brief-author{letter-spacing:-.01em}
 .day .dn{font-family:var(--fd);font-size:20px;font-weight:600;letter-spacing:.015em;line-height:1.1}
@@ -2128,3 +2123,100 @@ body.radar-full #radarCard#radarCard{background:var(--bg);border:0;
   .now-stack #current{grid-template-columns:minmax(0,1fr)}
   #currentCard .cc-main,#currentCard .cc-today,#currentCard .cc-grid,#currentCard .cc-expo{grid-column:1;grid-row:auto}
 }
+
+/* Outlook row: one cell per horizon. Hairline grid lines come from the 1px gap over the border
+   colour, so the lines stay right however many columns the width allows. Green only for a
+   verified calm cell, severity colour only for an elevated one; everything else stays text. */
+.outlook-card h2{justify-content:flex-start;align-items:baseline;gap:12px}
+.outlook-sub{font-family:var(--fm);font-size:var(--fs-2xs);font-weight:400;color:var(--muted);letter-spacing:var(--ls-eyebrow);text-transform:uppercase}
+.ol-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden}
+.ol-cell{font:inherit;text-align:left;color:var(--text);background:var(--panel);border:0;margin:0;padding:10px 12px;
+  display:flex;flex-direction:column;gap:3px;min-height:44px;min-width:0;cursor:pointer}
+.ol-cell:hover{background:var(--panel-2)}
+.ol-cell:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.ol-t{font-family:var(--fm);font-size:var(--fs-2xs);letter-spacing:var(--ls-eyebrow);text-transform:uppercase;color:var(--muted)}
+.ol-v{font-weight:600;font-size:var(--fs-md);line-height:1.3;overflow-wrap:anywhere}
+.ol-s{font-size:var(--fs-2xs);color:var(--muted);line-height:1.35}
+.ol-cell[data-state="calm"] .ol-v{color:var(--good)}
+.ol-cell[data-state="calm"] .ol-v::before{content:"\2713\00a0"}
+.ol-cell[data-state="elevated"]{background:color-mix(in srgb,var(--sev) 9%,var(--panel))}
+.ol-cell[data-state="elevated"] .ol-v{color:var(--sev)}
+.ol-cell:is([data-state="loading"],[data-state="partial"],[data-state="unavailable"]) .ol-v{color:var(--muted);font-weight:500}
+.ol-cell[aria-expanded="false"] .ol-s::after{content:"Show card";display:block;margin-top:2px;color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+.ol-note{margin:8px 0 0;font-size:var(--fs-2xs);color:var(--muted)}
+.ol-note:empty{display:none}
+.masonry>.card[hidden]{display:none}
+@media(max-width:760px){
+  .ol-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ol-cell:last-child{grid-column:1/-1}
+}
+
+/* The page's one freshness line. Left-aligned and set apart from the credits below it. */
+.source-panel{text-align:left;margin:0 0 12px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.source-panel>summary{cursor:pointer;min-height:44px;display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;list-style:none}
+.source-panel>summary::-webkit-details-marker{display:none}
+.source-panel>summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.sp-dot{width:8px;height:8px;border-radius:50%;background:var(--muted);flex:none}
+.sp-dot[data-state="ready"]{background:var(--good)}
+.sp-dot[data-state="partial"]{background:var(--warn)}
+.sp-dot[data-state="unavailable"]{background:var(--danger)}
+.sp-more{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+.source-panel[open] .sp-more::after{content:" \25B4"}
+.sp-list{display:grid;gap:2px;padding:6px 0 4px 18px;line-height:1.6}
+.sp-list .feed-status,.sp-list .stn{margin:0}
+
+/* ---- Storm layout (html.lsx-active, applied by applyActiveMode) ----
+   Radar spans the band ahead of Now and gets a taller fixed viewport; Now, storm reports and Your
+   day share the row beneath it. Below 1001px the band is already one column, so the DOM move
+   alone puts radar first. The 7-day, outlook row and context pack fold to #activeFold. */
+.active-bar[hidden],.active-fold[hidden]{display:none}
+.active-bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 12px;padding:10px 14px;border:1px solid var(--danger);
+  border-radius:var(--r-md);background:color-mix(in srgb,var(--danger) 8%,var(--panel));font-size:var(--fs-md);font-weight:600}
+.active-dot{width:9px;height:9px;border-radius:50%;background:var(--danger);flex:none}
+#activeBarText{flex:1 1 260px;min-width:0}
+.active-toggle{font:inherit;font-weight:600;font-size:var(--fs-sm);color:var(--text);background:var(--panel);border:1px solid var(--border);
+  border-radius:8px;padding:8px 12px;min-height:44px;cursor:pointer}
+.active-toggle:focus-visible,.fold-chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media(min-width:1001px){
+  :root.lsx-active{--radar-h:562px}
+  .lsx-active .top-band{grid-template-columns:minmax(0,1fr)}
+  .lsx-active .now-stack{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+}
+@media(min-width:681px) and (max-width:1000px){
+  .lsx-active .now-stack{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+  .lsx-active .now-stack #glanceCard{grid-column:1/-1}
+}
+/* In three columns Now is one of them, so it sizes by its own card, not the whole stack. */
+.lsx-active #currentCard{container:nowcard / inline-size}
+@container nowcard (max-width:600px){
+  .lsx-active #current{grid-template-columns:minmax(0,1fr)}
+  .lsx-active #currentCard .cc-main,.lsx-active #currentCard .cc-today,.lsx-active #currentCard .cc-grid,.lsx-active #currentCard .cc-expo{grid-column:1;grid-row:auto}
+}
+.lsx-active:not(.show-forecast) #forecastCard,
+.lsx-active:not(.show-outlook) #outlookCard,
+.lsx-active:not(.show-context) .railhead,
+.lsx-active:not(.show-context) #contextPack,
+.lsx-active:not(.show-context) #moreWeatherResources{display:none}
+.lsx-active:not(.show-forecast) .planning-grid{grid-template-columns:minmax(0,1fr)}
+.active-fold{display:flex;flex-direction:column;gap:10px;border-top:2px solid var(--text);padding-top:10px}
+.active-fold h2{font-family:var(--fd);font-size:22px;font-weight:600;letter-spacing:.015em;margin:0}
+.active-fold-chips{display:flex;flex-wrap:wrap;gap:8px}
+.fold-chip{font:inherit;font-size:var(--fs-sm);color:var(--text);background:var(--panel);border:1px solid var(--border);border-radius:8px;
+  padding:8px 12px;min-height:44px;cursor:pointer;text-align:left}
+.fold-chip span{color:var(--muted)}
+.fold-chip[aria-expanded="true"]{display:none}
+
+/* Storm reports */
+.reports-sub{font-family:var(--fm);font-size:var(--fs-2xs);font-weight:400;color:var(--muted);letter-spacing:var(--ls-eyebrow);text-transform:uppercase;margin-right:auto}
+#reportsCard h2{justify-content:flex-start;align-items:baseline;flex-wrap:wrap;gap:4px 12px}
+.lsr-list{list-style:none;margin:0;padding:0;display:grid}
+.lsr-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:10px;align-items:start;padding:8px 0;border-top:1px solid var(--border);font-size:var(--fs-md)}
+.lsr-row:first-child{border-top:0;padding-top:0}
+.lsr-k{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--lsr);color:#fff;font:700 11px var(--fm)}
+.lsr-body{min-width:0;overflow-wrap:anywhere}
+.lsr-near{color:var(--text);font-weight:600;white-space:nowrap}
+.lsr-src{display:block;font-size:var(--fs-2xs);color:var(--muted);margin-top:2px}
+.lsr-t{font-family:var(--fm);font-size:var(--fs-2xs);color:var(--muted);white-space:nowrap}
+.reports-none{margin:0;color:var(--muted)}
+.reports-cap{margin:8px 0 0;font-size:var(--fs-2xs);color:var(--muted)}
+.reports-note{margin:10px 0 0;font-size:var(--fs-2xs);color:var(--muted)}

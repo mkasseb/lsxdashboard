@@ -45,6 +45,7 @@ var FEEDS={
   climate:{label:"Climate",card:"climateCard",load:"loadClimate",every:6*3600000,age:12*3600000,local:true,reset:{cnToday:"",cnGrid:"Loading departures…",cnStation:"…",cnSrc:""},snapshot:[{id:"cnToday",ttl:12*3600000},{id:"cnGrid",ttl:12*3600000},{id:"cnStation",ttl:12*3600000}]},
   context:{label:"Records",card:"climateCard",load:"loadClimateContext",every:6*3600000,age:12*3600000,local:true,reset:{cnCtx:""},snapshot:[{id:"cnCtx",ttl:12*3600000}]},
   stations:{label:"Station plot",card:"obsCard",load:"loadStationPlot",every:12*60000,age:24*60000},
+  reports:{label:"Storm reports",card:"reportsCard",load:"loadReports",every:2*60000,age:6*60000,local:true,reset:{reports:"Checking storm reports…"}},
   qpf:{load:"loadQpf",every:60*60000,local:true,tracked:false,failure:"loader-owned",reset:{qpf7:""}},
   radar:{load:"refreshRadarLayer",every:4*60000,tracked:false,failure:"loader-owned"},
   satellite:{load:"refreshSatLayer",every:10*60000,tracked:false,failure:"loader-owned"},
@@ -871,6 +872,7 @@ function loadSpc(){
     // severe probability promotes the card under radar; zeros and gaps leave it in context.
     var leveled=[0,1,2].some(function(i){return spcRisk(r[i]).lvl>0||eroRisk(r[3+i]).lvl>0||fireRisk(r[6+i]).lvl>0;});
     syncRiskBreakdown(r.slice(0,9).every(function(v){return v===0;})&&!elevated,!complete,leveled||elevated);
+    if(typeof setOutlook==="function") setOutlook("risk",outlookRiskSummary(r,threats));
     if(typeof renderTheCall==="function") renderTheCall();   // outlook levels can add/remove a verdict pill
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
@@ -879,6 +881,7 @@ function loadSpc(){
     callRisk=null;                                           // never let a stale outlook keep a pill alive
     renderSpcThreats(null);
     syncRiskBreakdown(false);
+    if(typeof setOutlook==="function") setOutlook("risk",outlookRiskSummary(null));
     if(typeof renderTheCall==="function") renderTheCall();
   }).finally(function(){
     signal.removeEventListener("abort",abort);
@@ -951,6 +954,29 @@ function loadMcd(){
   });
 }
 
+/* Local Storm Reports. The IEM endpoint filters by state, not office, so the request is the two
+   states this office covers and stormReportRows() keeps only LSX's own reports. Requested only
+   while the storm layout is on (deferredFeeds.reports). */
+var LSR_URL="https://mesonet.agron.iastate.edu/geojson/lsr.geojson?states=MO,IL&hours=3";
+function loadReports(){
+  var fresh=locGuard("reports");
+  return getJSON(LSR_URL,{},locSignal()).then(function(fc){
+    // Leaving the storm layout ends demand: a response that lands afterwards must not repaint.
+    if(!fresh()||!feedRequested("reports")) return;
+    var rows=stormReportRows(fc,Date.now(),current);
+    if(!rows) throw new Error("Invalid storm reports");
+    feedUpdate("reports",rows.invalid?"partial":"ready");
+    // feedUpdate() re-synchronizes the layout, which can end demand (a hold expiring now).
+    if(!fresh()||!feedRequested("reports")) return;
+    renderStormReports(rows);
+  }).catch(function(e){
+    if(isAbort(e)||!fresh()||!feedRequested("reports")) return;
+    feedUpdate("reports","unavailable");
+    if(!fresh()||!feedRequested("reports")) return;
+    renderStormReports(false);
+  });
+}
+
 function loadCpc(){
   var fresh=locGuard("cpc");
   var el=document.getElementById("cpc"); if(!el) return Promise.resolve();
@@ -960,6 +986,7 @@ function loadCpc(){
     var values=rs.map(function(r){return r.status==="fulfilled"?cpcParse(r.value):null;});
     var known=values.filter(Boolean).length;
     feedUpdate("cpc",known===4?"ready":known?"partial":"unavailable");
+    if(typeof setOutlook==="function") setOutlook("cpc",outlookCpcSummary(values));
     function val(i){ return values[i]; }
     // Each period page contains both temperature and precipitation maps with their legends.
     el.innerHTML='<span id="cpcSourceHint" class="sr-only">CPC outlook (opens in a new tab)</span><div class="cpc-grid">'+[
@@ -976,6 +1003,7 @@ function loadCpc(){
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
     feedUpdate("cpc","unavailable");
+    if(typeof setOutlook==="function") setOutlook("cpc",outlookCpcSummary(null));
     el.innerHTML='<div class="empty">CPC outlooks unavailable. <a href="https://www.cpc.ncep.noaa.gov/products/predictions/610day/" target="_blank" rel="noopener">Open CPC \u2197</a></div>';
   });
 }
@@ -1015,6 +1043,17 @@ function loadDrought(){
     }
     outlookRow("drMonth",  r[1]);
     outlookRow("drSeason", r[2]);
+    if(typeof setOutlook==="function"){
+      var dmNow=null;
+      if(r[0].status==="fulfilled"){ dmNow=-1; (r[0].value.features||[]).forEach(function(f){ var dm=f.attributes&&f.attributes.DM; if(dm!=null&&dm>dmNow) dmNow=dm; }); }
+      var lookAhead=function(rs){
+        if(rs.status!=="fulfilled") return null;
+        var o="";
+        (rs.value.features||[]).forEach(function(f){ var v=f.attributes&&f.attributes.outlook; if(v&&v!=="No_Drought") o=v; });
+        return o;
+      };
+      setOutlook("drought",outlookDroughtSummary(dmNow,lookAhead(r[1]),lookAhead(r[2])));
+    }
   });
 }
 
@@ -1046,7 +1085,12 @@ function loadHazards(){
         +(notes.length?'<span class="hz-fc">'+esc(notes.join(" · "))+'</span>':'')
         +'</span></div>';
     }
-    el.innerHTML=block("Days 3–7",d37,all.slice(0,3).every(function(r){return r.status==="fulfilled";}))+block("Days 8–14",d814,all.slice(3,6).every(function(r){return r.status==="fulfilled";}));
+    var ok37=all.slice(0,3).every(function(r){return r.status==="fulfilled";}), ok814=all.slice(3,6).every(function(r){return r.status==="fulfilled";});
+    el.innerHTML=block("Days 3–7",d37,ok37)+block("Days 8–14",d814,ok814);
+    if(typeof setOutlook==="function"){
+      setOutlook("hz37",outlookHazardSummary(d37,ok37,all.slice(0,3).some(function(r){return r.status==="fulfilled";}),"WPC hazards outlook"));
+      setOutlook("hz814",outlookHazardSummary(d814,ok814,all.slice(3,6).some(function(r){return r.status==="fulfilled";}),"CPC hazards outlook"));
+    }
     // issuance freshness: the newest file date across whatever layers answered
     var issued=0;
     all.forEach(function(rs){
@@ -1063,6 +1107,7 @@ function loadHazards(){
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
     feedUpdate("hazards","unavailable");
+    if(typeof setOutlook==="function"){ setOutlook("hz37",outlookHazardSummary(null,false,false,"WPC hazards outlook")); setOutlook("hz814",outlookHazardSummary(null,false,false,"CPC hazards outlook")); }
     el.innerHTML='<div class="empty">Hazards outlook unavailable. <a href="https://www.wpc.ncep.noaa.gov/threats/threats.php" target="_blank" rel="noopener">Open WPC Hazards ↗</a></div>';
   });
 }

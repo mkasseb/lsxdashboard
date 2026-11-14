@@ -165,6 +165,7 @@ async function open(c, width=390) {
     if(c.drought!=null&&u.href.includes('/USDM_current/'))return reply(features([{DM:c.drought}]));
     if(c.drought!=null&&u.href.includes('/cpc_drought_outlk/')&&u.pathname.includes('/query'))return reply(features([{outlook:'Persistence'}]));
     if(c.offline) return reply({error:'simulated outage'},503);
+    if(u.hostname==='mesonet.agron.iastate.edu')return c.reportsDown?reply({error:'storm reports outage'},503):reply({type:'FeatureCollection',features:(c.reports||[]).map(([typetext,minutes,lat,lon,magnitude,city,wfo='LSX'],i)=>({id:String(i),type:'Feature',properties:{wfo,typetext,magnitude:magnitude??'',unit:typetext==='HAIL'?'INCH':null,city,county:'St. Charles',st:'MO',source:'Trained Spotter',remark:'',valid:new Date(c.now-minutes*60000).toISOString(),lat,lon},geometry:{type:'Point',coordinates:[lon,lat]}}))});
     if(u.hostname==='air-quality-api.open-meteo.com'&&c.aqi!=null) return reply({current:{us_aqi:c.aqi,time:c.aqiMissingTime?undefined:(c.now-(c.aqiAgeHours||0)*H)/1000,pm2_5:75,pm10:90}});
     if(u.hostname==='api.open-meteo.com'&&c.uv!=null) return reply({hourly:{time:[c.now/1000,(c.now+H)/1000],uv_index:[c.uv,c.uv+1]},daily:{time:Array.from({length:7},(_,i)=>stamp(c.now+i*24*H).slice(0,10)),uv_index_max:Array(7).fill(c.uv+1)}});
     if(u.hostname==='api.water.noaa.gov'&&c.river){
@@ -361,7 +362,7 @@ async function main() {
     await run('quiet outlook stays compact and expands for elevated or missing categories',config('quiet outlook'),async session=>{
       const {page}=session, breakdown=page.locator('#riskBreakdown'), toggle=breakdown.locator('summary');
       await expectText(page,'#riskQuiet',/through day 3/);
-      const riskHome=()=>page.locator('#riskCard').evaluate(e=>e.parentElement.id||(e.parentElement.classList.contains('masonry')?'masonry':e.parentElement.className));
+      const riskHome=()=>page.locator('#riskCard').evaluate(e=>e.parentElement.classList.contains('masonry')?'masonry':e.parentElement.id||e.parentElement.className);
       assert.equal(await riskHome(),'masonry','A verified quiet outlook stays in context');
       assert(await page.locator('#attention').isHidden());
       assert(await page.locator('#spc').isHidden());
@@ -1230,6 +1231,10 @@ async function main() {
     },1280);
     for(const width of [320,390,1280])await run('individual context touch and layout '+width,config('individual context',{touch:true,aqi:35}),async({page})=>{
       assert.equal(await page.locator('#compactView').count(),0);
+      // Calm outlook cards fold behind the outlook row; a touch on their cell brings them back.
+      for(const id of ['droughtCard','cpcCard'])if(await page.locator('#'+id).evaluate(e=>e.hidden)){
+        await page.locator('#outlookCells [aria-controls="'+id+'"]').first().tap();assert(await page.locator('#'+id).isVisible(),id+' opens from its outlook cell on touch');
+      }
       for(const id of ['afdCard','obsCard','climateCard','droughtCard','cpcCard']){
         const toggle=page.locator('#'+id+' .context-toggle'),body=page.locator('#'+id+'Body');
         assert.equal(await toggle.getAttribute('aria-controls'),id+'Body');
@@ -1250,6 +1255,115 @@ async function main() {
       await noOverflow(page);await page.locator('#rsFull').tap();
       assert.equal(await page.evaluate(()=>document.activeElement.id),'rsFull');
     },width);
+    const stormReports=[['FUNNEL CLOUD',9,38.80,-90.88,'','2 W Lake St. Louis'],['HAIL',17,38.81,-90.85,1.75,'Wentzville'],['TSTM WND DMG',21,38.78,-90.70,'',"O'Fallon"],['HAIL',5,37.2,-93.3,1,'Springfield','SGF']];
+    for(const width of [390,1280])await run('storm layout follows a covering warning '+width,config('storm layout',{alerts:[alert('Tornado Warning',base),alert('Severe Thunderstorm Warning',base,true)],reports:stormReports}),async session=>{
+      const {page}=session;
+      await page.waitForFunction(()=>document.querySelectorAll('#reports .lsr-row').length===3);
+      assert(await page.evaluate(()=>document.documentElement.classList.contains('lsx-active')),'A covering Tornado Warning turns the storm layout on');
+      await expectText(page,'#activeBarText',/Tornado Warning covers this location/);
+      assert.deepEqual(await page.evaluate(()=>[...document.querySelector('.top-band').children].map(e=>e.id||e.className)),['radarCard','now-stack'],'Radar leads in the DOM, so reading and tab order match the screen');
+      await expectText(page,'#reports',/Funnel cloud.*Lake St. Louis.*of you/s);
+      assert(!/Springfield/.test(await page.locator('#reports').innerText()),'Only the St. Louis office reports');
+      for(const id of ['forecastCard','outlookCard','contextPack'])assert(await page.locator('#'+id).isHidden(),id+' folds during the warning');
+      for(const id of ['h24Card','callCard','alertsCard','activeFold'])assert(await page.locator('#'+id).isVisible(),id+' stays on the page');
+      await page.locator('#activeFoldChips [data-show="forecast"]').click();
+      assert(await page.locator('#forecastCard').isVisible(),'A fold chip puts its section back');
+      await page.evaluate(()=>document.querySelector('#jumpNav a[href="#riversCard"]').click());
+      assert(await page.locator('#contextPack').isVisible(),'A jump link into the folded context opens it');
+      await page.locator('#activeToggle').click();
+      assert(!(await page.evaluate(()=>document.documentElement.classList.contains('lsx-active'))),'The reader can switch back to the usual layout');
+      assert.deepEqual(await page.evaluate(()=>[...document.querySelector('.top-band').children].map(e=>e.id||e.className)),['now-stack','radarCard']);
+      assert(await page.locator('#reportsCard').isHidden());assert.equal(await page.locator('#activeToggle').innerText(),'Show the storm layout');
+      await page.evaluate(()=>loadAlerts());
+      assert(!(await page.evaluate(()=>document.documentElement.classList.contains('lsx-active'))),'The choice survives an alert refresh');
+      await page.locator('#activeToggle').click();
+      assert(await page.evaluate(()=>document.documentElement.classList.contains('lsx-active')));
+      session.change(config('storm over',{reports:stormReports}));await page.evaluate(()=>loadAlerts());
+      await expectText(page,'#activeBarText',/has ended.*stays until/);
+      assert(await page.evaluate(()=>document.documentElement.classList.contains('lsx-active')),'The layout holds after the warning ends');
+      await page.clock.runFor(31*60000);
+      await page.waitForFunction(()=>!document.documentElement.classList.contains('lsx-active'));
+      assert(await page.locator('#activeBar').isHidden());
+      assert.equal(await page.evaluate(()=>deferredFeeds.reports),false,'Storm reports stop polling with the layout');
+      assert(await page.locator('#forecastCard').isVisible());
+    },width);
+    await run('storm layout transitions keep every state honest',config('storm transitions',{alerts:[alert('Tornado Warning',base)],reports:stormReports}),async session=>{
+      const {page}=session;
+      await page.waitForFunction(()=>document.querySelectorAll('#reports .lsr-row').length===3);
+      // A fold button moves focus into what it reveals.
+      await page.locator('#activeFoldChips [data-show="outlook"]').focus();await page.keyboard.press('Enter');
+      assert.equal(await page.evaluate(()=>document.activeElement.id),'outlookTitle','Focus follows the revealed section');
+      // "Show card" reaches a card inside the folded context pack.
+      const cell=page.locator('#outlookCells .ol-cell[aria-expanded="false"]').first();
+      assert(await cell.count(),'This scenario needs a folded outlook card to open');
+      const id=await cell.getAttribute('aria-controls');await cell.click();
+      assert(await page.locator('#'+id).isVisible(),id+' is reachable from its cell during the storm layout');
+      assert(await page.evaluate(id=>document.getElementById(id).contains(document.activeElement),id),'Focus lands in the opened card');
+      // The visible fold summary carries the same overdue qualifier as the hidden cell.
+      await page.evaluate(()=>{feedChecks.risk.status='ready';feedChecks.risk.successAt=Date.now()-FEEDS.risk.age-1;freshnessCheck();});
+      await expectText(page,'#foldOutlook',/check overdue/);
+      await page.evaluate(()=>{feedChecks.risk.successAt=Date.now();freshnessCheck();});
+      // A reports response landing after the reader leaves the layout cannot repaint.
+      await page.evaluate(()=>{const job=loadReports();document.getElementById('activeToggle').click();return job;});
+      assert.equal(await page.evaluate(()=>lastReports.length),0,'No reports or dots after exit');
+      // Storm layout switched on while fullscreen was open takes effect when fullscreen closes.
+      // Fullscreen makes the rest of the page inert, so the switch arrives as a state change (as a new warning would).
+      await page.evaluate(()=>{setRadarFull(true);activeState.optOut=false;applyActiveMode();});
+      assert.deepEqual(await page.evaluate(()=>[...document.querySelector('.top-band').children].map(e=>e.id||e.className)),['now-stack','radarCard'],'Fullscreen defers the move');
+      await page.evaluate(()=>setRadarFull(false));
+      assert.deepEqual(await page.evaluate(()=>[...document.querySelector('.top-band').children].map(e=>e.id||e.className)),['radarCard','now-stack'],'Closing fullscreen applies it');
+      // An alert outage with the warning still retained: the bar says it cannot be confirmed.
+      session.change(config('storm alerts down',{alerts:[alert('Tornado Warning',base)],alertsDown:true,reports:stormReports}));
+      await page.evaluate(()=>{feedChecks.alerts.successAt=Date.now()-FEEDS.alerts.age-1;return loadAlerts();});
+      await expectText(page,'#activeBarText',/cannot be confirmed/);
+      assert(await page.evaluate(()=>document.documentElement.classList.contains('lsx-active')),'An outage keeps the storm layout');
+      // A location reset clears the old place's reports even when the layout is already off, so no
+      // exit cleanup runs: only the reset's own clear can empty them.
+      await page.evaluate(()=>{activeState.optOut=true;applyActiveMode();});
+      assert(!(await page.evaluate(()=>document.documentElement.classList.contains('lsx-active'))));
+      await page.evaluate(()=>renderStormReports([{kind:{k:'H',label:'Hail',tone:'hail'},type:'HAIL',mag:'',city:'Old',county:'',st:'',source:'',remark:'',time:Date.now(),lat:38.8,lon:-90.7,mi:1,deg:0}]));
+      assert.equal(await page.evaluate(()=>lastReports.length),1);
+      // The real order of a location change: the old place's alert state goes first, then the UI resets.
+      await page.evaluate(()=>{resetLocationState();clearLocationUI();});
+      assert.deepEqual(await page.evaluate(()=>[lastReports.length,deferredFeeds.reports,lsrLayer===null]),[0,false,true],'A location reset clears reports and dots without restarting demand');
+    },1280);
+    await run('unreadable storm reports are a gap, not an all-clear',config('bad reports',{alerts:[alert('Tornado Warning',base)],reports:[['HAIL',5,null,null,1,'Nowhere']]}),async session=>{
+      const {page}=session;
+      await page.waitForFunction(()=>/could not be read/.test(document.getElementById('reports').innerText));
+      assert(!/No reports/.test(await page.locator('#reports').innerText()));
+      assert.equal(await page.locator('#fresh-reports').getAttribute('data-state'),'partial');
+      assert(await page.locator('#reportsCard #fresh-reports').isVisible(),'The partial check stays on its card');
+      // A readable report beside an unreadable one: show the readable one and say one more could not be read.
+      session.change(config('mixed reports',{alerts:[alert('Tornado Warning',base)],reports:[['HAIL',5,null,null,1,'Nowhere'],['HAIL',8,38.81,-90.85,1,'Wentzville']]}));
+      await page.evaluate(()=>loadReports());
+      assert.equal(await page.locator('#reports .lsr-row').count(),1);await expectText(page,'#reports',/1 more could not be read/);
+      // Past the cap the card says how many it is showing.
+      session.change(config('many reports',{alerts:[alert('Tornado Warning',base)],reports:Array.from({length:15},(_,i)=>['HAIL',i+1,38.81,-90.85,1,'Town '+i])}));
+      await page.evaluate(()=>loadReports());
+      assert.equal(await page.locator('#reports .lsr-row').count(),12);await expectText(page,'#reports',/Showing the latest 12 of 15 reports/);
+    });
+    await run('storm reports cannot repaint when the hold expires mid-response',config('hold expiry',{alerts:[alert('Tornado Warning',base)],reports:stormReports}),async session=>{
+      const {page}=session;
+      await page.waitForFunction(()=>document.querySelectorAll('#reports .lsr-row').length===3);
+      session.change(config('hold expiry, warning gone',{reports:stormReports}));
+      // The warning is gone and the hold has run out, but nothing has synchronized the layout yet. The
+      // next report response is what triggers that synchronization, inside feedUpdate().
+      const state=await page.evaluate(()=>{callLocalAlert=null;activeState.lastHit=Date.now()-31*60000;
+        return loadReports().then(()=>({active:document.documentElement.classList.contains('lsx-active'),requested:deferredFeeds.reports,reports:lastReports.length,dots:lsrLayer===null,
+          // Measured in the same task as the exit: the reappearing context pack is already packed.
+          squeezed:[...document.querySelectorAll('#contextPack>.card:not([hidden])')].filter(c=>getComputedStyle(c).display!=='none'&&c.getBoundingClientRect().width<160).length}));});
+      assert.deepEqual(state,{active:false,requested:false,reports:0,dots:true,squeezed:0},'The response that ends the layout cannot repaint reports or dots, and the pack returns packed');
+    });
+    await run('storm layout ignores distant warnings and keeps a report outage visible',config('distant storm',{alerts:[alert('Tornado Warning',base,true)]}),async session=>{
+      const {page}=session;
+      assert(!(await page.evaluate(()=>document.documentElement.classList.contains('lsx-active'))),'A warning elsewhere keeps the usual layout');
+      assert.equal(await page.evaluate(()=>deferredFeeds.reports),false,'A calm layout makes no storm report requests');
+      assert(!session.requests.some(u=>u.includes('mesonet.agron.iastate.edu')));
+      session.change(config('local storm, reports down',{alerts:[alert('Severe Thunderstorm Warning',base)],reportsDown:true}));await page.evaluate(()=>loadAlerts());
+      await page.waitForFunction(()=>/unavailable/.test(document.getElementById('reports').innerText));
+      assert(await page.locator('#fresh-reports').isVisible(),'A report outage stays on its card');
+      assert.equal(await page.locator('#reportsCard #fresh-reports').count(),1);
+    });
     await run('individual context reload keeps saved content accessible',config('context reload',{climateFixture:true,datedRecords:true}),async({page})=>{
       await page.evaluate(()=>requestContext('context'));
       await page.locator('#climateCard .context-toggle').click();
@@ -1258,7 +1372,13 @@ async function main() {
       assert.equal(await page.locator('#compactView').count(),0);
       for(const id of ['afdCard','obsCard','climateCard','droughtCard','cpcCard']){
         assert.equal(await page.locator('#'+id+' .context-toggle').getAttribute('aria-expanded'),'true');
-        assert(await page.locator('#'+id+'Body').isVisible());
+        // A verified calm outlook card folds behind its outlook cell; prove the cell is the way back in.
+        if(await page.locator('#'+id).evaluate(e=>e.hidden)){
+          const feed={droughtCard:'drought',cpcCard:'cpc'}[id];
+          assert.equal(await page.evaluate(feed=>feedState(feedChecks[feed],Date.now(),FEEDS[feed].age),feed),'ready',id+' folds only after a live check');
+          await page.locator('#outlookCells [aria-controls="'+id+'"]').first().click();
+        }
+        assert(await page.locator('#'+id+'Body').isVisible(),id+' saved content is reachable');
       }
     });
     await run('deferred station and climate work starts on approach or request',config('deferral',{maps:true,climateFixture:true}),async({page,requests})=>{

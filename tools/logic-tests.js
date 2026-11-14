@@ -1867,6 +1867,85 @@ async function checkGridLoaderIsolation() {
   check('recent gauge is current',gauge({validTime:new Date(+now-600000).toISOString()},+now,7200000).state,'ready');
 }
 
+/* The outlook row folds a card only on a verified calm reading. A gap, a failure or anything
+   elevated must keep the card open, or an outage could pass for an all-clear. */
+{
+  const L=name=>lift(new RegExp('^function '+name+'\\([^\\n]*\\)\\{[\\s\\S]*?^\\}','m'),name+'()');
+  const ol=new Function([
+    lift(/^var OUTLOOK_DAYS=.*$/m,'OUTLOOK_DAYS'),
+    ...['spcRisk','eroRisk','fireRisk','droughtCat','outlookCat','hazD','hazRange',
+        'outlookRiskSummary','outlookHazardSummary','outlookLean','outlookCpcSummary','outlookDroughtSummary'].map(L)
+  ].join('\n')+';return {risk:outlookRiskSummary,haz:outlookHazardSummary,cpc:outlookCpcSummary,drought:outlookDroughtSummary};')();
+  const zero=[0,0,0,0,0,0,0,0,0], quietThreats=[{values:[0,0,0]},{values:[0,0,0]}];
+  const calm=ol.risk(zero,quietThreats);
+  check('outlook: nine verified zeros are calm',[calm.state,calm.verified].join(),'calm,true');
+  check('outlook: one missing category is not calm',ol.risk([0,0,null,0,0,0,0,0,0],quietThreats).state,'partial');
+  check('outlook: missing probabilities are not verified',ol.risk(zero,[{values:[0,null,0]},{values:[0,0,0]}]).verified,false);
+  check('outlook: general storms are not folded',ol.risk([2,0,0,0,0,0,0,0,0],quietThreats).state,'partial');
+  const slight=ol.risk([0,4,0,1,0,0,0,0,0],quietThreats);
+  check('outlook: highest category wins over a lower flood risk',[slight.state,slight.value,slight.sub].join('|'),'elevated|Slight storm risk|Highest tomorrow');
+  check('outlook: non-zero severe probability is elevated',ol.risk(zero,[{values:[0,5,0]},{values:[0,0,0]}]).state,'elevated');
+  check('outlook: risk failure is unavailable',ol.risk(null).state,'unavailable');
+  check('outlook: no hazards on complete data is calm',ol.haz([],true,true).state,'calm');
+  check('outlook: no hazards on partial data is not calm',ol.haz([],false,true).state,'partial');
+  check('outlook: flagged hazard is elevated',ol.haz([{label:'Heavy Rain',start:null,end:null}],true,true).value,'Heavy Rain');
+  const cpc=ol.cpc([{cat:'Above',prob:70},{cat:'Above',prob:40},{cat:'Below',prob:33},{cat:'EC',prob:null}]);
+  check('outlook: CPC leanings read as words',[cpc.state,cpc.value,cpc.sub].join('|'),'info|Warm 70% · Wet 40%|8–14 days: Cool 33% · Precip even odds');
+  check('outlook: a missing CPC map is not verified',ol.cpc([{cat:'Above',prob:70},null,null,null]).verified,false);
+  check('outlook: no drought anywhere is calm',ol.drought(-1,'','').state,'calm');
+  check('outlook: unknown drought monitor is not calm',ol.drought(null,'','').state,'partial');
+  check('outlook: unknown drought monitor never claims no drought',ol.drought(null,'','').value,'Current drought unknown');
+  check('outlook: verified no drought with a missing outlook says so',ol.drought(-1,null,'').value,'No drought now');
+  check('outlook: current drought is elevated',ol.drought(1,'','').state,'elevated');
+  check('outlook: developing drought is elevated',ol.drought(-1,'Development','').value,'Drought developing');
+}
+
+/* The storm layout: only covering convective or flash-flood warnings switch the page; it holds
+   30 minutes after the last one and never drops on an alert outage. */
+{
+  const L=name=>lift(new RegExp('^function '+name+'\\([^\\n]*\\)\\{[\\s\\S]*?^\\}','m'),name+'()');
+  const am=new Function([lift(/^var ACTIVE_HOLD_MS=.*$/m,'ACTIVE_HOLD_MS'),lift(/^var LSR_KINDS=\[[\s\S]*?^\];/m,'LSR_KINDS'),
+    ...['activeModeTrigger','activeModeNext','lsrKind','lsrDistance','stormReportRows'].map(L)].join('\n')
+    +';return {trigger:activeModeTrigger,next:activeModeNext,rows:stormReportRows};')();
+  const t0=Date.parse('2026-05-20T22:00:00Z'), H=3600000;
+  const tor={event:'Tornado Warning',family:'convective',level:'emergency',ends:t0+H};
+  check('storm layout: covering tornado warning triggers',am.trigger(tor,t0),'Tornado Warning');
+  check('storm layout: flash flood warning triggers',am.trigger({event:'Flash Flood Warning',family:'flood',level:'warning',ends:t0+H},t0),'Flash Flood Warning');
+  check('storm layout: river flood warning does not',am.trigger({event:'Flood Warning',family:'flood',level:'warning',ends:t0+H},t0),'');
+  check('storm layout: winter storm warning does not',am.trigger({event:'Winter Storm Warning',family:'winter',level:'warning',ends:t0+H},t0),'');
+  check('storm layout: a watch does not',am.trigger({event:'Tornado Watch',family:'convective',level:'watch',ends:t0+H},t0),'');
+  check('storm layout: an expired warning does not',am.trigger(tor,t0+2*H),'');
+  const on=am.next({},tor,t0,true);
+  check('storm layout: enters on a covering warning',[on.active,on.event].join(),'true,Tornado Warning');
+  const held=am.next(on,null,t0+20*60000,true);
+  check('storm layout: holds after the warning ends',[held.active,held.holding,held.until].join(),'true,true,'+(t0+30*60000));
+  check('storm layout: releases after the hold',am.next(held,null,t0+31*60000,true).active,false);
+  check('storm layout: an alert outage never releases it',am.next(on,null,t0+5*H,false).active,true);
+  check('storm layout: an outage alone never enters it',am.next({},null,t0,false).active,false);
+  const outage=am.next(on,tor,t0+10*60000,false);
+  check('storm layout: a retained warning during an outage is unverified and does not renew the hold',[outage.active,outage.unverified,outage.lastHit].join(),'true,true,'+t0);
+  const fc={features:[
+    {properties:{wfo:'LSX',typetext:'HAIL',magnitude:1.75,unit:'INCH',valid:new Date(t0-20*60000).toISOString(),lat:38.8,lon:-90.7,city:'Wentzville'}},
+    {properties:{wfo:'LSX',typetext:'TORNADO',magnitude:'',valid:new Date(t0-5*60000).toISOString(),lat:38.9,lon:-90.8,city:'Foristell'}},
+    {properties:{wfo:'SGF',typetext:'HAIL',valid:new Date(t0-5*60000).toISOString(),lat:37,lon:-93,city:'Elsewhere'}},
+    {properties:{wfo:'LSX',typetext:'HAIL',valid:new Date(t0-4*H).toISOString(),lat:38.8,lon:-90.7,city:'Old'}},
+    {properties:{wfo:'LSX',typetext:'HAIL',valid:'not a time',lat:38.8,lon:-90.7,city:'Broken'}}
+  ]};
+  const rows=am.rows(fc,t0,{lat:38.79,lon:-90.85});
+  check('storm reports: only recent LSX reports, newest first',rows.map(r=>r.city).join(),'Foristell,Wentzville');
+  check('storm reports: tornado reads as a tornado',rows[0].kind.label,'Tornado');
+  check('storm reports: hail keeps its size',rows[1].mag,'1.75 INCH');
+  check('storm reports: distance is about 8 miles east',[Math.round(rows[1].mi),Math.round(rows[1].deg/10)*10].join(),'8,90');
+  check('storm reports: a malformed response is not an empty list',am.rows({},t0,null),null);
+  check('storm reports: an unreadable LSX record is counted, not dropped',rows.invalid,1);
+  const blank=am.rows({features:[{properties:{wfo:'LSX',typetext:'HAIL',valid:new Date(t0-60000).toISOString(),lat:null,lon:null,city:'Null Island'}}]},t0,null);
+  check('storm reports: null coordinates are invalid, not (0, 0)',[blank.length,blank.invalid].join(),'0,1');
+  const many=am.rows({features:Array.from({length:15},(_,i)=>({properties:{wfo:'LSX',typetext:'HAIL',valid:new Date(t0-i*60000).toISOString(),lat:38.8,lon:-90.7,city:'C'+i}}))},t0,null);
+  check('storm reports: the cap keeps the true total',[many.length,many.total].join(),'12,15');
+  const odd=am.rows({features:[null,{properties:{typetext:'HAIL',valid:new Date(t0).toISOString(),lat:38.8,lon:-90.7}},{type:'Feature'}]},t0,null);
+  check('storm reports: unattributable features are a gap, not "no reports"',[odd.length,odd.invalid].join(),'0,3');
+}
+
 checkLiveFeedFailures().then(checkSpcThreatProducts).then(checkForecastRefreshFailure).then(checkGridLoaderIsolation).then(() => {
   if (failed) {
     console.error(`\n${failed} logic test(s) failed`);
