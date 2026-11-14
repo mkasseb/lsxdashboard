@@ -934,6 +934,9 @@ folded changes:
   pair is not plotted at (0, 0). Past 12 rows the card says how many it is showing.
 - During an alert outage a retained warning neither renews the 30-minute hold nor lets the bar
   claim it is current; the outage branch runs first.
+- `layoutMasonry()` skips a hidden pack (zero width) instead of writing zero-width cards, and the
+  pack is laid out synchronously when the storm layout ends or the context fold opens, so it
+  never shows a frame of squeezed cards on its way back.
 - "Show card" opens the folded context pack before scrolling to a card inside it, fold buttons
   move focus to what they reveal, and a radar move deferred by fullscreen is applied when
   fullscreen closes.

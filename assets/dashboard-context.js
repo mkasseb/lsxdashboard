@@ -279,7 +279,9 @@ function applyActiveMode(){
   }
   syncFoldChips();
   if(typeof rvMap!=="undefined"&&rvMap){ rvMap.invalidateSize(); setTimeout(function(){ if(rvMap) rvMap.invalidateSize(); },260); }
-  if(typeof scheduleMasonry==="function") scheduleMasonry();
+  // Pack now, not next frame: the context pack just reappeared and must not show a frame unpacked.
+  if(!on&&typeof layoutMasonry==="function") layoutMasonry();
+  else if(typeof scheduleMasonry==="function") scheduleMasonry();
   if(typeof freshnessCheck==="function") freshnessCheck();
 }
 /* Radar ahead of Now in the DOM, not only on screen, so reading and tab order follow the picture.
@@ -311,10 +313,10 @@ function showFolded(key,scroll){
   var root=document.documentElement; if(!root.classList.contains("lsx-active")) return;
   root.classList.add("show-"+key);
   syncFoldChips();
-  if(typeof scheduleMasonry==="function") scheduleMasonry();
+  if(key==="context"&&typeof layoutMasonry==="function") layoutMasonry();
+  else if(typeof scheduleMasonry==="function") scheduleMasonry();
   var target=document.getElementById(key==="forecast"?"forecastCard":key==="outlook"?"outlookCard":"contextPack");
   if(scroll&&target){
-    if(key==="context"&&typeof layoutMasonry==="function") layoutMasonry();
     target.scrollIntoView({block:"start",behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth"});
     // Move focus with the view, so Tab continues through what was just revealed.
     var h=key==="context"?document.querySelector(".railhead"):target.querySelector("h2");

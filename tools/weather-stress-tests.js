@@ -1349,8 +1349,10 @@ async function main() {
       // The warning is gone and the hold has run out, but nothing has synchronized the layout yet. The
       // next report response is what triggers that synchronization, inside feedUpdate().
       const state=await page.evaluate(()=>{callLocalAlert=null;activeState.lastHit=Date.now()-31*60000;
-        return loadReports().then(()=>({active:document.documentElement.classList.contains('lsx-active'),requested:deferredFeeds.reports,reports:lastReports.length,dots:lsrLayer===null}));});
-      assert.deepEqual(state,{active:false,requested:false,reports:0,dots:true},'The response that ends the layout cannot repaint reports or dots');
+        return loadReports().then(()=>({active:document.documentElement.classList.contains('lsx-active'),requested:deferredFeeds.reports,reports:lastReports.length,dots:lsrLayer===null,
+          // Measured in the same task as the exit: the reappearing context pack is already packed.
+          squeezed:[...document.querySelectorAll('#contextPack>.card:not([hidden])')].filter(c=>getComputedStyle(c).display!=='none'&&c.getBoundingClientRect().width<160).length}));});
+      assert.deepEqual(state,{active:false,requested:false,reports:0,dots:true,squeezed:0},'The response that ends the layout cannot repaint reports or dots, and the pack returns packed');
     });
     await run('storm layout ignores distant warnings and keeps a report outage visible',config('distant storm',{alerts:[alert('Tornado Warning',base,true)]}),async session=>{
       const {page}=session;

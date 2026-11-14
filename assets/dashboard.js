@@ -2047,6 +2047,9 @@ function layoutMasonry(){
   if(masonryPointerActive)return;
   var m=document.querySelector(".masonry"); if(!m) return;
   var GAP=16, w=m.clientWidth;
+  // Folded away by the storm layout: measuring a hidden pack would write zero-width cards that
+  // flash squeezed when it is shown again. Lay it out when it is visible instead.
+  if(!w) return;
   var cols = w<=680 ? 1 : (w<=1100 ? 2 : 3);
   var colW = Math.floor((w-GAP*(cols-1))/cols);
   // Folded outlook cards are hidden and take no slot; the outlook row stands in for them.
