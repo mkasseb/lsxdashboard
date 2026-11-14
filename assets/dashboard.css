@@ -1664,14 +1664,13 @@ header .top{grid-column:1/-1;gap:16px;margin-bottom:10px;flex-wrap:nowrap}
 .jump a[aria-current="location"]{border-bottom-color:var(--accent);color:var(--text);background:var(--inset)}
 .jump-step{top:0;bottom:0}
 .redesign-grid{display:flex;flex-direction:column;gap:16px;align-items:stretch}
-.redesign-grid>*,.weather-hero>*,.planning-grid>*{min-width:0}
+.redesign-grid>*,.top-band>*,.now-stack>*,.planning-grid>*,.nws-band>*{min-width:0}
 .card{background:var(--panel);border:1px solid var(--border);box-shadow:none;padding:20px;border-radius:12px}
 .card.hero::before{display:none}.card h2{font-size:20px;align-items:baseline;flex-wrap:wrap}
 #alertsCard{padding:0;border:0;background:none}#mcd:empty{display:none}
-.weather-hero{display:grid;grid-template-columns:minmax(0,1fr);border:1px solid var(--border);border-radius:12px;background:var(--panel)}
-.weather-hero>.card{border:0;background:none;margin:0;border-radius:0}
-.weather-hero #callCard{border-top:1px solid var(--border)}
-.weather-hero #current{justify-content:flex-start;gap:0}
+.now-stack{display:grid;grid-template-columns:minmax(0,1fr);border:1px solid var(--border);border-radius:12px;background:var(--panel)}
+.now-stack>.card{border:0;background:none;margin:0;border-radius:0}
+.now-stack #current{justify-content:flex-start;gap:0}
 .cc-main{margin-bottom:12px;flex-wrap:wrap}.cc-temp{font-size:72px}.cc-desc{font-size:18px}
 .cc-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .cc-item{border:0;border-radius:0;padding:6px 0;background:none}
@@ -1682,8 +1681,7 @@ header .top{grid-column:1/-1;gap:16px;margin-bottom:10px;flex-wrap:nowrap}
 .bl-support{grid-template-columns:1fr}.bl-support li{border-left:0;border-top:1px solid var(--border);padding:8px 0}
 .bl-detail,.bl-action{font-size:15px}.bl-sheadline,.bl-sdetail{font-size:14px}
 .brief-author{font-size:12px}.disclosure{font-size:14px}
-.planning-grid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px;align-items:start}
-#h24Card{grid-column:1;grid-row:1}#radarCard{grid-column:2;grid-row:1/3}#forecastCard{grid-column:1;grid-row:2}
+.planning-grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:16px;align-items:start}
 .hourly-head{flex-wrap:wrap;gap:8px}.hourly-head h2{margin:0;flex:1 1 100%}
 .hourly-duration{font-size:13px;color:var(--muted)}.hourly-options{margin-left:auto}
 #radarCard .rs-head{flex-wrap:wrap;gap:12px}#radarCard .rs-head h2{font-size:20px}
@@ -1698,7 +1696,7 @@ body:not(.radar-full) #radarCard .imgwrap{aspect-ratio:1/1;max-height:600px}
 .r-now-label{font-size:12px;font-weight:500;color:var(--muted);margin-right:5px}
 .r-forecast-label{font-weight:700;color:var(--text)}
 @media(max-width:1000px){
-  .planning-grid{grid-template-columns:1fr}#h24Card,#radarCard,#forecastCard{grid-column:auto;grid-row:auto}
+  .planning-grid{grid-template-columns:1fr}
   body:not(.radar-full) #radarCard .imgwrap{aspect-ratio:16/10}
   .brand-word{display:none}.clock{display:none}
 }
@@ -1713,9 +1711,8 @@ body:not(.radar-full) #radarCard .imgwrap{aspect-ratio:1/1;max-height:600px}
   .location-tools{grid-column:1/-1}.location-tools summary{min-height:36px}
   .jump-wrap{display:block;margin:4px auto 12px}.sticky-context{padding:4px 0;min-height:28px}
   .jump a{padding:0 13px}.jump{width:100%}.jump-step{top:28px}
-  .card{padding:16px}.redesign-grid,.planning-grid{gap:12px}
-  .weather-hero{grid-template-columns:1fr}.weather-hero #callCard{border-left:0;border-top:1px solid var(--border)}
-  .weather-hero>.card{padding:16px}.cc-temp{font-size:64px}.cc-grid{gap:4px 10px}
+  .card{padding:16px}.redesign-grid,.planning-grid,.top-band,.nws-band{gap:12px}
+  .now-stack>.card{padding:16px}.cc-temp{font-size:64px}.cc-grid{gap:4px 10px}
   .cc-item .v{font-size:15px}.card h2,#radarCard .rs-head h2{font-size:20px}
   .bl-headline{font-size:24px}.day{grid-template-columns:minmax(65px,1fr) 24px 48px minmax(22px,.7fr) 70px 10px;gap:6px;padding:10px 0}
   .day .dn,.day .dt{font-size:13px}.day .di .wxi{width:26px;height:26px}
@@ -1730,8 +1727,8 @@ body:not(.radar-full) #radarCard .imgwrap{aspect-ratio:1/1;max-height:600px}
 }
 /* Keep complete observations and source ages compact without hiding any values. */
 body{transition:none}
-.weather-hero #currentCard{border-radius:12px 12px 0 0}
-.weather-hero #callCard{border-radius:0 0 12px 12px}
+.now-stack #currentCard{border-radius:12px 12px 0 0}
+.now-stack #glanceCard{border-radius:0 0 12px 12px}
 #currentCard .feed-status{font-size:12px;line-height:1.4;margin-top:4px;padding-top:0}
 #currentCard .cc-grid{gap:4px 12px}
 #currentCard .cc-item{display:flex;align-items:baseline;justify-content:space-between;gap:6px;flex-wrap:wrap}
@@ -1747,18 +1744,14 @@ body{transition:none}
 /* Each hero card owns its height. A horizontal observations strip keeps desktop compact
    without stretching a short regional message list to the height of the observations. */
 @media(min-width:681px){
-  .weather-hero #currentCard{display:block}
-  .weather-hero #current{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:8px 24px;align-items:start}
+  .now-stack #currentCard{display:block}
+  .now-stack #current{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:8px 24px;align-items:start}
   #currentCard .cc-main{grid-column:1;grid-row:1/3;margin:0}
   #currentCard .cc-today{grid-column:2;grid-row:1;margin:0}
   #currentCard .cc-grid{grid-column:2;grid-row:2}
   #currentCard .cc-expo{grid-column:1/-1;grid-row:3;margin:0}
   #currentCard .cc-ctx,#currentCard .stn{grid-column:1/-1;margin:0}
   #currentCard > .feed-status:not([hidden]){display:inline-block;margin:4px 16px 0 0}
-}
-@media(min-width:1101px){
-  .weather-hero #current{grid-template-columns:minmax(0,.85fr) minmax(0,1.2fr) minmax(0,1fr)}
-  #currentCard .cc-expo{grid-column:3;grid-row:1/3}
 }
 @media(max-width:680px){
   #currentCard .cc-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 16px}
@@ -1768,10 +1761,8 @@ body{transition:none}
   .bl-lead{grid-template-columns:minmax(0,1fr)}.bl-lead-ico{display:none}
 }
 
-/* Hourly precedes seven-day. Desktop supporting cards flow beneath a bounded radar,
-   while mobile/tablet cards keep their original order and map sizing. */
-.planning-column,.hourly-title-desktop,.forecast-primary-source{display:none}
-.desktop-planning .planning-column{display:flex;flex-direction:column;gap:18px;min-width:0}
+/* Hourly precedes seven-day; on desktop they share one row. */
+.hourly-title-desktop,.forecast-primary-source{display:none}
 #forecastCard .day{min-height:44px;padding-block:6px}
 /* Records need an unambiguous visible calendar date. If name + date do not fit on one
    line, keep the date on its own line while the holiday/day name can still truncate. */
@@ -1779,44 +1770,29 @@ body{transition:none}
 .daily.no-dnd .dn>span:first-child{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .daily.no-dnd .dnd{display:block;margin:2px 0 0;font-size:11px}
 @media(min-width:1001px){
-  .planning-grid.desktop-planning{display:block;position:relative}
-  .desktop-planning .planning-column{position:absolute;top:0}
-  .desktop-planning .planning-primary{left:0;width:calc(60% - 10.8px)}
-  .desktop-planning .planning-support{left:calc(60% + 7.2px);width:calc(40% - 7.2px)}
-  .planning-grid.desktop-planning>.railhead{position:absolute;margin:0;pointer-events:auto}
-  /* The lower pack overlaps only unused planning space. Its transparent container must
-     let clicks reach rivers still occupying the other column. */
-  .planning-grid.desktop-planning>.masonry{position:absolute;left:0;width:100%;pointer-events:none}
-  .planning-grid.desktop-planning>.masonry>.card{pointer-events:auto}
-  .desktop-planning .planning-column>.card{position:relative;left:auto;top:auto;width:auto;flex:0 0 auto;grid-column:auto;grid-row:auto}
   .hourly-title-mobile{display:none}.hourly-title-desktop{display:inline}
   .forecast-primary-source{display:inline;font-size:12px;font-weight:400;color:var(--muted)}
-  .desktop-planning #forecastCard h2{margin-bottom:8px}
-  .desktop-planning #forecastCard .day{padding-block:7px}
-  .desktop-planning #forecastCard .nbm-inline,.desktop-planning #forecastCard .nbm-unavailable{padding:0 0 5px}
-  #forecastCard .day{grid-template-columns:minmax(90px,1.2fr) 28px 52px minmax(40px,1fr) 78px 12px;gap:8px}
-  body:not(.radar-full) .desktop-planning #radarCard{align-self:auto;display:block;min-height:0}
-  body:not(.radar-full) .desktop-planning #radarCard .rs-view{flex:0 0 auto;min-height:0}
-  body:not(.radar-full) .desktop-planning #radarCard .imgwrap{flex:0 0 auto;aspect-ratio:auto;height:382px;min-height:382px;max-height:382px}
-  body:not(.radar-full) .desktop-planning #radarCard #radar{position:absolute;inset:0;height:100%;width:100%}
-  body:not(.radar-full) .desktop-planning #radarCard .rs-head{display:flex;flex-wrap:wrap;gap:8px 12px}
-  body:not(.radar-full) .desktop-planning #radarCard .rs-head h2{flex:1 1 auto}
-  body:not(.radar-full) .desktop-planning #radarCard .rs-tabs{margin-left:0}
-  body:not(.radar-full) .desktop-planning #radarCard .rs-right{margin-left:auto}
-  .desktop-planning .planning-support>.card{padding:18px}
-  .desktop-planning .planning-support>.card h2{font-size:18px}
-  .desktop-planning .planning-support .river-row .rlink{padding:11px 12px}
-  .desktop-planning .planning-support .river-row .rsub{font-size:12px;line-height:1.5}
-  .desktop-planning #riskCard .spc-pill{white-space:normal}
-  .weather-hero #currentCard,#callCard{padding-block:16px}
+  #forecastCard h2{margin-bottom:8px}
+  #forecastCard .day{padding-block:7px;grid-template-columns:minmax(90px,1.2fr) 28px 52px minmax(40px,1fr) 78px 12px;gap:8px}
+  #forecastCard .nbm-inline,#forecastCard .nbm-unavailable{padding:0 0 5px}
+  /* Radar shares the first screen with Now, so its viewport is a fixed height: a forecast or
+     feed changing size elsewhere can never resize or blank a working map. */
+  body:not(.radar-full) .top-band #radarCard{align-self:start;display:block;min-height:0}
+  body:not(.radar-full) .top-band #radarCard .rs-view{flex:0 0 auto;min-height:0}
+  body:not(.radar-full) .top-band #radarCard .imgwrap{flex:0 0 auto;aspect-ratio:auto;height:var(--radar-h);min-height:var(--radar-h);max-height:var(--radar-h)}
+  body:not(.radar-full) .top-band #radarCard #radar{position:absolute;inset:0;height:100%;width:100%}
+  body:not(.radar-full) .top-band #radarCard .rs-head{display:flex;flex-wrap:wrap;gap:8px 12px}
+  body:not(.radar-full) .top-band #radarCard .rs-head h2{flex:1 1 auto}
+  body:not(.radar-full) .top-band #radarCard .rs-tabs{margin-left:0}
+  body:not(.radar-full) .top-band #radarCard .rs-right{margin-left:auto}
+  .now-stack #currentCard,#callCard{padding-block:16px}
   #callCard .nws-message-status{margin-bottom:10px}#callCard #briefWhy{margin-top:10px}
-  /* A failed map stays a compact retry panel in the same supporting column. */
-  body:not(.radar-full) .desktop-planning #radarCard:has(#radar [data-retry-maps]) .imgwrap{height:auto;min-height:0;max-height:none}
-  body:not(.radar-full) .desktop-planning #radarCard #radar:has([data-retry-maps]){position:relative;inset:auto;height:auto}
+  /* A failed map stays a compact retry panel in the same slot. */
+  body:not(.radar-full) .top-band #radarCard:has(#radar [data-retry-maps]) .imgwrap{height:auto;min-height:0;max-height:none}
+  body:not(.radar-full) .top-band #radarCard #radar:has([data-retry-maps]){position:relative;inset:auto;height:auto}
 }
 @media(min-width:1001px) and (max-width:1240px){
-  body:not(.radar-full) .desktop-planning #radarCard .imgwrap{height:352px;min-height:352px;max-height:352px}
-  .desktop-planning #forecastCard .day{grid-template-columns:minmax(86px,1.2fr) 28px 48px minmax(32px,1fr) 74px 12px;gap:7px}
+  #forecastCard .day{grid-template-columns:minmax(86px,1.2fr) 28px 48px minmax(32px,1fr) 74px 12px;gap:7px}
 }
 /* Keep gauge identity, Now and forecast prose readable even in a narrow desktop context card.
    DOM/source values and the separate pin button remain unchanged. */
@@ -1972,15 +1948,14 @@ header .locsearch #locSearch{background:var(--panel)}
 #alertsCard,#alertsCard.bannered:not(.calm){background:none}
 #alertsCard.calm{background:var(--panel)}
 #alertsCard.bannered:not(.calm) .calmrow{background:var(--panel);border:0;border-radius:3px;box-shadow:none}
-.weather-hero{border:0;border-radius:0;background:none}
+.now-stack,.nws-band{border:0;border-radius:0;background:none}
 /* #main lifts these over the ID-level "reading surface" rule that paints #h24Card and #callCard. */
-#main .weather-hero>.card,#main .planning-grid>.card,#main .desktop-planning .planning-column>.card{
+#main .now-stack>.card,#main .planning-grid>.card,#main .nws-band>.card{
   background:none;border-radius:0;padding-inline:0}
-#main .weather-hero #currentCard,#main .planning-grid>.card,#main .desktop-planning .planning-column>.card{
+#main .now-stack #currentCard,#main .planning-grid>.card,#main .nws-band>.card{
   border-top:2px solid var(--text)}
-#main .weather-hero #callCard{border-top:1px solid var(--border)}
-#main .planning-grid>.card,#main .desktop-planning .planning-column>.card{padding-block:14px 0}
-.card h2,.masonry .card h2,#radarCard .rs-head h2,.desktop-planning .planning-support>.card h2{
+#main .planning-grid>.card{padding-block:14px 0}
+.card h2,.masonry .card h2,#radarCard .rs-head h2{
   font-family:var(--fd);font-size:25px;font-weight:600;letter-spacing:.015em;line-height:1.15}
 .masonry .card h2{font-size:22px}
 .card h2 .link,.card h2 .forecast-primary-source,.call-head .link,.rs-right .link,.hourly-duration{
@@ -1992,16 +1967,18 @@ header .locsearch #locSearch{background:var(--panel)}
 /* The same numbers the navigation shows, on the sections it points at. Decorative: the
    alternative-text form keeps them out of the heading's accessible name. */
 #currentCard>h2::before,#h24Card h2::before,#radarCard h2::before,#forecastCard>h2::before,
-#riversCard>h2::before,#climateCard>h2::before{
+#keyMessagesTitle::before,#riversCard>h2::before,#climateCard>h2::before{
   font-family:var(--fm);font-size:12px;font-weight:500;letter-spacing:0;color:var(--muted);
   margin-right:10px;flex:0 0 auto;align-self:center}
 #currentCard>h2::before{content:"02";content:"02" / ""}
-#h24Card h2::before{content:"03";content:"03" / ""}
-#radarCard h2::before{content:"04";content:"04" / ""}
+#radarCard h2::before{content:"03";content:"03" / ""}
+#h24Card h2::before{content:"04";content:"04" / ""}
 #forecastCard>h2::before{content:"05";content:"05" / ""}
-#riversCard>h2::before{content:"06";content:"06" / ""}
-#climateCard>h2::before{content:"07";content:"07" / ""}
-#currentCard>h2,#h24Card h2,#radarCard h2,#forecastCard>h2,#riversCard>h2,#climateCard>h2{justify-content:flex-start}
+#keyMessagesTitle::before{content:"06";content:"06" / ""}
+#riversCard>h2::before{content:"07";content:"07" / ""}
+#climateCard>h2::before{content:"08";content:"08" / ""}
+#currentCard>h2,#h24Card h2,#radarCard h2,#forecastCard>h2,#keyMessagesTitle,#riversCard>h2,#climateCard>h2{justify-content:flex-start}
+#keyMessagesTitle{display:flex;align-items:baseline}
 #currentCard>h2>.link,#forecastCard>h2>.forecast-primary-source,#riversCard>h2>.link,#climateCard>h2>.link{margin-left:auto}
 
 /* --- Now: the reading is the headline --- */
@@ -2094,7 +2071,7 @@ body.radar-full #radarCard#radarCard{background:var(--bg);border:0;
 #glanceWhy{margin-top:4px}
 /* Wide screens: answer on the left, the supporting rows stacked beside it, so the card costs
    one short band of height instead of pushing Now below the fold. */
-@media (min-width:1000px){
+@media (min-width:681px) and (max-width:1000px){
   #glance{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 32px;align-items:start}
   #glance>.loading,#glance>.glance-empty{grid-column:1 / -1}
   .glance-list{margin-top:0;grid-template-columns:1fr}
@@ -2112,4 +2089,42 @@ body.radar-full #radarCard#radarCard{background:var(--bg);border:0;
   .glance-headline{font-size:27px}
   .glance-lead{gap:10px;padding-left:10px}
   .glance-lead-ico .ic{width:30px;height:30px}
+}
+
+/* --- Layout bands (see the comment above .top-band in index.html) --- */
+:root{--radar-h:442px}   /* wrapper; the map inside is 2px less, 440px */
+@media(min-width:1001px) and (max-width:1240px){:root{--radar-h:402px}}
+.top-band,.nws-band{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start}
+@media(min-width:1001px){
+  /* Now + Your day on the left, radar on the right: the first screen answers "what is it,
+     what does it mean for me, and what is coming" without scrolling. */
+  .top-band{grid-template-columns:minmax(0,1fr) minmax(0,1.2fr)}
+  /* Key Messages and the forecaster's discussion are one source; read them side by side. */
+  .nws-band{grid-template-columns:minmax(0,1fr) minmax(0,1.35fr);gap:32px}
+}
+#main .nws-band>.card{padding-block:14px 16px}
+
+/* Worth a look today: context cards that stopped being calm (setAttention in dashboard.js). */
+.attention-band[hidden]{display:none}
+.attention-band{display:flex;flex-direction:column;gap:10px}
+.attention-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 14px;border-top:2px solid var(--text);padding-top:10px}
+.attention-head h2{font-family:var(--fd);font-size:27px;font-weight:600;letter-spacing:.015em;margin:0}
+.attention-sub{font-family:var(--fm);font-size:12px;color:var(--muted)}
+.attention-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(420px,100%),1fr));gap:16px;align-items:start}
+.attention-cards>.card{position:static;margin:0}
+
+/* Rivers, calm: one verified line instead of six identical "No Flooding" rows. */
+.river-calm-line{display:flex;align-items:center;gap:10px;margin:0;font-weight:600;color:var(--good)}
+.river-calm-dot{width:9px;height:9px;border-radius:50%;background:var(--good);flex:0 0 auto}
+#riversCard.rivers-calm #rivers{display:block}
+.river-calm-gap{margin:6px 0 0 19px;font-family:var(--fm);font-size:12px;color:var(--muted)}
+.river-all{margin-top:10px}
+.river-all-rows{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin-top:10px}
+
+/* Now sizes itself by its own column, not the viewport: beside radar it is ~470–630px wide, where
+   the temperature beside a three-across metrics grid leaves enlarged text no room. Stack it. */
+.now-stack{container:nowstack / inline-size}
+@container nowstack (max-width:600px){
+  .now-stack #current{grid-template-columns:minmax(0,1fr)}
+  #currentCard .cc-main,#currentCard .cc-today,#currentCard .cc-grid,#currentCard .cc-expo{grid-column:1;grid-row:auto}
 }

@@ -124,11 +124,11 @@ jobs:
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: |
           NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" REDESIGN_ARTIFACTS="$RUNNER_TEMP/redesign" xvfb-run -a node tools/redesign-tests.js
-      - name: Verify lower context fills desktop planning gaps
+      - name: Verify layout bands stack cleanly and the context pack never overlaps
         env:
           WEATHER_BROWSER: ${{ matrix.browser }}
           LIBGL_ALWAYS_SOFTWARE: "1"
-        run: NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" REDESIGN_ARTIFACTS="$RUNNER_TEMP/redesign/gaps" xvfb-run -a node tools/planning-gap-tests.js
+        run: NODE_PATH="$RUNNER_TEMP/lsx-browser/node_modules" REDESIGN_ARTIFACTS="$RUNNER_TEMP/redesign/bands" xvfb-run -a node tools/layout-band-tests.js
       - name: Verify NBM ranges, native details and refresh focus
         env:
           WEATHER_BROWSER: ${{ matrix.browser }}

@@ -21,22 +21,26 @@ async function main(){
    assert.equal(await p.locator('#compactView').count(),0);
    assert.equal(await p.locator('#hourlyOptions button').count(),3);
    assert.equal(await p.locator('#rsTabs button').count(),2);
-   const boxes=await p.evaluate(()=>Object.fromEntries(['currentCard','callCard','h24Card','radarCard','forecastCard','riskCard','riversCard'].map(id=>{const r=document.getElementById(id).getBoundingClientRect();return[id,{x:r.x,y:r.y,right:r.right,bottom:r.bottom}];})));
-   assert(Math.abs(boxes.currentCard.bottom-boxes.callCard.y)<2,'Messages follow the compact observations at their natural height');
+   const boxes=await p.evaluate(()=>Object.fromEntries(['currentCard','glanceCard','callCard','afdCard','h24Card','radarCard','forecastCard','riskCard','riversCard','attention'].map(id=>{const r=document.getElementById(id).getBoundingClientRect();return[id,{x:r.x,y:r.y,right:r.right,bottom:r.bottom}];})));
+   assert(Math.abs(boxes.currentCard.bottom-boxes.glanceCard.y)<2,'Your day follows the compact observations at their natural height');
+   // The fixture's gauges are in flood, so the calm rule has promoted rivers under Now and radar.
+   assert(await p.locator('#riversCard').evaluate(e=>e.parentElement.id==='attentionCards'),'Flooding gauges are promoted');
+   assert(await p.locator('#riskCard').evaluate(e=>e.parentElement.classList.contains('masonry')),'Quiet risk stays in context');
    const messageGap=await p.evaluate(()=>document.getElementById('callCard').getBoundingClientRect().bottom-document.getElementById('briefWhy').getBoundingClientRect().bottom);
    assert(messageGap>=12&&messageGap<=22,'Messages have only normal bottom padding: '+messageGap);
    if(width>1000){
-    assert(Math.abs(boxes.h24Card.y-boxes.radarCard.y)<2);assert(boxes.h24Card.right<=boxes.radarCard.x);
-    assert(Math.abs(boxes.forecastCard.y-boxes.h24Card.bottom-18)<2,'Hourly precedes Week without a dead band');
-    assert(Math.abs(boxes.forecastCard.x-boxes.h24Card.x)<2);assert(Math.abs(boxes.forecastCard.right-boxes.h24Card.right)<2);
-    assert(Math.abs(boxes.riskCard.y-boxes.radarCard.bottom-18)<2);assert(Math.abs(boxes.riversCard.y-boxes.riskCard.bottom-18)<2,'Supporting cards flow directly below radar');
-    assert.deepEqual(await p.locator('.planning-primary>.card').evaluateAll(rows=>rows.map(r=>r.id)),['h24Card','forecastCard']);
-    assert.deepEqual(await p.locator('.planning-support>.card').evaluateAll(rows=>rows.map(r=>r.id)),['radarCard','riskCard','riversCard']);
-    const mainWidth=boxes.h24Card.right-boxes.h24Card.x,supportWidth=boxes.radarCard.right-boxes.radarCard.x;
-    assert(Math.abs(mainWidth/(mainWidth+supportWidth)-.6)<.01,'Approved 60/40 columns');
+    assert(Math.abs(boxes.currentCard.y-boxes.radarCard.y)<2,'Now and radar share the first band');assert(boxes.currentCard.right<=boxes.radarCard.x);
+    assert(boxes.attention.y>=Math.max(boxes.glanceCard.bottom,boxes.radarCard.bottom),'Promoted cards follow the first band');
+    assert(Math.abs(boxes.h24Card.y-boxes.forecastCard.y)<2,'Hourly and Week share a row');assert(boxes.h24Card.right<=boxes.forecastCard.x);
+    assert(boxes.h24Card.y>=boxes.attention.bottom);
+    assert(Math.abs(boxes.callCard.y-boxes.afdCard.y)<2,'Key Messages and the discussion sit side by side');assert(boxes.callCard.right<=boxes.afdCard.x);
    }
-   else {assert(boxes.radarCard.y>=boxes.h24Card.bottom);assert(boxes.forecastCard.y>=boxes.radarCard.bottom);}
-   const radarSize=await p.locator('#radar').boundingBox(),loadedTiles=await p.locator('#radar .leaflet-tile-loaded').count();if(width>1000)assert(Math.abs(radarSize.height-(width<=1240?350:380))<2,'Radar stays bounded independently of forecast height');
+   else {
+    assert(boxes.radarCard.y>=boxes.glanceCard.bottom);assert(boxes.attention.y>=boxes.radarCard.bottom);
+    assert(boxes.h24Card.y>=boxes.attention.bottom);assert(boxes.forecastCard.y>=boxes.h24Card.bottom);assert(boxes.afdCard.y>=boxes.callCard.bottom);
+   }
+   assert(boxes.callCard.y>=Math.max(boxes.h24Card.bottom,boxes.forecastCard.bottom),'NWS messages follow the forecasts');
+   const radarSize=await p.locator('#radar').boundingBox(),loadedTiles=await p.locator('#radar .leaflet-tile-loaded').count();if(width>1000)assert(Math.abs(radarSize.height-(width<=1240?400:440))<2,'Radar stays bounded independently of forecast height');
    const rowHeights=await p.locator('#daily .day').evaluateAll(rows=>rows.map(r=>r.getBoundingClientRect().height));const rowMax=await p.locator('#daily').evaluate(e=>e.classList.contains('no-dnd')?76:56);assert(rowHeights.every(h=>h>=44&&h<=rowMax),'Compact rows keep 44px targets and room for stacked calendar dates: '+rowHeights);
    await p.locator('#daily .day').first().click();assert.equal(await p.locator('#daily .day').first().getAttribute('aria-expanded'),'true');
    await p.locator('#daily .day').first().press('Enter');assert.equal(await p.locator('#daily .day').first().getAttribute('aria-expanded'),'false');
@@ -47,13 +51,19 @@ async function main(){
    await p.locator('#briefWhy summary').click();
    // Repacking after an independently collapsed card must preserve the visible navigation target.
    await p.locator('#afdCard .context-toggle').click();await p.evaluate(()=>layoutMasonry());await p.clock.runFor(500);
-   for(const id of ['currentCard','h24Card','radarCard','forecastCard','riversCard','climateCard']){
+   // A reader who folds the lower context brings the final section to the page end: the state the
+   // clamped-jump scenario below needs, whichever way the pack happens to fall at this width.
+   for(const id of ['obsCard','droughtCard','cpcCard'])await p.locator('#'+id+' .context-toggle[aria-expanded="true"]').click();
+   await p.evaluate(()=>layoutMasonry());await p.clock.runFor(300);
+   // The clamp scenario needs the section that ends the page, which follows the packed layout.
+   const tail=await p.evaluate(()=>[...document.querySelectorAll('#jumpNav a')].map(a=>a.hash.slice(1)).sort((a,b)=>document.getElementById(b).getBoundingClientRect().bottom-document.getElementById(a).getBoundingClientRect().bottom)[0]);
+   for(const id of [...new Set(['currentCard','h24Card','radarCard','forecastCard','riversCard','climateCard'].filter(id=>id!==tail).concat(tail))]){
     await p.evaluate(id=>{document.querySelector('#jumpNav a[href="#'+id+'"]').click();document.getElementById(id).scrollIntoView();},id);
     await p.waitForFunction(id=>document.querySelector('#jumpNav a[aria-current="location"]')?.getAttribute('href')==='#'+id,id).catch(async e=>{console.error(JSON.stringify({width,theme,id,geometry:await p.evaluate(()=>({scroll:scrollY,bar:document.querySelector('.jump-wrap').getBoundingClientRect().bottom,links:[...document.querySelectorAll('#jumpNav a')].map(l=>({href:l.hash,active:l.getAttribute('aria-current'),top:document.querySelector(l.hash).getBoundingClientRect().top}))}))}));throw e;});
    }
    // Context arriving after a clamped final-section scroll must not select an earlier section.
-   const navBeforeGrowth=await p.evaluate(()=>{
-    const card=document.getElementById('climateCard').getBoundingClientRect();
+   const navBeforeGrowth=await p.evaluate(tail=>{
+    const card=document.getElementById(tail).getBoundingClientRect();
     const edge=Math.max(document.querySelector('.jump-wrap').getBoundingClientRect().bottom+16,parseFloat(getComputedStyle(document.getElementById('currentCard')).scrollMarginTop)+2);
     const maxScroll=document.documentElement.scrollHeight-innerHeight;
     const clamped=scrollY>=maxScroll-2&&card.top>edge&&card.bottom<=innerHeight&&card.top+scrollY-edge>maxScroll;
@@ -64,17 +74,17 @@ async function main(){
     if(card.top>edge+8)window.scrollBy({top:4,behavior:'instant'});
     window.dispatchEvent(new Event('resize'));
     return state;
-   });
+   },tail);
    let growthPermitsAlignment=false;
    if(navBeforeGrowth.clamped){
     clampedCases++;
     await p.clock.runFor(100);
-    assert.equal(await p.locator('#jumpNav a[aria-current="location"]').getAttribute('href'),'#climateCard');
+    assert.equal(await p.locator('#jumpNav a[aria-current="location"]').getAttribute('href'),'#'+tail);
     // Keep the original 24px-growth assertion above. Browser font metrics can leave
     // a larger clamp gap; extend only this test spacer enough to permit alignment,
     // then prove an actual scroll releases intent while the target stays visible.
-    growthPermitsAlignment=await p.evaluate(()=>{
-     const bar=document.querySelector('.jump-wrap'),card=document.getElementById('climateCard').getBoundingClientRect();
+    growthPermitsAlignment=await p.evaluate(tail=>{
+     const bar=document.querySelector('.jump-wrap'),card=document.getElementById(tail).getBoundingClientRect();
      const edge=Math.max(bar.getBoundingClientRect().bottom+16,parseFloat(getComputedStyle(document.getElementById('currentCard')).scrollMarginTop)+2);
      const target=card.top+scrollY-edge,maxScroll=document.documentElement.scrollHeight-innerHeight;
      if(card.top>edge&&card.bottom<=innerHeight&&target>maxScroll){
@@ -82,19 +92,19 @@ async function main(){
       window.dispatchEvent(new Event('resize'));
      }
      return card.top>edge&&card.bottom<=innerHeight&&card.top+scrollY-edge<=document.documentElement.scrollHeight-innerHeight;
-    });
+    },tail);
     if(growthPermitsAlignment){
      await p.clock.runFor(100);
-     assert.equal(await p.locator('#jumpNav a[aria-current="location"]').getAttribute('href'),'#climateCard','Extra test growth cannot move the unchanged visible navigation target');
+     assert.equal(await p.locator('#jumpNav a[aria-current="location"]').getAttribute('href'),'#'+tail,'Extra test growth cannot move the unchanged visible navigation target');
      await p.evaluate(()=>scrollBy({top:-24,behavior:'instant'}));await p.clock.runFor(100);
      // Native scroll delivery can follow the test-clock advance; await the actual
      // navigation update instead of assuming it ran in that synthetic time slice.
-     await p.waitForFunction(()=>{const link=document.querySelector('#jumpNav a[aria-current="location"]');return link&&link.hash!=='#climateCard';},null,{timeout:5000});
+     await p.waitForFunction(tail=>{const link=document.querySelector('#jumpNav a[aria-current="location"]');return link&&link.hash!=='#'+tail;},tail,{timeout:5000});
      const active=await p.evaluate(()=>{
       const link=document.querySelector('#jumpNav a[aria-current="location"]'),box=document.querySelector(link.hash).getBoundingClientRect();
       return {id:link.hash,top:box.top,edge:Math.max(document.querySelector('.jump-wrap').getBoundingClientRect().bottom+16,parseFloat(getComputedStyle(document.getElementById('currentCard')).scrollMarginTop)+2)};
      });
-     assert.notEqual(active.id,'#climateCard','Actual scrolling releases retained jump intent');assert(active.top<=active.edge+4,'Active section returns to the viewport edge');
+     assert.notEqual(active.id,'#'+tail,'Actual scrolling releases retained jump intent');assert(active.top<=active.edge+4,'Active section returns to the viewport edge');
      releasedCases++;
     }
     await p.evaluate(()=>document.getElementById('late-context-growth').remove());
@@ -130,13 +140,12 @@ async function main(){
   try{
    await p.evaluate(t=>applyTheme(t),theme);
    await p.locator('#radar [data-retry-maps]').waitFor();
-   const boxes=await p.evaluate(()=>Object.fromEntries(['h24Card','radarCard','forecastCard'].map(id=>{const r=document.getElementById(id).getBoundingClientRect();return[id,{x:r.x,y:r.y,right:r.right,bottom:r.bottom}];})));
+   const boxes=await p.evaluate(()=>Object.fromEntries(['currentCard','glanceCard','h24Card','radarCard','forecastCard'].map(id=>{const r=document.getElementById(id).getBoundingClientRect();return[id,{x:r.x,y:r.y,right:r.right,bottom:r.bottom}];})));
    if(width>1000){
-    assert(Math.abs(boxes.h24Card.y-boxes.radarCard.y)<2);
-    assert(Math.abs(boxes.forecastCard.x-boxes.h24Card.x)<2);
-    assert(Math.abs(boxes.forecastCard.y-boxes.h24Card.bottom-18)<2,'Map failure leaves the forecast column in place');
+    assert(Math.abs(boxes.currentCard.y-boxes.radarCard.y)<2);
+    assert(Math.abs(boxes.h24Card.y-boxes.forecastCard.y)<2,'Map failure leaves the forecast row in place');
     assert(boxes.radarCard.bottom-boxes.radarCard.y<400,'Failure panel stays compact');
-   }else {assert(boxes.radarCard.y>=boxes.h24Card.bottom);assert(boxes.forecastCard.y>=boxes.radarCard.bottom);}
+   }else {assert(boxes.radarCard.y>=boxes.glanceCard.bottom);assert(boxes.h24Card.y>=boxes.radarCard.bottom);}
    assert(await p.locator('#radar a[href="https://radar.weather.gov/station/KLSX/standard"]').isVisible());
    assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
    if(out){
@@ -146,7 +155,7 @@ async function main(){
    }
    s.change({...scenario,mapLibrariesDown:false});await p.locator('#radar [data-retry-maps]').click();
    await p.waitForFunction(()=>document.querySelectorAll('#radar .leaflet-tile-loaded').length>0);
-   if(width>1000)await p.waitForFunction(()=>{const h=radar.getBoundingClientRect().height;return h>=349&&h<=381;});
+   if(width>1000)await p.waitForFunction(()=>{const h=radar.getBoundingClientRect().height;return h>=399&&h<=441;});
    assert.equal(await p.locator('#radar .leaflet-map-pane').count(),1);assert.equal(await p.locator('#radar .leaflet-map-pane').evaluate(e=>getComputedStyle(e).position),'absolute');assert(await p.locator('#radar .leaflet-control-zoom').isVisible());assert(await p.locator('#radar .leaflet-tile-loaded').first().isVisible());assert.equal(await p.locator('#radar [data-retry-maps]').count(),0);
    assert.deepEqual(s.errors,[]);
    report.push({width,theme,mapState:'failure and retry',status:'passed',failurePlanning:boxes,recoveredMap:await p.locator('#radar').boundingBox(),recoveredTiles:await p.locator('#radar .leaflet-tile-loaded').count()});console.log('PASS '+engine+' '+width+' '+theme+' failure/retry');
@@ -162,16 +171,16 @@ async function main(){
   // Repeated native resizes expose late map-class mutations during observer delivery.
   for(let pass=0;pass<3;pass++)for(const width of [390,768,1000,1001,1180,1920,1440]){
    await p.locator('#riskHelp summary').focus();await p.setViewportSize({width,height:900});
-   await p.waitForFunction(w=>document.querySelector('.planning-grid').classList.contains('desktop-planning')===(w>1000),width);
+   await p.waitForFunction(()=>new Promise(r=>requestAnimationFrame(()=>r(true))));
    assert(await p.evaluate(()=>layoutRefs.map===rvMap&&layoutRefs.cards.every(card=>card===document.getElementById(card.id))),'No widget or map instance is replaced');
    assert.equal(await p.evaluate(()=>JSON.stringify(smart.days)),await p.evaluate(()=>layoutRefs.days));
    assert.equal(await p.locator('#daily .day').first().getAttribute('aria-expanded'),'true');
    assert(await p.locator('#riskHelp').evaluate(e=>e.open));assert(await p.locator('#afdCardBody').isHidden());
    assert(await p.locator('#riskHelp summary').evaluate(e=>e===document.activeElement),'Moved disclosure retains keyboard focus');
-   if(width<=1000){
-    assert.deepEqual(await p.locator('.planning-grid>.card').evaluateAll(rows=>rows.map(r=>r.id)),['h24Card','radarCard','forecastCard']);
-    assert(await p.locator('#riversCard').evaluate(e=>e.parentElement.classList.contains('masonry')));assert(await p.locator('#riskCard').evaluate(e=>e.parentElement.classList.contains('masonry')));
-   }
+   // CSS alone places the bands: no breakpoint moves a card to a different parent.
+   assert.deepEqual(await p.locator('.planning-grid>.card').evaluateAll(rows=>rows.map(r=>r.id)),['h24Card','forecastCard']);
+   assert.deepEqual(await p.locator('.top-band>.card').evaluateAll(rows=>rows.map(r=>r.id)),['radarCard']);
+   assert(await p.locator('#riversCard').evaluate(e=>e.parentElement.id==='attentionCards'));assert(await p.locator('#riskCard').evaluate(e=>e.parentElement.classList.contains('masonry')));
    assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
   }
   assert.deepEqual(responsive.errors,[]);report.push({state:'Responsive card identity, focus and disclosure preservation',status:'passed'});console.log('PASS '+engine+' responsive planning');

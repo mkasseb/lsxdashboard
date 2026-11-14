@@ -56,11 +56,17 @@ async function card(p){
       const c=await card(p);
       assert.equal(c.shown,c.rows,'desktop shows every row');
       assert.equal(c.button,null,'desktop has no toggle');
-      const side=await p.evaluate(()=>{
+      const placement=()=>p.evaluate(()=>{
         const a=document.querySelector('#glance .glance-lead').getBoundingClientRect(),b=document.querySelector('#glance .glance-list').getBoundingClientRect();
-        return b.left>=a.right&&b.top<a.bottom;
+        return {beside:b.left>=a.right&&b.top<a.bottom,below:b.top>=a.bottom-1};
       });
-      assert(side,'desktop puts rows beside the lead');
+      // Beside radar the card is a column, so rows stack under the lead; at tablet width it
+      // spans the page and the rows sit beside the lead to keep the band short.
+      assert((await placement()).below,'desktop stacks rows under the lead beside radar');
+      const r=await p.evaluate(()=>{const g=glanceCard.getBoundingClientRect(),n=currentCard.getBoundingClientRect(),m=radarCard.getBoundingClientRect();return g.right<=m.x&&Math.abs(n.top-m.top)<2&&Math.abs(g.top-n.bottom)<2;});
+      assert(r,'Now and Your day share the column beside radar on desktop');
+      await p.setViewportSize({width:900,height:900});
+      assert((await placement()).beside,'tablet puts rows beside the lead');
       console.log('PASS glance desktop layout');
     }finally{await s.context.close();}
 

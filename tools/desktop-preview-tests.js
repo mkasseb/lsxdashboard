@@ -4,13 +4,13 @@
 // Keep the actual weather, timestamps and map layers, with default TLS and no response fixtures.
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
 const {chromium}=require('playwright');
-const {planningGapGeometry,assertPlanningGap}=require('./planning-gap-contract');
+const {layoutGeometry,assertLayout}=require('./layout-contract');
 const root=path.join(__dirname,'..'),out=process.argv[2]||'/tmp/desktop-hosted',sha=process.env.EXPECTED_SHA;
 const audit={startedAt:new Date().toISOString(),commit:sha,tls:'Default certificate validation; no bypass',live:[],runtimeErrors:[],networkFailures:[]};
 async function geometry(page){return page.evaluate(()=>{
- const ids=['h24Card','forecastCard','radarCard','riskCard','riversCard'];
+ const ids=['currentCard','h24Card','forecastCard','radarCard','riskCard','riversCard'];
  const boxes=Object.fromEntries(ids.map(id=>{const r=document.getElementById(id).getBoundingClientRect();return[id,{x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom,right:r.right}];}));
- return {width:innerWidth,scrollWidth:document.documentElement.scrollWidth,desktop:document.querySelector('.planning-grid').classList.contains('desktop-planning'),boxes,map:{width:radar.clientWidth,height:radar.clientHeight,size:rvMap&&[rvMap.getSize().x,rvMap.getSize().y]},primary:[...document.querySelectorAll('.planning-primary>.card')].map(e=>e.id),support:[...document.querySelectorAll('.planning-support>.card')].map(e=>e.id),mobile:[...document.querySelectorAll('.planning-grid>.card')].map(e=>e.id)};
+ return {width:innerWidth,scrollWidth:document.documentElement.scrollWidth,desktop:innerWidth>1000,boxes,map:{width:radar.clientWidth,height:radar.clientHeight,size:rvMap&&[rvMap.getSize().x,rvMap.getSize().y]},planning:[...document.querySelectorAll('.planning-grid>.card')].map(e=>e.id),top:[...document.querySelectorAll('.top-band>.card')].map(e=>e.id)};
 });}
 async function settled(page){
  await page.waitForFunction(()=>rvMap&&rvBase&&rvBase.getMaplibreMap().isStyleLoaded()&&radar.clientWidth===rvMap.getSize().x&&radar.clientHeight===rvMap.getSize().y,null,{timeout:60000});
@@ -19,15 +19,12 @@ async function settled(page){
 }
 function verifyGeometry(g){
  assert(g.scrollWidth<=g.width+1,'Page overflow '+JSON.stringify(g));
- assert.equal(g.desktop,g.width>1000);
+ assert.deepEqual(g.planning,['h24Card','forecastCard']);assert.deepEqual(g.top,['radarCard']);
  if(g.desktop){
-  assert.deepEqual(g.primary,['h24Card','forecastCard']);assert.deepEqual(g.support,['radarCard','riskCard','riversCard']);
-  const b=g.boxes;assert(Math.abs(b.h24Card.y-b.radarCard.y)<2);
-  assert(Math.abs(b.h24Card.width/(b.h24Card.width+b.radarCard.width)-.6)<.01);
-  assert(Math.abs(b.forecastCard.y-b.h24Card.bottom-18)<2);assert(Math.abs(b.forecastCard.x-b.h24Card.x)<2);
-  assert(Math.abs(b.riskCard.y-b.radarCard.bottom-18)<2);assert(Math.abs(b.riversCard.y-b.riskCard.bottom-18)<2);
-  assert(Math.abs(g.map.height-(g.width<=1240?350:380))<2);
- }else assert.deepEqual(g.mobile,['h24Card','radarCard','forecastCard']);
+  const b=g.boxes;assert(Math.abs(b.h24Card.y-b.forecastCard.y)<2,'Hourly and Week share a row');assert(b.h24Card.right<=b.forecastCard.x);
+  assert(b.h24Card.y>=b.radarCard.bottom,'Forecasts follow the Now and radar band');
+  assert(Math.abs(g.map.height-(g.width<=1240?400:440))<2);
+ }else{const b=g.boxes;assert(b.h24Card.y>=b.radarCard.bottom);assert(b.forecastCard.y>=b.h24Card.bottom);}
  assert.deepEqual(g.map.size,[g.map.width,g.map.height],'Map geometry follows its rendered viewport');
 }
 async function main(){
@@ -58,7 +55,7 @@ async function main(){
    const primary=await page.locator('#daily .day').allTextContents(),normals=await page.locator('.normal-detail').allTextContents();
    for(const theme of ['light','dark']){
     await page.evaluate(t=>applyTheme(t),theme);await settled(page);verifyGeometry(await geometry(page));
-    if(width>1000)assertPlanningGap(await page.evaluate(planningGapGeometry));
+    if(width>1000)assertLayout(await page.evaluate(layoutGeometry));
     assert.deepEqual(await page.locator('#daily .day').allTextContents(),primary);assert.deepEqual(await page.locator('.normal-detail').allTextContents(),normals);
     if([1180,1440,1920,390,768].includes(width)){
      await page.evaluate(()=>scrollTo(0,0));await page.screenshot({path:path.join(out,`live-${width}-${theme}-page.png`),fullPage:true});
@@ -70,7 +67,7 @@ async function main(){
   }
   await page.setViewportSize({width:1440,height:1000});await settled(page);
   audit.gapStates=[];
-  async function checkGapState(state){await settled(page);const g=await page.evaluate(planningGapGeometry);audit.gapStates.push({state,...assertPlanningGap(g),geometry:g});await page.locator('.planning-grid').screenshot({path:path.join(out,'live-gap-'+state+'.png'),style:'.jump-wrap,.skip{visibility:hidden !important}'});}
+  async function checkGapState(state){await settled(page);const g=await page.evaluate(layoutGeometry);audit.gapStates.push({state,...assertLayout(g),geometry:g});await page.locator('.planning-grid').screenshot({path:path.join(out,'live-gap-'+state+'.png'),style:'.jump-wrap,.skip{visibility:hidden !important}'});}
   await checkGapState('loaded');
   await page.locator('#riskHelp > summary').click();await checkGapState('risk-expanded');
   const lastPin=page.locator('#rivers [data-pin-gauge]').last(),pinId=await lastPin.getAttribute('data-pin-gauge');await lastPin.scrollIntoViewIfNeeded();

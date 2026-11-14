@@ -793,3 +793,57 @@ the hero's today range) use `tGrad()`, which samples the ramp every few degrees:
 gradient blends in RGB, and teal→gold through RGB is exactly the muddy green the ramp avoids. A
 logic test fails if any temperature from −30 to 120°F maps to a saturated green, and the
 contrast check now samples 55, 56, 60 and 100°F as well.
+
+## November 2026 layout: bands and the calm rule
+
+This supersedes the October composition above (the 60/40 planning columns, the measured lower
+band and the reparenting that served them). The page is now a stack of bands placed by CSS grid:
+
+1. Alerts and mesoscale discussions.
+2. **Now + Your day | Radar.** Now and Your day are one joined unit on the left; radar fills the
+   right. Above 1000px the split is 1 : 1.2 and the radar viewport is a fixed 440px (400px through
+   1240px), so nothing else can resize a working map. The three things people open a weather page
+   for share the first screen. Your day keeps its two-column wide layout only between 681px and
+   1000px, where it spans the page; beside radar it stacks.
+3. **Worth a look today** (`#attention`): empty and hidden on an ordinary day. See below.
+4. **Hourly | Seven-day**, one row on desktop.
+5. **NWS Key Messages | Forecast discussion**, one row on desktop. Both come from the same office
+   product, so they sit together instead of a screen apart.
+6. **Around your area**: the remaining context, packed by the existing masonry.
+
+No script moves cards between breakpoints any more, so `initPlanningLayout()` and
+`layoutPlanningContext()` are gone, along with the transparent-container pointer workaround they
+needed. Mobile DOM order is the reading order: Now, Your day, radar, promoted cards, hourly,
+seven-day, Key Messages, discussion, context. Section numbers in the jump bar follow that order.
+
+**The calm rule.** A context card that shows nothing remarkable should cost one line, and one that
+does should not be buried. `setAttention(id, on)` moves a card between the context pack and
+`#attentionCards`, keeping its node (handlers, disclosures, pins, focus). Two cards use it:
+
+- **Rivers.** `riverState()` reads markers `loadRivers()` writes on each gauge row. Any gauge at
+  action stage or above, or any usable forecast point reaching a category, is *attention*. Both use
+  the numeric thresholds (`stageCategory`), never only the label: an "unknown" category at 16.2 ft
+  over a 16 ft line is at action stage, and a 15.8 → 16.1 ft forecast crosses it even though the
+  trend wording ignores rises under 0.5 ft. "Below action stage" needs positive evidence
+  (`data-below`): under the gauge's numeric action-stage threshold, or, when it publishes no action
+  stage, an explicit no-flooding category. A forecast counts toward "none forecast to reach it" only
+  with usable future points *and* an action-stage threshold to compare them against; otherwise the
+  row says why it is unverified. When any gauge lacks an action stage, the summary says "no
+  flooding reported" in place of "below action stage", claiming only what the data shows.
+  The forecast is judged before the reading (`forecastReach`): a stale, undated or missing
+  observation still shows a fresh forecast's threshold crossing and promotes the card, with the
+  current level labelled unverified. Crest wording stays withheld there, since it is relative to
+  the reading. Every gauge with a live reading below
+  action stage is *calm*: one line, rows behind "Show all gauges". Forecasts only decide what that
+  line may claim: "none forecast to reach it" needs every forecast current; otherwise it counts the
+  current ones and names the gauges without one (Eureka's is often stale), so a gap is visible but
+  doesn't hold six "No Flooding" rows open. Restored, loading, stale or failed *readings* are
+  *unknown* and keep the full rows where they were.
+- **Risk Outlook.** Promoted only when a verified SPC category is Marginal or higher, an ERO is
+  Marginal or higher, fire weather is Elevated or higher, or a severe probability is non-zero.
+  General thunder, zeros and missing categories never promote.
+
+The asymmetry is deliberate: a failure can never look like an all-clear, and it does not shout
+either. AQI already followed this rule (its card only appears above 100), so it is unchanged.
+`tools/layout-band-tests.js` (formerly the planning-gap test) checks that bands stack without
+overlap or dead space and that packed context never overlaps a card.

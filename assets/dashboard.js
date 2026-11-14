@@ -806,8 +806,48 @@ function renderRiverRows(){
       +'<button type="button" class="river-pin" data-pin-gauge="'+r.id+'" aria-pressed="'+on+'" aria-label="'+(on?'Unpin ':'Pin ')+esc(r.name)+'">'+(on?'Pinned':'Pin')+'</button></div>';
   }).join('');}
   if(pinned.length) html+='<h3 class="river-group">Pinned gauges</h3>'+rows(pinned)+'<h3 class="river-group">Other regional gauges</h3>';
-  el.innerHTML=html+rows(regional);
+  html+=rows(regional);
+  var state=riverState(), card=document.getElementById("riversCard"), all=el.querySelector(".river-all");
+  if(state==="calm"){
+    // Every gauge has a live reading below action stage and no current forecast reaches it: one
+    // line, with the full rows one tap away (pins still work inside). Current readings decide the
+    // collapse; forecasts only decide what the line may claim. A gauge whose forecast cannot be
+    // verified against action stage is named rather than counted as clear, so it never reads as reassurance, but it
+    // doesn't keep six "No Flooding" rows open either (Eureka's forecast is often stale).
+    var unforecast=RIVERS.filter(function(r){return riverRows[r.id].indexOf('data-fc="fresh"')<0;});
+    var clause=!unforecast.length?"none forecast to reach it"
+      :unforecast.length===RIVERS.length?"no forecasts verified against action stage"
+      :(RIVERS.length-unforecast.length)+" of "+RIVERS.length+" forecasts verified, none reaching it";
+    var gap=unforecast.length&&unforecast.length<RIVERS.length
+      ?'<p class="river-calm-gap">Forecast unverified against action stage: '+unforecast.map(function(r){return esc(r.name);}).join(", ")+'</p>':"";
+    var allActionStages=RIVERS.every(function(r){return riverRows[r.id].indexOf('data-action="1"')>=0;});
+    var observed=allActionStages?"gauges below action stage":"gauges with no flooding reported";
+    html='<p class="river-calm-line"><span class="river-calm-dot" aria-hidden="true"></span>All '+RIVERS.length+' '+observed+' · '+clause+'</p>'+gap
+      +'<details class="disclosure river-all"'+(all&&all.open?' open':'')+'><summary>Show all gauges</summary><div class="river-all-rows">'+html+'</div></details>';
+  }
+  el.innerHTML=html;
+  if(card) card.classList.toggle("rivers-calm",state==="calm");
+  setAttention("riversCard",state==="attention");
   if(focus){var button=el.querySelector('[data-pin-gauge="'+focus+'"]');if(button) button.focus({preventScroll:true});}
+}
+/* "attention" when any live gauge is at action stage or above now, or forecast to reach a category;
+   "calm" only when every gauge has a live, verified reading below action stage (forecast gaps are
+   named in the summary, not hidden); anything else (restored, loading, stale or failed readings)
+   is "unknown" and keeps the rows in place. */
+function riverState(){
+  // Restored snapshot rows (up to three hours old) have not passed the live freshness checks yet:
+  // they stay expanded where they are until loadRivers has verified them.
+  var feed=typeof feedChecks!=="undefined"&&feedChecks.rivers;
+  if(!feed||feed.saved||feed.status==="loading") return "unknown";
+  var calm=true;
+  for(var i=0;i<RIVERS.length;i++){
+    var row=riverRows[RIVERS[i].id];
+    if(row&&(/rlink c-(action|minor|moderate|major)/.test(row)||row.indexOf("rfcat")>=0||row.indexOf('data-reach="1"')>=0)) return "attention";
+    // Calm needs positive evidence the gauge is below action stage (data-below="1"), not merely the
+    // absence of a flood label: an "unknown" category with no usable threshold proves nothing.
+    if(!row||row.indexOf("r-now-label")<0||row.indexOf("rlink c-none")<0||row.indexOf('data-below="1"')<0) calm=false;
+  }
+  return calm?"calm":"unknown";
 }
 document.getElementById("rivers").addEventListener("click",function(e){
   var button=e.target.closest("[data-pin-gauge]");if(!button) return;
@@ -847,15 +887,35 @@ function crestWhen(iso){
     ? d.toLocaleDateString("en-US", {timeZone:WEATHER_TZ,weekday:"short",month:"short",day:"numeric"})
     : d.toLocaleString("en-US", {timeZone:WEATHER_TZ,weekday:"short",hour:"numeric"});
 }
-function crestInfo(fcJson,now){
-  if(!fcJson) return null;
-  // Series are issued hours before we read them, so drop points that have already elapsed —
-  // otherwise a peak from earlier this morning gets announced as an upcoming crest.
+/* The usable part of a stageflow series: finite stages (−9999 is the NWPS sentinel) at valid times
+   that have not already elapsed. Series are issued hours before we read them, so a peak from
+   earlier this morning must not be announced as upcoming. Shared by the crest wording and the
+   calm rule, so the two can never disagree about what the forecast contains. */
+function forecastPoints(fcJson){
+  if(!fcJson) return [];
   var cutoff=Date.now()-30*60000;
-  var pts=(fcJson.data||[]).filter(function(p){
-    return p&&typeof p.primary==="number"&&p.primary>-500&&p.validTime   // -9999 is the NWPS sentinel
-      && new Date(p.validTime).getTime()>cutoff;
+  return (fcJson.data||[]).filter(function(p){
+    var t=p&&p.validTime?new Date(p.validTime).getTime():NaN;
+    return p&&typeof p.primary==="number"&&isFinite(p.primary)&&p.primary>-500&&isFinite(t)&&t>cutoff;
   });
+}
+/* The highest usable point of a fresh forecast that reaches a flood category, judged on the
+   numeric thresholds alone. It needs no current reading, so a stale or missing observation can
+   never hide a verified forecast exceedance. Null when the forecast is missing, stale, empty or
+   reaches nothing. */
+function forecastReach(fcJson,cats){
+  if(!fcJson) return null;
+  var issue=Date.parse(fcJson.issuedTime||"");
+  if(WeatherContracts.sourceState(issue,Date.now(),WeatherContracts.policy.riverForecastAge).state!=="ready") return null;
+  var best=null;
+  forecastPoints(fcJson).forEach(function(p){ if(stageCategory(p.primary,cats)&&(!best||p.primary>best.primary)) best=p; });
+  return best?{point:best,cat:stageCategory(best.primary,cats)}:null;
+}
+function forecastReachNote(reach){
+  return '<span class="r-forecast-label">Forecast reaches: </span><span class="rup">▲ '+(Math.round(reach.point.primary*10)/10)+' ft by '+esc(crestWhen(reach.point.validTime))+'</span> <span class="rfcat c-'+reach.cat.key+'">'+esc(reach.cat.label)+'</span>';
+}
+function crestInfo(fcJson,now){
+  var pts=forecastPoints(fcJson);
   if(pts.length<2) return null;
   var base=(typeof now==="number")?now:pts[0].primary;
   var maxI=0, i;
@@ -872,9 +932,12 @@ function crestInfo(fcJson,now){
   if(base-end.primary>=0.5) return {kind:"falling", stage:end.primary, when:end.validTime};
   return null;
 }
-function riverLinkOnly(r,note){
-  return '<a class="rlink c-none" href="https://water.noaa.gov/gauges/'+r.id+'" target="_blank" rel="noopener">'
-    +'<span class="rname"><span class="rn-top">'+ic("flood")+esc(r.name)+'</span>'+(note?'<span class="rsub">'+esc(note)+'</span>':'')+'</span><span class="rmeta"><span class="rval" style="color:var(--muted);font-size:13px">View ↗</span></span></a>';
+/* A gauge whose current reading can't be used. A verified forecast exceedance is still shown and
+   marked data-reach, so it promotes the card while the reading itself stays labelled unverified. */
+function riverLinkOnly(r,note,reach){
+  var sub=(note?esc(note):'')+(reach?(note?' · ':'')+forecastReachNote(reach):'');
+  return '<a class="rlink c-none"'+(reach?' data-reach="1"':'')+' href="https://water.noaa.gov/gauges/'+r.id+'" target="_blank" rel="noopener">'
+    +'<span class="rname"><span class="rn-top">'+ic("flood")+esc(r.name)+'</span>'+(sub?'<span class="rsub">'+sub+'</span>':'')+'</span><span class="rmeta"><span class="rval" style="color:var(--muted);font-size:13px">View ↗</span></span></a>';
 }
 
 
@@ -1095,7 +1158,8 @@ function riskPill(info,denom){
 }
 
 
-function syncRiskBreakdown(quiet, probabilitiesMissing){
+function syncRiskBreakdown(quiet, probabilitiesMissing, elevated){
+  setAttention("riskCard",!!elevated);
   var breakdown=document.getElementById("riskBreakdown"), toggle=breakdown.querySelector("summary");
   if(toggle.hidden===quiet){
     if(!quiet&&document.activeElement===toggle) document.querySelector("#riskHelp summary").focus({preventScroll:true});
@@ -1906,13 +1970,43 @@ syncTabMotion();   // a page opened into a background tab never gets the event
 if(!document.hidden) startSchedule();
 document.getElementById("refresh").addEventListener("click",function(){ refreshAll(); });
 
+/* ---- The calm rule ----
+   Context cards live in the "Around your area" pack. When one stops being calm — a river gauge at
+   action stage or worse (now or in its forecast), an elevated storm/flood/fire outlook — it moves
+   up to #attention, directly under Now and radar, and goes back when it calms down. The decision
+   to move is made only on verified data: an outage or a still-loading feed leaves the card where
+   it is, fully expanded, so a failure can never look like an all-clear and never shouts either.
+   Moving the node keeps its handlers, disclosures and pins; focus inside it is restored. */
+function setAttention(id,on){
+  // Declared inside: a restored snapshot repaints rivers before later top-level vars initialise.
+  var ATTENTION_ORDER=["riskCard","riversCard"];
+  var card=document.getElementById(id), band=document.getElementById("attention"),
+      slot=document.getElementById("attentionCards"), m=document.querySelector(".masonry");
+  if(!card||!band||!slot||!m) return;
+  var home=on?slot:m;
+  if(card.parentNode!==home){
+    var focused=document.activeElement, keep=focused&&card.contains(focused);
+    if(_mObs) _mObs.disconnect();
+    ["left","top","width"].forEach(function(prop){ card.style.removeProperty(prop); });
+    if(on){
+      var next=null, rank=ATTENTION_ORDER.indexOf(id);
+      [].forEach.call(slot.children,function(c){ if(!next&&ATTENTION_ORDER.indexOf(c.id)>rank) next=c; });
+      slot.insertBefore(card,next);
+    } else m.appendChild(card);
+    if(_mObs) _mObs.observe(m,_mObsOpts);
+    if(keep&&document.activeElement!==focused) focused.focus({preventScroll:true});
+  }
+  card.classList.toggle("promoted",!!on);
+  band.hidden=!slot.querySelector(".card");
+  if(typeof scheduleMasonry==="function") scheduleMasonry();
+}
+
 /* ---- JavaScript masonry: pack band cards by their REAL measured height ---- */
 var masonryPointerActive=false;
 function layoutMasonry(){
   // Preserve the pressed target until its native click/toggle has completed.
   if(masonryPointerActive)return;
   var m=document.querySelector(".masonry"); if(!m) return;
-  if(layoutPlanningContext(m,tier))return;
   var GAP=16, w=m.clientWidth;
   var cols = w<=680 ? 1 : (w<=1100 ? 2 : 3);
   var colW = Math.floor((w-GAP*(cols-1))/cols);
@@ -1935,8 +2029,8 @@ function layoutMasonry(){
   //  (Alerts/Pulse/Current/Radar/Hourly are fixed heroes above this masonry.)
   function tier(id){
     var RANK={
-      riversCard:1, aqiCard:1, afdCard:1, // local context follows the fixed planning band
-      riskCard:2,       // severe storm/flood/fire risk
+      riskCard:1,       // severe storm/flood/fire risk (calm here; elevated moves it to #attention)
+      riversCard:2, aqiCard:2, // local gauges and air quality
       hazardsCard:3,    // hazards outlook (days 3–14)
       obsCard:4,        // station plot — current regional obs
       droughtCard:6,    // drought outlook
@@ -2018,6 +2112,11 @@ function layoutMasonry(){
     for(var k2=w.start;k2<w.start+d.span;k2++) colH[k2]=nb;
   }
   m.style.height=Math.max.apply(null,colH)+"px";
+  // A repack can change the station plot's width; Leaflet only learns that when told.
+  var station=document.getElementById("stnmap");
+  if(typeof stnMap!=="undefined"&&stnMap&&station&&station.clientWidth&&station.clientHeight){
+    var size=stnMap.getSize(); if(size.x!==station.clientWidth||size.y!==station.clientHeight) stnMap.invalidateSize({animate:false});
+  }
   reorderMasonryDOM(m,data);
   fitDayDates();
   document.dispatchEvent(new Event("lsxlayout"));

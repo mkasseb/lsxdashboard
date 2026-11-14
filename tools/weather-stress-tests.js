@@ -79,6 +79,9 @@ async function open(c, width=390) {
   const page=await context.newPage();
   page.setDefaultTimeout(15000);
   if(c.noIntersectionObserver)await page.addInitScript(()=>{delete window.IntersectionObserver;});
+  // Radar now shares the first screen, so it is normally within approach range at startup. This
+  // pushes it well below the fold to exercise the deferred-loading triggers themselves.
+  if(c.radarBelowFold)await page.addInitScript(()=>{const o=new MutationObserver(()=>{const band=document.querySelector('.top-band');if(!band)return;o.disconnect();const s=document.createElement('div');s.id='testFoldSpacer';s.style.height='4000px';band.before(s);});o.observe(document,{childList:true,subtree:true});});
   if(c.measure){const cdp=await context.newCDPSession(page);await cdp.send('Emulation.setCPUThrottlingRate',{rate:4});}
   await page.clock.install({time:new Date(c.now)});
   if(c.webglBlocked)await page.addInitScript(()=>{
@@ -166,7 +169,7 @@ async function open(c, width=390) {
     if(u.hostname==='api.open-meteo.com'&&c.uv!=null) return reply({hourly:{time:[c.now/1000,(c.now+H)/1000],uv_index:[c.uv,c.uv+1]},daily:{time:Array.from({length:7},(_,i)=>stamp(c.now+i*24*H).slice(0,10)),uv_index_max:Array(7).fill(c.uv+1)}});
     if(u.hostname==='api.water.noaa.gov'&&c.river){
       if(u.pathname.endsWith('/stageflow/forecast')) return reply({issuedTime:c.riverForecastMissingTime?undefined:new Date(c.now-(c.riverForecastAgeHours||1)*H).toISOString(),data:c.river.map((primary,i)=>({primary,validTime:new Date(c.now+i*24*H).toISOString()}))});
-      return reply({status:{observed:{primary:20,primaryUnit:'ft',floodCategory:'minor',validTime:c.riverMissingTime?undefined:new Date(c.now-(c.riverAgeMinutes||5)*60000).toISOString()}},flood:{categories:{action:{stage:16},minor:{stage:18},moderate:{stage:24},major:{stage:30}}}});
+      return reply({status:{observed:{primary:c.riverStage||20,primaryUnit:'ft',floodCategory:c.riverCategory||'minor',validTime:c.riverMissingTime?undefined:new Date(c.now-(c.riverAgeMinutes||5)*60000).toISOString()}},flood:{categories:c.riverNoThresholds?{}:{action:{stage:16},minor:{stage:18},moderate:{stage:24},major:{stage:30}}}});
     }
     if(u.hostname==='api.weather.gov') {
       let id='0';
@@ -358,6 +361,9 @@ async function main() {
     await run('quiet outlook stays compact and expands for elevated or missing categories',config('quiet outlook'),async session=>{
       const {page}=session, breakdown=page.locator('#riskBreakdown'), toggle=breakdown.locator('summary');
       await expectText(page,'#riskQuiet',/through day 3/);
+      const riskHome=()=>page.locator('#riskCard').evaluate(e=>e.parentElement.id||(e.parentElement.classList.contains('masonry')?'masonry':e.parentElement.className));
+      assert.equal(await riskHome(),'masonry','A verified quiet outlook stays in context');
+      assert(await page.locator('#attention').isHidden());
       assert(await page.locator('#spc').isHidden());
       assert(await page.locator('#riskProbabilityNote').isHidden());
       await toggle.click();
@@ -373,15 +379,20 @@ async function main() {
       await page.evaluate(()=>loadSpc());
       assert(await page.locator('#riskQuiet').isHidden());
       await expectText(page,'#spc',/General Storms/);
+      assert.equal(await riskHome(),'masonry','General storms are not a promotion');
       session.change(config('elevated probability',{probabilities:[[5,0,0],[0,0,0]]}));
       await page.evaluate(()=>loadSpc());
       assert(await page.locator('#riskQuiet').isHidden());
       assert(await page.locator('#spcThreats .elevated').isVisible());
+      assert.equal(await riskHome(),'attentionCards','An elevated probability moves the card under radar');
+      assert(await page.locator('#attention').isVisible());
       session.change(config('missing category'));
       await page.route(/SPC_wx_outlks\/MapServer\/17\/query\?/,route=>route.fulfill({status:503,json:{}}));
       await page.evaluate(()=>loadSpc());
       assert(await page.locator('#riskQuiet').isHidden());
       await expectText(page,'#spc',/Unavailable/);
+      assert.equal(await riskHome(),'masonry','A missing category is never a promotion');
+      assert(await page.locator('#attention').isHidden());
     },320);
     for(const width of [320,1280])await run('risk explanations work by tap and remain open after refresh at '+width+'px',config('risk help'),async({page})=>{
       // Finish the lazy context work before exercising an ordinary disclosure click.
@@ -512,6 +523,67 @@ async function main() {
       });
       await page.waitForFunction(()=>snapSafeSeq===locSeq);assert.equal(await page.evaluate(()=>current.name),'New favorite');
     });
+    await run('calm gauges collapse to one verified line and an outage is never calm',config('river calm',{river:[10,9,8],riverStage:10,riverCategory:'none'}),async session=>{
+      const {page}=session;
+      await expectText(page,'#rivers',/All 6 gauges below action stage/);
+      assert(await page.locator('#riversCard').evaluate(e=>e.classList.contains('rivers-calm')&&e.parentElement.classList.contains('masonry')));
+      assert(await page.locator('#attention').isHidden());
+      assert.equal(await page.locator('#rivers .river-row').count(),6,'Every gauge stays one tap away');
+      assert(await page.locator('#rivers .river-row').first().isHidden());
+      await page.locator('#rivers .river-all summary').click();
+      assert(await page.locator('#rivers .river-row').first().isVisible());
+      await page.locator('[data-pin-gauge="ERKM7"]').click();
+      assert(await page.locator('#rivers .river-all').evaluate(e=>e.open),'Pinning inside the disclosure keeps it open');
+      await expectText(page,'#rivers',/none forecast to reach it/);
+      // Restored snapshot rows have not passed live freshness checks: never calm, never promoted.
+      await page.evaluate(()=>{feedChecks.rivers.saved=true;renderRiverRows();});
+      assert(await page.locator('#riversCard').evaluate(e=>!e.classList.contains('rivers-calm')&&e.parentElement.classList.contains('masonry')),'Saved rows stay expanded in context');
+      await page.evaluate(()=>loadRivers());
+      assert(await page.locator('#riversCard').evaluate(e=>e.classList.contains('rivers-calm')),'A live check restores the calm summary');
+      // A stale forecast is not evidence that nothing is coming.
+      session.change(config('river stale forecast',{river:[10,9,8],riverStage:10,riverCategory:'none',riverForecastAgeHours:72}));
+      await page.evaluate(()=>loadRivers());
+      // Readings decide the collapse; the line just stops claiming anything about forecasts.
+      assert(await page.locator('#riversCard').evaluate(e=>e.classList.contains('rivers-calm')),'Stale forecasts do not reopen six calm rows');
+      await expectText(page,'.river-calm-line',/no forecasts verified against action stage/);
+      assert(!/none forecast to reach it/.test(await page.locator('.river-calm-line').innerText()),'A stale forecast is never counted as clear');
+      session.change(config('river crest forecast',{river:[10,17,12],riverStage:10,riverCategory:'none'}));
+      await page.evaluate(()=>loadRivers());
+      assert(await page.locator('#riversCard').evaluate(e=>e.parentElement.id==='attentionCards'&&!e.classList.contains('rivers-calm')),'A forecast reaching action stage promotes the gauges');
+      session.change(config('river outage'));
+      await page.evaluate(()=>loadRivers());
+      assert(await page.locator('#riversCard').evaluate(e=>e.parentElement.classList.contains('masonry')&&!e.classList.contains('rivers-calm')),'Unverified gauges keep full rows in context');
+      assert(await page.locator('#attention').isHidden());
+    },1280);
+    // Each case is one gauge state applied to all six fixture gauges; action stage is 16 ft.
+    const riverHome=page=>page.locator('#riversCard').evaluate(e=>({calm:e.classList.contains('rivers-calm'),promoted:e.parentElement.id==='attentionCards',line:document.querySelector('.river-calm-line')?.textContent||''}));
+    await run('a forecast rise under 0.5 ft that crosses action stage promotes the gauges',config('river small rise',{river:[15.8,16.1,15.9],riverStage:15.8,riverCategory:'no_flooding'}),async({page})=>{
+      await expectText(page,'#rivers',/Forecast reaches/);
+      const home=await riverHome(page);assert(home.promoted&&!home.calm,'16.1 ft forecast over a 16 ft action stage: '+JSON.stringify(home));
+      await expectText(page,'#rivers',/16\.1 ft by .*action stage/i);
+    },1280);
+    await run('a reading over action stage with an unknown category is not called calm',config('river unknown category',{river:[15,14,13],riverStage:16.2,riverCategory:'unknown'}),async({page})=>{
+      const home=await riverHome(page);assert(home.promoted&&!home.calm,'16.2 ft over a 16 ft action stage: '+JSON.stringify(home));
+      assert(!/below action stage/.test(home.line));
+      await expectText(page,'#rivers',/Action Stage/);
+    },1280);
+    await run('an unknown category with no thresholds stays unverified',config('river no thresholds',{river:[10,9,8],riverStage:10,riverCategory:'unknown',riverNoThresholds:true}),async({page})=>{
+      await page.waitForFunction(()=>feedChecks.rivers.status!=='loading');
+      const home=await riverHome(page);assert(!home.calm&&!home.promoted,'Nothing establishes "below action stage": '+JSON.stringify(home));
+    },1280);
+    await run('a current issuance with no usable forecast points is not counted as clear',config('river empty forecast',{river:[],riverStage:10,riverCategory:'no_flooding'}),async({page})=>{
+      await expectText(page,'.river-calm-line',/no forecasts verified against action stage/);
+      const home=await riverHome(page);assert(home.calm&&!/none forecast to reach it/.test(home.line),JSON.stringify(home));
+      await page.locator('#rivers .river-all summary').click();
+      await expectText(page,'#rivers',/Forecast issued with no usable stages/);
+    },1280);
+    await run('a current forecast without an action-stage threshold is unverified',config('river missing action threshold',{river:[15.8,16.1,15.9],riverStage:15.8,riverCategory:'no_flooding',riverNoThresholds:true}),async({page})=>{
+      await expectText(page,'.river-calm-line',/no forecasts verified against action stage/);
+      const home=await riverHome(page);assert(home.calm&&!home.promoted,JSON.stringify(home));
+      assert.match(home.line,/gauges with no flooding reported/);
+      await page.locator('#rivers .river-all summary').click();
+      await expectText(page,'#rivers',/Action-stage threshold unavailable for forecast comparison/);
+    },1280);
     await run('river pins persist and keep all regional gauges available',config('river pins',{river:[20,22,25]}),async({page})=>{
       const pin=page.locator('[data-pin-gauge="ERKM7"]');await pin.click();
       assert.equal(await page.locator('#rivers .river-row').count(),6);
@@ -935,7 +1007,16 @@ async function main() {
     for(const extra of [{riverAgeMinutes:180},{riverMissingTime:true}])await run('river timestamp validation '+JSON.stringify(extra),config('river age',{river:[22,28,32],...extra}),async({page})=>{
       await expectText(page,'#rivers',/current level unverified/);
       assert.equal(await page.evaluate(()=>feedChecks.rivers.status),'unavailable');
+      // The crest wording is relative to the unverified reading, so it stays withheld...
       assert(!/cresting|rising to/.test(await page.locator('#rivers').innerText()));
+      // ...but the fresh forecast's own threshold crossing (32 ft over 30 ft major) is shown and promoted.
+      await expectText(page,'#rivers',/Forecast reaches: ▲ 32 ft by .*major flood/i);
+      assert(await page.locator('#riversCard').evaluate(e=>e.parentElement.id==='attentionCards'&&!e.classList.contains('rivers-calm')),'A verified forecast exceedance promotes the card despite an unverified reading');
+    });
+    await run('stale observation with a stale forecast is neither calm nor promoted',config('river age stale forecast',{river:[22,28,32],riverAgeMinutes:180,riverForecastAgeHours:72}),async({page})=>{
+      await expectText(page,'#rivers',/current level unverified/);
+      assert(!/Forecast reaches/.test(await page.locator('#rivers').innerText()),'A stale forecast certifies nothing');
+      assert(await page.locator('#riversCard').evaluate(e=>e.parentElement.classList.contains('masonry')&&!e.classList.contains('rivers-calm')));
     });
     await run('old river forecast issuance cannot certify a new crest',config('old river forecast',{river:[22,28,32],riverForecastAgeHours:72}),async({page})=>{
       await expectText(page,'#rivers',/Forecast issuance unavailable or stale/);

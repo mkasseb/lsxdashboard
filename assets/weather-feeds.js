@@ -711,17 +711,28 @@ function loadRivers(){
     .then(function(res){
       var d=res[0], fcSeries=res[1];
       var ob=(d.status&&d.status.observed)||{}, val=ob.primary, unit=ob.primaryUnit||"ft", info=catInfo(ob.floodCategory);
-      if(typeof val!=="number"||!isFinite(val)||val<=-500) return riverLinkOnly(r);
+      // The forecast is judged on its own issuance, points and thresholds before the reading is:
+      // a stale or missing observation must not hide a verified forecast exceedance.
+      var reach=forecastReach(fcSeries,(d.flood&&d.flood.categories)||{});
+      if(typeof val!=="number"||!isFinite(val)||val<=-500) return riverLinkOnly(r,reach?"Current level unavailable":"",reach);
       var age=riverObservationState(ob,Date.now(),r.maxAge||WeatherContracts.policy.riverObservationAge);
       if(age.state!=="ready") return riverLinkOnly(r,age.time
         ?"Last report "+weatherTime(age.time,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT · stale; current level unverified"
-        :"Observation time unavailable; current level unverified");
+        :"Observation time unavailable; current level unverified",reach);
       known++;
       // Context: how much headroom is left before action stage, and which way it's heading
       var sub=["Observed "+weatherTime(age.time,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT"];
       var cats=(d.flood&&d.flood.categories)||{};
       var act=cats.action&&cats.action.stage, minor=cats.minor&&cats.minor.stage;
-      var ref=(typeof act==="number"&&act>0)?{v:act,n:"action stage"}
+      // The numeric thresholds outrank the category label: a reading at or over action stage is
+      // shown as such even if NWPS labels it "unknown" or omits the category.
+      var observedCat=stageCategory(val,cats);
+      if(observedCat&&info.cls==="c-none") info=catInfo(observedCat.label);
+      // Positive evidence of "below action stage": under a numeric action threshold,
+      // or, when action stage is missing, an explicit no-flooding category. Anything else is unverified.
+      var hasActionStage=Number.isFinite(act)&&act>0;
+      var below=hasActionStage?val<act:/^no[\s_-]*flood(?:ing)?$/i.test(ob.floodCategory||"");
+      var ref=hasActionStage?{v:act,n:"action stage"}
              :((typeof minor==="number"&&minor>0)?{v:minor,n:"flood stage"}:null);
       if(ref){
         var gap=ref.v-val;
@@ -732,7 +743,13 @@ function loadRivers(){
       var issue=Date.parse(fcSeries&&fcSeries.issuedTime||"");
       var forecastFresh=WeatherContracts.sourceState(issue,Date.now(),WeatherContracts.policy.riverForecastAge).state==="ready";
       var cr=forecastFresh?crestInfo(fcSeries,val):null;
-      if(fcSeries) sub.push(forecastFresh?"Forecast issued "+weatherTime(issue,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"Forecast issuance unavailable or stale");
+      // A current issuance with no usable future points is not a forecast of anything.
+      var points=forecastFresh?forecastPoints(fcSeries):[];
+      var forecastUsable=points.length>0;
+      if(fcSeries) sub.push(forecastFresh?(forecastUsable?"Forecast issued "+weatherTime(issue,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"Forecast issued with no usable stages"):"Forecast issuance unavailable or stale");
+      // Any usable point reaching a category promotes the gauge, independently of the trend wording
+      // (which ignores rises under 0.5 ft): 15.8 ft forecast to 16.1 ft still crosses a 16 ft line.
+      var reachCat=reach?reach.cat:null;
       var crestCat=null;
       if(cr){
         var st1=Math.round(cr.stage*10)/10;
@@ -742,7 +759,11 @@ function loadRivers(){
         sub.push('<span class="r-forecast-label">'+(cr.kind==="falling"?"Forecast trend: ":"Forecast peak in window: ")+'</span><span class="'+(cr.kind==="falling"?"rdn":"rup")+'">'+word+st1+" ft"+join+esc(crestWhen(cr.when))+'</span>'
           +(crestCat?' <span class="rfcat c-'+crestCat.key+'">'+esc(crestCat.label)+'</span>':''));
       }
-      return '<a class="rlink '+info.cls+'" href="https://water.noaa.gov/gauges/'+r.id+'" target="_blank" rel="noopener">'
+      // data-fc lets the calm rule tell a verified forecast from a missing or stale one.
+      var fcState=!fcSeries?"none":!forecastFresh?"stale":!forecastUsable?"empty":hasActionStage?"fresh":"unverified";
+      if(fcState==="unverified") sub.push("Action-stage threshold unavailable for forecast comparison");
+      if(reach&&!crestCat) sub.push(forecastReachNote(reach));
+      return '<a class="rlink '+info.cls+'" data-fc="'+fcState+'" data-below="'+(below?1:0)+'" data-action="'+(hasActionStage?1:0)+'" data-reach="'+(reachCat?1:0)+'" href="https://water.noaa.gov/gauges/'+r.id+'" target="_blank" rel="noopener">'
         +'<span class="rname"><span class="rn-top">'+ic("flood")+esc(r.name)+'</span>'
           +(sub.length?'<span class="rsub">'+sub.join(" · ")+'</span>':'')
         +'</span><span class="rmeta"><span class="rval"><span class="r-now-label">Now</span>'+(Math.round(val*10)/10)+' '+unit+'</span>'
@@ -846,7 +867,10 @@ function loadSpc(){
     var elevated=threats.some(function(day){return day&&day.values.some(function(v){return v>0;});});
     var complete=threats.length===2&&threats.every(function(day){return day&&day.values.every(function(v){return v!=null;});});
     // Only nine verified zero categories qualify. General storms and missing categories stay visible.
-    syncRiskBreakdown(r.slice(0,9).every(function(v){return v===0;})&&!elevated,!complete);
+    // A category with a real level (Marginal+, ERO Marginal+, fire Elevated+) or a non-zero
+    // severe probability promotes the card under radar; zeros and gaps leave it in context.
+    var leveled=[0,1,2].some(function(i){return spcRisk(r[i]).lvl>0||eroRisk(r[3+i]).lvl>0||fireRisk(r[6+i]).lvl>0;});
+    syncRiskBreakdown(r.slice(0,9).every(function(v){return v===0;})&&!elevated,!complete,leveled||elevated);
     if(typeof renderTheCall==="function") renderTheCall();   // outlook levels can add/remove a verdict pill
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
