@@ -811,16 +811,18 @@ function renderRiverRows(){
   if(state==="calm"){
     // Every gauge has a live reading below action stage and no current forecast reaches it: one
     // line, with the full rows one tap away (pins still work inside). Current readings decide the
-    // collapse; forecasts only decide what the line may claim. A gauge whose forecast is stale or
-    // missing is named rather than counted as clear, so it never reads as reassurance, but it
+    // collapse; forecasts only decide what the line may claim. A gauge whose forecast cannot be
+    // verified against action stage is named rather than counted as clear, so it never reads as reassurance, but it
     // doesn't keep six "No Flooding" rows open either (Eureka's forecast is often stale).
     var unforecast=RIVERS.filter(function(r){return riverRows[r.id].indexOf('data-fc="fresh"')<0;});
     var clause=!unforecast.length?"none forecast to reach it"
-      :unforecast.length===RIVERS.length?"no current forecasts"
-      :(RIVERS.length-unforecast.length)+" of "+RIVERS.length+" forecasts current, none reaching it";
+      :unforecast.length===RIVERS.length?"no forecasts verified against action stage"
+      :(RIVERS.length-unforecast.length)+" of "+RIVERS.length+" forecasts verified, none reaching it";
     var gap=unforecast.length&&unforecast.length<RIVERS.length
-      ?'<p class="river-calm-gap">No current forecast: '+unforecast.map(function(r){return esc(r.name);}).join(", ")+'</p>':"";
-    html='<p class="river-calm-line"><span class="river-calm-dot" aria-hidden="true"></span>All '+RIVERS.length+' gauges below action stage · '+clause+'</p>'+gap
+      ?'<p class="river-calm-gap">Forecast unverified against action stage: '+unforecast.map(function(r){return esc(r.name);}).join(", ")+'</p>':"";
+    var allActionStages=RIVERS.every(function(r){return riverRows[r.id].indexOf('data-action="1"')>=0;});
+    var observed=allActionStages?"gauges below action stage":"gauges with no flooding reported";
+    html='<p class="river-calm-line"><span class="river-calm-dot" aria-hidden="true"></span>All '+RIVERS.length+' '+observed+' · '+clause+'</p>'+gap
       +'<details class="disclosure river-all"'+(all&&all.open?' open':'')+'><summary>Show all gauges</summary><div class="river-all-rows">'+html+'</div></details>';
   }
   el.innerHTML=html;

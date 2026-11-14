@@ -725,11 +725,11 @@ function loadRivers(){
       // shown as such even if NWPS labels it "unknown" or omits the category.
       var observedCat=stageCategory(val,cats);
       if(observedCat&&info.cls==="c-none") info=catInfo(observedCat.label);
-      // Positive evidence of "below action stage": under a numeric action (else flood) threshold,
-      // or, with no threshold at all, an explicit no-flooding category. Anything else is unverified.
-      var lowest=(typeof act==="number"&&act>0)?act:((typeof minor==="number"&&minor>0)?minor:null);
-      var below=lowest!=null?val<lowest:/no[\s_-]*flood/i.test(ob.floodCategory||"");
-      var ref=(typeof act==="number"&&act>0)?{v:act,n:"action stage"}
+      // Positive evidence of "below action stage": under a numeric action threshold,
+      // or, when action stage is missing, an explicit no-flooding category. Anything else is unverified.
+      var hasActionStage=Number.isFinite(act)&&act>0;
+      var below=hasActionStage?val<act:/^no[\s_-]*flood(?:ing)?$/i.test(ob.floodCategory||"");
+      var ref=hasActionStage?{v:act,n:"action stage"}
              :((typeof minor==="number"&&minor>0)?{v:minor,n:"flood stage"}:null);
       if(ref){
         var gap=ref.v-val;
@@ -759,9 +759,10 @@ function loadRivers(){
           +(crestCat?' <span class="rfcat c-'+crestCat.key+'">'+esc(crestCat.label)+'</span>':''));
       }
       // data-fc lets the calm rule tell a verified forecast from a missing or stale one.
-      var fcState=!fcSeries?"none":!forecastFresh?"stale":forecastUsable?"fresh":"empty";
+      var fcState=!fcSeries?"none":!forecastFresh?"stale":!forecastUsable?"empty":hasActionStage?"fresh":"unverified";
+      if(fcState==="unverified") sub.push("Action-stage threshold unavailable for forecast comparison");
       if(reachCat&&!crestCat) sub.push('<span class="r-forecast-label">Forecast reaches: </span><span class="rup">▲ '+(Math.round(reachPt.primary*10)/10)+' ft by '+esc(crestWhen(reachPt.validTime))+'</span> <span class="rfcat c-'+reachCat.key+'">'+esc(reachCat.label)+'</span>');
-      return '<a class="rlink '+info.cls+'" data-fc="'+fcState+'" data-below="'+(below?1:0)+'" data-reach="'+(reachCat?1:0)+'" href="https://water.noaa.gov/gauges/'+r.id+'" target="_blank" rel="noopener">'
+      return '<a class="rlink '+info.cls+'" data-fc="'+fcState+'" data-below="'+(below?1:0)+'" data-action="'+(hasActionStage?1:0)+'" data-reach="'+(reachCat?1:0)+'" href="https://water.noaa.gov/gauges/'+r.id+'" target="_blank" rel="noopener">'
         +'<span class="rname"><span class="rn-top">'+ic("flood")+esc(r.name)+'</span>'
           +(sub.length?'<span class="rsub">'+sub.join(" · ")+'</span>':'')
         +'</span><span class="rmeta"><span class="rval"><span class="r-now-label">Now</span>'+(Math.round(val*10)/10)+' '+unit+'</span>'

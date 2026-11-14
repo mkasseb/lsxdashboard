@@ -545,7 +545,7 @@ async function main() {
       await page.evaluate(()=>loadRivers());
       // Readings decide the collapse; the line just stops claiming anything about forecasts.
       assert(await page.locator('#riversCard').evaluate(e=>e.classList.contains('rivers-calm')),'Stale forecasts do not reopen six calm rows');
-      await expectText(page,'.river-calm-line',/no current forecasts/);
+      await expectText(page,'.river-calm-line',/no forecasts verified against action stage/);
       assert(!/none forecast to reach it/.test(await page.locator('.river-calm-line').innerText()),'A stale forecast is never counted as clear');
       session.change(config('river crest forecast',{river:[10,17,12],riverStage:10,riverCategory:'none'}));
       await page.evaluate(()=>loadRivers());
@@ -572,10 +572,17 @@ async function main() {
       const home=await riverHome(page);assert(!home.calm&&!home.promoted,'Nothing establishes "below action stage": '+JSON.stringify(home));
     },1280);
     await run('a current issuance with no usable forecast points is not counted as clear',config('river empty forecast',{river:[],riverStage:10,riverCategory:'no_flooding'}),async({page})=>{
-      await expectText(page,'.river-calm-line',/no current forecasts/);
+      await expectText(page,'.river-calm-line',/no forecasts verified against action stage/);
       const home=await riverHome(page);assert(home.calm&&!/none forecast to reach it/.test(home.line),JSON.stringify(home));
       await page.locator('#rivers .river-all summary').click();
       await expectText(page,'#rivers',/Forecast issued with no usable stages/);
+    },1280);
+    await run('a current forecast without an action-stage threshold is unverified',config('river missing action threshold',{river:[15.8,16.1,15.9],riverStage:15.8,riverCategory:'no_flooding',riverNoThresholds:true}),async({page})=>{
+      await expectText(page,'.river-calm-line',/no forecasts verified against action stage/);
+      const home=await riverHome(page);assert(home.calm&&!home.promoted,JSON.stringify(home));
+      assert.match(home.line,/gauges with no flooding reported/);
+      await page.locator('#rivers .river-all summary').click();
+      await expectText(page,'#rivers',/Action-stage threshold unavailable for forecast comparison/);
     },1280);
     await run('river pins persist and keep all regional gauges available',config('river pins',{river:[20,22,25]}),async({page})=>{
       const pin=page.locator('[data-pin-gauge="ERKM7"]');await pin.click();
