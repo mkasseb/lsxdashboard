@@ -793,3 +793,42 @@ the hero's today range) use `tGrad()`, which samples the ramp every few degrees:
 gradient blends in RGB, and teal→gold through RGB is exactly the muddy green the ramp avoids. A
 logic test fails if any temperature from −30 to 120°F maps to a saturated green, and the
 contrast check now samples 55, 56, 60 and 100°F as well.
+
+## November 2026 layout: bands and the calm rule
+
+This supersedes the October composition above (the 60/40 planning columns, the measured lower
+band and the reparenting that served them). The page is now a stack of bands placed by CSS grid:
+
+1. Alerts and mesoscale discussions.
+2. **Now + Your day | Radar.** Now and Your day are one joined unit on the left; radar fills the
+   right. Above 1000px the split is 1 : 1.2 and the radar viewport is a fixed 440px (400px through
+   1240px), so nothing else can resize a working map. The three things people open a weather page
+   for share the first screen. Your day keeps its two-column wide layout only between 681px and
+   1000px, where it spans the page; beside radar it stacks.
+3. **Worth a look today** (`#attention`): empty and hidden on an ordinary day. See below.
+4. **Hourly | Seven-day**, one row on desktop.
+5. **NWS Key Messages | Forecast discussion**, one row on desktop. Both come from the same office
+   product, so they sit together instead of a screen apart.
+6. **Around your area**: the remaining context, packed by the existing masonry.
+
+No script moves cards between breakpoints any more, so `initPlanningLayout()` and
+`layoutPlanningContext()` are gone, along with the transparent-container pointer workaround they
+needed. Mobile DOM order is the reading order: Now, Your day, radar, promoted cards, hourly,
+seven-day, Key Messages, discussion, context. Section numbers in the jump bar follow that order.
+
+**The calm rule.** A context card that shows nothing remarkable should cost one line, and one that
+does should not be buried. `setAttention(id, on)` moves a card between the context pack and
+`#attentionCards`, keeping its node (handlers, disclosures, pins, focus). Two cards use it:
+
+- **Rivers.** `riverState()` reads the rendered gauge rows. Any gauge at action stage or above, or
+  a fresh forecast reaching a flood category, is *attention*. Every gauge verified below action
+  stage with no such forecast is *calm*: one line, rows behind "Show all gauges". Anything else
+  (loading, stale, failed) is *unknown* and keeps the full rows where they were.
+- **Risk Outlook.** Promoted only when a verified SPC category is Marginal or higher, an ERO is
+  Marginal or higher, fire weather is Elevated or higher, or a severe probability is non-zero.
+  General thunder, zeros and missing categories never promote.
+
+The asymmetry is deliberate: a failure can never look like an all-clear, and it does not shout
+either. AQI already followed this rule (its card only appears above 100), so it is unchanged.
+`tools/layout-band-tests.js` (formerly the planning-gap test) checks that bands stack without
+overlap or dead space and that packed context never overlaps a card.

@@ -227,15 +227,16 @@ The full design rationale — what each decision replaced, and why — lives in
 - **Colour is scarce.** Saturated colour means severity, links are blue; that is the whole budget.
   Type carries the hierarchy through the `--fs-*`/`--r-*`/`--sp-*` scales.
 - **The page is ordered by what a visitor came for.** Alerts and active mesoscale discussions,
-  a combined Now / NWS Key Messages hero, hourly planning, radar and seven-day forecast, then local
-  context. Desktop uses a 60% hourly/seven-day column and a 40% radar/risk/river column; phones read
-  hourly, radar, then seven-day, with risk and rivers in their original context positions. Every
-  existing card and individual disclosure remains available. Lower context starts at the shorter
-  column's bottom and reserves the other column's occupied space, so a tall river card cannot
-  hold back the lower cards across the whole page.
-- **Radar is a peek, not the product.** Its desktop viewport is bounded independently of forecast
-  height (350px through 1240px, 380px above); mobile keeps its existing sizing and fullscreen fills
-  the viewport. The same map and explored camera survive responsive placement;
+  then Now with Your day beneath it beside radar, then hourly beside the seven-day forecast, then
+  NWS Key Messages beside the forecast discussion, then local context. Phones read the same order
+  in one column. Plain CSS grid places these bands; only the context pack is packed by script.
+- **Calm context stays small.** When every river gauge is verified below action stage with no
+  forecast reaching it, the gauges collapse to one line with the rows one tap away. A gauge at
+  action stage or worse, or an elevated storm/flood/fire outlook, moves its card up to "Worth a
+  look today" under radar until it calms down. Outages and loading states never count as calm.
+- **Radar shares the first screen.** Its desktop viewport is a fixed height independent of
+  everything else (400px through 1240px, 440px above); mobile keeps its existing sizing and
+  fullscreen fills the viewport. The same map and explored camera survive resizing;
   radar and satellite stack on one Leaflet map; the loop targets a 60-minute span, not a sweep
   count; and a dead tile layer is detected per layer so it can never read as clear skies.
   Local KLSX defaults to super-resolution reflectivity; a product selector offers radial velocity

@@ -846,7 +846,10 @@ function loadSpc(){
     var elevated=threats.some(function(day){return day&&day.values.some(function(v){return v>0;});});
     var complete=threats.length===2&&threats.every(function(day){return day&&day.values.every(function(v){return v!=null;});});
     // Only nine verified zero categories qualify. General storms and missing categories stay visible.
-    syncRiskBreakdown(r.slice(0,9).every(function(v){return v===0;})&&!elevated,!complete);
+    // A category with a real level (Marginal+, ERO Marginal+, fire Elevated+) or a non-zero
+    // severe probability promotes the card under radar; zeros and gaps leave it in context.
+    var leveled=[0,1,2].some(function(i){return spcRisk(r[i]).lvl>0||eroRisk(r[3+i]).lvl>0||fireRisk(r[6+i]).lvl>0;});
+    syncRiskBreakdown(r.slice(0,9).every(function(v){return v===0;})&&!elevated,!complete,leveled||elevated);
     if(typeof renderTheCall==="function") renderTheCall();   // outlook levels can add/remove a verdict pill
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place

@@ -166,7 +166,7 @@ async function open(c, width=390) {
     if(u.hostname==='api.open-meteo.com'&&c.uv!=null) return reply({hourly:{time:[c.now/1000,(c.now+H)/1000],uv_index:[c.uv,c.uv+1]},daily:{time:Array.from({length:7},(_,i)=>stamp(c.now+i*24*H).slice(0,10)),uv_index_max:Array(7).fill(c.uv+1)}});
     if(u.hostname==='api.water.noaa.gov'&&c.river){
       if(u.pathname.endsWith('/stageflow/forecast')) return reply({issuedTime:c.riverForecastMissingTime?undefined:new Date(c.now-(c.riverForecastAgeHours||1)*H).toISOString(),data:c.river.map((primary,i)=>({primary,validTime:new Date(c.now+i*24*H).toISOString()}))});
-      return reply({status:{observed:{primary:20,primaryUnit:'ft',floodCategory:'minor',validTime:c.riverMissingTime?undefined:new Date(c.now-(c.riverAgeMinutes||5)*60000).toISOString()}},flood:{categories:{action:{stage:16},minor:{stage:18},moderate:{stage:24},major:{stage:30}}}});
+      return reply({status:{observed:{primary:c.riverStage||20,primaryUnit:'ft',floodCategory:c.riverCategory||'minor',validTime:c.riverMissingTime?undefined:new Date(c.now-(c.riverAgeMinutes||5)*60000).toISOString()}},flood:{categories:{action:{stage:16},minor:{stage:18},moderate:{stage:24},major:{stage:30}}}});
     }
     if(u.hostname==='api.weather.gov') {
       let id='0';
@@ -358,6 +358,9 @@ async function main() {
     await run('quiet outlook stays compact and expands for elevated or missing categories',config('quiet outlook'),async session=>{
       const {page}=session, breakdown=page.locator('#riskBreakdown'), toggle=breakdown.locator('summary');
       await expectText(page,'#riskQuiet',/through day 3/);
+      const riskHome=()=>page.locator('#riskCard').evaluate(e=>e.parentElement.id||(e.parentElement.classList.contains('masonry')?'masonry':e.parentElement.className));
+      assert.equal(await riskHome(),'masonry','A verified quiet outlook stays in context');
+      assert(await page.locator('#attention').isHidden());
       assert(await page.locator('#spc').isHidden());
       assert(await page.locator('#riskProbabilityNote').isHidden());
       await toggle.click();
@@ -373,15 +376,20 @@ async function main() {
       await page.evaluate(()=>loadSpc());
       assert(await page.locator('#riskQuiet').isHidden());
       await expectText(page,'#spc',/General Storms/);
+      assert.equal(await riskHome(),'masonry','General storms are not a promotion');
       session.change(config('elevated probability',{probabilities:[[5,0,0],[0,0,0]]}));
       await page.evaluate(()=>loadSpc());
       assert(await page.locator('#riskQuiet').isHidden());
       assert(await page.locator('#spcThreats .elevated').isVisible());
+      assert.equal(await riskHome(),'attentionCards','An elevated probability moves the card under radar');
+      assert(await page.locator('#attention').isVisible());
       session.change(config('missing category'));
       await page.route(/SPC_wx_outlks\/MapServer\/17\/query\?/,route=>route.fulfill({status:503,json:{}}));
       await page.evaluate(()=>loadSpc());
       assert(await page.locator('#riskQuiet').isHidden());
       await expectText(page,'#spc',/Unavailable/);
+      assert.equal(await riskHome(),'masonry','A missing category is never a promotion');
+      assert(await page.locator('#attention').isHidden());
     },320);
     for(const width of [320,1280])await run('risk explanations work by tap and remain open after refresh at '+width+'px',config('risk help'),async({page})=>{
       // Finish the lazy context work before exercising an ordinary disclosure click.
@@ -512,6 +520,25 @@ async function main() {
       });
       await page.waitForFunction(()=>snapSafeSeq===locSeq);assert.equal(await page.evaluate(()=>current.name),'New favorite');
     });
+    await run('calm gauges collapse to one verified line and an outage is never calm',config('river calm',{river:[10,9,8],riverStage:10,riverCategory:'none'}),async session=>{
+      const {page}=session;
+      await expectText(page,'#rivers',/All 6 gauges below action stage/);
+      assert(await page.locator('#riversCard').evaluate(e=>e.classList.contains('rivers-calm')&&e.parentElement.classList.contains('masonry')));
+      assert(await page.locator('#attention').isHidden());
+      assert.equal(await page.locator('#rivers .river-row').count(),6,'Every gauge stays one tap away');
+      assert(await page.locator('#rivers .river-row').first().isHidden());
+      await page.locator('#rivers .river-all summary').click();
+      assert(await page.locator('#rivers .river-row').first().isVisible());
+      await page.locator('[data-pin-gauge="ERKM7"]').click();
+      assert(await page.locator('#rivers .river-all').evaluate(e=>e.open),'Pinning inside the disclosure keeps it open');
+      session.change(config('river crest forecast',{river:[10,17,12],riverStage:10,riverCategory:'none'}));
+      await page.evaluate(()=>loadRivers());
+      assert(await page.locator('#riversCard').evaluate(e=>e.parentElement.id==='attentionCards'&&!e.classList.contains('rivers-calm')),'A forecast reaching action stage promotes the gauges');
+      session.change(config('river outage'));
+      await page.evaluate(()=>loadRivers());
+      assert(await page.locator('#riversCard').evaluate(e=>e.parentElement.classList.contains('masonry')&&!e.classList.contains('rivers-calm')),'Unverified gauges keep full rows in context');
+      assert(await page.locator('#attention').isHidden());
+    },1280);
     await run('river pins persist and keep all regional gauges available',config('river pins',{river:[20,22,25]}),async({page})=>{
       const pin=page.locator('[data-pin-gauge="ERKM7"]');await pin.click();
       assert.equal(await page.locator('#rivers .river-row').count(),6);

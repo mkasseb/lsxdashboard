@@ -57,7 +57,7 @@
 <link rel="preload" href="/assets/fonts/barlow-condensed-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/ibm-plex-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/ibm-plex-mono-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/assets/dashboard.css?v=51866a92b936b33f">
+<link rel="stylesheet" href="/assets/dashboard.css?v=f16279efd96ddb9f">
 </head>
 <body>
 <!-- First focusable thing on the page, and deliberately ahead of the sprite so it stays that way.
@@ -215,9 +215,10 @@
 <nav class="jump" id="jumpNav" aria-label="Jump to a section">
   <a href="#alertsCard">Alerts</a>
   <a href="#currentCard">Now</a>
-  <a href="#h24Card">Hourly</a>
   <a href="#radarCard">Radar</a>
+  <a href="#h24Card">Hourly</a>
   <a href="#forecastCard">7-Day</a>
+  <a href="#callCard">NWS</a>
   <a href="#riversCard">Rivers</a>
   <a href="#climateCard">Climate</a>
 </nav>
@@ -237,6 +238,15 @@
     <div id="alerts"><div class="loading">Loading alerts…</div></div>
   </section>
 <div id="mcd"></div>
+<!-- Layout: the answer first, the evidence beside it. Now + Your day sit next to radar so the three
+     things people open a weather page for share the first screen; everything that is merely
+     context waits below. Plain CSS grid places these bands, so no script reparents cards. -->
+<div class="top-band">
+<div class="now-stack">
+<section class="card hero" id="currentCard">
+      <h2>Now <span class="sr" id="railNowSub"></span><span class="link" id="ccStation">&mdash;</span></h2>
+      <div id="current"><div class="loading">Loading…</div></div>
+    </section>
 <!-- Your Day: the answer before the evidence. Computed by this page from the NWS hourly and
      seven-day forecasts (buildBottomLine + glanceWear in weather-core.js) and labelled as such;
      it sits beside, never inside, the verified NWS Key Messages card. Never snapshot-restored. -->
@@ -253,46 +263,7 @@
       <p>Clothing advice uses the feels-like range between 7 AM and 10 PM over the next 15 hours. It is withheld when the hourly forecast is missing, stale or has fewer than six usable hours. Official warnings above and NWS Key Messages always take precedence.</p>
     </details>
   </section>
-<div class="weather-hero">
-<section class="card hero" id="currentCard">
-      <h2>Now <span class="sr" id="railNowSub"></span><span class="link" id="ccStation">&mdash;</span></h2>
-      <div id="current"><div class="loading">Loading…</div></div>
-    </section>
-<section class="card " id="callCard">
-    <div class="call-head">
-      <h2 id="keyMessagesTitle">NWS Local Forecast</h2>
-      <a class="link" id="keyDiscussionLink" hidden target="_blank" rel="noopener noreferrer">Full discussion <span aria-hidden="true">↗</span></a>
-    </div>
-    <p id="briefStatus" class="feed-status" data-state="unavailable" role="status" hidden></p>
-    <p class="nws-message-meta" id="keyMessagesMeta"></p>
-    <p class="nws-message-status" id="keyMessagesStatus" role="status">Checking regional Key Messages and the local forecast…</p>
-    <div class="callrow" id="callRow"></div>
-    <details class="disclosure" id="briefWhy">
-      <summary><span class="nws-source-arrow" aria-hidden="true">▸</span>Source and freshness</summary>
-      <div id="briefEvidence"></div>
-    </details>
-  </section>
 </div>
-<div class="planning-grid">
-<section class="card " id="h24Card">
-    <div class="hourly-head">
-      <h2><span class="hourly-title-mobile">Plan your day</span><span class="hourly-title-desktop">Hourly forecast</span></h2>
-      <span class="hourly-duration" id="h24Title">Next 24 hours</span>
-      <div class="hourly-options" id="hourlyOptions" role="group" aria-label="Hourly forecast duration">
-        <button type="button" data-hours="24" aria-pressed="true" disabled>24 hours</button>
-        <button type="button" data-hours="48" aria-pressed="false" disabled>48 hours</button>
-        <button type="button" data-hours="72" aria-pressed="false" disabled>72 hours</button>
-      </div>
-    </div>
-    <p class="hourly-forecast-source">NWS point forecast · <span id="h24loc">selected location</span></p>
-    <div id="hourly24"><div class="loading">Loading hourly…</div></div>
-    <div class="precip-details">
-      <div class="precip-events" id="precipEvents"><div class="loading">Loading precipitation amounts…</div></div>
-      <div class="resource-links">
-        <a class="source-link" href="https://www.wpc.ncep.noaa.gov/qpf/qpf2.shtml" target="_blank" rel="noopener noreferrer" aria-label="WPC Precip (QPF) — precipitation amounts (opens in a new tab)"><svg class="ic" aria-hidden="true"><use href="#i-rain"/></svg><abbr title="Weather Prediction Center">WPC</abbr> Precip (<abbr title="Quantitative Precipitation Forecast — how much rain or melted snow is expected, not just whether">QPF</abbr>) <span aria-hidden="true">↗</span></a>
-      </div>
-    </div>
-  </section>
 <section class="card hero" id="radarCard">
     <div class="rs-head">
       <h2 id="skyTitle">Local radar</h2>
@@ -379,6 +350,34 @@
       <span class="resource-note">Blitzortung community network</span>
     </div>
   </section>
+</div>
+<!-- The calm rule: a context card that stops being calm (a gauge at action stage or worse, an
+     elevated SPC/WPC/fire category) is moved here by setAttention() in dashboard.js and returns
+     to the context pack when it calms down. Empty and hidden on an ordinary day. -->
+<section class="attention-band" id="attention" aria-labelledby="attentionTitle" hidden>
+  <div class="attention-head"><h2 id="attentionTitle">Worth a look today</h2><span class="attention-sub">Moved up from Around your area because these are not calm right now</span></div>
+  <div class="attention-cards" id="attentionCards"></div>
+</section>
+<div class="planning-grid">
+<section class="card " id="h24Card">
+    <div class="hourly-head">
+      <h2><span class="hourly-title-mobile">Plan your day</span><span class="hourly-title-desktop">Hourly forecast</span></h2>
+      <span class="hourly-duration" id="h24Title">Next 24 hours</span>
+      <div class="hourly-options" id="hourlyOptions" role="group" aria-label="Hourly forecast duration">
+        <button type="button" data-hours="24" aria-pressed="true" disabled>24 hours</button>
+        <button type="button" data-hours="48" aria-pressed="false" disabled>48 hours</button>
+        <button type="button" data-hours="72" aria-pressed="false" disabled>72 hours</button>
+      </div>
+    </div>
+    <p class="hourly-forecast-source">NWS point forecast · <span id="h24loc">selected location</span></p>
+    <div id="hourly24"><div class="loading">Loading hourly…</div></div>
+    <div class="precip-details">
+      <div class="precip-events" id="precipEvents"><div class="loading">Loading precipitation amounts…</div></div>
+      <div class="resource-links">
+        <a class="source-link" href="https://www.wpc.ncep.noaa.gov/qpf/qpf2.shtml" target="_blank" rel="noopener noreferrer" aria-label="WPC Precip (QPF) — precipitation amounts (opens in a new tab)"><svg class="ic" aria-hidden="true"><use href="#i-rain"/></svg><abbr title="Weather Prediction Center">WPC</abbr> Precip (<abbr title="Quantitative Precipitation Forecast — how much rain or melted snow is expected, not just whether">QPF</abbr>) <span aria-hidden="true">↗</span></a>
+      </div>
+    </div>
+  </section>
 <section class="card" id="forecastCard">
       <h2>7-Day Forecast <span class="forecast-primary-source">Official NWS forecast</span></h2>
       <div class="daily" id="daily"><div class="loading">Loading forecast…</div></div>
@@ -391,7 +390,29 @@
       </details>
     </section>
 </div>
-<div class="railhead"><span class="rail-t">Around your area</span><span class="rail-s">Local conditions, outlooks &amp; official forecast context</span></div>
+<div class="nws-band">
+<section class="card " id="callCard">
+    <div class="call-head">
+      <h2 id="keyMessagesTitle">NWS Local Forecast</h2>
+      <a class="link" id="keyDiscussionLink" hidden target="_blank" rel="noopener noreferrer">Full discussion <span aria-hidden="true">↗</span></a>
+    </div>
+    <p id="briefStatus" class="feed-status" data-state="unavailable" role="status" hidden></p>
+    <p class="nws-message-meta" id="keyMessagesMeta"></p>
+    <p class="nws-message-status" id="keyMessagesStatus" role="status">Checking regional Key Messages and the local forecast…</p>
+    <div class="callrow" id="callRow"></div>
+    <details class="disclosure" id="briefWhy">
+      <summary><span class="nws-source-arrow" aria-hidden="true">▸</span>Source and freshness</summary>
+      <div id="briefEvidence"></div>
+    </details>
+  </section>
+<section class="card " id="afdCard">
+    <h2>NWS Forecast Details
+      <a class="link" id="afdDiscussionLink" target="_blank" rel="noopener noreferrer" hidden>Full discussion <span aria-hidden="true">↗</span></a>
+    </h2>
+    <div id="afd"><div class="loading">Loading discussion…</div></div>
+  </section>
+</div>
+<div class="railhead"><span class="rail-t">Around your area</span><span class="rail-s">Local conditions, outlooks &amp; climate context</span></div>
 <div class="masonry">
 <section class="card " id="riversCard">
       <h2>River &amp; Flood Gauges — live levels <span class="qpfchip" id="qpf7"></span>
@@ -399,18 +420,6 @@
       </h2>
       <div class="river" id="rivers"><div class="loading">Loading gauges…</div></div>
     </section>
-<section class="card" id="aqiCard">
-      <h2>Air Quality
-        <a class="link" href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a>
-      </h2>
-      <div id="aqi"></div>
-    </section>
-<section class="card " id="afdCard">
-    <h2>NWS Forecast Details
-      <a class="link" id="afdDiscussionLink" target="_blank" rel="noopener noreferrer" hidden>Full discussion <span aria-hidden="true">↗</span></a>
-    </h2>
-    <div id="afd"><div class="loading">Loading discussion…</div></div>
-  </section>
 <section class="card" id="riskCard">
       <h2>Risk Outlook
         <a class="link" href="https://www.spc.noaa.gov/products/outlook/day1otlk.html" target="_blank" rel="noopener">Maps ↗</a>
@@ -436,6 +445,12 @@
         <a class="source-link" href="https://www.spc.noaa.gov/exper/mesoanalysis/" target="_blank" rel="noopener noreferrer" aria-label="SPC Mesoanalysis (opens in a new tab)"><svg class="ic" aria-hidden="true"><use href="#i-stats"/></svg><abbr title="Storm Prediction Center">SPC</abbr> Mesoanalysis <span aria-hidden="true">↗</span></a>
       </div>
       <div class="imgcap"><span id="spcLoc">SPC &middot; WPC</span><span>storm &middot; flood</span></div>
+    </section>
+<section class="card" id="aqiCard">
+      <h2>Air Quality
+        <a class="link" href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a>
+      </h2>
+      <div id="aqi"></div>
     </section>
 <section class="card" id="hazardsCard">
       <h2>Hazards Outlook
@@ -518,18 +533,18 @@
   integrity="sha384-tXYNKOHx4T02jMP7YYCtBxPIv1B5gaA5mcVPBzqMp6d7VzWzxJgI2aWF/nJLrQdS" crossorigin="anonymous"></script>
 <script src="/assets/weather-contracts.js?v=ad8b9553dc77bd53"></script>
 <script src="/assets/weather-core.js?v=405b479f82b3a96e"></script>
-<script src="/assets/weather-feeds.js?v=7d4e8617e6c79cc5"></script>
+<script src="/assets/weather-feeds.js?v=a9ab5e0119d19515"></script>
 <script src="/assets/forecast-view.js?v=b6dd1f0e63226306"></script>
-<script src="/assets/dashboard-context.js?v=a1da42d70c732592"></script>
+<script src="/assets/dashboard-context.js?v=bedeb00740624506"></script>
 <script src="/assets/model-data.js?v=aa9f38687b71f14d" data-worker-src="/assets/model-worker.js?v=3df9c3b9bd2c3bc4"></script>
 <script src="/assets/forecast-range.js?v=805a652762f3d938"></script>
 <script src="/assets/hourly-range.js?v=ee1dec6e184d1f77"></script>
 <script src="/assets/radar-map.js?v=733a2b8bb26aeb1d"></script>
 <script src="/assets/station-map.js?v=28a078d94c91ec8b"></script>
-<script src="/assets/map-runtime.js?v=714dc5d8d09a8907"></script>
+<script src="/assets/map-runtime.js?v=e32349c5e451dbdf"></script>
 <script src="/assets/location-controls.js?v=75c3366b43020679"></script>
 <script src="/assets/saved-view.js?v=6eab124901607437"></script>
 <script src="/assets/climate-view.js?v=d7b1e797b55b32ce"></script>
-<script src="/assets/dashboard.js?v=410bc5d63f1dcc89"></script>
+<script src="/assets/dashboard.js?v=ebf8aa92c674212d"></script>
 </body>
 </html>

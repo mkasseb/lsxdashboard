@@ -806,8 +806,30 @@ function renderRiverRows(){
       +'<button type="button" class="river-pin" data-pin-gauge="'+r.id+'" aria-pressed="'+on+'" aria-label="'+(on?'Unpin ':'Pin ')+esc(r.name)+'">'+(on?'Pinned':'Pin')+'</button></div>';
   }).join('');}
   if(pinned.length) html+='<h3 class="river-group">Pinned gauges</h3>'+rows(pinned)+'<h3 class="river-group">Other regional gauges</h3>';
-  el.innerHTML=html+rows(regional);
+  html+=rows(regional);
+  var state=riverState(), card=document.getElementById("riversCard"), all=el.querySelector(".river-all");
+  if(state==="calm"){
+    // Every gauge verified and below action stage, with no forecast reaching it: one line, and the
+    // full rows one tap away. Pins still work inside the disclosure.
+    html='<p class="river-calm-line"><span class="river-calm-dot" aria-hidden="true"></span>All '+RIVERS.length+' gauges below action stage, none forecast to reach it</p>'
+      +'<details class="disclosure river-all"'+(all&&all.open?' open':'')+'><summary>Show all gauges</summary><div class="river-all-rows">'+html+'</div></details>';
+  }
+  el.innerHTML=html;
+  if(card) card.classList.toggle("rivers-calm",state==="calm");
+  setAttention("riversCard",state==="attention");
   if(focus){var button=el.querySelector('[data-pin-gauge="'+focus+'"]');if(button) button.focus({preventScroll:true});}
+}
+/* "attention" when any gauge is at action stage or above now, or forecast to reach a category;
+   "calm" only when every gauge has a verified current reading below action stage; anything else
+   (loading, stale, failed) is "unknown" and keeps the full rows in place. */
+function riverState(){
+  var calm=true;
+  for(var i=0;i<RIVERS.length;i++){
+    var row=riverRows[RIVERS[i].id];
+    if(row&&(/rlink c-(action|minor|moderate|major)/.test(row)||row.indexOf("rfcat")>=0)) return "attention";
+    if(!row||row.indexOf("r-now-label")<0||row.indexOf("rlink c-none")<0) calm=false;
+  }
+  return calm?"calm":"unknown";
 }
 document.getElementById("rivers").addEventListener("click",function(e){
   var button=e.target.closest("[data-pin-gauge]");if(!button) return;
@@ -1095,7 +1117,8 @@ function riskPill(info,denom){
 }
 
 
-function syncRiskBreakdown(quiet, probabilitiesMissing){
+function syncRiskBreakdown(quiet, probabilitiesMissing, elevated){
+  setAttention("riskCard",!!elevated);
   var breakdown=document.getElementById("riskBreakdown"), toggle=breakdown.querySelector("summary");
   if(toggle.hidden===quiet){
     if(!quiet&&document.activeElement===toggle) document.querySelector("#riskHelp summary").focus({preventScroll:true});
@@ -1906,13 +1929,43 @@ syncTabMotion();   // a page opened into a background tab never gets the event
 if(!document.hidden) startSchedule();
 document.getElementById("refresh").addEventListener("click",function(){ refreshAll(); });
 
+/* ---- The calm rule ----
+   Context cards live in the "Around your area" pack. When one stops being calm — a river gauge at
+   action stage or worse (now or in its forecast), an elevated storm/flood/fire outlook — it moves
+   up to #attention, directly under Now and radar, and goes back when it calms down. The decision
+   to move is made only on verified data: an outage or a still-loading feed leaves the card where
+   it is, fully expanded, so a failure can never look like an all-clear and never shouts either.
+   Moving the node keeps its handlers, disclosures and pins; focus inside it is restored. */
+function setAttention(id,on){
+  // Declared inside: a restored snapshot repaints rivers before later top-level vars initialise.
+  var ATTENTION_ORDER=["riskCard","riversCard"];
+  var card=document.getElementById(id), band=document.getElementById("attention"),
+      slot=document.getElementById("attentionCards"), m=document.querySelector(".masonry");
+  if(!card||!band||!slot||!m) return;
+  var home=on?slot:m;
+  if(card.parentNode!==home){
+    var focused=document.activeElement, keep=focused&&card.contains(focused);
+    if(_mObs) _mObs.disconnect();
+    ["left","top","width"].forEach(function(prop){ card.style.removeProperty(prop); });
+    if(on){
+      var next=null, rank=ATTENTION_ORDER.indexOf(id);
+      [].forEach.call(slot.children,function(c){ if(!next&&ATTENTION_ORDER.indexOf(c.id)>rank) next=c; });
+      slot.insertBefore(card,next);
+    } else m.appendChild(card);
+    if(_mObs) _mObs.observe(m,_mObsOpts);
+    if(keep&&document.activeElement!==focused) focused.focus({preventScroll:true});
+  }
+  card.classList.toggle("promoted",!!on);
+  band.hidden=!slot.querySelector(".card");
+  if(typeof scheduleMasonry==="function") scheduleMasonry();
+}
+
 /* ---- JavaScript masonry: pack band cards by their REAL measured height ---- */
 var masonryPointerActive=false;
 function layoutMasonry(){
   // Preserve the pressed target until its native click/toggle has completed.
   if(masonryPointerActive)return;
   var m=document.querySelector(".masonry"); if(!m) return;
-  if(layoutPlanningContext(m,tier))return;
   var GAP=16, w=m.clientWidth;
   var cols = w<=680 ? 1 : (w<=1100 ? 2 : 3);
   var colW = Math.floor((w-GAP*(cols-1))/cols);
@@ -1935,8 +1988,8 @@ function layoutMasonry(){
   //  (Alerts/Pulse/Current/Radar/Hourly are fixed heroes above this masonry.)
   function tier(id){
     var RANK={
-      riversCard:1, aqiCard:1, afdCard:1, // local context follows the fixed planning band
-      riskCard:2,       // severe storm/flood/fire risk
+      riskCard:1,       // severe storm/flood/fire risk (calm here; elevated moves it to #attention)
+      riversCard:2, aqiCard:2, // local gauges and air quality
       hazardsCard:3,    // hazards outlook (days 3–14)
       obsCard:4,        // station plot — current regional obs
       droughtCard:6,    // drought outlook
@@ -2018,6 +2071,11 @@ function layoutMasonry(){
     for(var k2=w.start;k2<w.start+d.span;k2++) colH[k2]=nb;
   }
   m.style.height=Math.max.apply(null,colH)+"px";
+  // A repack can change the station plot's width; Leaflet only learns that when told.
+  var station=document.getElementById("stnmap");
+  if(typeof stnMap!=="undefined"&&stnMap&&station&&station.clientWidth&&station.clientHeight){
+    var size=stnMap.getSize(); if(size.x!==station.clientWidth||size.y!==station.clientHeight) stnMap.invalidateSize({animate:false});
+  }
   reorderMasonryDOM(m,data);
   fitDayDates();
   document.dispatchEvent(new Event("lsxlayout"));

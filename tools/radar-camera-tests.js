@@ -31,7 +31,7 @@ function sameCamera(a,b){assert.equal(b.zoom,a.zoom);assert(Math.hypot(b.offset[
 try{for(const width of [1180,1440,1920]){
  const s=await open(config('radar camera',{maps:true,geo:{lat:38.4328,lon:-90.3776},storage:{lsxLoc:{name:'Lake St. Louis, MO',lat:38.8,lon:-90.79,precision:'representative'}}}),width),p=s.page,steps=[];
  try{
-  await settled(p);centered(await geometry(p));const inlineHeight=(await geometry(p)).size[1];assert(Math.abs(inlineHeight-(width<=1240?350:380))<2);steps.push({state:'saved location startup',...await geometry(p)});
+  await settled(p);centered(await geometry(p));const inlineHeight=(await geometry(p)).size[1];assert(Math.abs(inlineHeight-(width<=1240?400:440))<2);steps.push({state:'saved location startup',...await geometry(p)});
   // Preserve the same forced asynchronous geolocation boundary as the browser API.
   await p.evaluate(()=>{navigator.geolocation.getCurrentPosition=cb=>{window.cameraGeo=cb;};document.getElementById('h24Card').style.minHeight='1200px';});await settled(p);
   await p.locator('#geoBtn').click();await p.waitForFunction(()=>!!window.cameraGeo);
@@ -67,7 +67,7 @@ try{for(const width of [1180,1440,1920]){
   await p.keyboard.press('Tab');assert(await p.evaluate(()=>radarCard.contains(document.activeElement)));
   await p.keyboard.press('Escape');await settled(p);sameCamera(chosen,await geometry(p));
   assert.equal(await p.evaluate(()=>document.activeElement.id),'rsFull');assert(!(await p.locator('header').evaluate(el=>el.inert)));
-  assert(await p.locator('#radarCard').evaluate(el=>el.parentElement.classList.contains('planning-grid')),'Closing applies the pending mobile placement');
+  assert(await p.locator('#radarCard').evaluate(el=>el.parentElement.classList.contains('top-band')),'Closing returns radar to its band');
   await p.setViewportSize({width,height:900});await settled(p);sameCamera(chosen,await geometry(p));
   assert.equal((await geometry(p)).size[1],inlineHeight);steps.push({state:'fullscreen breakpoint resize, Escape and focus restoration',...await geometry(p)});
   assert.deepEqual(s.errors,[]);report.push({width,steps});console.log('PASS '+engine+' radar camera '+width);
