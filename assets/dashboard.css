@@ -2092,8 +2092,8 @@ body.radar-full #radarCard#radarCard{background:var(--bg);border:0;
 }
 
 /* --- Layout bands (see the comment above .top-band in index.html) --- */
-:root{--radar-h:440px}
-@media(min-width:1001px) and (max-width:1240px){:root{--radar-h:400px}}
+:root{--radar-h:442px}   /* wrapper; the map inside is 2px less, 440px */
+@media(min-width:1001px) and (max-width:1240px){:root{--radar-h:402px}}
 .top-band,.nws-band{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start}
 @media(min-width:1001px){
   /* Now + Your day on the left, radar on the right: the first screen answers "what is it,
@@ -2119,3 +2119,11 @@ body.radar-full #radarCard#radarCard{background:var(--bg);border:0;
 #riversCard.rivers-calm #rivers{display:block}
 .river-all{margin-top:10px}
 .river-all-rows{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin-top:10px}
+
+/* Now sizes itself by its own column, not the viewport: beside radar it is ~470–630px wide, where
+   the temperature beside a three-across metrics grid leaves enlarged text no room. Stack it. */
+.now-stack{container:nowstack / inline-size}
+@container nowstack (max-width:600px){
+  .now-stack #current{grid-template-columns:minmax(0,1fr)}
+  #currentCard .cc-main,#currentCard .cc-today,#currentCard .cc-grid,#currentCard .cc-expo{grid-column:1;grid-row:auto}
+}

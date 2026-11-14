@@ -51,13 +51,19 @@ async function main(){
    await p.locator('#briefWhy summary').click();
    // Repacking after an independently collapsed card must preserve the visible navigation target.
    await p.locator('#afdCard .context-toggle').click();await p.evaluate(()=>layoutMasonry());await p.clock.runFor(500);
-   for(const id of ['currentCard','h24Card','radarCard','forecastCard','riversCard','climateCard']){
+   // A reader who folds the lower context brings the final section to the page end: the state the
+   // clamped-jump scenario below needs, whichever way the pack happens to fall at this width.
+   for(const id of ['obsCard','droughtCard','cpcCard'])await p.locator('#'+id+' .context-toggle[aria-expanded="true"]').click();
+   await p.evaluate(()=>layoutMasonry());await p.clock.runFor(300);
+   // The clamp scenario needs the section that ends the page, which follows the packed layout.
+   const tail=await p.evaluate(()=>[...document.querySelectorAll('#jumpNav a')].map(a=>a.hash.slice(1)).sort((a,b)=>document.getElementById(b).getBoundingClientRect().bottom-document.getElementById(a).getBoundingClientRect().bottom)[0]);
+   for(const id of [...new Set(['currentCard','h24Card','radarCard','forecastCard','riversCard','climateCard'].filter(id=>id!==tail).concat(tail))]){
     await p.evaluate(id=>{document.querySelector('#jumpNav a[href="#'+id+'"]').click();document.getElementById(id).scrollIntoView();},id);
     await p.waitForFunction(id=>document.querySelector('#jumpNav a[aria-current="location"]')?.getAttribute('href')==='#'+id,id).catch(async e=>{console.error(JSON.stringify({width,theme,id,geometry:await p.evaluate(()=>({scroll:scrollY,bar:document.querySelector('.jump-wrap').getBoundingClientRect().bottom,links:[...document.querySelectorAll('#jumpNav a')].map(l=>({href:l.hash,active:l.getAttribute('aria-current'),top:document.querySelector(l.hash).getBoundingClientRect().top}))}))}));throw e;});
    }
    // Context arriving after a clamped final-section scroll must not select an earlier section.
-   const navBeforeGrowth=await p.evaluate(()=>{
-    const card=document.getElementById('climateCard').getBoundingClientRect();
+   const navBeforeGrowth=await p.evaluate(tail=>{
+    const card=document.getElementById(tail).getBoundingClientRect();
     const edge=Math.max(document.querySelector('.jump-wrap').getBoundingClientRect().bottom+16,parseFloat(getComputedStyle(document.getElementById('currentCard')).scrollMarginTop)+2);
     const maxScroll=document.documentElement.scrollHeight-innerHeight;
     const clamped=scrollY>=maxScroll-2&&card.top>edge&&card.bottom<=innerHeight&&card.top+scrollY-edge>maxScroll;
@@ -68,17 +74,17 @@ async function main(){
     if(card.top>edge+8)window.scrollBy({top:4,behavior:'instant'});
     window.dispatchEvent(new Event('resize'));
     return state;
-   });
+   },tail);
    let growthPermitsAlignment=false;
    if(navBeforeGrowth.clamped){
     clampedCases++;
     await p.clock.runFor(100);
-    assert.equal(await p.locator('#jumpNav a[aria-current="location"]').getAttribute('href'),'#climateCard');
+    assert.equal(await p.locator('#jumpNav a[aria-current="location"]').getAttribute('href'),'#'+tail);
     // Keep the original 24px-growth assertion above. Browser font metrics can leave
     // a larger clamp gap; extend only this test spacer enough to permit alignment,
     // then prove an actual scroll releases intent while the target stays visible.
-    growthPermitsAlignment=await p.evaluate(()=>{
-     const bar=document.querySelector('.jump-wrap'),card=document.getElementById('climateCard').getBoundingClientRect();
+    growthPermitsAlignment=await p.evaluate(tail=>{
+     const bar=document.querySelector('.jump-wrap'),card=document.getElementById(tail).getBoundingClientRect();
      const edge=Math.max(bar.getBoundingClientRect().bottom+16,parseFloat(getComputedStyle(document.getElementById('currentCard')).scrollMarginTop)+2);
      const target=card.top+scrollY-edge,maxScroll=document.documentElement.scrollHeight-innerHeight;
      if(card.top>edge&&card.bottom<=innerHeight&&target>maxScroll){
@@ -86,19 +92,19 @@ async function main(){
       window.dispatchEvent(new Event('resize'));
      }
      return card.top>edge&&card.bottom<=innerHeight&&card.top+scrollY-edge<=document.documentElement.scrollHeight-innerHeight;
-    });
+    },tail);
     if(growthPermitsAlignment){
      await p.clock.runFor(100);
-     assert.equal(await p.locator('#jumpNav a[aria-current="location"]').getAttribute('href'),'#climateCard','Extra test growth cannot move the unchanged visible navigation target');
+     assert.equal(await p.locator('#jumpNav a[aria-current="location"]').getAttribute('href'),'#'+tail,'Extra test growth cannot move the unchanged visible navigation target');
      await p.evaluate(()=>scrollBy({top:-24,behavior:'instant'}));await p.clock.runFor(100);
      // Native scroll delivery can follow the test-clock advance; await the actual
      // navigation update instead of assuming it ran in that synthetic time slice.
-     await p.waitForFunction(()=>{const link=document.querySelector('#jumpNav a[aria-current="location"]');return link&&link.hash!=='#climateCard';},null,{timeout:5000});
+     await p.waitForFunction(tail=>{const link=document.querySelector('#jumpNav a[aria-current="location"]');return link&&link.hash!=='#'+tail;},tail,{timeout:5000});
      const active=await p.evaluate(()=>{
       const link=document.querySelector('#jumpNav a[aria-current="location"]'),box=document.querySelector(link.hash).getBoundingClientRect();
       return {id:link.hash,top:box.top,edge:Math.max(document.querySelector('.jump-wrap').getBoundingClientRect().bottom+16,parseFloat(getComputedStyle(document.getElementById('currentCard')).scrollMarginTop)+2)};
      });
-     assert.notEqual(active.id,'#climateCard','Actual scrolling releases retained jump intent');assert(active.top<=active.edge+4,'Active section returns to the viewport edge');
+     assert.notEqual(active.id,'#'+tail,'Actual scrolling releases retained jump intent');assert(active.top<=active.edge+4,'Active section returns to the viewport edge');
      releasedCases++;
     }
     await p.evaluate(()=>document.getElementById('late-context-growth').remove());

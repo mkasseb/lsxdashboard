@@ -63,8 +63,8 @@ async function card(p){
       // Beside radar the card is a column, so rows stack under the lead; at tablet width it
       // spans the page and the rows sit beside the lead to keep the band short.
       assert((await placement()).below,'desktop stacks rows under the lead beside radar');
-      const r=await p.evaluate(()=>{const g=glanceCard.getBoundingClientRect(),m=radarCard.getBoundingClientRect();return g.right<=m.x&&g.top<m.bottom;});
-      assert(r,'Your day sits beside radar on desktop');
+      const r=await p.evaluate(()=>{const g=glanceCard.getBoundingClientRect(),n=currentCard.getBoundingClientRect(),m=radarCard.getBoundingClientRect();return g.right<=m.x&&Math.abs(n.top-m.top)<2&&Math.abs(g.top-n.bottom)<2;});
+      assert(r,'Now and Your day share the column beside radar on desktop');
       await p.setViewportSize({width:900,height:900});
       assert((await placement()).beside,'tablet puts rows beside the lead');
       console.log('PASS glance desktop layout');
