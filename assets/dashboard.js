@@ -1898,12 +1898,16 @@ function initTheme(){
 }
 
 /* ============ INIT ============ */
+var JUMP_CUE_SLACK=8;
 function initJumpCue(){
   var nav=document.getElementById("jumpNav");
   function sync(){
-    var remaining=nav.scrollWidth-nav.clientWidth;
-    nav.classList.toggle("more-left",nav.scrollLeft>1);
-    nav.classList.toggle("more-right",remaining>1&&nav.scrollLeft<remaining-1);
+    // An edge button covers 44px of the last link. When only a sliver overflows (font metrics
+    // differ by a few pixels between engines) it would sit over a link that scrolling cannot
+    // uncover, so it appears only once more than a link's padding is actually hidden.
+    var remaining=nav.scrollWidth-nav.clientWidth, slack=JUMP_CUE_SLACK;
+    nav.classList.toggle("more-left",remaining>slack&&nav.scrollLeft>1);
+    nav.classList.toggle("more-right",remaining>slack&&nav.scrollLeft<remaining-1);
   }
   var reduce=window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)");
   function move(toEnd){ nav.scrollTo({left:toEnd?nav.scrollWidth:0,behavior:reduce&&reduce.matches?"auto":"smooth"}); }

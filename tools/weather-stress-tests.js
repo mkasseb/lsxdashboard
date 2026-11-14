@@ -480,6 +480,18 @@ async function main() {
       await page.evaluate(()=>document.fonts.ready);
       const jump=await page.locator('#jumpNav').evaluate(e=>({scroll:e.scrollWidth,client:e.clientWidth}));
       assert(jump.scroll<=jump.client+1,'Every section link fits a 390px bar: '+JSON.stringify(jump));
+      // Another engine's font metrics can overflow the bar by a sliver. The edge button must not
+      // then sit over the last link, where scrolling could never uncover it.
+      const sliver=await page.evaluate(()=>{
+        const nav0=document.getElementById('jumpNav'),end=nav0.querySelector('a:last-child'),cs=getComputedStyle(nav0);
+        const free=nav0.getBoundingClientRect().right-parseFloat(cs.borderRightWidth)-parseFloat(cs.paddingRight)-end.getBoundingClientRect().right;
+        const style=document.createElement('style');style.id='testSliver';style.textContent='#jumpNav a:last-child{padding-right:'+(parseFloat(getComputedStyle(end).paddingRight)+free+4)+'px}';document.head.append(style);
+        window.dispatchEvent(new Event('resize'));
+        const nav=document.getElementById('jumpNav'),last=nav.querySelector('a:last-child'),r=last.getBoundingClientRect();
+        const hit=document.elementFromPoint(Math.min(r.right,nav.getBoundingClientRect().right)-12,r.top+r.height/2);
+        const out={overflow:nav.scrollWidth-nav.clientWidth,hitLast:!!hit&&(hit===last||last.contains(hit))};style.remove();window.dispatchEvent(new Event('resize'));return out;
+      });
+      assert(sliver.overflow>0&&sliver.overflow<=8&&sliver.hitLast,'A sliver of overflow leaves the last link tappable: '+JSON.stringify(sliver));
       await page.locator('#stickyLocation').click();
       assert(await page.locator('#locSearch').isVisible());assert.equal(await page.evaluate(()=>document.activeElement.id),'locSearch');
       assert(await page.locator('#locationTools').isVisible());
@@ -499,7 +511,8 @@ async function main() {
       // The station plot never shows an empty box before its map starts.
       assert.equal(await page.evaluate(()=>stnMap),null);
       await expectText(page,'#stnmap',/loads when you scroll here/i);
-      await page.locator('#stnmap [data-load-stations]').click();
+      // Pressed without scrolling: scrolling would let the approach observer start the map first.
+      await page.locator('#stnmap [data-load-stations]').evaluate(b=>b.click());
       await page.waitForFunction(()=>stnMap&&document.querySelector('#stnmap .leaflet-map-pane'));
     },390);
     await run('desktop keeps search open and diagnostics behind ?debug',config('desktop header',{maps:true,search:'?debug'}),async({page})=>{

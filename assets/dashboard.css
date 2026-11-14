@@ -2215,7 +2215,7 @@ body.radar-full #radarCard#radarCard{background:var(--bg);border:0;
   header:not(.loc-open) .locbar,header:not(.loc-open) .location-tools{display:none}
   header .top{margin-bottom:4px}
   .sticky-context{min-height:44px;padding:0}
-  .jump a{font-size:15px;letter-spacing:0;padding:0 6px}
+  .jump a{font-size:15px;letter-spacing:0;padding:0 5px}
   .jump{gap:0}
 }
 /* Air quality is CAMS model output, never a monitor reading: the word rides with every value. */
