@@ -924,9 +924,11 @@ folded changes:
 - A summary folds its card only while its feed is ready (or refreshing after a ready check). A
   `partial`, `unavailable`, `stale` or `saved` feed unfolds it.
 - A storm-reports response that lands after the reader leaves the layout is dropped
-  (`feedRequested("reports")` is checked before painting), and a location reset clears reports
-  and map dots whether or not the layout was on.
-- An LSX record with no readable time or coordinates is counted, not dropped. Any unreadable
+  (`feedRequested("reports")` is checked before painting, and again after `feedUpdate()`, which
+  re-synchronizes the layout and can itself end it when a hold runs out), and a location reset
+  clears reports and map dots whether or not the layout was on.
+- An LSX record with no readable time or coordinates is counted, not dropped, and so is a feature
+  with no office at all, since it could be LSX's. Any unreadable
   record leaves the feed `partial`; if nothing else is readable the card says the reports
   "could not be read", never "No reports". Coordinates must be present and regional, so a null
   pair is not plotted at (0, 0). Past 12 rows the card says how many it is showing.

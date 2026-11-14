@@ -1942,6 +1942,8 @@ async function checkGridLoaderIsolation() {
   check('storm reports: null coordinates are invalid, not (0, 0)',[blank.length,blank.invalid].join(),'0,1');
   const many=am.rows({features:Array.from({length:15},(_,i)=>({properties:{wfo:'LSX',typetext:'HAIL',valid:new Date(t0-i*60000).toISOString(),lat:38.8,lon:-90.7,city:'C'+i}}))},t0,null);
   check('storm reports: the cap keeps the true total',[many.length,many.total].join(),'12,15');
+  const odd=am.rows({features:[null,{properties:{typetext:'HAIL',valid:new Date(t0).toISOString(),lat:38.8,lon:-90.7}},{type:'Feature'}]},t0,null);
+  check('storm reports: unattributable features are a gap, not "no reports"',[odd.length,odd.invalid].join(),'0,3');
 }
 
 checkLiveFeedFailures().then(checkSpcThreatProducts).then(checkForecastRefreshFailure).then(checkGridLoaderIsolation).then(() => {

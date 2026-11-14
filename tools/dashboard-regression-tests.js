@@ -164,6 +164,12 @@ async function main() {
       assert.match(await p.locator('#ol-hz37').innerText(),/Check overdue/);
       await p.evaluate(()=>{feedChecks.hazards.successAt=Date.now();freshnessCheck();});
       assert.equal(await p.locator('#hazardsCard').evaluate(e=>e.hidden),true,'A fresh check folds it again');
+      for(const status of ['unavailable','partial']){
+        await p.evaluate(status=>{feedChecks.hazards.status=status;freshnessCheck();},status);
+        assert.equal(await p.locator('#hazardsCard').evaluate(e=>e.hidden),false,'A '+status+' check unfolds a calm card');
+        await p.evaluate(()=>{feedChecks.hazards.status='ready';freshnessCheck();});
+        assert.equal(await p.locator('#hazardsCard').evaluate(e=>e.hidden),true);
+      }
       await p.locator('#ol-hz37').click();
       assert(await p.locator('#hazardsCard').isVisible(),'The cell opens its folded card');
       assert.equal(await p.locator('#ol-hz814').getAttribute('aria-expanded'),'true','Both cells for one card agree');

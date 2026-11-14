@@ -966,10 +966,13 @@ function loadReports(){
     var rows=stormReportRows(fc,Date.now(),current);
     if(!rows) throw new Error("Invalid storm reports");
     feedUpdate("reports",rows.invalid?"partial":"ready");
+    // feedUpdate() re-synchronizes the layout, which can end demand (a hold expiring now).
+    if(!fresh()||!feedRequested("reports")) return;
     renderStormReports(rows);
   }).catch(function(e){
     if(isAbort(e)||!fresh()||!feedRequested("reports")) return;
     feedUpdate("reports","unavailable");
+    if(!fresh()||!feedRequested("reports")) return;
     renderStormReports(false);
   });
 }

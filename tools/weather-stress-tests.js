@@ -1295,11 +1295,10 @@ async function main() {
       assert.equal(await page.evaluate(()=>document.activeElement.id),'outlookTitle','Focus follows the revealed section');
       // "Show card" reaches a card inside the folded context pack.
       const cell=page.locator('#outlookCells .ol-cell[aria-expanded="false"]').first();
-      if(await cell.count()){
-        const id=await cell.getAttribute('aria-controls');await cell.click();
-        assert(await page.locator('#'+id).isVisible(),id+' is reachable from its cell during the storm layout');
-        assert(await page.evaluate(id=>document.getElementById(id).contains(document.activeElement),id),'Focus lands in the opened card');
-      }
+      assert(await cell.count(),'This scenario needs a folded outlook card to open');
+      const id=await cell.getAttribute('aria-controls');await cell.click();
+      assert(await page.locator('#'+id).isVisible(),id+' is reachable from its cell during the storm layout');
+      assert(await page.evaluate(id=>document.getElementById(id).contains(document.activeElement),id),'Focus lands in the opened card');
       // The visible fold summary carries the same overdue qualifier as the hidden cell.
       await page.evaluate(()=>{feedChecks.risk.status='ready';feedChecks.risk.successAt=Date.now()-FEEDS.risk.age-1;freshnessCheck();});
       await expectText(page,'#foldOutlook',/check overdue/);
@@ -1318,9 +1317,15 @@ async function main() {
       await page.evaluate(()=>{feedChecks.alerts.successAt=Date.now()-FEEDS.alerts.age-1;return loadAlerts();});
       await expectText(page,'#activeBarText',/cannot be confirmed/);
       assert(await page.evaluate(()=>document.documentElement.classList.contains('lsx-active')),'An outage keeps the storm layout');
-      // A location reset clears the old place's reports even when nothing toggles.
-      await page.evaluate(()=>{renderStormReports([{kind:{k:'H',label:'Hail',tone:'hail'},type:'HAIL',mag:'',city:'Old',county:'',st:'',source:'',remark:'',time:Date.now(),lat:38.8,lon:-90.7,mi:1,deg:0}]);resetActiveMode();});
-      assert.equal(await page.evaluate(()=>lastReports.length),0,'A location reset clears reports and dots');
+      // A location reset clears the old place's reports even when the layout is already off, so no
+      // exit cleanup runs: only the reset's own clear can empty them.
+      await page.evaluate(()=>{activeState.optOut=true;applyActiveMode();});
+      assert(!(await page.evaluate(()=>document.documentElement.classList.contains('lsx-active'))));
+      await page.evaluate(()=>renderStormReports([{kind:{k:'H',label:'Hail',tone:'hail'},type:'HAIL',mag:'',city:'Old',county:'',st:'',source:'',remark:'',time:Date.now(),lat:38.8,lon:-90.7,mi:1,deg:0}]));
+      assert.equal(await page.evaluate(()=>lastReports.length),1);
+      // The real order of a location change: the old place's alert state goes first, then the UI resets.
+      await page.evaluate(()=>{resetLocationState();clearLocationUI();});
+      assert.deepEqual(await page.evaluate(()=>[lastReports.length,deferredFeeds.reports,lsrLayer===null]),[0,false,true],'A location reset clears reports and dots without restarting demand');
     },1280);
     await run('unreadable storm reports are a gap, not an all-clear',config('bad reports',{alerts:[alert('Tornado Warning',base)],reports:[['HAIL',5,null,null,1,'Nowhere']]}),async session=>{
       const {page}=session;
@@ -1328,6 +1333,24 @@ async function main() {
       assert(!/No reports/.test(await page.locator('#reports').innerText()));
       assert.equal(await page.locator('#fresh-reports').getAttribute('data-state'),'partial');
       assert(await page.locator('#reportsCard #fresh-reports').isVisible(),'The partial check stays on its card');
+      // A readable report beside an unreadable one: show the readable one and say one more could not be read.
+      session.change(config('mixed reports',{alerts:[alert('Tornado Warning',base)],reports:[['HAIL',5,null,null,1,'Nowhere'],['HAIL',8,38.81,-90.85,1,'Wentzville']]}));
+      await page.evaluate(()=>loadReports());
+      assert.equal(await page.locator('#reports .lsr-row').count(),1);await expectText(page,'#reports',/1 more could not be read/);
+      // Past the cap the card says how many it is showing.
+      session.change(config('many reports',{alerts:[alert('Tornado Warning',base)],reports:Array.from({length:15},(_,i)=>['HAIL',i+1,38.81,-90.85,1,'Town '+i])}));
+      await page.evaluate(()=>loadReports());
+      assert.equal(await page.locator('#reports .lsr-row').count(),12);await expectText(page,'#reports',/Showing the latest 12 of 15 reports/);
+    });
+    await run('storm reports cannot repaint when the hold expires mid-response',config('hold expiry',{alerts:[alert('Tornado Warning',base)],reports:stormReports}),async session=>{
+      const {page}=session;
+      await page.waitForFunction(()=>document.querySelectorAll('#reports .lsr-row').length===3);
+      session.change(config('hold expiry, warning gone',{reports:stormReports}));
+      // The warning is gone and the hold has run out, but nothing has synchronized the layout yet. The
+      // next report response is what triggers that synchronization, inside feedUpdate().
+      const state=await page.evaluate(()=>{callLocalAlert=null;activeState.lastHit=Date.now()-31*60000;
+        return loadReports().then(()=>({active:document.documentElement.classList.contains('lsx-active'),requested:deferredFeeds.reports,reports:lastReports.length,dots:lsrLayer===null}));});
+      assert.deepEqual(state,{active:false,requested:false,reports:0,dots:true},'The response that ends the layout cannot repaint reports or dots');
     });
     await run('storm layout ignores distant warnings and keeps a report outage visible',config('distant storm',{alerts:[alert('Tornado Warning',base,true)]}),async session=>{
       const {page}=session;

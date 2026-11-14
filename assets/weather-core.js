@@ -1735,7 +1735,9 @@ function stormReportRows(fc,nowMs,point,maxAgeMs){
   maxAgeMs=maxAgeMs||3*3600000;
   var rows=[], invalid=0;
   fc.features.forEach(function(f){
-    var p=f&&f.properties; if(!p||p.wfo!=="LSX") return;
+    var p=f&&f.properties;
+    if(!p||typeof p.wfo!=="string"||!p.wfo){ invalid++; return; }   // unattributable: could be LSX
+    if(p.wfo!=="LSX") return;
     var t=Date.parse(p.valid||"");
     var lat=p.lat==null||p.lat===""?NaN:+p.lat, lon=p.lon==null||p.lon===""?NaN:+p.lon;
     // An LSX record that cannot be read is a gap, never a "no reports" answer.
