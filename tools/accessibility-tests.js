@@ -19,6 +19,12 @@ const engine=process.env.WEATHER_BROWSER||'chromium',report=[];
     if(state==='observation outage'){
      await p.route('**/observations/latest',r=>r.fulfill({status:503,json:{}}));await p.evaluate(()=>loadCurrent());
     }
+    if(state==='warning'){
+     // A covering Tornado Warning is the storm layout: audit it, with every folded section put
+     // back through its own button, so the bar, storm reports and restored sections are all checked.
+     assert(await p.evaluate(()=>document.documentElement.classList.contains('lsx-active')),'Warning scenario audits the storm layout');
+     for(const key of ['forecast','outlook','context'])await p.locator('#activeFoldChips [data-show="'+key+'"]').click();
+    }
     const day=p.locator('#daily .day').first();await day.click();
     await p.locator('#nbmDailyToggle').check();
     await p.locator('#nbmInfo details').evaluate(e=>e.open=true);
