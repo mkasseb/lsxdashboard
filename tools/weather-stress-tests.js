@@ -1230,6 +1230,10 @@ async function main() {
     },1280);
     for(const width of [320,390,1280])await run('individual context touch and layout '+width,config('individual context',{touch:true,aqi:35}),async({page})=>{
       assert.equal(await page.locator('#compactView').count(),0);
+      // Calm outlook cards fold behind the outlook row; a touch on their cell brings them back.
+      for(const id of ['droughtCard','cpcCard'])if(await page.locator('#'+id).evaluate(e=>e.hidden)){
+        await page.locator('#outlookCells [aria-controls="'+id+'"]').first().tap();assert(await page.locator('#'+id).isVisible(),id+' opens from its outlook cell on touch');
+      }
       for(const id of ['afdCard','obsCard','climateCard','droughtCard','cpcCard']){
         const toggle=page.locator('#'+id+' .context-toggle'),body=page.locator('#'+id+'Body');
         assert.equal(await toggle.getAttribute('aria-controls'),id+'Body');

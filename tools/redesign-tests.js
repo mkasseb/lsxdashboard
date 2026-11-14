@@ -53,7 +53,9 @@ async function main(){
    await p.locator('#afdCard .context-toggle').click();await p.evaluate(()=>layoutMasonry());await p.clock.runFor(500);
    // A reader who folds the lower context brings the final section to the page end: the state the
    // clamped-jump scenario below needs, whichever way the pack happens to fall at this width.
-   for(const id of ['obsCard','droughtCard','cpcCard'])await p.locator('#'+id+' .context-toggle[aria-expanded="true"]').click();
+   // Calm, verified outlooks are already folded into the outlook row; their cells say so.
+   for(const id of ['droughtCard','cpcCard']){const folded=await p.locator('#'+id).evaluate(e=>e.hidden);if(folded)assert.equal(await p.locator('#outlookCells [aria-controls="'+id+'"]').first().getAttribute('aria-expanded'),'false',id+' folds only behind its outlook cell');}
+   for(const id of ['obsCard','droughtCard','cpcCard'])if(await p.locator('#'+id).isVisible())await p.locator('#'+id+' .context-toggle[aria-expanded="true"]').click();
    await p.evaluate(()=>layoutMasonry());await p.clock.runFor(300);
    // The clamp scenario needs the section that ends the page, which follows the packed layout.
    const tail=await p.evaluate(()=>[...document.querySelectorAll('#jumpNav a')].map(a=>a.hash.slice(1)).sort((a,b)=>document.getElementById(b).getBoundingClientRect().bottom-document.getElementById(a).getBoundingClientRect().bottom)[0]);

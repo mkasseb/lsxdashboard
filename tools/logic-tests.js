@@ -1867,6 +1867,37 @@ async function checkGridLoaderIsolation() {
   check('recent gauge is current',gauge({validTime:new Date(+now-600000).toISOString()},+now,7200000).state,'ready');
 }
 
+/* The outlook row folds a card only on a verified calm reading. A gap, a failure or anything
+   elevated must keep the card open, or an outage could pass for an all-clear. */
+{
+  const L=name=>lift(new RegExp('^function '+name+'\\([^\\n]*\\)\\{[\\s\\S]*?^\\}','m'),name+'()');
+  const ol=new Function([
+    lift(/^var OUTLOOK_DAYS=.*$/m,'OUTLOOK_DAYS'),
+    ...['spcRisk','eroRisk','fireRisk','droughtCat','outlookCat','hazD','hazRange',
+        'outlookRiskSummary','outlookHazardSummary','outlookLean','outlookCpcSummary','outlookDroughtSummary'].map(L)
+  ].join('\n')+';return {risk:outlookRiskSummary,haz:outlookHazardSummary,cpc:outlookCpcSummary,drought:outlookDroughtSummary};')();
+  const zero=[0,0,0,0,0,0,0,0,0], quietThreats=[{values:[0,0,0]},{values:[0,0,0]}];
+  const calm=ol.risk(zero,quietThreats);
+  check('outlook: nine verified zeros are calm',[calm.state,calm.verified].join(),'calm,true');
+  check('outlook: one missing category is not calm',ol.risk([0,0,null,0,0,0,0,0,0],quietThreats).state,'partial');
+  check('outlook: missing probabilities are not verified',ol.risk(zero,[{values:[0,null,0]},{values:[0,0,0]}]).verified,false);
+  check('outlook: general storms are not folded',ol.risk([2,0,0,0,0,0,0,0,0],quietThreats).state,'partial');
+  const slight=ol.risk([0,4,0,1,0,0,0,0,0],quietThreats);
+  check('outlook: highest category wins over a lower flood risk',[slight.state,slight.value,slight.sub].join('|'),'elevated|Slight storm risk|Highest tomorrow');
+  check('outlook: non-zero severe probability is elevated',ol.risk(zero,[{values:[0,5,0]},{values:[0,0,0]}]).state,'elevated');
+  check('outlook: risk failure is unavailable',ol.risk(null).state,'unavailable');
+  check('outlook: no hazards on complete data is calm',ol.haz([],true,true).state,'calm');
+  check('outlook: no hazards on partial data is not calm',ol.haz([],false,true).state,'partial');
+  check('outlook: flagged hazard is elevated',ol.haz([{label:'Heavy Rain',start:null,end:null}],true,true).value,'Heavy Rain');
+  const cpc=ol.cpc([{cat:'Above',prob:70},{cat:'Above',prob:40},{cat:'Below',prob:33},{cat:'EC',prob:null}]);
+  check('outlook: CPC leanings read as words',[cpc.state,cpc.value,cpc.sub].join('|'),'info|Warm 70% · Wet 40%|8–14 days: Cool 33% · Precip even odds');
+  check('outlook: a missing CPC map is not verified',ol.cpc([{cat:'Above',prob:70},null,null,null]).verified,false);
+  check('outlook: no drought anywhere is calm',ol.drought(-1,'','').state,'calm');
+  check('outlook: unknown drought monitor is not calm',ol.drought(null,'','').state,'partial');
+  check('outlook: current drought is elevated',ol.drought(1,'','').state,'elevated');
+  check('outlook: developing drought is elevated',ol.drought(-1,'Development','').value,'Drought developing');
+}
+
 checkLiveFeedFailures().then(checkSpcThreatProducts).then(checkForecastRefreshFailure).then(checkGridLoaderIsolation).then(() => {
   if (failed) {
     console.error(`\n${failed} logic test(s) failed`);

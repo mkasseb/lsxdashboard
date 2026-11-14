@@ -127,7 +127,9 @@ async function main() {
     });
     await run('source disclosures keep overdue partial saved and failed weather visible', async p => {
       assert.equal(await p.locator('#fresh-current').isVisible(),false);
-      const sources=p.locator('#currentCard .feed-sources');
+      assert.equal(await p.locator('#currentCard .feed-sources').count(),0,'Cards carry no per-card source disclosure');
+      const sources=p.locator('#sourcesPanel');
+      assert.equal(await p.locator('#sourcesList #fresh-current').count(),1,'Healthy clocks live in the footer panel');
       await sources.locator('summary').click();assert(await p.locator('#fresh-current').isVisible());
       assert.match(await p.locator('#fresh-current').innerText(),/checked.*source/);
       await sources.locator('summary').click();
@@ -139,13 +141,32 @@ async function main() {
           freshnessCheck();
         },status);
         assert.equal(await p.locator('#fresh-current').getAttribute('data-state'),status);
-        assert(await p.locator('#fresh-current').isVisible(),status+' cannot be hidden by Sources & updates');
+        assert(await p.locator('#fresh-current').isVisible(),status+' cannot be hidden by Sources & freshness');
+        assert.equal(await p.locator('#currentCard #fresh-current').count(),1,status+' stays on its own card');
       }
       await p.evaluate(()=>feedUpdate('current','ready',new Date(Date.now()-300000).toISOString()));
       assert.equal(await p.locator('#fresh-current').isVisible(),false);
       assert.equal(await sources.evaluate(e=>e.open),false,'Refresh preserves the chosen disclosure state');
       assert(await p.locator('#fresh-alerts').isVisible(),'Alert freshness stays visible');
       assert(await p.locator('#nbmHourlyStatus').isVisible(),'Unavailable model data stays visible');
+    });
+    await run('a folded outlook card reopens when its feed goes overdue', async p => {
+      await p.evaluate(()=>{
+        const calm={state:'calm',value:'No hazards',sub:'WPC hazards outlook',verified:true};
+        setOutlook('hz37',calm);setOutlook('hz814',calm);
+        Object.assign(feedChecks.hazards,{status:'ready',saved:false,successAt:Date.now()});freshnessCheck();
+      });
+      assert.equal(await p.locator('#hazardsCard').evaluate(e=>e.hidden),true,'Verified calm hazards fold');
+      assert.equal(await p.locator('#ol-hz37').getAttribute('aria-expanded'),'false');
+      await p.evaluate(()=>{feedChecks.hazards.successAt=Date.now()-FEEDS.hazards.age-1;freshnessCheck();});
+      assert.equal(await p.locator('#hazardsCard').evaluate(e=>e.hidden),false,'An overdue check must not hide behind a calm cell');
+      assert(await p.locator('#fresh-hazards').isVisible(),'The overdue warning is on screen');
+      assert.match(await p.locator('#ol-hz37').innerText(),/Check overdue/);
+      await p.evaluate(()=>{feedChecks.hazards.successAt=Date.now();freshnessCheck();});
+      assert.equal(await p.locator('#hazardsCard').evaluate(e=>e.hidden),true,'A fresh check folds it again');
+      await p.locator('#ol-hz37').click();
+      assert(await p.locator('#hazardsCard').isVisible(),'The cell opens its folded card');
+      assert.equal(await p.locator('#ol-hz814').getAttribute('aria-expanded'),'true','Both cells for one card agree');
     });
     for(const trigger of ['approach','navigation','station demand'])await run('deferred radar starts on '+trigger, async p => {
       assert.equal(await p.evaluate(()=>mapsRequested),false);

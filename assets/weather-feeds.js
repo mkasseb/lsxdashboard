@@ -871,6 +871,7 @@ function loadSpc(){
     // severe probability promotes the card under radar; zeros and gaps leave it in context.
     var leveled=[0,1,2].some(function(i){return spcRisk(r[i]).lvl>0||eroRisk(r[3+i]).lvl>0||fireRisk(r[6+i]).lvl>0;});
     syncRiskBreakdown(r.slice(0,9).every(function(v){return v===0;})&&!elevated,!complete,leveled||elevated);
+    if(typeof setOutlook==="function") setOutlook("risk",outlookRiskSummary(r,threats));
     if(typeof renderTheCall==="function") renderTheCall();   // outlook levels can add/remove a verdict pill
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
@@ -879,6 +880,7 @@ function loadSpc(){
     callRisk=null;                                           // never let a stale outlook keep a pill alive
     renderSpcThreats(null);
     syncRiskBreakdown(false);
+    if(typeof setOutlook==="function") setOutlook("risk",outlookRiskSummary(null));
     if(typeof renderTheCall==="function") renderTheCall();
   }).finally(function(){
     signal.removeEventListener("abort",abort);
@@ -960,6 +962,7 @@ function loadCpc(){
     var values=rs.map(function(r){return r.status==="fulfilled"?cpcParse(r.value):null;});
     var known=values.filter(Boolean).length;
     feedUpdate("cpc",known===4?"ready":known?"partial":"unavailable");
+    if(typeof setOutlook==="function") setOutlook("cpc",outlookCpcSummary(values));
     function val(i){ return values[i]; }
     // Each period page contains both temperature and precipitation maps with their legends.
     el.innerHTML='<span id="cpcSourceHint" class="sr-only">CPC outlook (opens in a new tab)</span><div class="cpc-grid">'+[
@@ -976,6 +979,7 @@ function loadCpc(){
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
     feedUpdate("cpc","unavailable");
+    if(typeof setOutlook==="function") setOutlook("cpc",outlookCpcSummary(null));
     el.innerHTML='<div class="empty">CPC outlooks unavailable. <a href="https://www.cpc.ncep.noaa.gov/products/predictions/610day/" target="_blank" rel="noopener">Open CPC \u2197</a></div>';
   });
 }
@@ -1015,6 +1019,17 @@ function loadDrought(){
     }
     outlookRow("drMonth",  r[1]);
     outlookRow("drSeason", r[2]);
+    if(typeof setOutlook==="function"){
+      var dmNow=null;
+      if(r[0].status==="fulfilled"){ dmNow=-1; (r[0].value.features||[]).forEach(function(f){ var dm=f.attributes&&f.attributes.DM; if(dm!=null&&dm>dmNow) dmNow=dm; }); }
+      var lookAhead=function(rs){
+        if(rs.status!=="fulfilled") return null;
+        var o="";
+        (rs.value.features||[]).forEach(function(f){ var v=f.attributes&&f.attributes.outlook; if(v&&v!=="No_Drought") o=v; });
+        return o;
+      };
+      setOutlook("drought",outlookDroughtSummary(dmNow,lookAhead(r[1]),lookAhead(r[2])));
+    }
   });
 }
 
@@ -1046,7 +1061,12 @@ function loadHazards(){
         +(notes.length?'<span class="hz-fc">'+esc(notes.join(" · "))+'</span>':'')
         +'</span></div>';
     }
-    el.innerHTML=block("Days 3–7",d37,all.slice(0,3).every(function(r){return r.status==="fulfilled";}))+block("Days 8–14",d814,all.slice(3,6).every(function(r){return r.status==="fulfilled";}));
+    var ok37=all.slice(0,3).every(function(r){return r.status==="fulfilled";}), ok814=all.slice(3,6).every(function(r){return r.status==="fulfilled";});
+    el.innerHTML=block("Days 3–7",d37,ok37)+block("Days 8–14",d814,ok814);
+    if(typeof setOutlook==="function"){
+      setOutlook("hz37",outlookHazardSummary(d37,ok37,all.slice(0,3).some(function(r){return r.status==="fulfilled";}),"WPC hazards outlook"));
+      setOutlook("hz814",outlookHazardSummary(d814,ok814,all.slice(3,6).some(function(r){return r.status==="fulfilled";}),"CPC hazards outlook"));
+    }
     // issuance freshness: the newest file date across whatever layers answered
     var issued=0;
     all.forEach(function(rs){
@@ -1063,6 +1083,7 @@ function loadHazards(){
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
     feedUpdate("hazards","unavailable");
+    if(typeof setOutlook==="function"){ setOutlook("hz37",outlookHazardSummary(null,false,false,"WPC hazards outlook")); setOutlook("hz814",outlookHazardSummary(null,false,false,"CPC hazards outlook")); }
     el.innerHTML='<div class="empty">Hazards outlook unavailable. <a href="https://www.wpc.ncep.noaa.gov/threats/threats.php" target="_blank" rel="noopener">Open WPC Hazards ↗</a></div>';
   });
 }

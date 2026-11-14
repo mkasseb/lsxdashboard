@@ -681,8 +681,9 @@ band when present. Incomplete, expired or failed model guidance remains visible 
 Precipitation events follow the chart and retain accumulation-period caveats; a verified dry
 forecast becomes one sentence. Snapshot v25 retires older hourly summary markup.
 
-Healthy feed check/source clocks move into a per-card Sources & updates disclosure. Alerts retain
-their visible check time. Loading, partial, overdue, unavailable and saved states stay outside the
+Healthy feed check/source clocks move into one footer disclosure, **Sources & freshness**
+(superseding the per-card Sources & updates panels; see "One outlook row, one freshness line"
+below). Alerts retain their visible check time. Loading, partial, overdue, unavailable and saved states stay outside the
 closed source disclosure and move back inside only after validation succeeds. Observation labels
 identify the actual station by name and code; selected-town forecasts keep their own attribution.
 
@@ -807,9 +808,11 @@ band and the reparenting that served them). The page is now a stack of bands pla
    1000px, where it spans the page; beside radar it stacks.
 3. **Worth a look today** (`#attention`): empty and hidden on an ordinary day. See below.
 4. **Hourly | Seven-day**, one row on desktop.
-5. **NWS Key Messages | Forecast discussion**, one row on desktop. Both come from the same office
+5. **Outlook row** (`#outlookCard`): today to next season in one row. See "One outlook row, one
+   freshness line" below.
+6. **NWS Key Messages | Forecast discussion**, one row on desktop. Both come from the same office
    product, so they sit together instead of a screen apart.
-6. **Around your area**: the remaining context, packed by the existing masonry.
+7. **Around your area**: the remaining context, packed by the existing masonry.
 
 No script moves cards between breakpoints any more, so `initPlanningLayout()` and
 `layoutPlanningContext()` are gone, along with the transparent-container pointer workaround they
@@ -847,3 +850,33 @@ The asymmetry is deliberate: a failure can never look like an all-clear, and it 
 either. AQI already followed this rule (its card only appears above 100), so it is unchanged.
 `tools/layout-band-tests.js` (formerly the planning-gap test) checks that bands stack without
 overlap or dead space and that packed context never overlaps a card.
+
+## November 2026: one outlook row, one freshness line
+
+Four cards each answered one slice of "is anything coming": Risk (today to day 3), Hazards (days
+3–14), Week Ahead (6–14 day leanings) and Drought (now to the season). On a calm day they spent
+about 1,000px to say nothing was. `#outlookCard` sits between the forecasts and the NWS text and
+gives each horizon one cell: Today–Day 3, Days 3–7, Days 8–14, 6–14 day leaning, Drought.
+
+The row fetches nothing. Each loader hands its own result to a pure summary
+(`outlookRiskSummary`, `outlookHazardSummary`, `outlookCpcSummary`, `outlookDroughtSummary` in
+`dashboard-context.js`) and then to `setOutlook()`, so a cell can never disagree with its card.
+Each summary returns a state (`calm`, `elevated`, `info`, `partial`, `unavailable`) and whether
+every input answered (`verified`).
+
+**Folding follows the calm rule's asymmetry.** Hazards, Week Ahead and Drought fold away (hidden,
+not packed) only when every cell they feed is verified and calm, or, for the CPC leanings, verified
+and complete. A missing layer, a failure, a restored snapshot that has not been re-checked yet, or
+anything elevated leaves the card open. A cell for a folded card says "Show card" and opens it in
+place. A card opened that way stays open until the location changes. The Risk card never folds:
+its calm form is already one line plus the category explainer, and it is the card `setAttention()`
+promotes when a category is elevated, so its cell only jumps to it. General storms keep the risk
+cell `partial`. They are not severe, but "nothing elevated" with a thunderstorm in the forecast
+would read wrong.
+
+**One freshness line.** The per-card Sources & updates panels (about a dozen) are gone. Each
+feed's `#fresh-*` line still exists with the same text and `data-state`; `freshnessCheck()` now
+moves the healthy ones (ready or on demand) into `#sourcesList` in the footer's **Sources &
+freshness** disclosure, whose summary is `#lastUpdate` plus a status dot. Loading, partial, overdue,
+unavailable and saved lines stay on their own card, visible, exactly as before. A problem belongs
+next to the data it affects. A healthy timestamp does not.

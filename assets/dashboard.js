@@ -40,17 +40,11 @@ function freshnessCheck(){
     else text+=({deferred:"Loads when this section approaches or is opened",loading:"Checking…",unavailable:"Unavailable",stale:"Check overdue",saved:"Saved data · awaiting verification"}[state]||"Unavailable")
       +(c.successAt?" · last successful check "+weatherTime(c.successAt,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"");
     if(c.issuedAt&&(state==="ready"||state==="partial"||state==="saved")) text+=" · source "+weatherTime(c.issuedAt,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT";
-    // Keep check/source clocks available without competing with the weather. Alerts and every
-    // incomplete, saved or overdue state stay outside the closed source disclosure.
+    // Healthy check/source clocks live in one footer panel instead of one disclosure per card.
+    // Alerts and every incomplete, saved or overdue state stay on their own card, visible.
     if(cfg.card!=="alertsCard"){
-      var sources=card.querySelector(".feed-sources");
-      if(!sources){
-        sources=document.createElement("details"); sources.className="feed-sources";
-        sources.innerHTML='<summary>Sources &amp; updates</summary><div class="feed-source-list"></div>';
-        if(cfg.card==="currentCard") sources.querySelector('.feed-source-list').innerHTML='<p class="stn">UV &amp; air quality: Open-Meteo · <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a></p>';
-        card.appendChild(sources);
-      }
-      var parent=state==="ready"||state==="deferred"?sources.querySelector('.feed-source-list'):card;
+      var list=document.getElementById("sourcesList");
+      var parent=(state==="ready"||state==="deferred")&&list?list:card;
       if(el.parentNode!==parent) parent.appendChild(el);
     }
     el.setAttribute("data-state",state);
@@ -66,6 +60,7 @@ function freshnessCheck(){
   var dot=document.getElementById("statusDot"), btn=document.getElementById("refresh");
   var state=!good?(counts.loading?"loading":"unavailable"):(bad||counts.partial||counts.saved||counts.loading?"partial":"ready");
   if(dot){ dot.setAttribute("data-state",state); dot.classList.toggle("stale",state==="unavailable"); }
+  var footDot=document.getElementById("sourcesDot"); if(footDot) footDot.setAttribute("data-state",state);
   var alert=feedChecks.alerts, alertState=feedState(alert,now,FEEDS.alerts.age);
   var notice=summary+". Alerts: "+({ready:"checked",partial:"some data unavailable",stale:"check overdue",saved:"saved and unverified",loading:"checking",unavailable:"unavailable"}[alertState]||"unavailable")+(alert.successAt?", last successful check "+weatherTime(alert.successAt,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"")+".";
   if(btn){ btn.title=notice; btn.setAttribute("aria-label","Refresh weather data. "+notice); }
@@ -73,6 +68,7 @@ function freshnessCheck(){
   if(footer) footer.textContent=summary+(lastAttempt?" · last full refresh attempted "+weatherTime(lastAttempt,{weekday:"short",hour:"numeric",minute:"2-digit"})+" CT":"")+". All weather times are Central Time (CT).";
   if(typeof resolveSnapBar==="function") resolveSnapBar();
   renderBriefingStatus();
+  if(typeof renderOutlook==="function") renderOutlook();   // an overdue feed unfolds its card
   if(renderTheCall._comfortAllowed!=null&&renderTheCall._comfortAllowed!==briefingComfortAllowed()) renderTheCall();
   renderNwsMessages();
 }
@@ -2010,8 +2006,9 @@ function layoutMasonry(){
   var GAP=16, w=m.clientWidth;
   var cols = w<=680 ? 1 : (w<=1100 ? 2 : 3);
   var colW = Math.floor((w-GAP*(cols-1))/cols);
-  var cards=[].slice.call(m.children).filter(function(c){return c.classList.contains("card");});
-  if(!cards.length) return;
+  // Folded outlook cards are hidden and take no slot; the outlook row stands in for them.
+  var cards=[].slice.call(m.children).filter(function(c){return c.classList.contains("card")&&!c.hidden;});
+  if(!cards.length){ m.style.height="0px"; return; }
   m.classList.add("mready");
   // Pass 1a: set every card's width (all WRITES together)…
   var data=cards.map(function(c){
@@ -2134,7 +2131,7 @@ function reorderMasonryDOM(m,data){
     if(Math.abs(a.top-b.top)>4) return a.top-b.top;   // same row within 4px
     return a.left-b.left;
   });
-  var kids=[].slice.call(m.children).filter(function(c){ return c.classList.contains("card"); });
+  var kids=[].slice.call(m.children).filter(function(c){ return c.classList.contains("card")&&!c.hidden; });
   var same=kids.length===visual.length;
   for(var i=0;same&&i<visual.length;i++){ if(kids[i]!==visual[i].c) same=false; }
   if(same) return;                                    // don't churn the DOM for no reason

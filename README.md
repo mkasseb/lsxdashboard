@@ -108,7 +108,7 @@ final startup step so controls cannot call dependencies that are still downloadi
 compact phone hourly planning, source disclosures with visible outage/expiry states, and radar
 loading on viewport approach, direct navigation, station demand or explicit controls. Radar libraries,
 styles and tiles wait until demand; browsers without IntersectionObserver load maps immediately.
-Healthy check/source timestamps remain under **Sources & updates**; warnings stay outside it.
+Healthy check/source timestamps sit in the footer's **Sources & freshness** panel; warnings stay on their own card.
 The Now card identifies its observation station by name, while the hourly card identifies the
 selected town's NWS point forecast. Model settings follow the chart; model failures remain visible.
 It also covers
