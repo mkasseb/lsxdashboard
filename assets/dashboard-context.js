@@ -14,7 +14,8 @@ function requestContext(key){
    line (feed-status lines sit outside .context-body) stay visible while it is folded. */
 var CONTEXT_START_COLLAPSED=["afdCard"];
 function initContextView(){
-  var ids=["afdCard","obsCard","climateCard","droughtCard","cpcCard"];
+  // Context cards keep individual disclosures, the PR-3 sources included.
+  var ids=["afdCard","obsCard","climateCard","droughtCard","cpcCard","storyCard","rainCard","winterCard"];
   function expand(card,on){
     var body=card.querySelector('.context-body'), button=card.querySelector('.context-toggle');
     body.hidden=!on; button.setAttribute('aria-expanded',String(on));

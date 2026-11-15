@@ -106,7 +106,8 @@ const server=http.createServer((req,res)=>{
         assert.equal(await page.locator('.map-diagnostics').count(),1);
         assert.equal(await page.locator('#radar .leaflet-map-pane').count(),1);
         assert.equal(await page.locator('#radar .leaflet-control-zoom').count(),1);
-        assert.equal(await page.locator('.context-toggle').count(),5);
+        // Five original context cards plus the Weather Story, observed rainfall and winter guidance.
+        assert.equal(await page.locator('.context-toggle').count(),8);
         console.log('PASS versioned upgrade: all current assets fetched, no handler crash, rendered radar tiles/controls and diagnostics');
       }
     }finally{await context.close();}

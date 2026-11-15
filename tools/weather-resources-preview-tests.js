@@ -30,7 +30,7 @@ async function main(){
   page.on('requestfailed',r=>audit.networkFailures.push({width,url:r.url().split('?')[0],error:r.failure()?.errorText}));
   try{
    const served=await page.goto(origin+'/?resource-preview='+sha,{waitUntil:'domcontentloaded',timeout:60000});assert(served.ok());
-   await page.waitForFunction(()=>typeof refreshInFlight!=='undefined'&&refreshInFlight===null&&document.querySelectorAll('.context-toggle').length===5,null,{timeout:90000});
+   await page.waitForFunction(()=>typeof refreshInFlight!=='undefined'&&refreshInFlight===null&&document.querySelectorAll('.context-toggle').length===8,null,{timeout:90000});
    assert.equal(await page.locator('#linksCard,.quicklinks').count(),0);
    assert.equal(await page.locator('a[href*="StateDroughtMonitor.aspx?MO"]').count(),0);
    assert.equal(await page.locator('#droughtCard .dr-tier a').first().getAttribute('href'),'https://droughtmonitor.unl.edu/CurrentMap.aspx');

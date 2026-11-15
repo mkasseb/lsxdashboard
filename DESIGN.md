@@ -1125,6 +1125,10 @@ That is the same rule as SPC's globally empty layers. One identify answers every
 queries verify each day's 4-inch and ice issuance. WPC days run 00Z–00Z, so each is named by its end
 ("Day 1 · until Wed 7 PM CT"), not by a start that falls on the previous evening in Central time.
 
+The three new cards live in the context pack and keep individual disclosures like the cards
+around them (`initContextView`). Their problem lines sit outside the folded body, so an outage still
+shows when a card is collapsed.
+
 **Road conditions.** MoDOT's Traveler Map and Getting Around Illinois are under More weather
 resources, and in a line under the alerts during the storm layout or while a winter warning (warning
 level or above) covers the location. Both are link-only origins (`NAV_ONLY` in `tools/check.py`).
