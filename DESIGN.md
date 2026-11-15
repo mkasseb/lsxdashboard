@@ -1125,6 +1125,13 @@ That is the same rule as SPC's globally empty layers. One identify answers every
 queries verify each day's 4-inch and ice issuance. WPC days run 00Z–00Z, so each is named by its end
 ("Day 1 · until Wed 7 PM CT"), not by a start that falls on the previous evening in Central time.
 
+The layer ids are hard-coded, and NOAA has renumbered map-service layers before. A shifted id here
+would not fail: it would put a 12-inch polygon under the 4-inch label, a confident wrong answer. So
+`loadWinter()` also reads the service's layer list, and `winterLayerCheck()` trusts an id only when
+the service names it as expected ("Day 1 probability of at least 4 inches of snow", "Day 1
+probability of icing"). If any of a day's three snow thresholds fails that check, the whole day's
+snow reads "Unverified". A missing layer list makes the feed unavailable.
+
 The three new cards live in the context pack and keep individual disclosures like the cards
 around them (`initContextView`). Their problem lines sit outside the folded body, so an outage still
 shows when a card is collapsed.

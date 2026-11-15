@@ -1033,12 +1033,14 @@ function loadWinter(){
         return {issue:a[0].issue_time,start:a[0].start_time,end:a[0].end_time};
       }).catch(function(){return null;});
   });
-  return Promise.all([getJSON(hitUrl,null,signal)].concat(metaJobs)).then(function(res){
+  var layerJob=getJSON(WPC_WINTER_URL+"?f=json",null,signal).catch(function(){return null;});
+  return Promise.all([getJSON(hitUrl,null,signal),layerJob].concat(metaJobs)).then(function(res){
     if(!fresh()||!feedRequested("winter")) return;
-    var hits=res[0];
+    var hits=res[0], layers=res[1];
     if(!hits||hits.error||!Array.isArray(hits.results)) throw new Error("Invalid winter guidance response");
-    var meta={}; metaLayers.forEach(function(id,i){ meta[id]=res[i+1]; });
-    var g=winterGuidance(hits.results,meta,Date.now());
+    if(!layers||layers.error||!Array.isArray(layers.layers)) throw new Error("Unverified winter layer list");
+    var meta={}; metaLayers.forEach(function(id,i){ meta[id]=res[i+2]; });
+    var g=winterGuidance(hits.results,meta,Date.now(),winterLayerCheck(layers.layers));
     if(!g||!g.known) throw new Error("No verified winter guidance");
     feedUpdate("winter",g.known===g.total?"ready":"partial");
     if(!fresh()||!feedRequested("winter")) return;

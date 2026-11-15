@@ -2005,8 +2005,8 @@ async function checkGridLoaderIsolation() {
   const ns=new Function(['var WEATHER_TZ="America/Chicago";',lift(/^var WEATHER_PARTS=.*$/m,'WEATHER_PARTS'),L('weatherParts'),
     lift(/^var WXSTORY_IMAGE=.*$/m,'WXSTORY_IMAGE'),lift(/^var RAIN_WINDOWS=\[[\s\S]*?^\];/m,'RAIN_WINDOWS'),
     lift(/^var WINTER_DAYS=\[[\s\S]*?^\];/m,'WINTER_DAYS'),lift(/^var WINTER_THRESHOLDS=.*$/m,'WINTER_THRESHOLDS'),
-    ...['currentStories','rfcTime','rainfallFromIdentify','winterDemand','wpcTime','winterIssuanceOk','winterGuidance','winterCategory'].map(L)].join('\n')
-    +';return {currentStories,rfcTime,rainfallFromIdentify,winterDemand,wpcTime,winterIssuanceOk,winterGuidance,winterCategory};')();
+    ...['currentStories','rfcTime','rainfallFromIdentify','winterDemand','wpcTime','winterIssuanceOk','winterLayerCheck','winterGuidance','winterCategory'].map(L)].join('\n')
+    +';return {currentStories,rfcTime,rainfallFromIdentify,winterDemand,wpcTime,winterIssuanceOk,winterLayerCheck,winterGuidance,winterCategory};')();
   const t0=Date.parse('2026-11-15T04:00:00Z'), S=t0/1000, H=3600000;
   const img=n=>'https://www.weather.gov/images/lsx/wxstory/Tab'+n+'FileL.png';
   const st=ns.currentStories([
@@ -2040,12 +2040,22 @@ async function checkGridLoaderIsolation() {
   check('winter: a WSSI impact asks for guidance out of season',[ns.winterDemand(Date.parse('2026-10-20T12:00:00Z'),[0,1]),ns.winterDemand(Date.parse('2026-10-20T12:00:00Z'),[0,0]),ns.winterDemand(Date.parse('2026-10-20T12:00:00Z'),[null,null])].join(),'true,false,false');
   const day=i=>{const s0=Date.UTC(2026,10,15+i);const f=t=>new Date(t).toISOString().slice(0,19).replace('T',' ');return {issue:f(t0-2*H),start:f(s0),end:f(s0+24*H)};};
   const meta={1:day(0),4:day(0),6:day(1),9:day(1),11:day(2),14:day(2)};
-  const g=ns.winterGuidance([{layerId:1,attributes:{'Probability Code':'2'}},{layerId:2,attributes:{'Probability Code':'1'}},{layerId:9,attributes:{'Probability Code':'3'}}],meta,t0);
+  const names=[];[1,2,3].forEach((d,k)=>{const b=k*5;names.push({id:b,name:'Day '+d+' Snow and Ice Accumulation'},{id:b+1,name:'Day '+d+' probability of at least 4 inches of snow'},{id:b+2,name:'Day '+d+' probability of at least 8 inches of snow'},{id:b+3,name:'Day '+d+' probability of at least 12 inches of snow'},{id:b+4,name:'Day '+d+' probability of icing >0.25 inches'});});
+  const ok=ns.winterLayerCheck(names);
+  check('winter: the published layer list verifies all twelve ids',Object.keys(ok).length,12);
+  const shifted=ns.winterLayerCheck(names.map(n=>({id:n.id+1,name:n.name})));
+  check('winter: a renumbered service verifies none of them',Object.keys(shifted).length,0);
+  check('winter: a missing layer list verifies nothing',Object.keys(ns.winterLayerCheck(null)).length,0);
+  const swapped=ns.winterLayerCheck(names.map(n=>n.id===2?{id:2,name:'Day 1 probability of at least 12 inches of snow'}:n.id===3?{id:3,name:'Day 1 probability of at least 8 inches of snow'}:n));
+  check('winter: swapped thresholds are caught',[!!swapped[2],!!swapped[3],!!swapped[1]].join(),'false,false,true');
+  check('winter: one unverified threshold makes the whole day\'s snow unverified',ns.winterGuidance([],meta,t0,swapped).days[0].snow,null);
+  check('winter: no verification at all is not a reading',ns.winterGuidance([],meta,t0,undefined),null);
+  const g=ns.winterGuidance([{layerId:1,attributes:{'Probability Code':'2'}},{layerId:2,attributes:{'Probability Code':'1'}},{layerId:9,attributes:{'Probability Code':'3'}}],meta,t0,ok);
   check('winter: categories per threshold and ice per day',JSON.stringify(g.days.map(d=>[d.snow,d.ice])),JSON.stringify([[[2,1,0],0],[[0,0,0],3],[[0,0,0],0]]));
   check('winter: every verified layer counts',[g.known,g.total].join(),'6,6');
-  const unverified=ns.winterGuidance([],{1:null,4:{issue:'2026-11-12 00:00:00',start:'2026-11-12 00:00:00',end:'2026-11-13 00:00:00'},6:day(1),9:day(1),11:day(2),14:day(2)},t0);
+  const unverified=ns.winterGuidance([],{1:null,4:{issue:'2026-11-12 00:00:00',start:'2026-11-12 00:00:00',end:'2026-11-13 00:00:00'},6:day(1),9:day(1),11:day(2),14:day(2)},t0,ok);
   check('winter: an empty or old layer cannot certify "below 10%"',JSON.stringify([unverified.days[0].snow,unverified.days[0].ice,unverified.known]),JSON.stringify([null,null,4]));
-  check('winter: a malformed identify is not "no snow"',ns.winterGuidance(null,meta,t0),null);
+  check('winter: a malformed identify is not "no snow"',ns.winterGuidance(null,meta,t0,ok),null);
   check('winter: issuance must be recent and its period not over',[ns.winterIssuanceOk(day(0),t0),ns.winterIssuanceOk({issue:'2026-11-13 00:00:00',start:'2026-11-15 00:00:00',end:'2026-11-16 00:00:00'},t0),ns.winterIssuanceOk({issue:'2026-11-14 22:00:00',start:'2026-11-14 00:00:00',end:'2026-11-15 00:00:00'},t0)].join(),'true,false,false');
   {
     const rw=new Function([lift(/^var ROAD_WINTER_EVENTS=.*$/m,'ROAD_WINTER_EVENTS'),L('winterWarningCovers')].join('\n')+';return winterWarningCovers;')();

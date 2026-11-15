@@ -257,6 +257,12 @@ async function open(c, width=390) {
       }
       if(u.pathname.includes('/wpc_prob_winter_precip/MapServer')){
         if(c.winterDown)return reply({error:{code:500}},503);
+        if(/\/MapServer\/?$/.test(u.pathname)){
+          // The service's own layer list, as published; winterRenumbered shifts the names one slot.
+          const names=[];[1,2,3].forEach((d,k)=>{const b=k*5;names.push([b,'Day '+d+' Snow and Ice Accumulation'],[b+1,'Day '+d+' probability of at least 4 inches of snow'],[b+2,'Day '+d+' probability of at least 8 inches of snow'],[b+3,'Day '+d+' probability of at least 12 inches of snow'],[b+4,'Day '+d+' probability of icing >0.25 inches']);});
+          if(c.winterRenumbered)names.forEach(n=>n[0]+=1);
+          return reply({layers:names.map(([id,name])=>({id,name}))});
+        }
         if(u.pathname.endsWith('/identify')){
           const body={results:(c.winterHits||[]).map(([layerId,dn])=>({layerId,attributes:{'Probability Code':String(dn)}}))};
           if(c.winterHold){heldWinter.push({route,body});return;}
@@ -732,6 +738,13 @@ async function main() {
     await run('an unverifiable winter layer reads unverified, not below 10%',config('winter unverified',{now:Date.parse('2026-12-10T18:00:00Z'),winterEmptyLayers:[1]}),async({page})=>{
       await page.waitForFunction(()=>feedChecks.winter.status==='partial');
       assert.match(await page.locator('#winter').innerText(),/Day 1[^\n]*\n?[^\n]*Snow Unverified/);
+    });
+    await run('renumbered winter layers read unverified, never a wrong threshold',config('winter renumbered',{now:Date.parse('2026-12-10T18:00:00Z'),winterRenumbered:true,winterHits:[[2,3]]}),async({page})=>{
+      await page.waitForFunction(()=>feedChecks.winter.status!=='loading');
+      const t=await page.locator('#winter').innerText();
+      assert.doesNotMatch(t,/High/,'A polygon from a renumbered layer is never read under the wrong label');
+      assert.doesNotMatch(t,/Below 10%/,'Nothing is certified from unverified layers');
+      assert.equal(await page.evaluate(()=>feedChecks.winter.status),'unavailable');
     });
     await run('winter guidance stops when WSSI clears and drops a late response',config('winter demand',{winterImpact:true,winterHold:true,winterHits:[[1,3]]}),async session=>{
       const {page}=session;

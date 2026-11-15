@@ -542,11 +542,27 @@ function winterIssuanceOk(meta,nowMs){
   var issued=wpcTime(meta.issue), end=wpcTime(meta.end);
   return isFinite(issued)&&isFinite(end)&&issued<=nowMs+10*60000&&nowMs-issued<=36*3600000&&end>nowMs;
 }
+/* Layer ids on NOAA's map services have been renumbered before (SPC uses discovery for that reason),
+   and a renumbered id here would put a 12-inch polygon under a 4-inch label: a wrong answer, not a
+   gap. So each id is trusted only when the service's own layer list names it as expected. Returns
+   the set of verified ids. */
+function winterLayerCheck(layers){
+  var named={}, ok={};
+  (Array.isArray(layers)?layers:[]).forEach(function(l){ if(l&&isFinite(Number(l.id))) named[Number(l.id)]=String(l.name||"").trim(); });
+  WINTER_DAYS.forEach(function(d){
+    d.snow.forEach(function(id,i){
+      var re=new RegExp("^Day "+d.day+" probability of at least "+WINTER_THRESHOLDS[i]+" inches of snow$","i");
+      if(re.test(named[id]||"")) ok[id]=true;
+    });
+    if(new RegExp("^Day "+d.day+" probability of icing","i").test(named[d.ice]||"")) ok[d.ice]=true;
+  });
+  return ok;
+}
 /* hits: identify results at the point; meta: {layerId:{issue,start,end}} for each day's 4-inch and
    ice layers (the 8- and 12-inch layers are issued with the 4-inch one). Per day, snow is one
    category per threshold (4, 8, 12 inches) and ice one category, or null when unverifiable. */
-function winterGuidance(hits,meta,nowMs){
-  if(!Array.isArray(hits)||!meta) return null;
+function winterGuidance(hits,meta,nowMs,verified){
+  if(!Array.isArray(hits)||!meta||!verified) return null;
   var byLayer={};
   hits.forEach(function(h){
     var at=(h&&h.attributes)||{}, id=Number(h&&h.layerId);
@@ -556,7 +572,8 @@ function winterGuidance(hits,meta,nowMs){
   var known=0;
   var days=WINTER_DAYS.map(function(d){
     var snowMeta=meta[d.snow[0]], iceMeta=meta[d.ice];
-    var snowOk=winterIssuanceOk(snowMeta,nowMs), iceOk=winterIssuanceOk(iceMeta,nowMs);
+    var snowOk=d.snow.every(function(id){return verified[id];})&&winterIssuanceOk(snowMeta,nowMs);
+    var iceOk=!!verified[d.ice]&&winterIssuanceOk(iceMeta,nowMs);
     if(snowOk) known++; if(iceOk) known++;
     return {day:d.day,
       snow:snowOk?d.snow.map(function(id){return byLayer[id]||0;}):null,
