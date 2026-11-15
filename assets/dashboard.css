@@ -2235,13 +2235,18 @@ body.radar-full #radarCard#radarCard{background:var(--bg);border:0;
 .cc-take .glance-detail{font-size:13px}
 .cc-take .glance-action{font-size:15px}
 @media(max-width:680px){.cc-take{flex-basis:100%}.cc-take .glance-headline{font-size:22px}}
-/* With a takeaway, the reading row spans the card so the takeaway sits beside the temperature;
-   today's range and the metrics move under it. Without one the original two-column grid stays. */
+/* With a takeaway and room for it, the reading row spans the card so the takeaway sits beside the
+   temperature; today's range and the metrics move under it. The test is the Now card's own width,
+   not the viewport: in the storm layout's two- and three-column rows Now can be ~300px wide on a
+   wide screen, and there the takeaway wraps under the reading as it does on a phone. */
+#currentCard{container:nowcard / inline-size}
 @media(min-width:681px){
-  #currentCard #current:has(.cc-take:not(:empty)) .cc-main{grid-column:1/-1;grid-row:1;flex-wrap:nowrap;align-items:center;gap:24px}
-  #currentCard #current:has(.cc-take:not(:empty)) .cc-today{grid-column:1/-1;grid-row:2}
-  #currentCard #current:has(.cc-take:not(:empty)) .cc-grid{grid-column:1/-1;grid-row:3;grid-template-columns:repeat(3,minmax(0,1fr))}
-  #currentCard #current:has(.cc-take:not(:empty)) .cc-expo{grid-row:4}
+  @container nowcard (min-width:560px){
+    #currentCard #current:has(.cc-take:not(:empty)) .cc-main{grid-column:1/-1;grid-row:1;flex-wrap:nowrap;align-items:center;gap:24px}
+    #currentCard #current:has(.cc-take:not(:empty)) .cc-today{grid-column:1/-1;grid-row:2}
+    #currentCard #current:has(.cc-take:not(:empty)) .cc-grid{grid-column:1/-1;grid-row:3;grid-template-columns:repeat(3,minmax(0,1fr))}
+    #currentCard #current:has(.cc-take:not(:empty)) .cc-expo{grid-row:4}
+  }
 }
 /* Calm-day radar (syncRadarCalm in dashboard-context.js). Only where the radar stacks under Now:
    above 1000px it sits beside the taller Now column, so a smaller map would save no height. The

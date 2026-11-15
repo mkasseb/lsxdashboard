@@ -1026,10 +1026,17 @@ failure-ownership rule that keeps the hourly chart out of `#current`.
 
 `paintNowTakeaway()` re-checks the hourly feed itself rather than trusting the last rendered
 string. An overdue hourly check, or a location change (which resets the hourly feed to loading and
-`#current` with it), means an observation repaint paints no takeaway. On phones it wraps under the
-reading. Above 680px, when there is a takeaway, the reading row spans the card (temperature left,
-takeaway right) with today's range and the metrics under it. Without one, the original two-column
-grid stays.
+`#current` with it), means an observation repaint paints no takeaway. If the forecast lands before the observation (startup,
+a location change, a slow station fallback), the painter puts the slot at the top of the loading
+state rather than waiting; `loadCurrent()` rebuilds it beside the temperature when the reading
+lands.
+
+On phones it wraps under the reading. When the Now card itself is at least 560px wide, the reading
+row spans the card (temperature left, takeaway right) with today's range and the metrics under it.
+The test is a container query on `#currentCard`, not the viewport: the storm layout puts Now in a
+two- or three-column row, where it can be about 300px wide on a wide screen, and there the takeaway
+wraps under the reading as it does on a phone. Without a takeaway, the original two-column grid
+stays.
 
 **Rain-chance bars.** The hourly chart already drew one bar per hour with a chance above 0%, in the
 band under the temperature line (`.h24-bar`). A stress scenario now pins that, and pins that a dry

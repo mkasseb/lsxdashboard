@@ -1671,10 +1671,18 @@ function glanceIcon(name){
    can never bring back a takeaway its forecast no longer supports: an overdue hourly check, or a
    location change (which resets the hourly feed to loading and #current with it). */
 function paintNowTakeaway(){
-  var el=document.getElementById("ccTake"); if(!el) return;
   var state=feedState(feedChecks.hourly,Date.now(),FEEDS.hourly.age);
   var html=(state==="ready"||state==="partial")?(renderGlance._leadHtml||""):"";
-  if(el.innerHTML!==html) el.innerHTML=html;
+  var el=document.getElementById("ccTake");
+  if(!el&&html){
+    // Observations are still loading (startup, a location change, a slow station fallback): the
+    // forecast's takeaway must not wait for them. Put a slot at the top of the loading state;
+    // loadCurrent() rebuilds it beside the temperature when the reading lands.
+    var cur=document.getElementById("current"); if(!cur) return;
+    el=document.createElement("div"); el.className="cc-take"; el.id="ccTake";
+    cur.insertBefore(el,cur.firstChild);
+  }
+  if(el&&el.innerHTML!==html) el.innerHTML=html;
 }
 function renderGlance(H,hourlyReady,candidates){
   var box=document.getElementById("glance"), card=document.getElementById("glanceCard");

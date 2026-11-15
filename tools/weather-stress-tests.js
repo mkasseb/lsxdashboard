@@ -572,6 +572,27 @@ async function main() {
       await page.evaluate(()=>loadCurrent());await page.locator('#current .cc-temp').waitFor();
       assert.equal(await page.locator('#ccTake .glance-lead').count(),0,'A repaint cannot restore a takeaway its forecast no longer supports');
     });
+    await run('a slow observation does not hold back the forecast takeaway',config('takeaway slow obs'),async session=>{
+      const {page}=session;
+      let release;const held=new Promise(r=>release=r);
+      await page.route('**/observations/latest',async r=>{await held;await r.fulfill({status:503,json:{}});});
+      await page.evaluate(()=>{setLocation({name:'Wentzville, MO',lat:38.81,lon:-90.86,precision:'representative'},{save:true});});
+      await page.locator('#ccTake .glance-headline').waitFor();
+      assert.equal(await page.locator('#current .cc-temp').count(),0,'The observation is still loading');
+      assert(await page.locator('#ccTake .glance-lead').isVisible(),'The forecast takeaway shows while the reading loads');
+      release();await page.waitForFunction(()=>/observation unavailable/i.test(document.getElementById('current').innerText));
+      assert.equal(await page.locator('#ccTake').count(),1,'One slot after the reading lands');
+      assert(await page.locator('#ccTake .glance-lead').isVisible());
+    });
+    for(const width of [900,1280])await run('the takeaway fits the narrow storm-layout Now card '+width,config('takeaway storm narrow',{alerts:[alert('Severe Thunderstorm Warning',base)]}),async({page})=>{
+      await page.waitForFunction(()=>document.documentElement.classList.contains('lsx-active'));
+      await page.locator('#ccTake .glance-headline').waitFor();
+      const g=await page.evaluate(()=>{const card=document.getElementById('currentCard').getBoundingClientRect(),lead=document.querySelector('#ccTake .glance-lead'),l=lead.getBoundingClientRect(),t=document.querySelector('#current .cc-temp').getBoundingClientRect(),h=lead.querySelector('.glance-headline');
+        return {card:card.width,leadRight:l.right,cardRight:card.right,overflow:h.scrollWidth-h.clientWidth,below:l.top>=t.bottom-1};});
+      assert(g.card<560,'This storm layout gives Now a narrow column: '+g.card);
+      assert(g.leadRight<=g.cardRight+1&&g.overflow<=1,'The takeaway stays inside the Now card: '+JSON.stringify(g));
+      assert(g.below,'In a narrow Now card the takeaway wraps under the reading');
+    },width);
     await run('an overdue hourly check withdraws the takeaway on the next repaint',config('takeaway overdue'),async session=>{
       const {page}=session;
       await page.locator('#ccTake .glance-headline').waitFor();
