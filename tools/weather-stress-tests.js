@@ -261,6 +261,7 @@ async function open(c, width=390) {
           // The service's own layer list, as published; winterRenumbered shifts the names one slot.
           const names=[];[1,2,3].forEach((d,k)=>{const b=k*5;names.push([b,'Day '+d+' Snow and Ice Accumulation'],[b+1,'Day '+d+' probability of at least 4 inches of snow'],[b+2,'Day '+d+' probability of at least 8 inches of snow'],[b+3,'Day '+d+' probability of at least 12 inches of snow'],[b+4,'Day '+d+' probability of icing >0.25 inches']);});
           if(c.winterRenumbered)names.forEach(n=>n[0]+=1);
+          if(c.winterIceName)names.forEach(n=>{if(n[0]===4)n[1]=c.winterIceName;});
           return reply({layers:names.map(([id,name])=>({id,name}))});
         }
         if(u.pathname.endsWith('/identify')){
@@ -746,6 +747,14 @@ async function main() {
       assert.doesNotMatch(t,/Below 10%/,'Nothing is certified from unverified layers');
       assert.equal(await page.evaluate(()=>feedChecks.winter.status),'unavailable');
     });
+    for(const [label,iceName] of [['another threshold','Day 1 probability of icing >0.50 inches'],['no threshold','Day 1 probability of icing']]){
+      await run('a winter ice layer with '+label+' reads unverified',config('winter ice '+label,{now:Date.parse('2026-12-10T18:00:00Z'),winterIceName:iceName}),async({page})=>{
+        await page.waitForFunction(()=>feedChecks.winter.status!=='loading');
+        const day1=await page.locator('#winter .winter-row').first().innerText();
+        assert.match(day1,/Ice[^\n]*Unverified/,'Day 1 ice is not certified from a layer at another threshold');
+        assert.match(day1,/Snow[^\n]*Below 10%/,'Day 1 snow, still verified, keeps its reading');
+      });
+    }
     await run('winter guidance stops when WSSI clears and drops a late response',config('winter demand',{winterImpact:true,winterHold:true,winterHits:[[1,3]]}),async session=>{
       const {page}=session;
       await page.waitForFunction(()=>deferredFeeds.winter===true);

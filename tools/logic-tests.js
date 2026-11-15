@@ -2049,6 +2049,11 @@ async function checkGridLoaderIsolation() {
   const swapped=ns.winterLayerCheck(names.map(n=>n.id===2?{id:2,name:'Day 1 probability of at least 12 inches of snow'}:n.id===3?{id:3,name:'Day 1 probability of at least 8 inches of snow'}:n));
   check('winter: swapped thresholds are caught',[!!swapped[2],!!swapped[3],!!swapped[1]].join(),'false,false,true');
   check('winter: one unverified threshold makes the whole day\'s snow unverified',ns.winterGuidance([],meta,t0,swapped).days[0].snow,null);
+  const ice50=ns.winterLayerCheck(names.map(n=>n.id===4?{id:4,name:'Day 1 probability of icing >0.50 inches'}:n));
+  check('winter: an ice layer at another threshold is not verified',!!ice50[4],false);
+  const iceBare=ns.winterLayerCheck(names.map(n=>n.id===9?{id:9,name:'Day 2 probability of icing'}:n));
+  check('winter: an ice layer with no threshold is not verified',!!iceBare[9],false);
+  check('winter: a changed ice threshold reads unverified, not below 10%',ns.winterGuidance([],meta,t0,ice50).days[0].ice,null);
   check('winter: no verification at all is not a reading',ns.winterGuidance([],meta,t0,undefined),null);
   const g=ns.winterGuidance([{layerId:1,attributes:{'Probability Code':'2'}},{layerId:2,attributes:{'Probability Code':'1'}},{layerId:9,attributes:{'Probability Code':'3'}}],meta,t0,ok);
   check('winter: categories per threshold and ice per day',JSON.stringify(g.days.map(d=>[d.snow,d.ice])),JSON.stringify([[[2,1,0],0],[[0,0,0],3],[[0,0,0],0]]));

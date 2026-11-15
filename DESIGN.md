@@ -1128,9 +1128,11 @@ queries verify each day's 4-inch and ice issuance. WPC days run 00Z–00Z, so ea
 The layer ids are hard-coded, and NOAA has renumbered map-service layers before. A shifted id here
 would not fail: it would put a 12-inch polygon under the 4-inch label, a confident wrong answer. So
 `loadWinter()` also reads the service's layer list, and `winterLayerCheck()` trusts an id only when
-the service names it as expected ("Day 1 probability of at least 4 inches of snow", "Day 1
-probability of icing"). If any of a day's three snow thresholds fails that check, the whole day's
-snow reads "Unverified". A missing layer list makes the feed unavailable.
+the service names it exactly as expected ("Day 1 probability of at least 4 inches of snow", "Day 1
+probability of icing >0.25 inches"). Each match is whole-name and end-anchored, so the threshold is
+part of what is checked: an ice layer moved to 0.50 inch reads "Unverified", not "Ice ≥0.25″ Below
+10%". If any of a day's three snow thresholds fails that check, the whole day's snow reads
+"Unverified". A missing layer list makes the feed unavailable.
 
 The three new cards live in the context pack and keep individual disclosures like the cards
 around them (`initContextView`). Their problem lines sit outside the folded body, so an outage still

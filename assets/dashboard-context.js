@@ -554,7 +554,7 @@ function winterLayerCheck(layers){
       var re=new RegExp("^Day "+d.day+" probability of at least "+WINTER_THRESHOLDS[i]+" inches of snow$","i");
       if(re.test(named[id]||"")) ok[id]=true;
     });
-    if(new RegExp("^Day "+d.day+" probability of icing","i").test(named[d.ice]||"")) ok[d.ice]=true;
+    if(new RegExp("^Day "+d.day+" probability of icing >0\\.25 inches$","i").test(named[d.ice]||"")) ok[d.ice]=true;
   });
   return ok;
 }
