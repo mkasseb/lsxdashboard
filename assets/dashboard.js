@@ -71,6 +71,7 @@ function freshnessCheck(){
   if(typeof renderOutlook==="function") renderOutlook();   // an overdue feed unfolds its card
   if(typeof syncActiveMode==="function"&&!freshnessCheck._inActive){ freshnessCheck._inActive=true; try{ syncActiveMode(); }finally{ freshnessCheck._inActive=false; } }
   if(typeof syncRadarCalm==="function") syncRadarCalm();   // after the storm layout, which wins
+  if(typeof syncStoryClock==="function") syncStoryClock();   // Weather Story graphics start and end on time
   if(renderTheCall._comfortAllowed!=null&&renderTheCall._comfortAllowed!==briefingComfortAllowed()) renderTheCall();
   renderNwsMessages();
 }

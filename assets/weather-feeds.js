@@ -981,9 +981,11 @@ function loadStory(){
     });
     var stories=currentStories(items,Date.now());
     if(!stories||(stories.invalid&&stories.invalid===stories.total)) throw new Error("Unreadable Weather Story");
+    renderStory._items=items;   // re-filtered on the freshness tick as graphics start and end
     feedUpdate("story",stories.invalid?"partial":"ready");
     renderStory(stories);
   }).catch(function(){
+    renderStory._items=null;
     feedUpdate("story","unavailable");
     renderStory(null);
   });

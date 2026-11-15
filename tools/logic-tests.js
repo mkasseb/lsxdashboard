@@ -2020,6 +2020,8 @@ async function checkGridLoaderIsolation() {
   check('story: unreadable times, missing titles, foreign images and reversed windows are counted',[bad.length,bad.invalid].join(),'0,4');
   check('story: a non-list is not an empty story',ns.currentStories(null,t0),null);
   check('story: the end instant is exclusive',ns.currentStories([{start:S-60,end:S,title:'T',image:img(1)}],t0).length,0);
+  const blank=ns.currentStories([{start:'',end:S+600,title:'T',image:img(1)},{start:'  ',end:'',title:'T',image:img(1)},{end:S+60,title:'T',image:img(1)}],t0);
+  check('story: empty or missing times are unreadable, not the 1970 epoch',[blank.length,blank.invalid].join(),'0,3');
 
   check('rainfall: service footprint dates are UTC',new Date(ns.rfcTime('11/15/2026 2:00:00 AM')).toISOString(),'2026-11-15T02:00:00.000Z');
   check('rainfall: PM and 12 AM/PM parse',[ns.rfcTime('11/14/2026 12:00:00 PM'),ns.rfcTime('11/14/2026 12:00:00 AM')].map(v=>new Date(v).toISOString().slice(11,13)).join(),'12,00');
@@ -2045,6 +2047,15 @@ async function checkGridLoaderIsolation() {
   check('winter: an empty or old layer cannot certify "below 10%"',JSON.stringify([unverified.days[0].snow,unverified.days[0].ice,unverified.known]),JSON.stringify([null,null,4]));
   check('winter: a malformed identify is not "no snow"',ns.winterGuidance(null,meta,t0),null);
   check('winter: issuance must be recent and its period not over',[ns.winterIssuanceOk(day(0),t0),ns.winterIssuanceOk({issue:'2026-11-13 00:00:00',start:'2026-11-15 00:00:00',end:'2026-11-16 00:00:00'},t0),ns.winterIssuanceOk({issue:'2026-11-14 22:00:00',start:'2026-11-14 00:00:00',end:'2026-11-15 00:00:00'},t0)].join(),'true,false,false');
+  {
+    const rw=new Function([lift(/^var ROAD_WINTER_EVENTS=.*$/m,'ROAD_WINTER_EVENTS'),L('winterWarningCovers')].join('\n')+';return winterWarningCovers;')();
+    const grp=(ev,k,extra)=>Object.assign({ev,lv:{k},latest:t0+H},extra||{});
+    check('roads: a winter storm warning under a stronger flood warning still counts',rw([grp('Flood Warning','warning'),grp('Winter Storm Warning','warning')],t0),true);
+    check('roads: advisories, freeze and wind chill warnings, expired or distant alerts do not',
+      [rw([grp('Winter Weather Advisory','advisory')],t0),rw([grp('Freeze Warning','warning')],t0),rw([grp('Extreme Cold Warning','warning')],t0),
+       rw([grp('Ice Storm Warning','warning',{latest:t0-1})],t0),rw([grp('Blizzard Warning','warning',{scope:'away'})],t0)].join(),'false,false,false,false,false');
+    check('roads: a folded group counts its current phase',rw([{scope:'here',phases:[grp('Winter Storm Watch','watch'),grp('Winter Storm Warning','warning')]}],t0),true);
+  }
   check('winter: category words',[0,1,2,3,9].map(ns.winterCategory).join('|'),'Below 10%|Slight (10–39%)|Moderate (40–69%)|High (70–100%)|Unknown');
 }
 

@@ -468,7 +468,9 @@ function currentStories(items,nowMs){
   if(!Array.isArray(items)) return null;
   var out=[], invalid=0, nowS=nowMs/1000;
   items.forEach(function(it){
-    var start=Number(it&&it.start), end=Number(it&&it.end), title=String(it&&it.title||"").trim();
+    // An empty or missing time would become Number("")=0 and pass as a real instant.
+    var rawStart=String(it&&it.start!=null?it.start:"").trim(), rawEnd=String(it&&it.end!=null?it.end:"").trim();
+    var start=rawStart?Number(rawStart):NaN, end=rawEnd?Number(rawEnd):NaN, title=String(it&&it.title||"").trim();
     var image=String(it&&it.image||"").trim();
     if(!isFinite(start)||!isFinite(end)||end<start||!title||!WXSTORY_IMAGE.test(image)){ invalid++; return; }
     if(start<=nowS&&nowS<end) out.push({start:start*1000,end:end*1000,order:Number(it.order)||0,title:title,
@@ -571,6 +573,12 @@ function storyHtml(s){
     +'<figcaption><strong>'+esc(s.title)+'</strong>'+(s.description?' '+esc(s.description):'')
     +'<span class="story-valid">Valid until '+esc(weatherTime(s.end,{weekday:"short",hour:"numeric",minute:"2-digit"}))+' CT</span></figcaption></figure>';
 }
+/* Validity is re-checked on the freshness tick (every 30 seconds), not only when the feed reloads:
+   a graphic must leave the page when its end time passes, and an upcoming one appears on time. */
+function syncStoryClock(){
+  if(!renderStory._items) return;
+  renderStory(currentStories(renderStory._items,Date.now()));
+}
 function renderStory(stories){
   var el=document.getElementById("story"), link=document.getElementById("olStory");
   renderStory._current=stories&&stories.length?stories[0]:null;
@@ -625,10 +633,26 @@ function syncWinterDemand(){
   else if(!want&&deferredFeeds.winter) deferredFeeds.winter=false;
 }
 /* Road conditions matter during the storm layout and under a covering winter alert. */
+/* Any covering, unexpired winter-precipitation warning counts, not only the single strongest alert:
+   a Flood Warning can outrank a Winter Storm Warning in callLocalAlert and still leave roads icy.
+   Walks the same groups and phases bottomLineLocalAlert does. The event list is explicit because
+   eventFamily()'s "winter" also holds Freeze, Frost and Wind Chill warnings, which are not road
+   hazards. */
+var ROAD_WINTER_EVENTS=/winter storm|blizzard|ice storm|snow squall|heavy snow|lake effect snow|freezing rain/i;
+function winterWarningCovers(groups,nowMs){
+  return (groups||[]).some(function(g){
+    if(!g||g.scope==="away") return false;
+    var phases=g.phases&&g.phases.length?g.phases:[g];
+    return phases.some(function(p){
+      if(!p||p.latest>0&&p.latest<=nowMs) return false;
+      var level=p.lv&&p.lv.k;
+      return ROAD_WINTER_EVENTS.test(String(p.ev||""))&&(level==="warning"||level==="emergency");
+    });
+  });
+}
 function syncRoadLinks(){
   var el=document.getElementById("roadLinks"); if(!el) return;
-  var local=typeof callLocalAlert!=="undefined"?callLocalAlert:null;
-  var show=document.documentElement.classList.contains("lsx-active")
-    ||!!(local&&local.family==="winter"&&(local.level==="warning"||local.level==="emergency"));
+  var groups=typeof callAlertGroups!=="undefined"?callAlertGroups:[];
+  var show=document.documentElement.classList.contains("lsx-active")||winterWarningCovers(groups,Date.now());
   if(el.hidden===show) el.hidden=!show;
 }

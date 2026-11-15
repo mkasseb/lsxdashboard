@@ -1130,8 +1130,15 @@ around them (`initContextView`). Their problem lines sit outside the folded body
 shows when a card is collapsed.
 
 **Road conditions.** MoDOT's Traveler Map and Getting Around Illinois are under More weather
-resources, and in a line under the alerts during the storm layout or while a winter warning (warning
-level or above) covers the location. Both are link-only origins (`NAV_ONLY` in `tools/check.py`).
+resources, and in a line under the storm-layout bar during the storm layout or while a
+winter-precipitation warning covers the location (`winterWarningCovers()`). That check walks every
+covering, unexpired alert phase, not only `callLocalAlert`, because a Flood Warning can outrank a
+Winter Storm Warning there. It matches winter storm, blizzard, ice storm, snow squall, heavy snow,
+lake-effect snow and freezing rain by name: `eventFamily()`'s "winter" also holds Freeze, Frost and
+Wind Chill warnings, which are not road hazards. Weather Story graphics are re-filtered on the
+30-second freshness tick (`syncStoryClock()`), so one leaves the page when its end time passes rather
+than at the next feed refresh. An empty or missing time is rejected before conversion: `Number("")`
+is 0, a real instant. Both are link-only origins (`NAV_ONLY` in `tools/check.py`).
 
 **Not added.** USGS earthquakes: off-topic for a weather page.
 

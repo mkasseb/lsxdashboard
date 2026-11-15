@@ -681,6 +681,14 @@ async function main() {
         else await expectText(page,'#story',/Good/);
         assert(await page.locator('#fresh-story').isVisible(),'The problem line stays on the card');
       });
+    await run('a Weather Story graphic leaves the page when its end time passes',config('story expiry',{story:[{title:'Short Lived',start:-1,end:0.2,n:3}]}),async({page})=>{
+      await expectText(page,'#story',/Short Lived/);assert(await page.locator('#olStory').isVisible());
+      // No feed refresh: the 30-second freshness tick alone must retire it (12 min end, 30 min feed cadence).
+      await page.clock.runFor(13*60000);
+      await page.waitForFunction(()=>!/Short Lived/.test(document.getElementById('story').innerText));
+      assert(!await page.locator('#olStory').isVisible(),'The outlook link goes with it');
+      await expectText(page,'#story',/No Weather Story graphic is current/);
+    });
     await run('no current Weather Story says so rather than showing an old graphic',config('story none',{story:[{title:'Expired',start:-10,end:-1}]}),async({page})=>{
       await expectText(page,'#story',/No Weather Story graphic is current/);
       assert.equal(await page.locator('#story img').count(),0);assert(!await page.locator('#olStory').isVisible());
@@ -736,7 +744,7 @@ async function main() {
       session.releaseWinter();await page.waitForTimeout(200);
       assert.doesNotMatch(await page.locator('#winter').innerText(),/High/,'A response that lands after demand ends never paints');
     });
-    for(const [name,alerts,shown] of [['the storm layout',[alert('Tornado Warning',base)],true],['a winter storm warning',[alert('Winter Storm Warning',base)],true],['a winter weather advisory',[alert('Winter Weather Advisory',base)],false],['a quiet day',[],false]])
+    for(const [name,alerts,shown] of [['the storm layout',[alert('Tornado Warning',base)],true],['a winter storm warning',[alert('Winter Storm Warning',base)],true],['a winter storm warning under a flood warning',[alert('Flood Warning',base),alert('Winter Storm Warning',base)],true],['a freeze warning',[alert('Freeze Warning',base)],false],['a winter weather advisory',[alert('Winter Weather Advisory',base)],false],['a quiet day',[],false]])
       await run('road condition links follow '+name,config('roads '+name,{alerts}),async({page})=>{
         await page.waitForFunction(()=>feedChecks.alerts.status==='ready');
         assert.equal(await page.locator('#roadLinks').isVisible(),shown);
