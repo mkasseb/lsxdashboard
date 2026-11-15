@@ -375,6 +375,7 @@ def check_csp_covers_origins(served_html, headers_text):
 UPPERAIR = os.path.join(ROOT, "upperair")
 # Links inside the UpperAir bundle that are never fetched: Svelte's runtime error messages cite
 # svelte.dev, and the map attribution names Natural Earth and Open-Meteo.
+BARE_HOST = re.compile(r"""["'`]((?:[a-z0-9-]+\.)+(?:com|gov|edu|org|net|dev|io))["'`]""")
 UPPERAIR_NAV_ONLY = {"https://svelte.dev", "https://www.naturalearthdata.com", "https://open-meteo.com"}
 
 
@@ -411,7 +412,11 @@ def check_upperair(headers_text):
             if not os.path.isfile(os.path.join(UPPERAIR, "assets", chunk)):
                 problems.append("missing lazy chunk assets/" + chunk)
     declared = [s for srcs in directives.values() for s in srcs if s.startswith("https://")]
-    found = sorted(set(ORIGIN.findall("\n".join(texts))))
+    bundle = "\n".join(texts)
+    # A URL builder can swap in a host after the fact (`url.hostname = "…"`), so a bare quoted
+    # hostname counts as an origin too, or the scan misses exactly the request that gets blocked.
+    hosts = {"https://" + h for h in BARE_HOST.findall(bundle)}
+    found = sorted(set(ORIGIN.findall(bundle)) | hosts)
     problems += ["origin not in the /upperair/* CSP: " + o for o in found
                  if o not in UPPERAIR_NAV_ONLY and not covered_by(o, declared)]
     if problems:

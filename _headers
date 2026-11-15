@@ -51,7 +51,7 @@
 # tools/check.py verifies every origin in the bundle is covered here.
 /upperair/*
   ! Content-Security-Policy
-  Content-Security-Policy: default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'self'; form-action 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.open-meteo.com https://geocoding-api.open-meteo.com https://mesonet.agron.iastate.edu https://basemap.nationalmap.gov; worker-src 'none'; frame-src 'none'; manifest-src 'self'
+  Content-Security-Policy: default-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'self'; form-action 'none'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' https://api.open-meteo.com https://single-runs-api.open-meteo.com https://geocoding-api.open-meteo.com https://mesonet.agron.iastate.edu https://basemap.nationalmap.gov; worker-src 'none'; frame-src 'none'; manifest-src 'self'
 
 # Vite names these files by content hash, so a changed file is a new URL and old ones never change.
 /upperair/assets/*
