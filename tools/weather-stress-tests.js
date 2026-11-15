@@ -436,6 +436,9 @@ async function main() {
       const {page}=session;
       await page.waitForFunction(()=>mapsInFlight===null);await page.evaluate(()=>{deferredFeeds.stations=true;});
       await page.locator('#rsFull').click();assert.equal(await page.locator('#radarCard').getAttribute('aria-modal'),'true');
+      // Opening fullscreen requests maps itself; let that attempt fail before the libraries recover,
+      // or the Retry press below joins it (a busy retry rejoins the attempt in flight, by design).
+      await page.waitForFunction(()=>mapsInFlight===null&&!!document.querySelector('#radar [data-retry-maps]:not([aria-disabled])'));
       session.change(config('retry success recovered',{maps:true}));
       await page.locator('#radar [data-retry-maps]').focus();await page.keyboard.press('Enter');
       await page.waitForFunction(()=>rvMap&&mapsInFlight===null);
