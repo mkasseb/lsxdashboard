@@ -436,6 +436,9 @@ async function main() {
       const {page}=session;
       await page.waitForFunction(()=>mapsInFlight===null);await page.evaluate(()=>{deferredFeeds.stations=true;});
       await page.locator('#rsFull').click();assert.equal(await page.locator('#radarCard').getAttribute('aria-modal'),'true');
+      // Opening fullscreen requests maps itself; let that attempt fail before the libraries recover,
+      // or the Retry press below joins it (a busy retry rejoins the attempt in flight, by design).
+      await page.waitForFunction(()=>mapsInFlight===null&&!!document.querySelector('#radar [data-retry-maps]:not([aria-disabled])'));
       session.change(config('retry success recovered',{maps:true}));
       await page.locator('#radar [data-retry-maps]').focus();await page.keyboard.press('Enter');
       await page.waitForFunction(()=>rvMap&&mapsInFlight===null);
@@ -487,6 +490,137 @@ async function main() {
       await expectText(page,'#callRow',/Dry weather is expected/);
       const order=await page.evaluate(()=>document.getElementById('alertsCard').getBoundingClientRect().bottom<=document.getElementById('callCard').getBoundingClientRect().top);
       assert(order,'Active local warnings precede regional messages');
+    });
+    await run('hourly chart draws rain-chance bars under the temperature line for a rainy forecast',config('rain bars',{delayedRain:true}),async({page})=>{
+      await page.locator('#hourly24 .h24-svg').waitFor();
+      const bars=await page.evaluate(()=>{
+        const svg=document.querySelector('#hourly24 .h24-svg'),line=svg.querySelector('.h24-line'),lb=line.getBBox();
+        return [...svg.querySelectorAll('.h24-bar')].map(b=>({top:+b.getAttribute('y'),h:+b.getAttribute('height'),lineBottom:lb?lb.y+lb.height:null}));
+      });
+      // delayedRain: hours 6-11 carry an 80% chance, every other hour 0%.
+      assert.equal(bars.length,6,'One bar for each hour with a rain chance above 0%: '+bars.length);
+      assert(bars.every(b=>b.h>0),'Every bar has height');
+      assert(bars.every(b=>b.top>=b.lineBottom),'Bars sit in the band under the temperature line: '+JSON.stringify(bars[0]));
+      const dry=await page.evaluate(()=>{renderHourly24(smart.hourlyAll.map(h=>({...h,probabilityOfPrecipitation:{value:0}})));return document.querySelectorAll('#hourly24 .h24-bar').length;});
+      assert.equal(dry,0,'A dry forecast draws no bars');
+    });
+    await run('calm-day radar shrinks on a phone and grows back when rain is near',config('calm radar',{maps:true}),async session=>{
+      const {page}=session;
+      await page.waitForFunction(()=>typeof rvMap!=='undefined'&&rvMap&&document.documentElement.classList.contains('radar-calm'));
+      const box=async()=>page.evaluate(()=>{const r=document.querySelector('#radarCard .imgwrap').getBoundingClientRect(),m=rvMap.getSize();return {ratio:r.width/r.height,h:r.height,mapH:m.y};});
+      let b=await box();
+      assert(Math.abs(b.ratio-16/9)<0.05,'A calm phone radar is 16:9: '+JSON.stringify(b));
+      await page.waitForFunction(()=>Math.abs(rvMap.getSize().y-document.getElementById('radar').clientHeight)<2);
+      // Rain inside the next six hours brings the full-size radar back.
+      session.change(config('calm radar rain',{maps:true,pop:40,condition:'Chance Rain'}));
+      await page.evaluate(()=>loadForecast());
+      await page.waitForFunction(()=>!document.documentElement.classList.contains('radar-calm'));
+      b=await box();assert(Math.abs(b.ratio-1.2)<0.05,'Rain nearby restores the full phone radar: '+JSON.stringify(b));
+      assert.match(await page.evaluate(()=>document.documentElement.dataset.radarCalm),/rain chance of 40%/);
+      // A covering alert that does not trigger the storm layout ends calm at once, not on the next tick.
+      session.change(config('calm radar heat',{maps:true}));await page.evaluate(()=>loadForecast());
+      await page.waitForFunction(()=>document.documentElement.classList.contains('radar-calm'));
+      session.change(config('calm radar heat advisory',{maps:true,alerts:[alert('Heat Advisory',base)]}));
+      await page.evaluate(()=>loadAlerts());
+      assert.equal(await page.evaluate(()=>document.documentElement.classList.contains('lsx-active')),false,'A Heat Advisory keeps the usual layout');
+      assert.equal(await page.evaluate(()=>document.documentElement.classList.contains('radar-calm')),false,'A covering advisory restores the full radar immediately');
+      // An alert outage is never evidence of calm.
+      session.change(config('calm radar alerts down',{maps:true,alertsDown:true}));
+      await page.evaluate(()=>Promise.all([loadForecast(),loadAlerts()]));
+      assert.equal(await page.evaluate(()=>document.documentElement.classList.contains('radar-calm')),false,'An alert outage keeps the full radar');
+    },390);
+    for(const width of [390,1280])await run('storm layout zooms the radar to county scale without playing the loop '+width,config('storm camera',{maps:true,alerts:[alert('Tornado Warning',base)],reports:[['FUNNEL CLOUD',9,38.80,-90.88,'','2 W Lake St. Louis']]}),async session=>{
+      const {page}=session;
+      await page.waitForFunction(()=>document.documentElement.classList.contains('lsx-active')&&typeof rvMap!=='undefined'&&rvMap&&lsrLayer);
+      await page.waitForFunction(()=>stormCamera.applied);
+      const cam=await page.evaluate(()=>{
+        const z=rvMap.getZoom(),c=rvMap.getCenter(),pin=rvMap.latLngToContainerPoint([current.lat,current.lon]);
+        const dot=lsrLayer.getLayers()[0],d=rvMap.latLngToContainerPoint(dot.getLatLng()),b=rvMap.getBounds();
+        const wide=b.getNorthWest().distanceTo(b.getNorthEast())/1000,tall=b.getNorthWest().distanceTo(b.getSouthWest())/1000;
+        return {zoom:z,center:[c.lat,c.lng],sep:Math.hypot(d.x-pin.x,d.y-pin.y),shortKm:Math.min(wide,tall),playing:radarPlaying};
+      });
+      assert(cam.zoom>=9&&cam.zoom<=10,'County-scale zoom on entry: '+JSON.stringify(cam));
+      assert(cam.shortKm>=40&&cam.shortKm<100,'The short side spans about a county or two, not the region: '+JSON.stringify(cam));
+      assert(Math.abs(cam.center[0]-38.8)<0.01&&Math.abs(cam.center[1]+90.79)<0.01,'Centred on the selected point');
+      assert(cam.sep>=30,'A report 8 km away is clear of the you pin: '+cam.sep);
+      assert.equal(cam.playing,false,'The loop does not auto-play');
+      // A resize keeps the storm view; leaving restores the earlier view.
+      await page.locator('#activeToggle').click();
+      await page.waitForFunction(()=>!document.documentElement.classList.contains('lsx-active'));
+      assert.equal(await page.evaluate(()=>rvMap.getZoom()),7,'Leaving the storm layout restores the earlier view');
+      // An explored camera during the storm is the reader's: leaving does not move it.
+      await page.locator('#activeToggle').click();await page.waitForFunction(()=>document.documentElement.classList.contains('lsx-active'));
+      await page.evaluate(()=>rvMap.setZoom(8,{animate:false}));
+      await page.locator('#activeToggle').click();await page.waitForFunction(()=>!document.documentElement.classList.contains('lsx-active'));
+      assert.equal(await page.evaluate(()=>rvMap.getZoom()),8,'A camera the reader moved is left alone');
+    },width);
+    await run('the storm layout always wins over the calm radar',config('calm radar storm',{maps:true,alerts:[alert('Tornado Warning',base)]}),async({page})=>{
+      await page.waitForFunction(()=>document.documentElement.classList.contains('lsx-active'));
+      assert.equal(await page.evaluate(()=>document.documentElement.classList.contains('radar-calm')),false);
+      const r=await page.evaluate(()=>{const b=document.querySelector('#radarCard .imgwrap').getBoundingClientRect();return b.width/b.height;});
+      assert(r<1.5,'A storm radar is never the calm 16:9 strip: '+r);
+    },390);
+    await run('desktop radar keeps its height on a calm day',config('calm radar desktop',{maps:true}),async({page})=>{
+      await page.waitForFunction(()=>typeof rvMap!=='undefined'&&rvMap&&document.documentElement.classList.contains('radar-calm'));
+      assert(Math.abs((await page.locator('#radar').boundingBox()).height-440)<2,'Beside Now a smaller radar saves no height');
+    },1440);
+    await run('the takeaway beside the temperature follows its own feed, not the observation',config('now takeaway',{delayedRain:true}),async session=>{
+      const {page}=session;
+      await page.locator('#ccTake .glance-headline').waitFor();
+      const lead=await page.locator('#ccTake .glance-headline').textContent();
+      assert.equal(await page.locator('#glance .glance-lead').count(),0,'The lead is moved, not copied');
+      // A dead observation feed rebuilds Now; the forecast-derived takeaway survives it.
+      await page.route('**/observations/latest',r=>r.fulfill({status:503,json:{}}));
+      await page.evaluate(()=>loadCurrent());
+      await expectText(page,'#current',/observation unavailable/i);
+      assert.equal(await page.locator('#ccTake .glance-headline').textContent(),lead,'An observation outage keeps the takeaway');
+      await page.unroute('**/observations/latest');
+      // The hourly forecast failing withdraws it, and an observation repaint cannot bring it back.
+      session.change(config('now takeaway hourly down',{hourlyDown:true}));
+      await page.evaluate(()=>loadForecast());
+      await page.waitForFunction(()=>!document.querySelector('#ccTake .glance-lead'));
+      await page.evaluate(()=>loadCurrent());await page.locator('#current .cc-temp').waitFor();
+      assert.equal(await page.locator('#ccTake .glance-lead').count(),0,'A repaint cannot restore a takeaway its forecast no longer supports');
+    });
+    await run('a slow observation does not hold back the forecast takeaway',config('takeaway slow obs'),async session=>{
+      const {page}=session;
+      let release;const held=new Promise(r=>release=r);
+      await page.route('**/observations/latest',async r=>{await held;await r.fulfill({status:503,json:{}});});
+      await page.evaluate(()=>{setLocation({name:'Wentzville, MO',lat:38.81,lon:-90.86,precision:'representative'},{save:true});});
+      await page.locator('#ccTake .glance-headline').waitFor();
+      assert.equal(await page.locator('#current .cc-temp').count(),0,'The observation is still loading');
+      assert(await page.locator('#ccTake .glance-lead').isVisible(),'The forecast takeaway shows while the reading loads');
+      release();await page.waitForFunction(()=>/observation unavailable/i.test(document.getElementById('current').innerText));
+      assert.equal(await page.locator('#ccTake').count(),1,'One slot after the reading lands');
+      assert(await page.locator('#ccTake .glance-lead').isVisible());
+    });
+    for(const width of [900,1280])await run('the takeaway fits the narrow storm-layout Now card '+width,config('takeaway storm narrow',{alerts:[alert('Severe Thunderstorm Warning',base)]}),async({page})=>{
+      await page.waitForFunction(()=>document.documentElement.classList.contains('lsx-active'));
+      await page.locator('#ccTake .glance-headline').waitFor();
+      const g=await page.evaluate(()=>{const card=document.getElementById('currentCard').getBoundingClientRect(),lead=document.querySelector('#ccTake .glance-lead'),l=lead.getBoundingClientRect(),t=document.querySelector('#current .cc-temp').getBoundingClientRect(),h=lead.querySelector('.glance-headline');
+        return {card:card.width,leadRight:l.right,cardRight:card.right,overflow:h.scrollWidth-h.clientWidth,below:l.top>=t.bottom-1};});
+      assert(g.card<560,'This storm layout gives Now a narrow column: '+g.card);
+      assert(g.leadRight<=g.cardRight+1&&g.overflow<=1,'The takeaway stays inside the Now card: '+JSON.stringify(g));
+      assert(g.below,'In a narrow Now card the takeaway wraps under the reading');
+    },width);
+    await run('an overdue hourly check withdraws the takeaway on the next repaint',config('takeaway overdue'),async session=>{
+      const {page}=session;
+      await page.locator('#ccTake .glance-headline').waitFor();
+      // Hourly stops answering; its last check ages past the hourly feed's limit.
+      session.change(config('takeaway overdue hang',{hourlyHang:true}));
+      await page.evaluate(()=>{const c=feedChecks.hourly;c.successAt-=FEEDS.hourly.age+60000;});
+      await page.evaluate(()=>loadCurrent());await page.locator('#current .cc-temp').waitFor();
+      assert.equal(await page.evaluate(()=>feedState(feedChecks.hourly,Date.now(),FEEDS.hourly.age)),'stale');
+      assert.equal(await page.locator('#ccTake .glance-lead').count(),0,'A stale forecast cannot keep its takeaway beside the temperature');
+    });
+    await run('a location change clears the old place takeaway',config('takeaway reset'),async session=>{
+      const {page}=session;
+      await page.locator('#ccTake .glance-headline').waitFor();
+      session.change(config('takeaway reset new place',{hourlyHang:true}));
+      await page.evaluate(()=>setLocation({name:'Wentzville, MO',lat:38.81,lon:-90.86,precision:'representative'},{save:true}));
+      assert.equal(await page.locator('#ccTake .glance-lead').count(),0,'The old place takeaway is cleared at once');
+      await page.evaluate(()=>{paintNowTakeaway();loadCurrent();});await page.locator('#current .cc-temp').waitFor();
+      assert.equal(await page.locator('#ccTake .glance-lead').count(),0,'A repaint for the new place cannot bring the old takeaway back');
     });
     await run('selected town stays visible in sticky navigation',config('sticky town'),async({page})=>{
       await page.evaluate(()=>window.scrollTo(0,1800));

@@ -242,8 +242,52 @@ function syncActiveMode(){
   activeState.active=next.active; activeState.lastHit=next.lastHit; activeState.event=next.event;
   activeState.until=next.until||0; activeState.unverified=!!next.unverified;
   applyActiveMode();
+  // Every alert repaint (new alerts, expiry, outage) ends in syncActiveMode, after callLocalAlert
+  // is current. feedUpdate("alerts") runs before that, so the calm radar re-checks here too.
+  if(typeof syncRadarCalm==="function") syncRadarCalm();
+}
+/* Storm camera. Entering the storm layout zooms the radar to roughly county scale around the
+   selected point: the largest zoom at which the map's shorter side still covers STORM_CAMERA_KM
+   (about one county; zoom 9 on a phone, 10 on a desktop), so storm-report dots near the location
+   are not hidden under the "you" pin. It happens once per entry, with no
+   animation and no loop playback. Leaving restores the earlier view, but only if the reader has
+   not moved the map since: an explored camera is theirs. */
+var STORM_CAMERA_KM=40, STORM_CAMERA_ZOOMS=[9,11];
+/* Pure: Web Mercator metres per pixel at zoom 0 is 156543 at the equator, scaled by cos(latitude). */
+function stormCameraZoom(lat,shortSidePx){
+  if(!isFinite(lat)||!(shortSidePx>0)) return STORM_CAMERA_ZOOMS[0];
+  var needed=STORM_CAMERA_KM*1000/shortSidePx, z=Math.floor(Math.log2(156543.03*Math.cos(lat*Math.PI/180)/needed));
+  return Math.max(STORM_CAMERA_ZOOMS[0],Math.min(STORM_CAMERA_ZOOMS[1],z));
+}
+var stormCamera={pending:false,before:null,applied:null};
+function stormCameraView(){
+  if(typeof rvMap==="undefined"||!rvMap) return null;
+  var c=rvMap.getCenter(); return {lat:c.lat,lng:c.lng,zoom:rvMap.getZoom()};
+}
+/* Same view as far as a reader can tell: same zoom, centre within a few screen pixels. Resizes
+   re-centre with sub-pixel rounding, which is not the reader moving the map. */
+function sameCameraView(a,b){
+  if(!a||!b||a.zoom!==b.zoom||typeof rvMap==="undefined"||!rvMap) return false;
+  return rvMap.project([a.lat,a.lng],a.zoom).distanceTo(rvMap.project([b.lat,b.lng],b.zoom))<3;
+}
+function enterStormCamera(){
+  if(typeof rvMap==="undefined"||!rvMap||typeof L==="undefined"||!current) return;
+  stormCamera.pending=false;
+  stormCamera.before=stormCameraView();
+  rvMap.invalidateSize({animate:false});
+  var size=rvMap.getSize();
+  rvMap.setView([current.lat,current.lon],stormCameraZoom(current.lat,Math.min(size.x,size.y)),{animate:false});
+  stormCamera.applied=stormCameraView();
+}
+function leaveStormCamera(){
+  var before=stormCamera.before, applied=stormCamera.applied;
+  stormCamera={pending:false,before:null,applied:null};
+  if(!before||!applied||!sameCameraView(stormCameraView(),applied)) return;
+  rvMap.invalidateSize({animate:false});
+  rvMap.setView([before.lat,before.lng],before.zoom,{animate:false});
 }
 function resetActiveMode(){
+  stormCamera={pending:false,before:null,applied:null};   // the old place's view is not worth restoring
   activeState={active:false,lastHit:0,event:"",optOut:false,until:0,unverified:false};
   applyActiveMode();
   if(typeof renderStormReports==="function") renderStormReports(null);   // the old place's reports and dots
@@ -277,13 +321,18 @@ function applyActiveMode(){
   if(!on) ACTIVE_SHOW.forEach(function(k){ root.classList.remove("show-"+k); });
   if(on){
     if(typeof requestContext==="function") requestContext("reports");
-    if(typeof requestMaps==="function") requestMaps();
+    stormCamera.pending=true;
+    // The map may still be loading. Re-check the layout after the wait: it can end first.
+    if(typeof requestMaps==="function") requestMaps().then(function(){
+      if(stormCamera.pending&&document.documentElement.classList.contains("lsx-active")) enterStormCamera();
+    });
   }else{
     deferredFeeds.reports=false;   // stop polling; the footer lists it as on demand again
     if(typeof renderStormReports==="function") renderStormReports(null);
   }
   syncFoldChips();
   if(typeof rvMap!=="undefined"&&rvMap){ rvMap.invalidateSize(); setTimeout(function(){ if(rvMap) rvMap.invalidateSize(); },260); }
+  if(on&&stormCamera.pending) enterStormCamera(); else if(!on) leaveStormCamera();
   // Pack now, not next frame: the context pack just reappeared and must not show a frame unpacked.
   if(!on&&typeof layoutMasonry==="function") layoutMasonry();
   else if(typeof scheduleMasonry==="function") scheduleMasonry();
@@ -353,3 +402,54 @@ function showFolded(key,scroll){
     else if(t.closest("#contextPack")) showFolded("context",false);
   },true);
 })();
+
+/* ---- Calm-day radar ----
+   On a phone or tablet the radar stacks under Now, so a full-size empty map pushes the forecasts
+   down. It shrinks only on positive evidence that no precipitation is near, read from data the page
+   already has, never from radar pixels (a dead tile layer looks exactly like a clear sky):
+   - the hourly feed is verified (not partial, saved, loading, stale or unavailable);
+   - every one of the next RADAR_CALM_HOURS hours is covered, with no gap, by a period whose rain
+     chance is known and below RADAR_CALM_POP, and whose wording names no precipitation;
+   - the alert feed is verified and nothing covers this location;
+   - the storm layout is off.
+   Anything missing or uncertain keeps the full-size radar. */
+var RADAR_CALM_HOURS=6, RADAR_CALM_POP=20;
+var RADAR_CALM_WORDS=/rain|shower|storm|thunder|drizzle|snow|flurr|sleet|freezing|ice|hail|wintry|precip/i;
+function radarCalm(periods,nowMs,o){
+  o=o||{};
+  if(o.stormLayout) return {calm:false,reason:"storm layout"};
+  if(o.hourlyState!=="ready") return {calm:false,reason:"hourly forecast not verified"};
+  if(o.alertsState!=="ready") return {calm:false,reason:"alerts not verified"};
+  if(o.localAlert) return {calm:false,reason:"an alert covers this location"};
+  var end=nowMs+RADAR_CALM_HOURS*3600000, win=[];
+  (Array.isArray(periods)?periods:[]).forEach(function(p){
+    if(!p) return;
+    var a=Date.parse(p.startTime), b=Date.parse(p.endTime);
+    if(!isFinite(a)||!isFinite(b)||b<=a) return;
+    if(b>nowMs&&a<end) win.push({a:a,b:b,p:p});
+  });
+  win.sort(function(x,y){return x.a-y.a;});
+  if(!win.length||win[0].a>nowMs) return {calm:false,reason:"the next hours are not covered"};
+  for(var i=0;i<win.length;i++){
+    if(i&&win[i].a!==win[i-1].b) return {calm:false,reason:"a gap in the next hours"};
+    var pop=win[i].p.probabilityOfPrecipitation, v=pop&&typeof pop==="object"?pop.value:pop;
+    if(v==null||v===""||!isFinite(Number(v))) return {calm:false,reason:"an unknown rain chance"};
+    if(Number(v)>=RADAR_CALM_POP) return {calm:false,reason:"a rain chance of "+Number(v)+"%"};
+    if(RADAR_CALM_WORDS.test(String(win[i].p.shortForecast||""))) return {calm:false,reason:"precipitation in the wording"};
+  }
+  if(win[win.length-1].b<end) return {calm:false,reason:"the next hours are not covered"};
+  return {calm:true,reason:"no precipitation in the next "+RADAR_CALM_HOURS+" hours"};
+}
+function syncRadarCalm(){
+  if(typeof feedChecks==="undefined"||typeof feedState!=="function") return;
+  var now=Date.now();
+  var verdict=radarCalm(typeof smart!=="undefined"?smart.hourlyAll:[],now,{
+    hourlyState:feedState(feedChecks.hourly,now,FEEDS.hourly.age),
+    alertsState:feedState(feedChecks.alerts,now,FEEDS.alerts.age),
+    localAlert:typeof callLocalAlert!=="undefined"?callLocalAlert:null,
+    stormLayout:document.documentElement.classList.contains("lsx-active")
+  });
+  document.documentElement.classList.toggle("radar-calm",verdict.calm);
+  document.documentElement.setAttribute("data-radar-calm",verdict.reason);
+}
+

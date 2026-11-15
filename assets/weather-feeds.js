@@ -159,6 +159,7 @@ function loadForecast(){
         clearHourlyForecast();
       }
       if(typeof renderTheCall==="function") renderTheCall();
+      if(typeof syncRadarCalm==="function") syncRadarCalm();   // feedUpdate ran before these periods landed
     });
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
@@ -227,7 +228,7 @@ function loadCurrent(){
     el.innerHTML='<div class="cc-main"><div class="cc-icon">'+wxImg(desc,day,64)+'</div><div>'
       +'<div class="cc-temp">'+(temp!=null?temp+"°":"—")+'</div><div class="cc-desc">'+esc(desc)+'</div>'
       +(feels!=null&&temp!=null?'<div class="cc-feels'+(feels-temp>=3?" is-hot":(temp-feels>=3?" is-cold":""))+'">Feels like '+feels+'°</div>':'')
-      +'</div></div>'
+      +'</div><div class="cc-take" id="ccTake"></div></div>'
       +'<div class="cc-today" id="ccToday"></div>'
       +'<div class="cc-grid">'
       +'<div class="cc-item"><div class="k">Dew Point</div><div class="v">'+(dew!=null?dew+"°":ccGap("dew point"))+'</div></div>'
@@ -253,6 +254,7 @@ function loadCurrent(){
       +'</div>';
     renderHeroToday();    // today's range + sun times, once the 7-day has landed
     renderUvNow();        // UV, once Open-Meteo has answered
+    if(typeof paintNowTakeaway==="function") paintNowTakeaway();   // Your day's lead, beside the temperature
     renderCurrentCtx();   // normals + today's records, once climate context has landed
     if(typeof renderAqiMini==="function") renderAqiMini();   // re-fill the AQI line after the re-render
   }).catch(function(){

@@ -70,6 +70,7 @@ function freshnessCheck(){
   renderBriefingStatus();
   if(typeof renderOutlook==="function") renderOutlook();   // an overdue feed unfolds its card
   if(typeof syncActiveMode==="function"&&!freshnessCheck._inActive){ freshnessCheck._inActive=true; try{ syncActiveMode(); }finally{ freshnessCheck._inActive=false; } }
+  if(typeof syncRadarCalm==="function") syncRadarCalm();   // after the storm layout, which wins
   if(renderTheCall._comfortAllowed!=null&&renderTheCall._comfortAllowed!==briefingComfortAllowed()) renderTheCall();
   renderNwsMessages();
 }
@@ -690,8 +691,9 @@ function renderCurrentUnavailable(message){
   heroNow.temp=null;
   document.body.removeAttribute("data-wx");
   document.getElementById("current").innerHTML='<div class="empty" role="status"><b>Current observation unavailable.</b> '+message+'</div>'
+    +'<div class="cc-take" id="ccTake"></div>'
     +currentExposure()+'<div class="stn">UV &amp; modeled air quality: Open-Meteo (CAMS) · measured AQI: <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a></div>';
-  renderUvNow(); renderAqiMini();
+  renderUvNow(); renderAqiMini(); if(typeof paintNowTakeaway==="function") paintNowTakeaway();
 }
 
 
@@ -1662,6 +1664,26 @@ function renderTheCall(){
 function glanceIcon(name){
   return '<svg class="ic" aria-hidden="true"><use href="#i-'+esc(name||"info")+'"/></svg>';
 }
+/* The lead (the one-line takeaway, "Below freezing by 7am tomorrow") sits beside the temperature in
+   Now, in the #ccTake slot loadCurrent() builds, the same way #ccToday and #ccUv are filled. It is
+   moved out of Your day, not copied: Your day keeps the supporting rows. The slot is repainted from
+   here and after every observation repaint, and it re-checks the hourly feed itself so a repaint
+   can never bring back a takeaway its forecast no longer supports: an overdue hourly check, or a
+   location change (which resets the hourly feed to loading and #current with it). */
+function paintNowTakeaway(){
+  var state=feedState(feedChecks.hourly,Date.now(),FEEDS.hourly.age);
+  var html=(state==="ready"||state==="partial")?(renderGlance._leadHtml||""):"";
+  var el=document.getElementById("ccTake");
+  if(!el&&html){
+    // Observations are still loading (startup, a location change, a slow station fallback): the
+    // forecast's takeaway must not wait for them. Put a slot at the top of the loading state;
+    // loadCurrent() rebuilds it beside the temperature when the reading lands.
+    var cur=document.getElementById("current"); if(!cur) return;
+    el=document.createElement("div"); el.className="cc-take"; el.id="ccTake";
+    cur.insertBefore(el,cur.firstChild);
+  }
+  if(el&&el.innerHTML!==html) el.innerHTML=html;
+}
 function renderGlance(H,hourlyReady,candidates){
   var box=document.getElementById("glance"), card=document.getElementById("glanceCard");
   if(!box||!card) return;
@@ -1669,7 +1691,7 @@ function renderGlance(H,hourlyReady,candidates){
   var hourlyState=feedState(feedChecks.hourly,now,FEEDS.hourly.age);
   if(feedState(feedChecks.alerts,now,FEEDS.alerts.age)!=="ready")
     notes.push("Alert status is unverified. Check official NWS warnings.");
-  var html;
+  var html, leadHtml="";
   var usable=hourlyState==="ready"||hourlyState==="partial";
   if(!usable||!hourlyReady){
     // "saved" (snapshot paint) and "loading" wait for the live check; only a real failure,
@@ -1690,13 +1712,14 @@ function renderGlance(H,hourlyReady,candidates){
       html='<p class="glance-empty">An emergency alert is active here. Follow the alert above and official instructions.</p>';
     }else{
       var L=model.lead;
-      html='<div class="glance-lead tone-'+esc(L.tone)+'">'
+      leadHtml='<div class="glance-lead tone-'+esc(L.tone)+'">'
         +'<span class="glance-lead-ico">'+glanceIcon(L.icon)+'</span>'
         +'<div><p class="glance-label">'+esc(L.label)+'</p>'
         +'<p class="glance-headline">'+esc(L.headline)+'</p>'
         +(L.detail?'<p class="glance-detail">'+esc(L.detail)+'</p>':'')
         +(L.action?'<p class="glance-action">'+esc(L.action)+'</p>':'')
         +'</div></div>';
+      html='';
       var rows=model.supports.slice();
       // Clothing is a constant question, so it always gets a row, unless a warning has the lead.
       if(wear&&!L.alertAware) rows.splice(Math.min(rows.length,2),0,wear);
@@ -1715,6 +1738,7 @@ function renderGlance(H,hourlyReady,candidates){
         +(renderGlance._open?'true':'false')+'">'+(renderGlance._open?'Show less':'Show '+extra+' more for today')+'</button>';
     }
   }
+  renderGlance._leadHtml=leadHtml; paintNowTakeaway();
   var scope=document.getElementById("glanceScope"), scopeText="Next 24 hours";
   if(scope&&scope.textContent!==scopeText) scope.textContent=scopeText;
   var noteText=notes.join(" ");
