@@ -46,6 +46,9 @@ var FEEDS={
   context:{label:"Records",card:"climateCard",load:"loadClimateContext",every:6*3600000,age:12*3600000,local:true,reset:{cnCtx:""},snapshot:[{id:"cnCtx",ttl:12*3600000}]},
   stations:{label:"Station plot",card:"obsCard",load:"loadStationPlot",every:12*60000,age:24*60000},
   reports:{label:"Storm reports",card:"reportsCard",load:"loadReports",every:2*60000,age:6*60000,local:true,reset:{reports:"Checking storm reports…"}},
+  story:{label:"Weather Story",card:"storyCard",load:"loadStory",every:30*60000,age:90*60000},
+  rainfall:{label:"Observed rainfall",card:"rainCard",load:"loadRainfall",every:60*60000,age:3*3600000,local:true,reset:{rain:"Checking observed rainfall…"}},
+  winter:{label:"Winter guidance",card:"winterCard",load:"loadWinter",every:60*60000,age:3*3600000,local:true,reset:{winter:"Checking WPC winter guidance…"}},
   qpf:{load:"loadQpf",every:60*60000,local:true,tracked:false,failure:"loader-owned",reset:{qpf7:""}},
   radar:{load:"refreshRadarLayer",every:4*60000,tracked:false,failure:"loader-owned"},
   satellite:{load:"refreshSatLayer",every:10*60000,tracked:false,failure:"loader-owned"},
@@ -962,6 +965,89 @@ function loadMcd(){
    states this office covers and stormReportRows() keeps only LSX's own reports. Requested only
    while the storm layout is on (deferredFeeds.reports). */
 var LSR_URL="https://mesonet.agron.iastate.edu/geojson/lsr.geojson?states=MO,IL&hours=3";
+var WXSTORY_URL="https://www.weather.gov/source/lsx/wxstory/wxstory.xml";
+var RFC_QPE_URL="https://mapservices.weather.noaa.gov/raster/rest/services/obs/rfc_qpe/MapServer/";
+var WPC_WINTER_URL="https://mapservices.weather.noaa.gov/vector/rest/services/precip/wpc_prob_winter_precip/MapServer/";
+
+/* The office's Weather Story. Not location-scoped: it is NWS St. Louis's own graphic for its area. */
+function loadStory(){
+  return getText(WXSTORY_URL).then(function(xml){
+    var doc=new DOMParser().parseFromString(String(xml||""),"application/xml");
+    if(doc.getElementsByTagName("parsererror").length||!doc.getElementsByTagName("graphicasts").length) throw new Error("Invalid Weather Story");
+    function text(node,tag){ var n=node.getElementsByTagName(tag)[0]; return n?n.textContent:""; }
+    var items=[].map.call(doc.getElementsByTagName("graphicast"),function(g){
+      return {start:text(g,"StartTime"),end:text(g,"EndTime"),order:text(g,"order"),title:text(g,"title"),
+        description:text(g,"description"),image:text(g,"FullImage")};
+    });
+    var stories=currentStories(items,Date.now());
+    if(!stories||(stories.invalid&&stories.invalid===stories.total)) throw new Error("Unreadable Weather Story");
+    feedUpdate("story",stories.invalid?"partial":"ready");
+    renderStory(stories);
+  }).catch(function(){
+    feedUpdate("story","unavailable");
+    renderStory(null);
+  });
+}
+
+/* Observed rainfall at the selected point: RFC QPE, one identify for all three windows. */
+function loadRainfall(){
+  var fresh=locGuard("rainfall");
+  var lon=current.lon, lat=current.lat;
+  var url=RFC_QPE_URL+"identify?geometry="+lon+","+lat+"&geometryType=esriGeometryPoint&sr=4326&layers=all:25,37,53"
+    +"&tolerance=0&mapExtent="+(lon-0.1)+","+(lat-0.1)+","+(lon+0.1)+","+(lat+0.1)+"&imageDisplay=100,100,96&returnGeometry=false&f=json";
+  return getJSON(url,null,locSignal()).then(function(d){
+    if(!fresh()) return;
+    if(!d||d.error||!Array.isArray(d.results)) throw new Error("Invalid rainfall response");
+    var r=rainfallFromIdentify(d.results,Date.now());
+    if(!r||!r.known) throw new Error("No usable rainfall window");
+    feedUpdate("rainfall",r.known===RAIN_WINDOWS.length?"ready":"partial",r.windows[0].through||r.windows[1].through);
+    if(!fresh()) return;
+    renderRainfall(r);
+  }).catch(function(e){
+    if(isAbort(e)||!fresh()) return;
+    feedUpdate("rainfall","unavailable");
+    if(!fresh()) return;
+    renderRainfall(null);
+  });
+}
+
+/* WPC probabilistic snow and ice, days 1-3, wanted only in season or with a WSSI impact
+   (syncWinterDemand). Demand can end while a request is out: re-check it after every wait,
+   including after feedUpdate(), which re-synchronizes the layout and demand. */
+function loadWinter(){
+  var fresh=locGuard("winter");
+  var lon=current.lon, lat=current.lat, signal=locSignal();
+  var hitUrl=WPC_WINTER_URL+"identify?geometry="+lon+","+lat+"&geometryType=esriGeometryPoint&sr=4326"
+    +"&layers=all:1,2,3,4,6,7,8,9,11,12,13,14&tolerance=0&mapExtent="+(lon-0.1)+","+(lat-0.1)+","+(lon+0.1)+","+(lat+0.1)
+    +"&imageDisplay=100,100,96&returnGeometry=false&f=json";
+  var metaLayers=[1,4,6,9,11,14];
+  var metaJobs=metaLayers.map(function(id){
+    return getJSON(WPC_WINTER_URL+id+"/query?where=1%3D1&outFields=issue_time,start_time,end_time&returnDistinctValues=true&returnGeometry=false&f=json",null,signal)
+      .then(function(d){
+        if(!d||d.error||!Array.isArray(d.features)) return null;
+        // Several issuances in one layer is not a single verified product.
+        var a=d.features.map(function(f){return f.attributes||{};});
+        if(a.length!==1) return null;
+        return {issue:a[0].issue_time,start:a[0].start_time,end:a[0].end_time};
+      }).catch(function(){return null;});
+  });
+  return Promise.all([getJSON(hitUrl,null,signal)].concat(metaJobs)).then(function(res){
+    if(!fresh()||!feedRequested("winter")) return;
+    var hits=res[0];
+    if(!hits||hits.error||!Array.isArray(hits.results)) throw new Error("Invalid winter guidance response");
+    var meta={}; metaLayers.forEach(function(id,i){ meta[id]=res[i+1]; });
+    var g=winterGuidance(hits.results,meta,Date.now());
+    if(!g||!g.known) throw new Error("No verified winter guidance");
+    feedUpdate("winter",g.known===g.total?"ready":"partial");
+    if(!fresh()||!feedRequested("winter")) return;
+    renderWinter(g);
+  }).catch(function(e){
+    if(isAbort(e)||!fresh()||!feedRequested("winter")) return;
+    feedUpdate("winter","unavailable");
+    if(!fresh()||!feedRequested("winter")) return;
+    renderWinter(null);
+  });
+}
 function loadReports(){
   var fresh=locGuard("reports");
   return getJSON(LSR_URL,{},locSignal()).then(function(fc){

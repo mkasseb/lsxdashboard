@@ -57,7 +57,7 @@
 <link rel="preload" href="/assets/fonts/barlow-condensed-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/ibm-plex-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/ibm-plex-mono-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/assets/dashboard.css?v=5fbf2a25829c451d">
+<link rel="stylesheet" href="/assets/dashboard.css?v=1961f6a6b4767ec2">
 </head>
 <body>
 <!-- First focusable thing on the page, and deliberately ahead of the sprite so it stays that way.
@@ -241,6 +241,12 @@
   <span class="active-dot" aria-hidden="true"></span><span id="activeBarText"></span>
   <button type="button" class="active-toggle" id="activeToggle">Show the usual layout</button>
 </div>
+<!-- Road conditions, shown during the storm layout or under a covering winter warning (syncRoadLinks). -->
+<p class="resource-links road-links" id="roadLinks" hidden>
+  <span class="resource-note">Road conditions:</span>
+  <a class="source-link" href="https://traveler.modot.org/map/" target="_blank" rel="noopener noreferrer">MoDOT Traveler Map <span aria-hidden="true">↗</span></a>
+  <a class="source-link" href="https://www.gettingaroundillinois.com/" target="_blank" rel="noopener noreferrer">Getting Around Illinois (IDOT) <span aria-hidden="true">↗</span></a>
+</p>
 <!-- Layout: the answer first, the evidence beside it. Now + Your day sit next to radar so the three
      things people open a weather page for share the first screen; everything that is merely
      context waits below. Plain CSS grid places these bands, so no script reparents cards. -->
@@ -408,6 +414,9 @@
 <section class="card outlook-card" id="outlookCard" aria-labelledby="outlookTitle">
   <h2 id="outlookTitle">Outlook <span class="outlook-sub">Today to next season</span></h2>
   <div class="ol-row" id="outlookCells" role="group" aria-labelledby="outlookTitle"></div>
+  <!-- A link cannot sit inside a cell button, so the office's current Weather Story for today to
+       day 3 is a line directly under the row, shown only while one is valid (renderStory). -->
+  <p class="ol-story" id="olStory" hidden>Today–Day 3 from NWS St. Louis: <a href="#storyCard">Weather Story</a></p>
   <p class="ol-note" id="outlookNote"></p>
 </section>
 <div class="nws-band">
@@ -443,6 +452,29 @@
 </section>
 <div class="railhead"><span class="rail-t">Around your area</span><span class="rail-s">Local conditions, outlooks &amp; climate context</span></div>
 <div class="masonry" id="contextPack">
+<!-- NWS St. Louis Weather Story: only graphics inside their own start/end times (currentStories). -->
+<section class="card" id="storyCard">
+      <h2>Weather Story
+        <a class="link" href="https://www.weather.gov/lsx/weatherstory" target="_blank" rel="noopener noreferrer">NWS St. Louis ↗</a>
+      </h2>
+      <div id="story"><div class="loading">Checking the Weather Story…</div></div>
+    </section>
+<!-- Observed rainfall at the selected point: RFC QPE, gauge-corrected (rainfallFromIdentify). -->
+<section class="card" id="rainCard">
+      <h2>Observed Rainfall
+        <a class="link" href="https://water.noaa.gov/" target="_blank" rel="noopener noreferrer">NWPS ↗</a>
+      </h2>
+      <div id="rain"><div class="loading">Checking observed rainfall…</div></div>
+      <div class="imgcap"><span>NWS River Forecast Center <abbr title="Quantitative Precipitation Estimate: radar, gauges and satellite combined">QPE</abbr></span><span>at this location</span></div>
+    </section>
+<!-- WPC probabilistic snow and ice, days 1-3: in season or with a WSSI impact (syncWinterDemand). -->
+<section class="card" id="winterCard" hidden>
+      <h2>Winter Guidance
+        <a class="link" href="https://www.wpc.ncep.noaa.gov/pwpf/wwd_accum_probs.php" target="_blank" rel="noopener noreferrer">WPC ↗</a>
+      </h2>
+      <div id="winter"><div class="loading">Checking WPC winter guidance…</div></div>
+      <div class="imgcap"><span><abbr title="Weather Prediction Center">WPC</abbr> chance of snow or ice at this location</span><span>24-hour periods</span></div>
+    </section>
 <section class="card " id="riversCard">
       <h2>River &amp; Flood Gauges — live levels <span class="qpfchip" id="qpf7"></span>
         <a class="link" href="https://water.noaa.gov/" target="_blank" rel="noopener" title="National Water Prediction Service — NOAA’s river gauge and flood forecast site">NWPS ↗</a>
@@ -538,6 +570,8 @@
   <div class="resource-links">
     <a class="source-link" href="https://www.weather.gov/lsx/winter" target="_blank" rel="noopener noreferrer" aria-label="Winter Weather — NWS St. Louis (opens in a new tab)"><svg class="ic" aria-hidden="true"><use href="#i-snow"/></svg>Winter Weather <span aria-hidden="true">↗</span></a>
     <a class="source-link" href="https://aviationweather.gov/gfa/#obs" target="_blank" rel="noopener noreferrer" aria-label="Aviation Weather — Aviation Weather Center (opens in a new tab)"><svg class="ic" aria-hidden="true"><use href="#i-plane"/></svg>Aviation Weather <span aria-hidden="true">↗</span></a>
+    <a class="source-link" href="https://traveler.modot.org/map/" target="_blank" rel="noopener noreferrer" aria-label="MoDOT Traveler Map — Missouri road conditions (opens in a new tab)"><svg class="ic" aria-hidden="true"><use href="#i-pin"/></svg>MoDOT Traveler Map <span aria-hidden="true">↗</span></a>
+    <a class="source-link" href="https://www.gettingaroundillinois.com/" target="_blank" rel="noopener noreferrer" aria-label="Getting Around Illinois — IDOT road conditions (opens in a new tab)"><svg class="ic" aria-hidden="true"><use href="#i-pin"/></svg>Getting Around Illinois (IDOT) <span aria-hidden="true">↗</span></a>
   </div>
 </details>
 </div>
@@ -556,7 +590,7 @@
     </div>
   </details>
   Data: NOAA / National Weather Service (public domain) · air quality, UV &amp; geocoding by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> (<a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>).<br>
-  Air quality based on <a href="https://atmosphere.copernicus.eu/" target="_blank" rel="noopener">Copernicus Atmosphere Monitoring Service (CAMS)</a> · location data from <a href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames</a> · storm reports via the <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">Iowa Environmental Mesonet</a> · basemaps credited on each map.<br>
+  Air quality based on <a href="https://atmosphere.copernicus.eu/" target="_blank" rel="noopener">Copernicus Atmosphere Monitoring Service (CAMS)</a> · location data from <a href="https://www.geonames.org/" target="_blank" rel="noopener">GeoNames</a> · storm reports via the <a href="https://mesonet.agron.iastate.edu/" target="_blank" rel="noopener">Iowa Environmental Mesonet</a> · Weather Story from NWS St. Louis · observed rainfall from NWS River Forecast Center QPE · winter guidance from WPC · basemaps credited on each map.<br>
   Open source under MIT — <a href="https://github.com/mkasseb/lsxdashboard" target="_blank" rel="noopener">github.com/mkasseb/lsxdashboard</a>, with full data &amp; icon credits in the <a href="https://github.com/mkasseb/lsxdashboard#license" target="_blank" rel="noopener">README</a>.<br>
   Not an official NWS product. During severe weather, always defer to official warnings &amp; a NOAA Weather Radio.
 </footer>
@@ -570,9 +604,9 @@
   integrity="sha384-tXYNKOHx4T02jMP7YYCtBxPIv1B5gaA5mcVPBzqMp6d7VzWzxJgI2aWF/nJLrQdS" crossorigin="anonymous"></script>
 <script src="/assets/weather-contracts.js?v=ad8b9553dc77bd53"></script>
 <script src="/assets/weather-core.js?v=565144c53a5e92d2"></script>
-<script src="/assets/weather-feeds.js?v=ee67ef0a3b6aeb2e"></script>
+<script src="/assets/weather-feeds.js?v=1ed417451f365e42"></script>
 <script src="/assets/forecast-view.js?v=b6dd1f0e63226306"></script>
-<script src="/assets/dashboard-context.js?v=c8dbefee5738d063"></script>
+<script src="/assets/dashboard-context.js?v=81d09932d71d3fd3"></script>
 <script src="/assets/model-data.js?v=aa9f38687b71f14d" data-worker-src="/assets/model-worker.js?v=3df9c3b9bd2c3bc4"></script>
 <script src="/assets/forecast-range.js?v=805a652762f3d938"></script>
 <script src="/assets/hourly-range.js?v=ee1dec6e184d1f77"></script>

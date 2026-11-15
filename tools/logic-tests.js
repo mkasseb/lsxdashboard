@@ -1998,6 +1998,56 @@ async function checkGridLoaderIsolation() {
   check('storm camera: an unmeasured map falls back to zoom 9',[zf(38.8,0),zf(NaN,500)].join(),'9,9');
 }
 
+/* New sources: the Weather Story, observed rainfall and WPC winter guidance. A gap, an expired
+   graphic, a stale analysis or an unverifiable layer must never read as "nothing here". */
+{
+  const L=name=>lift(new RegExp('^function '+name+'\\([^\\n]*\\)\\{[\\s\\S]*?^\\}','m'),name+'()');
+  const ns=new Function(['var WEATHER_TZ="America/Chicago";',lift(/^var WEATHER_PARTS=.*$/m,'WEATHER_PARTS'),L('weatherParts'),
+    lift(/^var WXSTORY_IMAGE=.*$/m,'WXSTORY_IMAGE'),lift(/^var RAIN_WINDOWS=\[[\s\S]*?^\];/m,'RAIN_WINDOWS'),
+    lift(/^var WINTER_DAYS=\[[\s\S]*?^\];/m,'WINTER_DAYS'),lift(/^var WINTER_THRESHOLDS=.*$/m,'WINTER_THRESHOLDS'),
+    ...['currentStories','rfcTime','rainfallFromIdentify','winterDemand','wpcTime','winterIssuanceOk','winterGuidance','winterCategory'].map(L)].join('\n')
+    +';return {currentStories,rfcTime,rainfallFromIdentify,winterDemand,wpcTime,winterIssuanceOk,winterGuidance,winterCategory};')();
+  const t0=Date.parse('2026-11-15T04:00:00Z'), S=t0/1000, H=3600000;
+  const img=n=>'https://www.weather.gov/images/lsx/wxstory/Tab'+n+'FileL.png';
+  const st=ns.currentStories([
+    {start:S-3600,end:S+7200,order:5,title:'Warming Trend',description:'Dry.',image:img(5)},
+    {start:S-90000,end:S-3600,order:1,title:'Old fog',image:img(1)},
+    {start:S-60,end:S+60,order:2,title:'Second',image:img(2)}
+  ],t0);
+  check('story: only graphics valid now, in office order',st.map(x=>x.title).join(),'Second,Warming Trend');
+  check('story: an expired graphic is not counted as bad data',st.invalid,0);
+  const bad=ns.currentStories([{start:'x',end:S+60,title:'T',image:img(1)},{start:S,end:S+60,title:'',image:img(1)},{start:S,end:S+60,title:'T',image:'https://evil.example/x.png'},{start:S+10,end:S,title:'T',image:img(1)}],t0);
+  check('story: unreadable times, missing titles, foreign images and reversed windows are counted',[bad.length,bad.invalid].join(),'0,4');
+  check('story: a non-list is not an empty story',ns.currentStories(null,t0),null);
+  check('story: the end instant is exclusive',ns.currentStories([{start:S-60,end:S,title:'T',image:img(1)}],t0).length,0);
+
+  check('rainfall: service footprint dates are UTC',new Date(ns.rfcTime('11/15/2026 2:00:00 AM')).toISOString(),'2026-11-15T02:00:00.000Z');
+  check('rainfall: PM and 12 AM/PM parse',[ns.rfcTime('11/14/2026 12:00:00 PM'),ns.rfcTime('11/14/2026 12:00:00 AM')].map(v=>new Date(v).toISOString().slice(11,13)).join(),'12,00');
+  check('rainfall: garbage is not a time',Number.isNaN(ns.rfcTime('yesterday')),true);
+  const fp=(subset,t)=>({attributes:{name:subset,idp_subset:subset,idp_issueddate:t}}), px=(subset,v)=>({attributes:{name:subset,'Service Pixel Value':v}});
+  const R=['nws_precip_last24hours_conus','nws_precip_last3days_conus','nws_precip_last7days_conus'];
+  const good=ns.rainfallFromIdentify([fp(R[0],'11/15/2026 3:00:00 AM'),px(R[0],'0.12'),fp(R[1],'11/14/2026 12:00:00 PM'),px(R[1],'0'),fp(R[2],'11/14/2026 12:00:00 PM'),px(R[2],'1.5')],t0);
+  check('rainfall: three verified windows, zero is a real zero',[good.known,good.windows.map(w=>w.inches).join('|')].join(),'3,0.12|0|1.5');
+  const gaps=ns.rainfallFromIdentify([fp(R[0],'11/14/2026 10:00:00 PM'),px(R[0],'0.1'),fp(R[1],'11/14/2026 12:00:00 PM'),px(R[1],'NoData'),fp(R[2],'nonsense'),px(R[2],'2')],t0);
+  check('rainfall: stale, NoData and undated windows are gaps, never 0.00"',[gaps.known,gaps.windows.map(w=>w.inches===null?'gap':w.inches).join('|')].join(),'0,gap|gap|gap');
+  check('rainfall: a missing value at the point is a gap',ns.rainfallFromIdentify([fp(R[0],'11/15/2026 3:00:00 AM')],t0).windows[0].inches,null);
+  check('rainfall: a malformed response is not "no rain"',ns.rainfallFromIdentify({},t0),null);
+  check('rainfall: negative or absurd values are rejected',ns.rainfallFromIdentify([fp(R[0],'11/15/2026 3:00:00 AM'),px(R[0],'-1')],t0).windows[0].inches,null);
+
+  check('winter: cool season is November through March in Central time',['2026-11-01T12:00:00Z','2027-03-31T12:00:00Z','2026-10-31T12:00:00Z','2027-04-01T12:00:00Z'].map(d=>ns.winterDemand(Date.parse(d),null)).join(),'true,true,false,false');
+  check('winter: a WSSI impact asks for guidance out of season',[ns.winterDemand(Date.parse('2026-10-20T12:00:00Z'),[0,1]),ns.winterDemand(Date.parse('2026-10-20T12:00:00Z'),[0,0]),ns.winterDemand(Date.parse('2026-10-20T12:00:00Z'),[null,null])].join(),'true,false,false');
+  const day=i=>{const s0=Date.UTC(2026,10,15+i);const f=t=>new Date(t).toISOString().slice(0,19).replace('T',' ');return {issue:f(t0-2*H),start:f(s0),end:f(s0+24*H)};};
+  const meta={1:day(0),4:day(0),6:day(1),9:day(1),11:day(2),14:day(2)};
+  const g=ns.winterGuidance([{layerId:1,attributes:{'Probability Code':'2'}},{layerId:2,attributes:{'Probability Code':'1'}},{layerId:9,attributes:{'Probability Code':'3'}}],meta,t0);
+  check('winter: categories per threshold and ice per day',JSON.stringify(g.days.map(d=>[d.snow,d.ice])),JSON.stringify([[[2,1,0],0],[[0,0,0],3],[[0,0,0],0]]));
+  check('winter: every verified layer counts',[g.known,g.total].join(),'6,6');
+  const unverified=ns.winterGuidance([],{1:null,4:{issue:'2026-11-12 00:00:00',start:'2026-11-12 00:00:00',end:'2026-11-13 00:00:00'},6:day(1),9:day(1),11:day(2),14:day(2)},t0);
+  check('winter: an empty or old layer cannot certify "below 10%"',JSON.stringify([unverified.days[0].snow,unverified.days[0].ice,unverified.known]),JSON.stringify([null,null,4]));
+  check('winter: a malformed identify is not "no snow"',ns.winterGuidance(null,meta,t0),null);
+  check('winter: issuance must be recent and its period not over',[ns.winterIssuanceOk(day(0),t0),ns.winterIssuanceOk({issue:'2026-11-13 00:00:00',start:'2026-11-15 00:00:00',end:'2026-11-16 00:00:00'},t0),ns.winterIssuanceOk({issue:'2026-11-14 22:00:00',start:'2026-11-14 00:00:00',end:'2026-11-15 00:00:00'},t0)].join(),'true,false,false');
+  check('winter: category words',[0,1,2,3,9].map(ns.winterCategory).join('|'),'Below 10%|Slight (10–39%)|Moderate (40–69%)|High (70–100%)|Unknown');
+}
+
 checkLiveFeedFailures().then(checkSpcThreatProducts).then(checkForecastRefreshFailure).then(checkGridLoaderIsolation).then(() => {
   if (failed) {
     console.error(`\n${failed} logic test(s) failed`);

@@ -1,5 +1,5 @@
 /* Optional context presentation and demand state, independent of weather decisions. */
-var deferredFeeds={stations:false,context:false};
+var deferredFeeds={stations:false,context:false,winter:false};
 function feedRequested(key){ return !Object.prototype.hasOwnProperty.call(deferredFeeds,key)||deferredFeeds[key]; }
 function requestContext(key){
   if(feedRequested(key)) return Promise.resolve();
@@ -245,6 +245,8 @@ function syncActiveMode(){
   // Every alert repaint (new alerts, expiry, outage) ends in syncActiveMode, after callLocalAlert
   // is current. feedUpdate("alerts") runs before that, so the calm radar re-checks here too.
   if(typeof syncRadarCalm==="function") syncRadarCalm();
+  syncRoadLinks();
+  syncWinterDemand();   // callRisk (WSSI) is current here too: loadSpc ends in renderTheCall
 }
 /* Storm camera. Entering the storm layout zooms the radar to roughly county scale around the
    selected point: the largest zoom at which the map's shorter side still covers STORM_CAMERA_KM
@@ -453,3 +455,179 @@ function syncRadarCalm(){
   document.documentElement.setAttribute("data-radar-calm",verdict.reason);
 }
 
+
+/* ---- Weather Story (NWS St. Louis graphicast XML) ----
+   The office publishes its Weather Story as XML: each graphic has a start and end time, a title,
+   a caption and an image. Only graphics valid now are shown, in the office's order. The image
+   slots are reused, so a fixed image URL alone can be a week old; the times are the evidence.
+   An entry with an unreadable time, a missing title or an image outside the office's own path is
+   counted, not dropped: any of those makes the feed partial, and nothing readable is a gap. */
+var WXSTORY_IMAGE=/^https:\/\/www\.weather\.gov\/images\/lsx\/wxstory\/[A-Za-z0-9_-]+\.(png|jpg|gif)$/;
+function currentStories(items,nowMs){
+  if(!Array.isArray(items)) return null;
+  var out=[], invalid=0, nowS=nowMs/1000;
+  items.forEach(function(it){
+    var start=Number(it&&it.start), end=Number(it&&it.end), title=String(it&&it.title||"").trim();
+    var image=String(it&&it.image||"").trim();
+    if(!isFinite(start)||!isFinite(end)||end<start||!title||!WXSTORY_IMAGE.test(image)){ invalid++; return; }
+    if(start<=nowS&&nowS<end) out.push({start:start*1000,end:end*1000,order:Number(it.order)||0,title:title,
+      description:String(it.description||"").trim(),image:image});
+  });
+  out.sort(function(a,b){return a.order-b.order;});
+  out.invalid=invalid; out.total=items.length;
+  return out;
+}
+
+/* ---- Observed rainfall (RFC QPE: gauge-corrected multi-sensor analysis) ----
+   One identify answers the 24-hour, 3-day and 7-day windows at the point. Each window carries its
+   own reference time (its end): 24 h is refreshed hourly; 3 and 7 days once a day, ending 12Z.
+   A window is usable only with a finite, non-negative value and a reference time inside its age
+   limit; a missing, NoData, unreadable or stale window is a gap, never 0.00". */
+var RAIN_WINDOWS=[
+  {key:"h24",label:"Last 24 hours",subset:"nws_precip_last24hours_conus",maxAge:4*3600000},
+  {key:"d3",label:"Last 3 days",subset:"nws_precip_last3days_conus",maxAge:36*3600000},
+  {key:"d7",label:"Last 7 days",subset:"nws_precip_last7days_conus",maxAge:36*3600000}
+];
+/* "11/15/2026 2:00:00 AM" (UTC, as the service formats footprint dates) or epoch milliseconds. */
+function rfcTime(v){
+  if(typeof v==="number") return isFinite(v)?v:NaN;
+  var m=/^(\d{1,2})\/(\d{1,2})\/(\d{4}) (\d{1,2}):(\d{2}):(\d{2}) (AM|PM)$/.exec(String(v||"").trim());
+  if(!m) return NaN;
+  var h=Number(m[4])%12+(m[7]==="PM"?12:0);
+  return Date.UTC(Number(m[3]),Number(m[1])-1,Number(m[2]),h,Number(m[5]),Number(m[6]));
+}
+function rainfallFromIdentify(results,nowMs){
+  if(!Array.isArray(results)) return null;
+  var issued={}, value={};
+  results.forEach(function(r){
+    var a=(r&&r.attributes)||{}, subset=String(a.idp_subset||a.name||"");
+    if(a.idp_issueddate!=null&&a.idp_subset) issued[subset]=rfcTime(a.idp_issueddate);
+    if(a["Service Pixel Value"]!=null&&a.name) value[String(a.name)]=a["Service Pixel Value"];
+  });
+  var out={windows:[],known:0};
+  RAIN_WINDOWS.forEach(function(w){
+    var t=issued[w.subset], raw=value[w.subset], v=(raw==null||raw===""||/nodata/i.test(String(raw)))?NaN:Number(raw);
+    var ok=isFinite(v)&&v>=0&&v<100&&isFinite(t)&&t<=nowMs+10*60000&&nowMs-t<=w.maxAge;
+    out.windows.push({key:w.key,label:w.label,inches:ok?v:null,through:isFinite(t)?t:null,
+      reason:ok?"":(!isFinite(t)?"no reference time":nowMs-t>w.maxAge?"analysis is out of date":"no value at this point")});
+    if(ok) out.known++;
+  });
+  return out;
+}
+
+/* ---- WPC winter guidance (probabilistic snow and ice, days 1-3) ----
+   Asked for only in the cool season (November through March, Central dates) or while WSSI shows a
+   winter impact for today or tomorrow. A point inside a WPC polygon takes its category. A point
+   outside every polygon reads "below 10%" only when that layer's own issuance is verified current;
+   a layer with nothing issued anywhere, or an old issuance, cannot certify it and stays unknown. */
+var WINTER_DAYS=[
+  {day:1,snow:[1,2,3],ice:4},{day:2,snow:[6,7,8],ice:9},{day:3,snow:[11,12,13],ice:14}
+];
+var WINTER_THRESHOLDS=[4,8,12];
+function winterDemand(nowMs,wssi){
+  var month=weatherParts(new Date(nowMs)).month;   // 0-11, Central
+  if(month>=10||month<=2) return true;              // November through March
+  return Array.isArray(wssi)&&wssi.some(function(v){return v!=null&&v>0;});
+}
+/* "2026-11-14 20:06:24" (UTC). */
+function wpcTime(v){
+  var m=/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/.exec(String(v||"").trim());
+  return m?Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6]):NaN;
+}
+function winterIssuanceOk(meta,nowMs){
+  if(!meta) return false;
+  var issued=wpcTime(meta.issue), end=wpcTime(meta.end);
+  return isFinite(issued)&&isFinite(end)&&issued<=nowMs+10*60000&&nowMs-issued<=36*3600000&&end>nowMs;
+}
+/* hits: identify results at the point; meta: {layerId:{issue,start,end}} for each day's 4-inch and
+   ice layers (the 8- and 12-inch layers are issued with the 4-inch one). Per day, snow is one
+   category per threshold (4, 8, 12 inches) and ice one category, or null when unverifiable. */
+function winterGuidance(hits,meta,nowMs){
+  if(!Array.isArray(hits)||!meta) return null;
+  var byLayer={};
+  hits.forEach(function(h){
+    var at=(h&&h.attributes)||{}, id=Number(h&&h.layerId);
+    var dn=Number(at["Probability Code"]!=null?at["Probability Code"]:at.dn);
+    if(isFinite(id)&&isFinite(dn)) byLayer[id]=Math.max(byLayer[id]||0,dn);
+  });
+  var known=0;
+  var days=WINTER_DAYS.map(function(d){
+    var snowMeta=meta[d.snow[0]], iceMeta=meta[d.ice];
+    var snowOk=winterIssuanceOk(snowMeta,nowMs), iceOk=winterIssuanceOk(iceMeta,nowMs);
+    if(snowOk) known++; if(iceOk) known++;
+    return {day:d.day,
+      snow:snowOk?d.snow.map(function(id){return byLayer[id]||0;}):null,
+      ice:iceOk?(byLayer[d.ice]||0):null,
+      end:snowOk?wpcTime(snowMeta.end):iceOk?wpcTime(iceMeta.end):null};
+  });
+  return {days:days,known:known,total:WINTER_DAYS.length*2};
+}
+function winterCategory(dn){ return ["Below 10%","Slight (10–39%)","Moderate (40–69%)","High (70–100%)"][dn]||"Unknown"; }
+
+/* ---- Rendering for the Weather Story, observed rainfall and winter guidance ---- */
+function storyHtml(s){
+  return '<figure class="story-item"><img src="'+esc(s.image)+'" alt="NWS St. Louis Weather Story: '+esc(s.title)+'" loading="lazy" decoding="async">'
+    +'<figcaption><strong>'+esc(s.title)+'</strong>'+(s.description?' '+esc(s.description):'')
+    +'<span class="story-valid">Valid until '+esc(weatherTime(s.end,{weekday:"short",hour:"numeric",minute:"2-digit"}))+' CT</span></figcaption></figure>';
+}
+function renderStory(stories){
+  var el=document.getElementById("story"), link=document.getElementById("olStory");
+  renderStory._current=stories&&stories.length?stories[0]:null;
+  if(el){
+    var html=stories==null
+      ?'<p class="empty">The Weather Story could not be read. <a href="https://www.weather.gov/lsx/weatherstory" target="_blank" rel="noopener">Open it at NWS St. Louis ↗</a></p>'
+      :stories.length?stories.map(storyHtml).join("")
+      :'<p class="story-none">No Weather Story graphic is current right now. <a href="https://www.weather.gov/lsx/weatherstory" target="_blank" rel="noopener">NWS St. Louis ↗</a></p>';
+    if(el.innerHTML!==html) el.innerHTML=html;
+  }
+  if(link){
+    var cur=renderStory._current;
+    link.hidden=!cur;
+    var a=link.querySelector("a"); if(a&&cur) a.textContent=cur.title;
+  }
+  if(typeof scheduleMasonry==="function") scheduleMasonry();
+}
+function rainAmount(v){ return v==null?null:(v<0.005?"0.00":v.toFixed(2))+"″"; }
+function renderRainfall(r){
+  var el=document.getElementById("rain"); if(!el) return;
+  var html;
+  if(!r) html='<p class="empty">Observed rainfall is unavailable. <a href="https://water.noaa.gov/" target="_blank" rel="noopener">NWPS precipitation ↗</a></p>';
+  else html='<div class="rain-grid">'+r.windows.map(function(w){
+    return '<div class="rain-item"><div class="k">'+esc(w.label)+'</div>'
+      +(w.inches!=null?'<div class="v">'+rainAmount(w.inches)+'</div><div class="s">through '+esc(weatherTime(w.through,{weekday:"short",hour:"numeric"}))+' CT</div>'
+        :'<div class="v cc-gap">—</div><div class="s">'+esc(w.reason)+'</div>')+'</div>';
+  }).join("")+'</div>';
+  if(el.innerHTML!==html) el.innerHTML=html;
+  if(typeof scheduleMasonry==="function") scheduleMasonry();
+}
+function renderWinter(g){
+  var el=document.getElementById("winter"); if(!el) return;
+  var html;
+  if(!g) html='<p class="empty">WPC winter guidance is unavailable. <a href="https://www.wpc.ncep.noaa.gov/pwpf/wwd_accum_probs.php" target="_blank" rel="noopener">Open WPC ↗</a></p>';
+  else html='<div class="winter-rows">'+g.days.map(function(d){
+    // WPC days run 00Z-00Z, so a start reads as the previous evening in Central time; name the end.
+    var when="Day "+d.day+(d.end?" · until "+weatherTime(d.end,{weekday:"short",hour:"numeric"})+" CT":"");
+    var snow=d.snow?WINTER_THRESHOLDS.map(function(t,i){return d.snow[i]>0||i===0?'≥'+t+'″ '+winterCategory(d.snow[i]):'';}).filter(Boolean).join(' · '):'Unverified';
+    var ice=d.ice==null?'Unverified':'≥0.25″ '+winterCategory(d.ice);
+    return '<div class="winter-row"><span class="winter-day">'+esc(when)+'</span><span><b>Snow</b> '+esc(snow)+'</span><span><b>Ice</b> '+esc(ice)+'</span></div>';
+  }).join("")+'</div>';
+  if(el.innerHTML!==html) el.innerHTML=html;
+  if(typeof scheduleMasonry==="function") scheduleMasonry();
+}
+/* Winter guidance is asked for only in season or with a WSSI impact; leaving both stops polling,
+   hides the card and drops any response still in flight (loadWinter re-checks demand). */
+function syncWinterDemand(){
+  var want=winterDemand(Date.now(),typeof callRisk!=="undefined"&&callRisk?callRisk.wssi:null);
+  var card=document.getElementById("winterCard");
+  if(card&&card.hidden===want){ card.hidden=!want; if(typeof scheduleMasonry==="function") scheduleMasonry(); }
+  if(want&&!feedRequested("winter")&&typeof requestContext==="function") requestContext("winter");
+  else if(!want&&deferredFeeds.winter) deferredFeeds.winter=false;
+}
+/* Road conditions matter during the storm layout and under a covering winter alert. */
+function syncRoadLinks(){
+  var el=document.getElementById("roadLinks"); if(!el) return;
+  var local=typeof callLocalAlert!=="undefined"?callLocalAlert:null;
+  var show=document.documentElement.classList.contains("lsx-active")
+    ||!!(local&&local.family==="winter"&&(local.level==="warning"||local.level==="emergency"));
+  if(el.hidden===show) el.hidden=!show;
+}
