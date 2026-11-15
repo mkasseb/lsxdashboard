@@ -242,6 +242,9 @@ function syncActiveMode(){
   activeState.active=next.active; activeState.lastHit=next.lastHit; activeState.event=next.event;
   activeState.until=next.until||0; activeState.unverified=!!next.unverified;
   applyActiveMode();
+  // Every alert repaint (new alerts, expiry, outage) ends in syncActiveMode, after callLocalAlert
+  // is current. feedUpdate("alerts") runs before that, so the calm radar re-checks here too.
+  if(typeof syncRadarCalm==="function") syncRadarCalm();
 }
 /* Storm camera. Entering the storm layout zooms the radar to roughly county scale around the
    selected point: the largest zoom at which the map's shorter side still covers STORM_CAMERA_KM

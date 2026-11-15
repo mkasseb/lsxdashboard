@@ -514,6 +514,13 @@ async function main() {
       await page.waitForFunction(()=>!document.documentElement.classList.contains('radar-calm'));
       b=await box();assert(Math.abs(b.ratio-1.2)<0.05,'Rain nearby restores the full phone radar: '+JSON.stringify(b));
       assert.match(await page.evaluate(()=>document.documentElement.dataset.radarCalm),/rain chance of 40%/);
+      // A covering alert that does not trigger the storm layout ends calm at once, not on the next tick.
+      session.change(config('calm radar heat',{maps:true}));await page.evaluate(()=>loadForecast());
+      await page.waitForFunction(()=>document.documentElement.classList.contains('radar-calm'));
+      session.change(config('calm radar heat advisory',{maps:true,alerts:[alert('Heat Advisory',base)]}));
+      await page.evaluate(()=>loadAlerts());
+      assert.equal(await page.evaluate(()=>document.documentElement.classList.contains('lsx-active')),false,'A Heat Advisory keeps the usual layout');
+      assert.equal(await page.evaluate(()=>document.documentElement.classList.contains('radar-calm')),false,'A covering advisory restores the full radar immediately');
       // An alert outage is never evidence of calm.
       session.change(config('calm radar alerts down',{maps:true,alertsDown:true}));
       await page.evaluate(()=>Promise.all([loadForecast(),loadAlerts()]));

@@ -1057,9 +1057,11 @@ Anything missing or uncertain keeps the full-size radar. `html.radar-calm` then 
 to 16:9 (from 1.2:1, about 100px shorter at 390px) and the tablet radar to 2:1. Above 1000px
 nothing changes: there the radar sits beside the Now column, which is already taller, so a smaller
 map would only leave a gap under it. The storm layout and fullscreen always win (`:not(.lsx-active)`,
-`body:not(.radar-full)`). `syncRadarCalm()` runs from `freshnessCheck()` (alerts, resets, and every
-30 seconds, so an aging forecast un-shrinks the map), and again right after the hourly periods land,
-because `feedUpdate("hourly")` runs before they are stored. The reason is kept in
+`body:not(.radar-full)`). `syncRadarCalm()` runs from `freshnessCheck()` (resets, and every 30
+seconds, so an aging forecast un-shrinks the map), at the end of `syncActiveMode()` (every alert
+repaint ends there, including expiry, after `callLocalAlert` is current), and right after the hourly
+periods land. The last two exist because `feedUpdate()` runs before either alert or hourly state
+is stored, so a check driven only by it would read the previous value. The reason is kept in
 `data-radar-calm` for debugging.
 
 **The storm camera.** Entering the storm layout zooms the radar to roughly county scale around the
