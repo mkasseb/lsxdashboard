@@ -180,6 +180,21 @@ URL is stated in four places — `rel=canonical`, `og:url`, the sitemap's `<loc>
 line — and `tools/check.py` fails if they stop agreeing; moving the site means changing
 `SELF_ORIGIN` there and all four.
 
+## UpperAir sounding viewer (`/upperair/`)
+
+The "Sounding (skew-T)" link in the hourly card opens UpperAir, a skew-T/hodograph viewer that
+lives in the separate (private) `skew-t-viewer` repo. That app has a Vite build and this site
+deliberately has none, so the **finished build is committed here** under `upperair/`, with
+`upperair/SOURCE_COMMIT` naming the source commit. Do not edit those files by hand. To update:
+
+```bash
+cd ../skew-t-viewer && scripts/sync_lsxdashboard.sh ../lsxdashboard
+```
+
+Then commit `upperair/` here. `_headers` gives `/upperair/*` its own CSP (detaching the
+dashboard's), and `tools/check.py` fails if the bundle is incomplete or fetches an origin that
+policy does not allow.
+
 ## Data sources
 
 All feeds are keyless. The sources have different attribution and reuse terms; see [License](#license).

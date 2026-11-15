@@ -17,6 +17,19 @@ function locationURL(l){
   u.searchParams.set("kind",l.precision==="representative"?"city":"point");u.hash="";
   return u.href;
 }
+/* The UpperAir sounding viewer lives at /upperair/ (built in the skew-t-viewer repo). Its link
+   format is versioned (v=1) and strict: an unknown or repeated key rejects the whole link. With no
+   valid time it loads the next forecast hour. HRRR-backed GFS because the CWA is inside the HRRR
+   domain and a skew-T is mostly a next-few-hours question. */
+function soundingURL(l){
+  var name=String(l.name||"Selected location").replace(" (home)","").slice(0,160);
+  var p=new URLSearchParams({v:"1",source:"forecast",lat:l.lat.toFixed(4),lon:l.lon.toFixed(4),name:name,model:"gfs_hrrr"});
+  return "/upperair/#"+p.toString();
+}
+function setSoundingLink(l){
+  var a=document.getElementById("soundingLink");
+  if(a) a.setAttribute("href",soundingURL(l));
+}
 function locationFeedback(text){ var el=document.getElementById("locFeedback");if(el) el.textContent=text; }
 function syncLocationTools(){
   var toggle=document.getElementById("favoriteToggle"), select=document.getElementById("favoriteSelect");
@@ -53,6 +66,7 @@ function updateLocNow(){
   // never from a fetch that a later location could have superseded.
   var tabPlace=(current.name||"").replace(" (home)","");
   document.title=tabPlace?(tabPlace+" — "+TITLE_BASE):TITLE_BASE;
+  setSoundingLink(current);
   // The hero band names the place too: a shared link should say whose weather this is without
   // the visitor having to find the location bar.
   var r=document.getElementById("railNowSub"); if(r) r.textContent=current.name.replace(" (home)","");

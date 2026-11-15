@@ -6,7 +6,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const {chromium}=require('playwright');
 const root=path.join(__dirname,'..'),out=process.argv[2]||'/tmp/weather-resources-hosted',sha=process.env.EXPECTED_SHA;
 const links=[
- ['#h24Card .resource-links a','https://www.wpc.ncep.noaa.gov/qpf/qpf2.shtml'],
+ ['#h24Card .resource-links a:not(#soundingLink)','https://www.wpc.ncep.noaa.gov/qpf/qpf2.shtml'],
  ['#radarCard .resource-links a','https://map.blitzortung.org/#7/38.7/-90.4'],
  ['#riskCard .resource-links a','https://www.spc.noaa.gov/exper/mesoanalysis/'],
  ['#climateCard .resource-links a','https://www.weather.gov/lsx/climate'],

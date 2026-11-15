@@ -2074,6 +2074,19 @@ async function checkGridLoaderIsolation() {
   check('winter: category words',[0,1,2,3,9].map(ns.winterCategory).join('|'),'Below 10%|Slight (10–39%)|Moderate (40–69%)|High (70–100%)|Unknown');
 }
 
+{
+  /* The UpperAir link format is strict (unknown or repeated keys reject the whole link), so pin
+     exactly what the dashboard emits: version, forecast source, rounded point, display name, model,
+     and no valid time, which the viewer reads as "next forecast hour". */
+  const soundingURL = new Function(lift(/^function soundingURL\(l\)\{[\s\S]*?^\}/m, 'soundingURL()') + ';return soundingURL;')();
+  const u = new URL(soundingURL({lat:38.627003,lon:-90.199402,name:'St. Louis, MO (home)'}), 'https://lsxdashboard.com');
+  const q = new URLSearchParams(u.hash.slice(1));
+  check('sounding: links into the bundled viewer', u.pathname, '/upperair/');
+  check('sounding: only keys the viewer accepts, once each', [...q.keys()].join(), 'v,source,lat,lon,name,model');
+  check('sounding: point, name and model', [q.get('v'),q.get('source'),q.get('lat'),q.get('lon'),q.get('name'),q.get('model')].join('|'), '1|forecast|38.6270|-90.1994|St. Louis, MO|gfs_hrrr');
+  check('sounding: a long name is clipped to what the viewer allows', new URLSearchParams(new URL(soundingURL({lat:38,lon:-90,name:'x'.repeat(300)}),'https://a.b').hash.slice(1)).get('name').length, 160);
+}
+
 checkLiveFeedFailures().then(checkSpcThreatProducts).then(checkForecastRefreshFailure).then(checkGridLoaderIsolation).then(() => {
   if (failed) {
     console.error(`\n${failed} logic test(s) failed`);

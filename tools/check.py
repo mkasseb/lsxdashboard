@@ -288,13 +288,27 @@ def check_inline_script_syntax(html):
     return True
 
 
-def csp_directives(headers_text):
-    """{directive: [source, ...]} from the Content-Security-Policy in _headers."""
-    m = re.search(r"^\s*Content-Security-Policy:\s*(.+)$", headers_text, re.M)
-    if not m:
+def header_blocks(headers_text):
+    """{path pattern: [header line, ...]} — _headers is unindented paths, each followed by indented lines."""
+    blocks, current = {}, None
+    for line in headers_text.splitlines():
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if not line[0].isspace():
+            current = blocks.setdefault(line.strip(), [])
+        elif current is not None:
+            current.append(line.strip())
+    return blocks
+
+
+def csp_directives(headers_text, path="/*"):
+    """{directive: [source, ...]} from the Content-Security-Policy that `path`'s block in _headers sets."""
+    lines = header_blocks(headers_text).get(path, [])
+    policy = next((l.split(":", 1)[1] for l in lines if l.startswith("Content-Security-Policy:")), None)
+    if policy is None:
         return None
     out = {}
-    for chunk in m.group(1).split(";"):
+    for chunk in policy.split(";"):
         parts = chunk.split()
         if parts:
             out[parts[0]] = parts[1:]
@@ -355,6 +369,54 @@ def check_csp_covers_origins(served_html, headers_text):
         "ok    csp: %d origin(s) in served pages and assets, all declared (%d fetchable via connect-src)"
         % (len(found), len([o for o in connect if o.startswith("https://")]))
     )
+    return True
+
+
+UPPERAIR = os.path.join(ROOT, "upperair")
+# Links inside the UpperAir bundle that are never fetched: Svelte's runtime error messages cite
+# svelte.dev, and the map attribution names Natural Earth and Open-Meteo.
+UPPERAIR_NAV_ONLY = {"https://svelte.dev", "https://www.naturalearthdata.com", "https://open-meteo.com"}
+
+
+def check_upperair(headers_text):
+    """The committed UpperAir build is complete, and its own CSP covers what it fetches.
+
+    The bundle is minified output from another repo, so nothing in this one would notice a
+    sync that dropped a chunk, or a new data source in the viewer that this CSP blocks. The
+    `/upperair/*` block must also detach the dashboard's policy: Pages merges matching rules,
+    and two CSP headers both apply, so a missing `!` line quietly intersects the two.
+    """
+    if not os.path.isdir(UPPERAIR):
+        print("ok    upperair: not present")
+        return True
+    page = os.path.join(UPPERAIR, "index.html")
+    if not os.path.isfile(page) or not os.path.isfile(os.path.join(UPPERAIR, "SOURCE_COMMIT")):
+        return fail(["FAIL  upperair: index.html or SOURCE_COMMIT missing — rerun scripts/sync_lsxdashboard.sh in skew-t-viewer"])
+    lines = header_blocks(headers_text).get("/upperair/*", [])
+    if "! Content-Security-Policy" not in lines:
+        return fail(["FAIL  upperair: /upperair/* in _headers must detach the dashboard CSP with `! Content-Security-Policy`"])
+    directives = csp_directives(headers_text, "/upperair/*")
+    if directives is None:
+        return fail(["FAIL  upperair: /upperair/* in _headers sets no Content-Security-Policy of its own"])
+    html = read(page)
+    problems, texts = [], [html]
+    for ref in re.findall(r'(?:src|href)="(/upperair/[^"]+)"', html):
+        path = os.path.join(ROOT, ref.lstrip("/"))
+        if not os.path.isfile(path):
+            problems.append("missing " + ref)
+    for name in sorted(os.listdir(os.path.join(UPPERAIR, "assets"))):
+        path = os.path.join(UPPERAIR, "assets", name)
+        texts.append(read(path))
+        for chunk in re.findall(r"import\(`\./([^`]+)`\)", texts[-1]):
+            if not os.path.isfile(os.path.join(UPPERAIR, "assets", chunk)):
+                problems.append("missing lazy chunk assets/" + chunk)
+    declared = [s for srcs in directives.values() for s in srcs if s.startswith("https://")]
+    found = sorted(set(ORIGIN.findall("\n".join(texts))))
+    problems += ["origin not in the /upperair/* CSP: " + o for o in found
+                 if o not in UPPERAIR_NAV_ONLY and not covered_by(o, declared)]
+    if problems:
+        return fail(["FAIL  upperair:"] + ["        " + p for p in problems])
+    print("ok    upperair: bundle complete, %d origin(s) covered by its own CSP" % len(found))
     return True
 
 
@@ -547,6 +609,7 @@ def main():
         check_csp_covers_origins(served_html, headers_text),
         check_icons_resolve(combined),
         check_root_files(html),
+        check_upperair(headers_text),
     ]
     if not all(results):
         print("\nchecks failed")

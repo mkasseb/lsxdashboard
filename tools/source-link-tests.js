@@ -20,7 +20,7 @@ const expected=[
  ['#droughtCard .dr-tier:nth-of-type(3) > a',cpc+'expert_assessment/sdo_summary.php','Season (3 mo) — CPC seasonal drought outlook'],
  ['#hazards .hz-row:nth-child(1) a','https://www.wpc.ncep.noaa.gov/threats/threats.php','WPC Days 3–7 hazards outlook'],
  ['#hazards .hz-row:nth-child(2) a',cpc+'predictions/threats/threats.php','CPC Days 8–14 hazards outlook'],
- ['#h24Card .resource-links a','https://www.wpc.ncep.noaa.gov/qpf/qpf2.shtml','WPC Precip (QPF) — precipitation amounts'],
+ ['#h24Card .resource-links a:not(#soundingLink)','https://www.wpc.ncep.noaa.gov/qpf/qpf2.shtml','WPC Precip (QPF) — precipitation amounts'],
  ['#radarCard .resource-links a','https://map.blitzortung.org/#7/38.7/-90.4','Live Lightning — Blitzortung community network'],
  ['#riskCard .resource-links a','https://www.spc.noaa.gov/exper/mesoanalysis/','SPC Mesoanalysis'],
  ['#climateCard .resource-links a','https://www.weather.gov/lsx/climate','Climate & Records — NWS St. Louis'],
@@ -45,6 +45,15 @@ async function resources(page,touch=false){
  assert.equal(await page.locator('#h24Card .precip-details #precipEvents').count(),1,'WPC stays beside precipitation details');
  assert(await page.locator('#afdDiscussionLink').isVisible(),'Forecast discussion retains its contextual destination');
  assert.equal(await page.locator('#riversCard h2 a').getAttribute('href'),'https://water.noaa.gov/','Flood map retains its contextual destination');
+ // The sounding viewer is part of this site, not an official source: same tab, no ↗, and its
+ // href follows the selected location in the viewer's strict v=1 link format.
+ const sounding=page.locator('#h24Card .resource-links #soundingLink');
+ assert.equal(await sounding.count(),1,'Sounding link sits beside the hourly forecast');
+ assert.equal(await sounding.getAttribute('target'),null,'Sounding opens in the same tab');
+ assert.match(await sounding.getAttribute('href'),/^\/upperair\/#v=1&source=forecast&lat=-?\d+\.\d{4}&lon=-?\d+\.\d{4}&name=[^&]+&model=gfs_hrrr$/);
+ assert.doesNotMatch(await sounding.innerText(),/↗/);
+ await sounding.scrollIntoViewIfNeeded();
+ assert((await sounding.boundingBox()).height>=minTargetHeight,'44px sounding target');
 }
 async function contracts(page){
  // Measure resting hit targets after the finite card entrance, not transformed
