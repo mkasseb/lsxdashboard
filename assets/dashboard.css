@@ -2257,3 +2257,22 @@ body.radar-full #radarCard#radarCard{background:var(--bg);border:0;
 @media(max-width:680px){
   :root.radar-calm:not(.lsx-active) body:not(.radar-full) #radarCard .imgwrap{aspect-ratio:16/9}
 }
+
+/* --- New sources: Weather Story, observed rainfall, winter guidance, road links (PR: data sources) --- */
+.story-item{margin:0 0 12px}
+.story-item img{display:block;width:100%;height:auto;border-radius:3px;background:var(--chip)}
+.story-item figcaption{margin-top:8px;font-size:var(--fs-sm);line-height:1.45}
+.story-valid{display:block;margin-top:4px;font-family:var(--fm);font-size:12px;color:var(--muted)}
+.story-none{margin:0;color:var(--muted)}
+.rain-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.rain-item .k{font-family:var(--fm);font-size:11px;letter-spacing:.03em;color:var(--muted)}
+.rain-item .v{font-family:var(--fm);font-weight:500;font-size:20px}
+.rain-item .s{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.winter-rows{display:grid;gap:6px}
+.winter-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:2px 12px;align-items:baseline;font-size:var(--fs-sm);
+  padding-bottom:6px;border-bottom:1px solid var(--border)}
+.winter-day{grid-column:1/-1;font-family:var(--fm);font-size:12px;color:var(--muted)}
+@media(max-width:480px){.winter-row{grid-template-columns:minmax(0,1fr)}}
+.ol-story{margin:8px 0 0;font-size:var(--fs-sm)}
+.road-links{margin:0;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center}
+.road-links[hidden]{display:none}

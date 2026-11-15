@@ -1075,3 +1075,79 @@ restores the earlier view, but only if the reader has not moved the map since (s
 within 3px, because resizes re-centre with sub-pixel rounding). A camera the reader moved is
 theirs. A location reset forgets the saved view.
 
+## November 2026: the office's own story, observed rain and winter odds
+
+Every new feed was checked with a real request first: keyless, and CORS-open for a browser origin.
+Two items from the plan changed on that evidence.
+
+**No Hazardous Weather Outlook.** NWS St. Louis does not issue one. `api.weather.gov` lists 42 HWO
+offices (Paducah, Lincoln, Springfield and Kansas City among them), and LSX is not one of them;
+forecast.weather.gov says "None issued by this office recently". Rather than a loader for a product
+that does not exist, the outlook row links the office's Weather Story under the Today–Day 3 cell.
+The link is a line under the row, not inside the cell: the cells are buttons, and a link nested in a
+button is invalid and confusing to a screen reader.
+
+**No GLM lightning layer.** GIBS's Web Mercator capabilities list GOES-East ABI imagery but no GOES
+GLM product, only LIS/OLS climatologies. The Blitzortung link stays.
+
+**Weather Story.** The office publishes it as XML (`www.weather.gov/source/lsx/wxstory/wxstory.xml`):
+each graphic has a start and end time, a title, a caption and an image. The image slots are reused,
+so a fixed image URL can be a week old. `currentStories()` keeps only graphics valid now, in the
+office's order, so an expired fog graphic never sits on a sunny afternoon. An entry with an unreadable
+time, a missing title or an image outside `www.weather.gov/images/lsx/wxstory/` is counted, not
+dropped. Any such entry makes the feed partial; nothing readable makes it unavailable, never "no
+story". The feed is office-wide, so it is not location-scoped. `www.weather.gov` is in both
+connect-src (the XML) and img-src (the graphics).
+
+**Observed rainfall.** From the NWS River Forecast Centers' QPE (`obs/rfc_qpe` on the existing
+`mapservices` origin): a gauge-corrected multi-sensor analysis (radar, gauges, satellite) at about
+4 km. One identify request answers the 24-hour, 3-day and 7-day windows at the point. Each window
+carries its own reference time: 24 hours is refreshed hourly; 3 and 7 days once a day, ending 12Z
+(6 AM CST). The card prints each window's "through" time. `rainfallFromIdentify()` accepts a window
+only with a finite, non-negative value and a reference time inside its age limit (4 hours; 36 for the
+daily windows). A missing, NoData, undated or stale window is a gap with its reason, never 0.00″. The
+alternatives were weaker. MRMS QPE is radar-only and has no 7-day window. IEM's IEMRE daily series is
+calendar days, not rolling windows, and its hourly series is partly filled from IFS forecasts.
+
+**WPC winter guidance.** `precip/wpc_prob_winter_precip` gives WPC's chance of at least 4, 8 or 12
+inches of snow and at least 0.25 inch of ice for days 1–3. It is a deferred feed (`deferredFeeds.winter`),
+asked for only in November through March (Central dates) or while WSSI shows an impact today or
+tomorrow (`winterDemand()`). `syncWinterDemand()` runs at the end of `syncActiveMode()`, after
+`loadSpc()` has stored WSSI, and turning demand off hides the card and stops polling. `loadWinter()`
+re-checks demand after its requests and again after `feedUpdate()`, so a response that lands after
+demand ends never paints.
+
+A point inside a WPC polygon takes its category. The snow layers have no "less than 10%" polygon, so
+a point outside every polygon reads "Below 10%" only when that layer's own issuance is verified: one
+distinct issuance, issued within 36 hours, with a period not yet over (`winterIssuanceOk()`). A
+layer with nothing issued anywhere, or several issuances, cannot certify it and reads "Unverified".
+That is the same rule as SPC's globally empty layers. One identify answers every threshold; six small
+queries verify each day's 4-inch and ice issuance. WPC days run 00Z–00Z, so each is named by its end
+("Day 1 · until Wed 7 PM CT"), not by a start that falls on the previous evening in Central time.
+
+The layer ids are hard-coded, and NOAA has renumbered map-service layers before. A shifted id here
+would not fail: it would put a 12-inch polygon under the 4-inch label, a confident wrong answer. So
+`loadWinter()` also reads the service's layer list, and `winterLayerCheck()` trusts an id only when
+the service names it exactly as expected ("Day 1 probability of at least 4 inches of snow", "Day 1
+probability of icing >0.25 inches"). Each match is whole-name and end-anchored, so the threshold is
+part of what is checked: an ice layer moved to 0.50 inch reads "Unverified", not "Ice ≥0.25″ Below
+10%". If any of a day's three snow thresholds fails that check, the whole day's snow reads
+"Unverified". A missing layer list makes the feed unavailable.
+
+The three new cards live in the context pack and keep individual disclosures like the cards
+around them (`initContextView`). Their problem lines sit outside the folded body, so an outage still
+shows when a card is collapsed.
+
+**Road conditions.** MoDOT's Traveler Map and Getting Around Illinois are under More weather
+resources, and in a line under the storm-layout bar during the storm layout or while a
+winter-precipitation warning covers the location (`winterWarningCovers()`). That check walks every
+covering, unexpired alert phase, not only `callLocalAlert`, because a Flood Warning can outrank a
+Winter Storm Warning there. It matches winter storm, blizzard, ice storm, snow squall, heavy snow,
+lake-effect snow and freezing rain by name: `eventFamily()`'s "winter" also holds Freeze, Frost and
+Wind Chill warnings, which are not road hazards. Weather Story graphics are re-filtered on the
+30-second freshness tick (`syncStoryClock()`), so one leaves the page when its end time passes rather
+than at the next feed refresh. An empty or missing time is rejected before conversion: `Number("")`
+is 0, a real instant. Both are link-only origins (`NAV_ONLY` in `tools/check.py`).
+
+**Not added.** USGS earthquakes: off-topic for a weather page.
+

@@ -188,13 +188,16 @@ All feeds are keyless. The sources have different attribution and reuse terms; s
 |---|---|
 | `api.weather.gov` | Forecast, 24–72-hour views, grid event precipitation totals + gusts, station obs, active alerts, AFD + mesoscale discussion text, county zones |
 | `opengeo.ncep.noaa.gov` (WMS) | KLSX super-resolution base reflectivity/velocity (default local view), regional reflectivity mosaic, per-product scan times and station legends |
-| `mapservices.weather.noaa.gov` | SPC convective outlooks and separate tornado/wind/hail probabilities; fire outlooks and mesoscale discussion polygons; watch county fills; WPC excessive rainfall, winter storm severity, and QPF; CPC 6–10/8–14 day, hazards, and drought outlooks |
+| `mapservices.weather.noaa.gov` | SPC convective outlooks and separate tornado/wind/hail probabilities; fire outlooks and mesoscale discussion polygons; watch county fills; WPC excessive rainfall, winter storm severity, QPF and probabilistic snow/ice (days 1–3, in season or with a WSSI impact); River Forecast Center QPE observed rainfall (24 hours, 3 and 7 days); CPC 6–10/8–14 day, hazards, and drought outlooks |
+| `www.weather.gov` | NWS St. Louis Weather Story: the office's graphicast XML (titles, captions, valid times) and its graphics |
 | `services5.arcgis.com` | Current U.S. Drought Monitor classification |
 | `api.water.noaa.gov` (NWPS) | River gauge stages and crest forecasts |
 | `data.rcc-acis.org` | 1991–2020 normals, daily records, rankings, dry streaks |
 | Open-Meteo | Modeled air quality from Copernicus Atmosphere Monitoring Service (CAMS), labelled "modeled" on the page with AirNow linked for measured values; UV index; and the location geocoder using GeoNames data |
 | `gibs.earthdata.nasa.gov` (WMTS) | GOES-19 ABI GeoColor satellite tiles, in the map's own projection |
 | `mesonet.agron.iastate.edu` (Iowa Environmental Mesonet) | Local Storm Reports for the St. Louis office, requested only while the storm layout is on |
+
+Road conditions link to [MoDOT's Traveler Map](https://traveler.modot.org/map/) and [Getting Around Illinois](https://www.gettingaroundillinois.com/) (links only, nothing is fetched).
 
 Basemap via OpenFreeMap: © OpenMapTiles, data from OpenStreetMap contributors.
 

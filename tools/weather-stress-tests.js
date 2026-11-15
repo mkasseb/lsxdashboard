@@ -63,6 +63,19 @@ function feeds(c, id='0') {
 function alert(event, now, away=false) {
   return {id:'urn:scenario:'+event,type:'Feature',geometry:{type:'Polygon',coordinates:[away?[[-89,38],[-88,38],[-88,39],[-89,39],[-89,38]]:[[-91.2,38.2],[-90,38.2],[-90,39.4],[-91.2,39.4],[-91.2,38.2]]]},properties:{id:'urn:scenario:'+event,event,severity:event==='Tornado Warning'?'Extreme':event.includes('Advisory')?'Moderate':'Severe',urgency:'Immediate',certainty:'Observed',senderName:'NWS St Louis MO',sent:new Date(now-600000).toISOString(),effective:new Date(now-600000).toISOString(),onset:new Date(now-600000).toISOString(),expires:new Date(now+H).toISOString(),ends:new Date(now+H).toISOString(),areaDesc:away?'Madison':'St. Charles',affectedZones:['https://api.weather.gov/zones/county/'+(away?'ILC119':'MOC183')],headline:event+' issued for scenario testing',description:'Scenario weather hazard.',instruction:'Move to a safe location.',parameters:{NWSheadline:[event]}}};
 }
+/* RFC QPE identify: a footprint (reference time) and an image (value) per window, as the service answers. */
+function rainBody(c){
+  const fmt=t=>{const d=new Date(t),h=d.getUTCHours();return (d.getUTCMonth()+1)+'/'+d.getUTCDate()+'/'+d.getUTCFullYear()+' '+((h%12)||12)+':'+String(d.getUTCMinutes()).padStart(2,'0')+':00 '+(h<12?'AM':'PM');};
+  const r=c.rain||{h24:0.12,d3:0.5,d7:1.25}, hour=Math.floor(c.now/H)*H, day12=Math.floor((c.now-12*H)/(24*H))*24*H+12*H;
+  const rows=[['nws_precip_last24hours_conus',26,'h24',hour-H],['nws_precip_last3days_conus',38,'d3',day12],['nws_precip_last7days_conus',54,'d7',day12]];
+  const results=[];
+  rows.forEach(([subset,id,k,t])=>{
+    const when=c.rainStale?t-3*24*H:t;
+    results.push({layerId:id+1,layerName:'Footprint',attributes:{name:subset,idp_subset:subset,idp_issueddate:fmt(when)}});
+    if(!(c.rainNoData||[]).includes(k))results.push({layerId:id+2,layerName:'Image',attributes:{'Service Pixel Value':String(r[k]),name:subset}});
+  });
+  return {results};
+}
 function metadata(names) { return {layers:names.map(([id,name])=>({id,name,subLayerIds:null}))}; }
 const SPC=metadata([[1,'Day 1 Categorical Outlook'],[9,'Day 2 Categorical Outlook'],[17,'Day 3 Categorical Outlook'],[3,'Day 1 Probabilistic Tornado Outlook'],[7,'Day 1 Probabilistic Wind Outlook'],[5,'Day 1 Probabilistic Hail Outlook'],[11,'Day 2 Probabilistic Tornado Outlook'],[15,'Day 2 Probabilistic Wind Outlook'],[13,'Day 2 Probabilistic Hail Outlook']]);
 const otherMetadata={
@@ -95,7 +108,7 @@ async function open(c, width=390) {
   if(c.storage)await page.addInitScript(storage=>Object.entries(storage).forEach(([key,value])=>localStorage.setItem(key,typeof value==='string'?value:JSON.stringify(value))),c.storage);
   if(c.geo)await page.addInitScript(geo=>Object.defineProperty(navigator,'geolocation',{value:{getCurrentPosition:success=>queueMicrotask(()=>success({coords:{latitude:geo.lat,longitude:geo.lon,accuracy:25}}))}}),c.geo);
   if(c.snapshot)await page.addInitScript(snapshot=>localStorage.setItem('lsxSnap_v25',snapshot),c.snapshot);
-  const errors=[],requests=[],delayedMapScripts=[],heldPoints=[],heldSpcProducts=[],heldCpc=[];
+  const errors=[],requests=[],delayedMapScripts=[],heldPoints=[],heldSpcProducts=[],heldCpc=[],heldStory=[],heldRain=[],heldWinter=[];
   let spcMetadataRequests=0;
   page.on('pageerror',e=>errors.push(e.message));
   let active=c;
@@ -107,7 +120,7 @@ async function open(c, width=390) {
       if(active.origin&&u.pathname.startsWith('/assets/'))return route.continue();
       if(u.pathname==='/')return route.fulfill({status:200,contentType:'text/html',headers:active.productionCsp?{'Content-Security-Policy':fs.readFileSync(path.join(root,'_headers'),'utf8').match(/Content-Security-Policy: (.*)/)[1]}:{},body:active.maps&&!active.badMapIntegrity?html.replace(/integrity="[^"]*"/g,""):html});
       const asset=assets[u.pathname];
-      return route.fulfill({status:asset?200:404,contentType:asset?.type||'text/plain',body:asset?(active.eagerContext&&typeof asset.content==='string'?asset.content.replace('var deferredFeeds={stations:false,context:false};','var deferredFeeds={stations:true,context:true};'):asset.content):'Missing static asset'});
+      return route.fulfill({status:asset?200:404,contentType:asset?.type||'text/plain',body:asset?(active.eagerContext&&typeof asset.content==='string'?asset.content.replace('var deferredFeeds={stations:false,context:false,winter:false};','var deferredFeeds={stations:true,context:true,winter:false};'):asset.content):'Missing static asset'});
     }
     // Capture a request's scenario before any delay; later switches must not rewrite an old response.
     const scenario=clone(active);
@@ -165,6 +178,17 @@ async function open(c, width=390) {
     if(c.drought!=null&&u.href.includes('/USDM_current/'))return reply(features([{DM:c.drought}]));
     if(c.drought!=null&&u.href.includes('/cpc_drought_outlk/')&&u.pathname.includes('/query'))return reply(features([{outlook:'Persistence'}]));
     if(c.offline) return reply({error:'simulated outage'},503);
+    if(u.hostname==='www.weather.gov'){
+      if(u.pathname.startsWith('/images/lsx/wxstory/'))return route.fulfill({status:200,contentType:'image/png',body:Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGP4DwQACfsD/fteaysAAAAASUVORK5CYII=','base64')});
+      if(u.pathname==='/source/lsx/wxstory/wxstory.xml'){
+        if(c.storyDown)return reply({error:'story outage'},503);
+        if(c.storyHold){heldStory.push(route);return;}
+        const items=c.story||[{title:'Upcoming Warming Trend',description:'Temperatures warm to above normal.',start:-3,end:20,n:5},{title:'Old Fog Graphic',description:'Expired.',start:-30,end:-20,n:1}];
+        const g=items.map(it=>'<graphicast><StartTime>'+(it.raw?it.start:Math.round((c.now+it.start*H)/1000))+'</StartTime><EndTime>'+(it.raw?it.end:Math.round((c.now+it.end*H)/1000))+'</EndTime><order>'+(it.n||1)+'</order><title><![CDATA['+it.title+']]></title><description><![CDATA['+(it.description||'')+']]></description><FullImage>'+(it.image||'https://www.weather.gov/images/lsx/wxstory/Tab'+(it.n||1)+'FileL.png')+'</FullImage></graphicast>').join('');
+        return route.fulfill({status:200,contentType:'application/xml',body:c.storyMalformed?'<xml><nope':'<xml><head></head><graphicasts>'+g+'</graphicasts></xml>'});
+      }
+      return reply({error:'not found'},404);
+    }
     if(u.hostname==='mesonet.agron.iastate.edu')return c.reportsDown?reply({error:'storm reports outage'},503):reply({type:'FeatureCollection',features:(c.reports||[]).map(([typetext,minutes,lat,lon,magnitude,city,wfo='LSX'],i)=>({id:String(i),type:'Feature',properties:{wfo,typetext,magnitude:magnitude??'',unit:typetext==='HAIL'?'INCH':null,city,county:'St. Charles',st:'MO',source:'Trained Spotter',remark:'',valid:new Date(c.now-minutes*60000).toISOString(),lat,lon},geometry:{type:'Point',coordinates:[lon,lat]}}))});
     if(u.hostname==='air-quality-api.open-meteo.com'&&c.aqi!=null) return reply({current:{us_aqi:c.aqi,time:c.aqiMissingTime?undefined:(c.now-(c.aqiAgeHours||0)*H)/1000,pm2_5:75,pm10:90}});
     if(u.hostname==='api.open-meteo.com'&&c.uv!=null) return reply({hourly:{time:[c.now/1000,(c.now+H)/1000],uv_index:[c.uv,c.uv+1]},daily:{time:Array.from({length:7},(_,i)=>stamp(c.now+i*24*H).slice(0,10)),uv_index_max:Array(7).fill(c.uv+1)}});
@@ -226,6 +250,32 @@ async function open(c, width=390) {
         const probability=c.probabilities[day-1][k];
         return reply(features(probability?[{...product,dn:k===0?2:5},{...product,dn:probability}]:[]));
       }
+      if(u.pathname.includes('/obs/rfc_qpe/MapServer/identify')){
+        if(c.rainDown)return reply({error:{code:500}},503);
+        if(c.rainHold){heldRain.push({route,body:rainBody(c)});return;}
+        return reply(rainBody(c));
+      }
+      if(u.pathname.includes('/wpc_prob_winter_precip/MapServer')){
+        if(c.winterDown)return reply({error:{code:500}},503);
+        if(/\/MapServer\/?$/.test(u.pathname)){
+          // The service's own layer list, as published; winterRenumbered shifts the names one slot.
+          const names=[];[1,2,3].forEach((d,k)=>{const b=k*5;names.push([b,'Day '+d+' Snow and Ice Accumulation'],[b+1,'Day '+d+' probability of at least 4 inches of snow'],[b+2,'Day '+d+' probability of at least 8 inches of snow'],[b+3,'Day '+d+' probability of at least 12 inches of snow'],[b+4,'Day '+d+' probability of icing >0.25 inches']);});
+          if(c.winterRenumbered)names.forEach(n=>n[0]+=1);
+          if(c.winterIceName)names.forEach(n=>{if(n[0]===4)n[1]=c.winterIceName;});
+          return reply({layers:names.map(([id,name])=>({id,name}))});
+        }
+        if(u.pathname.endsWith('/identify')){
+          const body={results:(c.winterHits||[]).map(([layerId,dn])=>({layerId,attributes:{'Probability Code':String(dn)}}))};
+          if(c.winterHold){heldWinter.push({route,body});return;}
+          return reply(body);
+        }
+        const id=Number(u.pathname.split('/').at(-2));
+        if(c.winterEmptyLayers?.includes(id))return reply(features([]));
+        const day=[1,4].includes(id)?0:[6,9].includes(id)?1:2;
+        const fmt=t=>new Date(t).toISOString().slice(0,19).replace('T',' ');
+        const issued=c.now-(c.winterStaleHours||2)*H, start=Math.floor(c.now/(24*H))*24*H+day*24*H;
+        return reply(features([{issue_time:fmt(issued),start_time:fmt(start),end_time:fmt(start+24*H)}]));
+      }
       for(const [service,m] of Object.entries(otherMetadata)){
         if(u.pathname.includes('/'+service+'/MapServer')) {
           if(!u.pathname.includes('/query')) return reply(m);
@@ -245,6 +295,8 @@ async function open(c, width=390) {
   if(c.maps&&!c.deferMaps)await page.evaluate(()=>{requestMaps();});
   if(!c.skipWait)await page.waitForFunction(()=>typeof refreshInFlight!=='undefined'&&refreshInFlight===null&&snapSafeSeq===locSeq);
   return {page,context,errors,requests,change:c=>{active=c;},
+    releaseRain:()=>{heldRain.splice(0).forEach(h=>h.route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(h.body)}));},
+    releaseWinter:()=>{heldWinter.splice(0).forEach(h=>h.route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(h.body)}));},
     releaseCpc:()=>Promise.all(heldCpc.map(p=>p.route.fulfill({status:200,json:p.body}).catch(()=>{}))),
     spcMetadataRequests:()=>spcMetadataRequests,
     releaseSpcProducts:()=>Promise.all(heldSpcProducts.map(p=>p.route.fulfill({status:200,json:p.body}).catch(()=>{}))),
@@ -622,6 +674,104 @@ async function main() {
       await page.evaluate(()=>{paintNowTakeaway();loadCurrent();});await page.locator('#current .cc-temp').waitFor();
       assert.equal(await page.locator('#ccTake .glance-lead').count(),0,'A repaint for the new place cannot bring the old takeaway back');
     });
+    await run('Weather Story shows only current graphics and links them from the outlook row',config('story'),async({page})=>{
+      await expectText(page,'#story',/Upcoming Warming Trend/);
+      assert.doesNotMatch(await page.locator('#story').innerText(),/Old Fog Graphic/,'An expired graphic is never shown');
+      assert.equal(await page.locator('#story img').getAttribute('src'),'https://www.weather.gov/images/lsx/wxstory/Tab5FileL.png');
+      assert(await page.locator('#olStory').isVisible());await expectText(page,'#olStory a',/Upcoming Warming Trend/);
+      assert.equal(await page.evaluate(()=>feedChecks.story.status),'ready');
+    });
+    for(const [name,extra,state] of [['outage',{storyDown:true},'unavailable'],['malformed XML',{storyMalformed:true},'unavailable'],['all entries unreadable',{story:[{title:'',start:-1,end:5}]},'unavailable'],['one bad entry',{story:[{title:'Good',start:-1,end:5,n:2},{title:'Bad',start:-1,end:5,image:'https://evil.example/x.png'}]},'partial']])
+      await run('Weather Story '+name+' is a visible gap, not a quiet day',config('story '+name,extra),async({page})=>{
+        await page.waitForFunction(state=>feedChecks.story.status===state,state);
+        if(state==='unavailable'){await expectText(page,'#story',/could not be read/);assert(!await page.locator('#olStory').isVisible(),'No outlook link to a story that could not be read');}
+        else await expectText(page,'#story',/Good/);
+        assert(await page.locator('#fresh-story').isVisible(),'The problem line stays on the card');
+      });
+    await run('a Weather Story graphic leaves the page when its end time passes',config('story expiry',{story:[{title:'Short Lived',start:-1,end:0.2,n:3}]}),async({page})=>{
+      await expectText(page,'#story',/Short Lived/);assert(await page.locator('#olStory').isVisible());
+      // No feed refresh: the 30-second freshness tick alone must retire it (12 min end, 30 min feed cadence).
+      await page.clock.runFor(13*60000);
+      await page.waitForFunction(()=>!/Short Lived/.test(document.getElementById('story').innerText));
+      assert(!await page.locator('#olStory').isVisible(),'The outlook link goes with it');
+      await expectText(page,'#story',/No Weather Story graphic is current/);
+    });
+    await run('no current Weather Story says so rather than showing an old graphic',config('story none',{story:[{title:'Expired',start:-10,end:-1}]}),async({page})=>{
+      await expectText(page,'#story',/No Weather Story graphic is current/);
+      assert.equal(await page.locator('#story img').count(),0);assert(!await page.locator('#olStory').isVisible());
+    });
+    await run('observed rainfall shows three windows with their own reference times',config('rain'),async({page})=>{
+      await expectText(page,'#rain',/Last 24 hours[\s\S]*0\.12″[\s\S]*Last 3 days[\s\S]*0\.50″[\s\S]*Last 7 days[\s\S]*1\.25″/);
+      assert.equal(await page.evaluate(()=>feedChecks.rainfall.status),'ready');
+    });
+    await run('a missing rainfall window is a gap, never 0.00 inches',config('rain gap',{rainNoData:['d3']}),async({page})=>{
+      await page.waitForFunction(()=>feedChecks.rainfall.status==='partial');
+      const t=await page.locator('#rain').innerText();
+      assert.match(t,/Last 3 days\s*—\s*no value at this point/);assert.doesNotMatch(t,/Last 3 days\s*0\.00/);
+      assert(await page.locator('#fresh-rainfall').isVisible());
+    });
+    for(const [name,extra] of [['stale analyses',{rainStale:true}],['an outage',{rainDown:true}]])
+      await run('observed rainfall with '+name+' is unavailable',config('rain '+name,extra),async({page})=>{
+        await page.waitForFunction(()=>feedChecks.rainfall.status==='unavailable');
+        await expectText(page,'#rain',/unavailable/);assert.doesNotMatch(await page.locator('#rain').innerText(),/0\.\d\d″/);
+      });
+    await run('a rainfall response for the previous location never paints',config('rain late',{rainHold:true,skipWait:true}),async session=>{
+      const {page,requests}=session;
+      await page.waitForFunction(()=>typeof feedChecks!=='undefined'&&feedChecks.rainfall&&feedChecks.rainfall.status==='loading');
+      for(let i=0;i<100&&!requests.some(r=>r.includes('rfc_qpe'));i++)await page.waitForTimeout(50);
+      session.change(config('rain late new place',{rain:{h24:2.5,d3:3.5,d7:4.5}}));
+      await page.evaluate(()=>setLocation({name:'Wentzville, MO',lat:38.81,lon:-90.86,precision:'representative'},{save:true}));
+      await page.waitForFunction(()=>/2\.50″/.test(document.getElementById('rain').innerText));
+      session.releaseRain();await page.waitForTimeout(200);
+      assert.doesNotMatch(await page.locator('#rain').innerText(),/0\.12″/,'The old place\'s rainfall cannot overwrite the new one');
+    });
+    await run('winter guidance stays off out of season without a WSSI impact',config('winter off'),async({page,requests})=>{
+      await page.waitForTimeout(300);
+      assert(!await page.locator('#winterCard').isVisible());
+      assert.equal(requests.filter(r=>r.includes('wpc_prob_winter_precip')).length,0,'No winter requests on a September day');
+    });
+    await run('winter guidance appears in season and reads verified categories',config('winter season',{now:Date.parse('2026-12-10T18:00:00Z'),winterHits:[[1,2],[2,1],[9,3]]}),async({page})=>{
+      await page.waitForFunction(()=>feedChecks.winter.status==='ready');
+      assert(await page.locator('#winterCard').isVisible());
+      const t=await page.locator('#winter').innerText();
+      assert.match(t,/Day 1[\s\S]*≥4″ Moderate \(40–69%\) · ≥8″ Slight/);assert.match(t,/Day 2[\s\S]*Ice ≥0\.25″ High/);
+    });
+    await run('an unverifiable winter layer reads unverified, not below 10%',config('winter unverified',{now:Date.parse('2026-12-10T18:00:00Z'),winterEmptyLayers:[1]}),async({page})=>{
+      await page.waitForFunction(()=>feedChecks.winter.status==='partial');
+      assert.match(await page.locator('#winter').innerText(),/Day 1[^\n]*\n?[^\n]*Snow Unverified/);
+    });
+    await run('renumbered winter layers read unverified, never a wrong threshold',config('winter renumbered',{now:Date.parse('2026-12-10T18:00:00Z'),winterRenumbered:true,winterHits:[[2,3]]}),async({page})=>{
+      await page.waitForFunction(()=>feedChecks.winter.status!=='loading');
+      const t=await page.locator('#winter').innerText();
+      assert.doesNotMatch(t,/High/,'A polygon from a renumbered layer is never read under the wrong label');
+      assert.doesNotMatch(t,/Below 10%/,'Nothing is certified from unverified layers');
+      assert.equal(await page.evaluate(()=>feedChecks.winter.status),'unavailable');
+    });
+    for(const [label,iceName] of [['another threshold','Day 1 probability of icing >0.50 inches'],['no threshold','Day 1 probability of icing']]){
+      await run('a winter ice layer with '+label+' reads unverified',config('winter ice '+label,{now:Date.parse('2026-12-10T18:00:00Z'),winterIceName:iceName}),async({page})=>{
+        await page.waitForFunction(()=>feedChecks.winter.status!=='loading');
+        const day1=await page.locator('#winter .winter-row').first().innerText();
+        assert.match(day1,/Ice[^\n]*Unverified/,'Day 1 ice is not certified from a layer at another threshold');
+        assert.match(day1,/Snow[^\n]*Below 10%/,'Day 1 snow, still verified, keeps its reading');
+      });
+    }
+    await run('winter guidance stops when WSSI clears and drops a late response',config('winter demand',{winterImpact:true,winterHold:true,winterHits:[[1,3]]}),async session=>{
+      const {page}=session;
+      await page.waitForFunction(()=>deferredFeeds.winter===true);
+      assert(await page.locator('#winterCard').isVisible());
+      session.change(config('winter demand cleared',{}));
+      await page.evaluate(()=>loadSpc());
+      await page.waitForFunction(()=>deferredFeeds.winter===false);
+      assert(!await page.locator('#winterCard').isVisible(),'Out of season without a WSSI impact the card hides');
+      session.releaseWinter();await page.waitForTimeout(200);
+      assert.doesNotMatch(await page.locator('#winter').innerText(),/High/,'A response that lands after demand ends never paints');
+    });
+    for(const [name,alerts,shown] of [['the storm layout',[alert('Tornado Warning',base)],true],['a winter storm warning',[alert('Winter Storm Warning',base)],true],['a winter storm warning under a flood warning',[alert('Flood Warning',base),alert('Winter Storm Warning',base)],true],['a freeze warning',[alert('Freeze Warning',base)],false],['a winter weather advisory',[alert('Winter Weather Advisory',base)],false],['a quiet day',[],false]])
+      await run('road condition links follow '+name,config('roads '+name,{alerts}),async({page})=>{
+        await page.waitForFunction(()=>feedChecks.alerts.status==='ready');
+        assert.equal(await page.locator('#roadLinks').isVisible(),shown);
+        if(shown){assert.equal(await page.locator('#roadLinks a[href="https://traveler.modot.org/map/"]').count(),1);assert.equal(await page.locator('#roadLinks a[href="https://www.gettingaroundillinois.com/"]').count(),1);}
+      });
     await run('selected town stays visible in sticky navigation',config('sticky town'),async({page})=>{
       await page.evaluate(()=>window.scrollTo(0,1800));
       const box=await page.locator('#stickyLocation').boundingBox();assert(box.y>=0&&box.y<60);
