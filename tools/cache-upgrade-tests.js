@@ -82,12 +82,16 @@ const server=http.createServer((req,res)=>{
       await page.waitForLoadState('networkidle');
       assert.deepEqual(errors,[],'old page loads before upgrade');
       priming=false;requests=[];
-      await page.goto(base+'/',{waitUntil:'domcontentloaded'});
+      // ?debug turns on the map diagnostics panel this check uses as its initialization witness.
+      await page.goto(base+'/?debug',{waitUntil:'domcontentloaded'});
       if(baseline){
-        // Cached legacy initialization reaches five retained cards, then the retired linksCard.
-        await page.waitForFunction(()=>document.querySelectorAll('.context-toggle').length===5);
+        // Cached legacy initialization now stops at the first markup the new page no longer has:
+        // its clock tick writes to the removed #clock before it builds any context card. Each engine
+        // words that null-element error its own way (Chromium, WebKit, Firefox).
+        for(let i=0;i<100&&!errors.length;i++)await page.waitForTimeout(100);
         await page.waitForTimeout(100);
-        assert(errors.some(e=>/querySelector|addEventListener|compact/.test(e)),JSON.stringify({errors,requests,diagnostics:await page.locator('.map-diagnostics').count()}));
+        assert(errors.some(e=>/Cannot set properties of null \(setting 'textContent'\)|null is not an object \(evaluating 'document\.getElementById\("clock"\)|getElementById\(\.\.\.\) is null/.test(e)),JSON.stringify({errors,requests,diagnostics:await page.locator('.map-diagnostics').count()}));
+        assert.equal(await page.locator('.context-toggle').count(),0,'Legacy startup halts before building context cards');
         assert.equal(await page.locator('.map-diagnostics').count(),0);
         assert.equal(await page.locator('#radar').innerHTML(),'');
         assert.equal(requests.filter(p=>p.startsWith('/assets/')&&names.includes(path.basename(new URL(p,base).pathname))).length,0,'old assets reused without network');

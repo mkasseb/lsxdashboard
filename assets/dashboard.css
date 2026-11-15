@@ -1920,16 +1920,12 @@ header .locsearch #locSearch{background:var(--panel)}
 .dot,.dot[data-state="partial"],.dot.stale,.calmrow .cdot{box-shadow:none}
 .location-tools summary{color:var(--text);text-decoration:underline;text-underline-offset:3px}
 
-/* --- Section navigation: numbered like log entries, selected entry inverted --- */
+/* --- Section navigation: selected entry inverted --- */
 .jump-wrap{border-block:1px solid var(--border)}
-.jump{counter-reset:lsxsec;gap:2px}
+.jump{gap:2px}
 .jump a{font-family:var(--fd);font-size:19px;font-weight:600;letter-spacing:.02em;
   gap:8px;border-bottom:0;border-radius:3px;color:var(--text)}
-.jump a::before{counter-increment:lsxsec;content:counter(lsxsec,decimal-leading-zero);
-  content:counter(lsxsec,decimal-leading-zero) / "";
-  font-family:var(--fm);font-size:11px;font-weight:500;letter-spacing:0;color:var(--muted)}
 .jump a[aria-current="location"]{background:var(--text);color:var(--bg);border-bottom-color:transparent}
-.jump a[aria-current="location"]::before{color:inherit;opacity:.75}
 .jump-prev{background:linear-gradient(to left,transparent,var(--bg) 45%);border-radius:0}
 .jump-next{background:linear-gradient(to right,transparent,var(--bg) 45%);border-radius:0}
 #stickyLocation{font-family:var(--fd);font-size:19px;font-weight:600;letter-spacing:.02em}
@@ -1959,19 +1955,6 @@ header .locsearch #locSearch{background:var(--panel)}
 .railhead{align-items:center}
 .rail-t{font-family:var(--fd);font-size:27px;font-weight:600;letter-spacing:.015em}
 .railhead::after{background:var(--border)}
-/* The same numbers the navigation shows, on the sections it points at. Decorative: the
-   alternative-text form keeps them out of the heading's accessible name. */
-#currentCard>h2::before,#h24Card h2::before,#radarCard h2::before,#forecastCard>h2::before,
-#keyMessagesTitle::before,#riversCard>h2::before,#climateCard>h2::before{
-  font-family:var(--fm);font-size:12px;font-weight:500;letter-spacing:0;color:var(--muted);
-  margin-right:10px;flex:0 0 auto;align-self:center}
-#currentCard>h2::before{content:"02";content:"02" / ""}
-#radarCard h2::before{content:"03";content:"03" / ""}
-#h24Card h2::before{content:"04";content:"04" / ""}
-#forecastCard>h2::before{content:"05";content:"05" / ""}
-#keyMessagesTitle::before{content:"06";content:"06" / ""}
-#riversCard>h2::before{content:"07";content:"07" / ""}
-#climateCard>h2::before{content:"08";content:"08" / ""}
 #currentCard>h2,#h24Card h2,#radarCard h2,#forecastCard>h2,#keyMessagesTitle,#riversCard>h2,#climateCard>h2{justify-content:flex-start}
 #keyMessagesTitle{display:flex;align-items:baseline}
 #currentCard>h2>.link,#forecastCard>h2>.forecast-primary-source,#riversCard>h2>.link,#climateCard>h2>.link{margin-left:auto}
@@ -2220,3 +2203,22 @@ body.radar-full #radarCard#radarCard{background:var(--bg);border:0;
 .reports-none{margin:0;color:var(--muted)}
 .reports-cap{margin:8px 0 0;font-size:var(--fs-2xs);color:var(--muted)}
 .reports-note{margin:10px 0 0;font-size:var(--fs-2xs);color:var(--muted)}
+
+/* --- One place name, and it opens search (PR: cleanup and wording) ---
+   The sticky label is the only copy of the selected place on screen. A search glyph says it is
+   the way to change it. On phones the search row and saved-location tools stay folded until it
+   is tapped (header.loc-open), so the first screen is one row of controls, then weather. */
+#stickyLocation{display:inline-flex;align-items:center;gap:6px;min-height:44px}
+#stickyLocation .ic{flex:0 0 auto;width:15px;height:15px;color:var(--muted)}
+#stickyPlace{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:680px){
+  header:not(.loc-open) .locbar,header:not(.loc-open) .location-tools{display:none}
+  header .top{margin-bottom:4px}
+  .sticky-context{min-height:44px;padding:0}
+  .jump a{font-size:15px;letter-spacing:0;padding:0 5px}
+  .jump{gap:0}
+}
+/* Air quality is CAMS model output, never a monitor reading: the word rides with every value. */
+.aqi-modeled{font-family:var(--fm);font-size:11px;font-weight:400;letter-spacing:.02em;color:var(--muted)}
+.aqi-measured{overflow-wrap:anywhere}
+.aqi-model-note{margin-top:4px}

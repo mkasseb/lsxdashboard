@@ -4,7 +4,7 @@
 // Reproduce review findings through the served page, with controlled upstream responses.
 const assert = require('node:assert/strict');
 const playwright = require('playwright');
-const {open, config, alert, setBrowser} = require('./weather-stress-tests');
+const {open, config, alert, openLocationPanel, setBrowser} = require('./weather-stress-tests');
 const engine = process.env.WEATHER_BROWSER || 'chromium';
 let passed = 0, failed = 0;
 
@@ -49,6 +49,7 @@ async function pendingSearch(page, action) {
   let first;
   const pending = new Promise(resolve => first = resolve);
   await page.route('https://geocoding-api.open-meteo.com/**', route => {first(route);});
+  await openLocationPanel(page);
   const input = page.locator('#locSearch');
   await input.fill('Wentzville');
   await page.clock.runFor(350);
@@ -216,6 +217,7 @@ async function main() {
     await run('clearing search rejects its pending results', p => pendingSearch(p, input => input.fill('')));
     await run('editing search invalidates results before the next debounce', p => pendingSearch(p, input => input.fill('Quincy')));
     await run('Enter cannot select results left over from another query', async p => {
+      await openLocationPanel(p);
       await p.evaluate(() => renderSuggestions([{name:'Wentzville', latitude:38.81, longitude:-90.86,
         country_code:'US', admin1:'Missouri', admin2:'St. Charles', feature_code:'PPL'}], {keys:['wentzville']}));
       const before = await p.evaluate(() => geoSeq);
@@ -309,6 +311,19 @@ async function main() {
       assert.equal(await p.evaluate(() => feedChecks.uv.status), 'unavailable');
       assert.doesNotMatch(await p.locator('#currentCard, #daily').allTextContents().then(t => t.join(' ')), /NaN/);
     });
+
+    await run('every air-quality value says it is modeled and links measured values', async p => {
+      assert.match(await p.locator('#aqiMini').innerText(), /modeled/i);
+      assert.match(await p.locator('#aqiMini').innerText(), /75/);
+      assert.equal(await p.locator('#aqiMini a[href*="airnow"]').count(), 1, 'The tile links AirNow for measured values');
+      assert.match(await p.locator('#sourcesList').textContent(), /modeled air quality/i);
+    });
+    await run('unhealthy modeled air quality is labelled on the card and in Your day', async p => {
+      await p.waitForFunction(() => document.getElementById('aqiCard').classList.contains('show'));
+      assert.match(await p.locator('#aqiCard').innerText(), /modeled/i);
+      assert.equal(await p.locator('#aqiCard a[href*="airnow"]').count() >= 1, true);
+      await p.waitForFunction(() => /Modeled AQI 155/.test(document.getElementById('glance').innerText));
+    }, {aqi:155});
 
     await run('observation failure preserves independently checked air quality and UV', async p => {
       await p.route('**/observations/latest', r => r.fulfill({status:503, json:{}}));

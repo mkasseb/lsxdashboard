@@ -9,6 +9,10 @@ function requestContext(key){
   if(key==="stations") job=Promise.all([job,requestMaps()]);
   return job;
 }
+/* The forecast discussion is the longest block on the page and repeats the reasoning behind Key
+   Messages beside it, so it starts folded. Its heading, the "Full discussion" link and any problem
+   line (feed-status lines sit outside .context-body) stay visible while it is folded. */
+var CONTEXT_START_COLLAPSED=["afdCard"];
 function initContextView(){
   var ids=["afdCard","obsCard","climateCard","droughtCard","cpcCard"];
   function expand(card,on){
@@ -30,6 +34,7 @@ function initContextView(){
     button.setAttribute('aria-controls',body.id);button.setAttribute('aria-expanded','true');button.textContent='Hide details';
     button.addEventListener('click',function(){expand(card,body.hidden);});
     card.appendChild(button);card.appendChild(body);
+    if(CONTEXT_START_COLLAPSED.indexOf(id)>=0){body.hidden=true;button.setAttribute('aria-expanded','false');button.textContent='Show details';}
   });
   document.getElementById('jumpNav').addEventListener('click',function(e){
     var link=e.target.closest('a');if(!link)return;
