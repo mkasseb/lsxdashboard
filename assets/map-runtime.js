@@ -26,13 +26,27 @@ function initMapDiagnostics(){
   document.getElementById("radar").closest(".maplock-wrap").after(panel);
 }
 
+/* Replacing a map's placeholder or retry panel removes whatever control had focus. Callers check
+   first and hand focus to a stable target, so a keyboard reader never lands on <body> (which would
+   also escape the fullscreen dialog). */
+function focusInside(el){
+  return !!(el&&document.activeElement&&document.activeElement!==el&&el.contains(document.activeElement));
+}
+function focusRadarControl(){
+  // The radar map is built with keyboard:false, so its container is not focusable. The first visible
+  // control in the radar view outside the map (map lock, loop, scrubber) is the stable target.
+  var view=document.getElementById("rsRadar"), radar=document.getElementById("radar");
+  var target=[].slice.call(view.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),a[href]'))
+    .filter(function(n){return !radar.contains(n)&&n.getClientRects().length;})[0]||document.getElementById("rsFull");
+  if(target) target.focus({preventScroll:true});
+}
 function mapFallback(id){
   var el=document.getElementById(id);
   if(el&&el.closest(".maplock-wrap"))el.closest(".maplock-wrap").classList.add("map-unavailable");
   var href=id==="radar"?"https://radar.weather.gov/station/KLSX/standard":"https://www.weather.gov/wrh/timeseries?site=KSTL";
   if(!el) return;
   // Rebuilding the panel replaces the focused retry button; hand focus to its replacement.
-  var hadFocus=el.contains(document.activeElement)&&document.activeElement!==el;
+  var hadFocus=focusInside(el);
   el.innerHTML='<div class="imgfail">Map didn’t load. <button type="button" data-retry-maps>Retry maps</button> <a href="'+href+'" target="_blank" rel="noopener">'+(id==="radar"?"Open NWS radar":"Open NWS obs")+' ↗</a></div>';
   if(hadFocus) el.querySelector('[data-retry-maps]').focus({preventScroll:true});
 }
@@ -112,20 +126,27 @@ function ensureMaps(){
     else radarEl.innerHTML='<div class="imgfail" role="status">Loading map…</div>';
   }
   if(!stnMap&&feedRequested("stations")){
-    var stnEl=document.getElementById("stnmap");
-    if(stnEl&&!stnEl.querySelector('[data-retry-maps]')) stnEl.innerHTML='<div class="imgfail" role="status">Loading station map…</div>';
+    var stnEl=document.getElementById("stnmap"), stnLoad=stnEl&&stnEl.querySelector('[data-load-stations]');
+    // A focused Load button stays in place as a busy button; removing it would drop focus.
+    if(stnLoad&&stnLoad===document.activeElement){stnLoad.textContent="Loading station map…";stnLoad.setAttribute("aria-disabled","true");stnEl.setAttribute("aria-busy","true");}
+    else if(stnEl&&!stnEl.querySelector('[data-retry-maps]')) stnEl.innerHTML='<div class="imgfail" role="status">Loading station map…</div>';
   }
   syncRadarBadge();syncSkyMeta();
   mapsInFlight=ensureMapLibraries().then(function(){mapStage("Requesting basemap style (tiles.openfreemap.org)");return loadMapStyle(theme);}).then(function(style){
     if(!rvMap){
-      try{document.getElementById("radar").innerHTML="";initRadarMap(style);document.getElementById("radar").closest(".maplock-wrap").classList.remove("map-unavailable");}
+      var radarFocus=focusInside(document.getElementById("radar"));
+      try{document.getElementById("radar").innerHTML="";initRadarMap(style);document.getElementById("radar").closest(".maplock-wrap").classList.remove("map-unavailable");
+        if(radarFocus) focusRadarControl();}
       catch(e){
         var failedRadar=rvMap;rvMap=null;rvBase=null;baseLabels=null;
         removePartialMap(failedRadar);mapBoot.phase="error";mapStage("Radar initialization: "+e.message);mapFallback("radar");
       }
     }
     if(!stnMap&&feedRequested("stations")){
-      try{document.getElementById("stnmap").innerHTML="";initStationMap(style);renderStationLayer();}
+      var stnFocus=focusInside(document.getElementById("stnmap"));
+      try{document.getElementById("stnmap").innerHTML="";document.getElementById("stnmap").removeAttribute("aria-busy");initStationMap(style);renderStationLayer();
+        // Leaflet makes the station map container focusable (keyboard navigation is on).
+        if(stnFocus) document.getElementById("stnmap").focus({preventScroll:true});}
       catch(e){
         var failedStation=stnMap;stnMap=null;stnBase=null;
         removePartialMap(failedStation);mapStage("Station initialization: "+e.message);mapFallback("stnmap");

@@ -991,11 +991,23 @@ scroll here" with a Load station map button (which calls `requestContext("statio
 "Loading station map…" while the libraries arrive. An empty grey box looked like a map with no
 stations. Map failure still replaces it with the retry panel.
 
-**A retry never drops focus.** While maps retry, the radar's Retry button is `aria-disabled`, not
-`disabled`: a focused button that becomes disabled drops focus to `<body>`, and an automatic retry
-(the station card coming into range) could start while a keyboard reader sat on it, including in
-the fullscreen dialog, which then no longer contained focus. A failed retry rebuilds the panel and
-hands focus to the new Retry button when the old one had it.
+**Replacing a map control never drops focus.** Each place where map startup replaces a control
+someone may have focused now checks first and hands focus on (`focusInside()` in
+`map-runtime.js`):
+
+- While maps retry, the radar's Retry button is `aria-disabled`, not `disabled`. A focused button
+  that becomes disabled drops focus to `<body>`, and an automatic retry (the station card coming
+  into range) could start while a keyboard reader sat on it, including in the fullscreen dialog,
+  which then no longer contained focus.
+- A failed retry rebuilds the panel and focuses the new Retry button. A successful one replaces the
+  panel with the map. The radar map is built with `keyboard:false`, so its container cannot take
+  focus; `focusRadarControl()` moves it to the first visible control in the radar view outside the
+  map, which is inside the dialog when fullscreen is open.
+- A focused "Load station map" button stays in place as a busy button while the libraries load.
+  When the map replaces it, focus moves to the station map container, which Leaflet makes
+  focusable.
+- Crossing into the phone layout with focus in search or saved locations opens the panel
+  (`header.loc-open`) instead of hiding the focused control.
 
 **Map diagnostics behind `?debug`.** The disclosure under the radar was for whoever debugs map
 tiles. `initMapDiagnostics()` now builds it only when the URL has `?debug`. The boot log behind it

@@ -432,6 +432,17 @@ async function main() {
       release();await page.evaluate(()=>window.autoRetry);
       assert(await retry.isEnabled());assert(await retry.evaluate(b=>b===document.activeElement),'Focus survives the failed retry');
     });
+    await run('a successful map retry keeps focus inside the fullscreen dialog',config('retry success focus',{maps:true,mapLibrariesDown:true}),async session=>{
+      const {page}=session;
+      await page.waitForFunction(()=>mapsInFlight===null);await page.evaluate(()=>{deferredFeeds.stations=true;});
+      await page.locator('#rsFull').click();assert.equal(await page.locator('#radarCard').getAttribute('aria-modal'),'true');
+      session.change(config('retry success recovered',{maps:true}));
+      await page.locator('#radar [data-retry-maps]').focus();await page.keyboard.press('Enter');
+      await page.waitForFunction(()=>rvMap&&mapsInFlight===null);
+      const focus=await page.evaluate(()=>({tag:document.activeElement.tagName,inside:document.getElementById('radarCard').contains(document.activeElement)}));
+      assert(focus.inside&&focus.tag!=='BODY','Focus moves to a radar control when the map replaces the retry panel: '+JSON.stringify(focus));
+      await page.keyboard.press('Escape');
+    });
     await run('risk explanations keep their pressed target during a failed radar retry',config('risk retry',{maps:true,mapLibrariesDown:true}),async({page})=>{
       await page.locator('#radar [data-retry-maps]').waitFor();
       // Keep the lazy station observer from starting this retry before pointerdown.
@@ -525,12 +536,19 @@ async function main() {
       // The station plot never shows an empty box before its map starts.
       assert.equal(await page.evaluate(()=>stnMap),null);
       await expectText(page,'#stnmap',/loads when you scroll here/i);
-      // Pressed without scrolling: scrolling would let the approach observer start the map first.
-      await page.locator('#stnmap [data-load-stations]').evaluate(b=>b.click());
+      // Keyboard activation: focus must follow the loader to the station map, never to <body>.
+      await page.locator('#stnmap [data-load-stations]').focus();await page.keyboard.press('Enter');
       await page.waitForFunction(()=>stnMap&&document.querySelector('#stnmap .leaflet-map-pane'));
+      assert.equal(await page.evaluate(()=>document.activeElement.id),'stnmap','Focus lands on the station map that replaced the button');
     },390);
     await run('desktop keeps search open and diagnostics behind ?debug',config('desktop header',{maps:true,search:'?debug'}),async({page})=>{
       assert(await page.locator('#locSearch').isVisible(),'Desktop shows search without a tap');
+      // Narrowing to the phone layout while typing must not hide the focused input.
+      await page.locator('#locSearch').focus();await page.setViewportSize({width:390,height:900});
+      await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+      assert(await page.locator('#locSearch').isVisible(),'The folding panel stays open around a focused input');
+      assert.equal(await page.evaluate(()=>document.activeElement.id),'locSearch','Focus survives the breakpoint');
+      await page.setViewportSize({width:1440,height:900});
       assert(await page.locator('#locationTools').isVisible());
       await page.waitForFunction(()=>typeof rvMap!=='undefined'&&rvMap);
       assert.equal(await page.locator('#radarCard .map-diagnostics').count(),1,'?debug turns the diagnostics panel on');

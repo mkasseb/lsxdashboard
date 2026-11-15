@@ -607,6 +607,18 @@ function initLocationUI(){
     header.classList.add("loc-open");
     inp.scrollIntoView({block:"center"});inp.focus({preventScroll:true});
   });
+  /* Crossing into the phone layout folds the panel. If focus is inside it (the reader is typing a
+     search when the window narrows or the phone rotates), open it instead: hiding a focused input
+     drops focus to <body>. */
+  if(window.matchMedia){
+    var phone=window.matchMedia("(max-width:680px)"), header=document.querySelector("header");
+    var onPhone=function(){
+      if(!phone.matches) return;
+      var a=document.activeElement;
+      if(a&&a!==document.body&&(document.querySelector(".locbar").contains(a)||document.getElementById("locationTools").contains(a))) header.classList.add("loc-open");
+    };
+    if(phone.addEventListener) phone.addEventListener("change",onPhone); else if(phone.addListener) phone.addListener(onPhone);
+  }
   document.querySelector("header").addEventListener("keydown",function(e){
     if(e.key==="Escape"&&document.querySelector("header").classList.contains("loc-open")) closeLocationPanel(true);
   });
