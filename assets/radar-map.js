@@ -215,6 +215,8 @@ function initRadarMap(style){
   drawMcdPolygons();            // same deal for any mesoscale discussion that beat the map here
   drawWatchPolygons();          // …and any watch fills
   if(typeof drawStormReports==="function") drawStormReports();   // storm report dots, if any
+  // A storm layout that began before the map existed still gets its county-scale view.
+  if(typeof stormCamera!=="undefined"&&stormCamera.pending&&document.documentElement.classList.contains("lsx-active")) enterStormCamera();
 }
 /* ---- RADAR LOOP ----------------------------------------------------------
    The WMS advertises ~2 h of past sweeps in its time dimension, and honours a

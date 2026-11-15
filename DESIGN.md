@@ -939,9 +939,9 @@ folded changes:
   move focus to what they reveal, and a radar move deferred by fullscreen is applied when
   fullscreen closes.
 
-There is no auto-play of the radar loop and no camera change. A moving map nobody asked for costs
-bandwidth on a phone in a storm, and `prefers-reduced-motion` readers would need a separate path.
-The loop button is right under the map.
+There is no auto-play of the radar loop. A moving map nobody asked for costs bandwidth on a phone
+in a storm, and `prefers-reduced-motion` readers would need a separate path. The loop button is
+right under the map. (The camera does change once on entry; see "the storm camera" below.)
 
 ## November 2026: one of each, and less to open
 
@@ -1012,4 +1012,57 @@ someone may have focused now checks first and hands focus on (`focusInside()` in
 **Map diagnostics behind `?debug`.** The disclosure under the radar was for whoever debugs map
 tiles. `initMapDiagnostics()` now builds it only when the URL has `?debug`. The boot log behind it
 records every stage regardless, so turning the flag on after a failure loses nothing.
+
+## November 2026: the answer beside the reading, and a radar sized by the weather
+
+**The takeaway sits beside the temperature.** Your day's lead ("Below freezing by 7am tomorrow",
+"Excellent outdoor conditions") moved into Now, next to the reading, so the answer and the evidence
+share the first screen. It is moved, not copied: Your day keeps its supporting rows, its status
+line and "How this is worked out", and no longer prints a lead of its own. The lead lives in a
+`#ccTake` slot inside `.cc-main`, filled the way `#ccToday` and `#ccUv` are. `loadCurrent()` and
+the observation-outage panel both build the slot and repaint it. So a dead observation feed
+rebuilds Now without taking the forecast-derived takeaway with it, which is the same
+failure-ownership rule that keeps the hourly chart out of `#current`.
+
+`paintNowTakeaway()` re-checks the hourly feed itself rather than trusting the last rendered
+string. An overdue hourly check, or a location change (which resets the hourly feed to loading and
+`#current` with it), means an observation repaint paints no takeaway. On phones it wraps under the
+reading. Above 680px, when there is a takeaway, the reading row spans the card (temperature left,
+takeaway right) with today's range and the metrics under it. Without one, the original two-column
+grid stays.
+
+**Rain-chance bars.** The hourly chart already drew one bar per hour with a chance above 0%, in the
+band under the temperature line (`.h24-bar`). A stress scenario now pins that, and pins that a dry
+forecast draws none.
+
+**Calm-day radar.** On phones and tablets the radar stacks under Now, so a full-size empty map
+pushes the forecasts down. `radarCalm()` in `dashboard-context.js` decides from data the page
+already has, never from radar pixels: a dead tile layer looks exactly like a clear sky. The radar
+is calm only when all of these hold:
+
+- the hourly feed is verified (not partial, saved, loading, stale or unavailable);
+- every one of the next 6 hours is covered, with no gap, by a period whose rain chance is known
+  and below 20% (NWS's "slight chance" starts at 20), and whose wording names no precipitation;
+- the alert feed is verified and nothing covers this location;
+- the storm layout is off.
+
+Anything missing or uncertain keeps the full-size radar. `html.radar-calm` then sets the phone radar
+to 16:9 (from 1.2:1, about 100px shorter at 390px) and the tablet radar to 2:1. Above 1000px
+nothing changes: there the radar sits beside the Now column, which is already taller, so a smaller
+map would only leave a gap under it. The storm layout and fullscreen always win (`:not(.lsx-active)`,
+`body:not(.radar-full)`). `syncRadarCalm()` runs from `freshnessCheck()` (alerts, resets, and every
+30 seconds, so an aging forecast un-shrinks the map), and again right after the hourly periods land,
+because `feedUpdate("hourly")` runs before they are stored. The reason is kept in
+`data-radar-calm` for debugging.
+
+**The storm camera.** Entering the storm layout zooms the radar to roughly county scale around the
+selected point: the largest zoom at which the map's shorter side still covers 40 km
+(`stormCameraZoom()`, clamped to 9–11), which is zoom 9 on a phone and 10 on a desktop. At the old
+zoom 7 a storm report 8 km away sat under the "you" pin; at county scale it is 30px or more clear.
+It happens once per entry, with no animation and no loop playback. If the map is still loading
+when the layout begins, the zoom waits for `requestMaps()` and re-checks that the layout is still
+on, and `initRadarMap()` applies it if a later retry is what brings the map up. Leaving the layout
+restores the earlier view, but only if the reader has not moved the map since (same zoom, centre
+within 3px, because resizes re-centre with sub-pixel rounding). A camera the reader moved is
+theirs. A location reset forgets the saved view.
 

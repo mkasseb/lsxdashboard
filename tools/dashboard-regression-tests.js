@@ -322,7 +322,8 @@ async function main() {
       await p.waitForFunction(() => document.getElementById('aqiCard').classList.contains('show'));
       assert.match(await p.locator('#aqiCard').innerText(), /modeled/i);
       assert.equal(await p.locator('#aqiCard a[href*="airnow"]').count() >= 1, true);
-      await p.waitForFunction(() => /Modeled AQI 155/.test(document.getElementById('glance').innerText));
+      // Your day prints its lead beside the temperature (#ccTake) and its rows in #glance.
+      await p.waitForFunction(() => /Modeled AQI 155/.test(document.getElementById('ccTake').innerText + ' ' + document.getElementById('glance').innerText));
     }, {aqi:155});
 
     await run('observation failure preserves independently checked air quality and UV', async p => {

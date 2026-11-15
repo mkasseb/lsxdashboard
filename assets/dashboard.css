@@ -2222,3 +2222,33 @@ body.radar-full #radarCard#radarCard{background:var(--bg);border:0;
 .aqi-modeled{font-family:var(--fm);font-size:11px;font-weight:400;letter-spacing:.02em;color:var(--muted)}
 .aqi-measured{overflow-wrap:anywhere}
 .aqi-model-note{margin-top:4px}
+
+/* --- Now and Your day, joined (PR: layout) ---
+   Your day's lead sits in .cc-main beside the temperature, so the answer and the reading share the
+   first screen. It wraps under the reading when the row is too narrow. The Your day card below
+   keeps the supporting rows. */
+.cc-take{flex:1 1 240px;min-width:0}
+.cc-take:empty{display:none}
+.cc-take .glance-lead{padding-block:2px}
+.cc-take .glance-headline{font-size:24px}
+.cc-take .glance-lead-ico .ic{width:28px;height:28px}
+.cc-take .glance-detail{font-size:13px}
+.cc-take .glance-action{font-size:15px}
+@media(max-width:680px){.cc-take{flex-basis:100%}.cc-take .glance-headline{font-size:22px}}
+/* With a takeaway, the reading row spans the card so the takeaway sits beside the temperature;
+   today's range and the metrics move under it. Without one the original two-column grid stays. */
+@media(min-width:681px){
+  #currentCard #current:has(.cc-take:not(:empty)) .cc-main{grid-column:1/-1;grid-row:1;flex-wrap:nowrap;align-items:center;gap:24px}
+  #currentCard #current:has(.cc-take:not(:empty)) .cc-today{grid-column:1/-1;grid-row:2}
+  #currentCard #current:has(.cc-take:not(:empty)) .cc-grid{grid-column:1/-1;grid-row:3;grid-template-columns:repeat(3,minmax(0,1fr))}
+  #currentCard #current:has(.cc-take:not(:empty)) .cc-expo{grid-row:4}
+}
+/* Calm-day radar (syncRadarCalm in dashboard-context.js). Only where the radar stacks under Now:
+   above 1000px it sits beside the taller Now column, so a smaller map would save no height. The
+   storm layout and fullscreen always win. */
+@media(max-width:1000px){
+  :root.radar-calm:not(.lsx-active) body:not(.radar-full) #radarCard .imgwrap{aspect-ratio:2/1}
+}
+@media(max-width:680px){
+  :root.radar-calm:not(.lsx-active) body:not(.radar-full) #radarCard .imgwrap{aspect-ratio:16/9}
+}

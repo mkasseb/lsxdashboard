@@ -1961,6 +1961,43 @@ async function checkGridLoaderIsolation() {
   check('storm reports: unattributable features are a gap, not "no reports"',[odd.length,odd.invalid].join(),'0,3');
 }
 
+/* Calm-day radar: the map shrinks only on positive evidence of no nearby precipitation. Any gap,
+   unknown, outage, local alert or storm layout keeps the full-size radar. */
+{
+  const rc=new Function([lift(/^var RADAR_CALM_HOURS=.*$/m,'RADAR_CALM_HOURS'),lift(/^var RADAR_CALM_WORDS=.*$/m,'RADAR_CALM_WORDS'),
+    lift(/^function radarCalm\(periods,nowMs,o\)\{[\s\S]*?^\}/m,'radarCalm()')].join('\n')+';return radarCalm;')();
+  const t0=Date.parse('2026-11-15T18:30:00Z'), H=3600000, start=Math.floor(t0/H)*H;
+  const hours=(n,f)=>Array.from({length:n},(_,i)=>Object.assign({startTime:new Date(start+i*H).toISOString(),endTime:new Date(start+(i+1)*H).toISOString(),
+    probabilityOfPrecipitation:{value:0},shortForecast:'Sunny'},f?f(i):{}));
+  const ok={hourlyState:'ready',alertsState:'ready',localAlert:null,stormLayout:false};
+  const calm=(p,o)=>rc(p,t0,Object.assign({},ok,o||{})).calm;
+  check('calm radar: six dry verified hours are calm',calm(hours(8)),true);
+  check('calm radar: a 20% chance is not calm',calm(hours(8,i=>i===4?{probabilityOfPrecipitation:{value:20}}:{})),false);
+  check('calm radar: 19% is still calm',calm(hours(8,i=>i===4?{probabilityOfPrecipitation:{value:19}}:{})),true);
+  check('calm radar: rain beyond six hours does not count',calm(hours(10,i=>i===8?{probabilityOfPrecipitation:{value:90},shortForecast:'Rain'}:{})),true);
+  check('calm radar: precipitation wording at 0% is not calm',calm(hours(8,i=>i===2?{shortForecast:'Patchy Drizzle'}:{})),false);
+  check('calm radar: an unknown chance is not calm',calm(hours(8,i=>i===1?{probabilityOfPrecipitation:{value:null}}:{})),false);
+  check('calm radar: a missing hour is not calm',calm(hours(8).filter((_,i)=>i!==3)),false);
+  check('calm radar: a forecast ending inside the window is not calm',calm(hours(4)),false);
+  check('calm radar: a forecast starting after now is not calm',calm(hours(8).slice(1)),false);
+  check('calm radar: no forecast is not calm',calm([]),false);
+  check('calm radar: malformed periods are not calm',calm([null,{startTime:'x'}]),false);
+  check('calm radar: an unverified hourly feed is not calm',['stale','saved','loading','unavailable','partial'].map(st=>calm(hours(8),{hourlyState:st})).join(),'false,false,false,false,false');
+  check('calm radar: an alert outage is not calm',calm(hours(8),{alertsState:'unavailable'}),false);
+  check('calm radar: a covering alert is not calm',calm(hours(8),{localAlert:{event:'Heat Advisory'}}),false);
+  check('calm radar: the storm layout always wins',calm(hours(8),{stormLayout:true}),false);
+}
+
+/* Storm camera zoom: the largest zoom whose shorter side still covers about a county. */
+{
+  const zf=new Function([lift(/^var STORM_CAMERA_KM=.*$/m,'STORM_CAMERA_KM'),lift(/^function stormCameraZoom\(lat,shortSidePx\)\{[\s\S]*?^\}/m,'stormCameraZoom()')].join('\n')+';return stormCameraZoom;')();
+  check('storm camera: a phone radar lands on zoom 9',zf(38.8,300),9);
+  check('storm camera: a desktop storm radar lands on zoom 10',zf(38.8,560),10);
+  check('storm camera: never zooms out past the county range',zf(38.8,80),9);
+  check('storm camera: never zooms in past street scale',zf(38.8,5000),11);
+  check('storm camera: an unmeasured map falls back to zoom 9',[zf(38.8,0),zf(NaN,500)].join(),'9,9');
+}
+
 checkLiveFeedFailures().then(checkSpcThreatProducts).then(checkForecastRefreshFailure).then(checkGridLoaderIsolation).then(() => {
   if (failed) {
     console.error(`\n${failed} logic test(s) failed`);

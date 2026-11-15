@@ -229,7 +229,7 @@ The full design rationale — what each decision replaced, and why — lives in
 - **Colour is scarce.** Saturated colour means severity, links are blue; that is the whole budget.
   Type carries the hierarchy through the `--fs-*`/`--r-*`/`--sp-*` scales.
 - **The page is ordered by what a visitor came for.** Alerts and active mesoscale discussions,
-  then Now with Your day beneath it beside radar, then hourly beside the seven-day forecast, then
+  then Now (with Your day's one-line takeaway beside the temperature) and Your day beside radar, then hourly beside the seven-day forecast, then
   NWS Key Messages beside the forecast discussion, then local context. Phones read the same order
   in one column. Plain CSS grid places these bands; only the context pack is packed by script.
 - **Calm context stays small.** When every river gauge is verified below action stage with no
@@ -238,7 +238,8 @@ The full design rationale — what each decision replaced, and why — lives in
   look today" under radar until it calms down. Outages and loading states never count as calm.
 - **Radar shares the first screen.** Its desktop viewport is a fixed height independent of
   everything else (400px through 1240px, 440px above); mobile keeps its existing sizing and
-  fullscreen fills the viewport. The same map and explored camera survive resizing;
+  fullscreen fills the viewport. On phones and tablets a verified calm forecast (no precipitation
+  in the next six hours) shrinks it to 16:9 / 2:1; the storm layout zooms it to county scale. The same map and explored camera survive resizing;
   radar and satellite stack on one Leaflet map; the loop targets a 60-minute span, not a sweep
   count; and a dead tile layer is detected per layer so it can never read as clear skies.
   Local KLSX defaults to super-resolution reflectivity; a product selector offers radial velocity
