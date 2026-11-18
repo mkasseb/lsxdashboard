@@ -1425,9 +1425,9 @@ async function main() {
       assert(await page.locator('header').evaluate(el=>el.inert));
       assert(await page.evaluate(()=>{
         const lead=document.querySelector('#ccTake .glance-lead'), row=document.querySelector('#glance li');
-        const focus=document.activeElement;
+        const focus=document.activeElement, title=document.getElementById('keyMessagesTitle').firstChild;
         renderTheCall(true);renderTheCall(true);
-        return !!lead&&!!row&&lead.isConnected&&row.isConnected&&document.activeElement===focus;
+        return !!lead&&!!row&&lead.isConnected&&row.isConnected&&title.isConnected&&document.activeElement===focus;
       }),'unchanged observation/climate guidance preserves DOM nodes and fullscreen focus');
       for(let i=0;i<20;i++){await page.keyboard.press('Tab');assert(await page.evaluate(()=>document.getElementById('radarCard').contains(document.activeElement)));}
       await page.keyboard.press('Escape');assert(!(await page.locator('header').evaluate(el=>el.inert)));

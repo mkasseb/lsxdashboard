@@ -1664,7 +1664,7 @@ function renderTheCall(briefingOnly){
 
   var model=buildBottomLine(candidates,callLocalAlert);
   renderTheCall._nbmContext={model:model,candidates:candidates};
-  renderNwsMessages();
+  if(!briefingOnly) renderNwsMessages();
   renderGlance(H,hourlyReady,candidates,{now:now,obs:obs,climateFor:climateFor,sunset:sunTimes(current.lat,current.lon,now).set});
 }
 
