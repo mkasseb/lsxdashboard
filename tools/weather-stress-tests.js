@@ -521,7 +521,7 @@ async function main() {
     await run('official messages remain independent of modeled later storms',config('message horizons',{weekRain:true}),async({page})=>{
       await expectText(page,'#keyMessagesTitle',/NWS Key Messages/);
       await expectText(page,'#callRow',/southeast Missouri and southwest Illinois/);
-      assert(!/Storms possible Saturday|Rain unlikely/.test(await page.locator('#callRow').innerText()));
+      assert(!/Storms possible Saturday|Dry today/.test(await page.locator('#callRow').innerText()));
       await page.locator('#briefWhy summary').click();await page.locator('#briefWhy summary').focus();
       await page.evaluate(()=>loadForecast());
       assert(await page.locator('#briefWhy').evaluate(el=>el.open));
