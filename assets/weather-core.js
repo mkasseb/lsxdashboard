@@ -841,12 +841,15 @@ function bottomLineHourlyCandidates(H,opts){
     "Feels like "+coldest.fl+"°.","Limit time outside and cover exposed skin.","danger");
 
   var localNow=weatherParts(now), today=localNow.key;
-  var morning=null,trough=null,firstFreeze=null,frost=null,high=null;
+  var morning=null,trough=null,firstFreeze=null,coldestFreeze=null,frost=null,high=null;
   timed.forEach(function(h){
     if(h.t==null) return;
     if(h.hr>=6&&h.hr<=9&&(!morning||h.t<morning.t)) morning=h;
     if(H[3]&&h.d>=H[3].d&&(!trough||h.t<trough.t)) trough=h;
-    if(!firstFreeze&&h.t<=32) firstFreeze=h;
+    if(h.t<=32){
+      if(!firstFreeze) firstFreeze=h;
+      if(h.d>now&&(!coldestFreeze||h.t<coldestFreeze.t)) coldestFreeze=h;
+    }
     if(!frost&&h.hr>=3&&h.hr<=9&&h.clear&&h.mph!=null&&h.mph<=5&&h.dew!=null&&h.dew<=32&&h.t<=36) frost=h;
     if(h.d>now&&h.day&&weatherParts(h.d).key===today&&(!high||h.t>high.t)) high=h;
   });
@@ -866,20 +869,30 @@ function bottomLineHourlyCandidates(H,opts){
      the colour still means something on the night it matters. */
   function freezeTone(t){ return t!=null&&t<=24?"danger":"warning"; }
   function freezeWhen(h){ return h.d<=now?" now":" by "+when(h.d); }
-  // A fresh observed freeze can describe now even after the forecast hour has aged out.
-  var observedFreeze=opts.obs&&opts.obs.t<=32&&currentHour&&currentHour.d<timingCutoff;
-  if(observedFreeze) firstFreeze=currentHour;
-  if(firstFreeze&&(!morning||mMin>32||observedFreeze)) push(86,"cold","cold","Cold",
+  var observedFreeze=opts.obs&&opts.obs.t<=32&&currentHour;
+  var hardFreezeAction="Protect plants, pipes and pets; cover exposed skin.";
+  var freezeAction="Expect frost; scrape windshields and watch for slick spots.";
+  var slickAction="Watch for freezing temperatures and slick spots where surfaces are wet.";
+  // The observed freeze describes now. Keep the colder forecast and its precautions if
+  // temperatures are still falling, and carry the observed reading in that same cue.
+  if(observedFreeze){
+    var upcoming=!!(coldestFreeze&&coldestFreeze.t<currentHour.t);
+    var freeze=upcoming?coldestFreeze:currentHour;
+    push(upcoming&&freeze===morning?85:86,"cold","cold","Cold",
+      (freeze.t<=24?"Hard freeze":"Below freezing")+freezeWhen(freeze),
+      upcoming?currentHour.t+"° now · low "+freeze.t+"°.":currentHour.t+"°.",
+      freeze.t<=24?hardFreezeAction:upcoming?freezeAction:slickAction,freezeTone(freeze.t));
+  }else if(firstFreeze&&(!morning||mMin>32)) push(86,"cold","cold","Cold",
     (firstFreeze.t<=24?"Hard freeze":"Below freezing")+freezeWhen(firstFreeze),
-    firstFreeze.t+"°.","Watch for freezing temperatures and slick spots where surfaces are wet.",freezeTone(firstFreeze.t));
-  if(cold==="freezing") push(85,"cold","cold","Cold",
+    firstFreeze.t+"°.",slickAction,freezeTone(firstFreeze.t));
+  else if(cold==="freezing") push(85,"cold","cold","Cold",
     (mMin<=24?"Hard freeze":"Below freezing")+freezeWhen(morning),
-    "Low "+mMin+"°.",mMin<=24?"Protect plants, pipes and pets; cover exposed skin.":"Expect frost; scrape windshields and watch for slick spots.",freezeTone(mMin));
+    "Low "+mMin+"°.",mMin<=24?hardFreezeAction:freezeAction,freezeTone(mMin));
   else if(cold==="falling") push(66,"trend-down","cold","Temperature trend","Sharp temperature drop",
     "Falling "+(nowT-cMin)+"° to "+cMin+"° by "+when(trough.d)+".","","warning");
   else if(cold==="cold"&&!frost&&!firstFreeze) push(unusual?56:48,"cold","cold","Temperature","Cold morning",
     mMin+"° "+near(morning.d)+coldDetail+".","","neutral");
-  if(frost&&!firstFreeze) push(80,"cold","frost","Frost","Frost possible",
+  if(frost&&!firstFreeze&&!observedFreeze) push(80,"cold","frost","Frost","Frost possible",
     "On windshields and roofs "+near(frost.d)+".","","warning");
 
   for(i=0;i<timed.length;i++){ if(timed[i].fog){
@@ -1273,34 +1286,46 @@ function glanceWear(H,opts){
   var lo=Math.min.apply(null,fl), hi=Math.max.apply(null,fl), swing=hi-lo;
   var wet=out.some(function(h){ return h.pop!=null&&h.pop>=40&&!h.wint; });
   var wintry=out.some(function(h){ return h.pop!=null&&h.pop>=30&&h.wint; });
-  function tier(t){ return t<=20?0:t<=35?1:t<=50?2:t<=62?3:t<88?4:5; }
-  var clothes=["Heavy coat, hat and gloves","Winter coat","Warm jacket","Light jacket or sweater","Short sleeves","Light, breathable clothes"];
-  var first=tier(fl[0]), wear=clothes[first], transition=null, warmest=first, warmerAt=null, evening="";
-  var sunset=opts.sunset;
-  for(var i=1;i<out.length;i++){
-    // Break at missing hours or overnight so a crossing isn't timed from a gap.
-    if(out[i].d-out[i-1].d!==3600000) break;
-    var prev=tier(fl[i-1]), next=tier(fl[i]), at=out[i].d;
-    if(next>warmest){ warmest=next; warmerAt=at; }
-    if(!transition&&next!==first){
-      transition=at;
-      wear+=" until ~"+whenWord(at,now)+", then "+clothes[next].toLowerCase();
-    }
-    if(!evening&&warmerAt&&next<prev&&next<=2&&sunset&&at>=sunset&&weatherParts(at).key===weatherParts(sunset).key){
-      var sunClock=weatherTime(sunset,{hour:"numeric",minute:"2-digit"});
-      evening=clothes[next]+" again "+(at-sunset<3600000?"after sunset ("+sunClock+")":"around "+whenWord(at,now)+" after sunset");
-    }
+  function limits(h){
+    var normal=opts.climateFor&&opts.climateFor(weatherParts(h.d).key);
+    return [20,35,50,normal&&normal.hi!=null&&normal.hi<60?69:62,87];
   }
-  if(warmerAt&&warmerAt>transition) wear+=" · "+clothes[warmest].toLowerCase()+" by ~"+whenWord(warmerAt,now);
+  var edges=out.map(limits);
+  function tier(i){
+    var next=0;
+    while(next<edges[i].length&&fl[i]>edges[i][next]) next++;
+    return next;
+  }
+  var clothes=["Heavy coat, hat and gloves","Winter coat","Warm jacket","Light jacket or sweater","Short sleeves","Light, breathable clothes"];
+  var start=0, cutoff=+now+3600000;
+  while(opts.now&&start+1<out.length&&out[start+1].d<=cutoff) start++;
+  var first=tier(start), wear=clothes[first], change=null, sunset=opts.sunset;
+  for(var i=start+1;i<out.length;i++){
+    // Missing hours can't establish a crossing or show that a new tier will hold.
+    if(out[i].d-out[i-1].d!==3600000) break;
+    var next=tier(i), diff=Math.abs(next-first);
+    if(!diff) continue;
+    var holds=i+1<out.length&&out[i+1].d-out[i].d===3600000&&tier(i+1)===next;
+    var clears=next>first?fl[i]-edges[i][next-1]>=2:edges[i][next]-fl[i]>=2;
+    if((holds||clears)&&(!change||diff>change.diff||diff===change.diff&&next<change.tier))
+      change={at:out[i].d,tier:next,diff:diff};
+  }
+  if(change){
+    var label=clothes[change.tier].toLowerCase();
+    if(change.tier<first&&sunset&&change.at>=sunset&&weatherParts(change.at).key===weatherParts(sunset).key){
+      var sunsetText=change.at-sunset<3600000?"after sunset ("+weatherTime(sunset,{hour:"numeric",minute:"2-digit"})+")":
+        "around "+whenWord(change.at,now)+" after sunset";
+      wear+=", then "+label+" "+sunsetText;
+    }else wear+=" until ~"+whenWord(change.at,now)+", then "+label;
+  }
   var extras=[];
-  if(!transition&&swing>=18&&lo<=62) extras.push("dress in layers");
-  if(evening) extras.push(evening.charAt(0).toLowerCase()+evening.slice(1));
+  if(!change&&swing>=18&&lo<=62) extras.push("dress in layers");
   if(wintry) extras.push("waterproof boots");
   if(wet) extras.push("bring an umbrella");
   return {icon:"walk",topic:"wear",label:"Wear",headline:wear,
           detail:"Feels like "+(lo===hi?lo+"°":lo+"–"+hi+"°")+" while you're out"
             +(extras.length?" · "+extras.join(", "):"")+".",
-          advice:wear+"."+(evening?" "+evening+".":"")+
+          advice:wear+"." +
             (wintry?" Wear waterproof boots.":"")+(wet?" Bring an umbrella.":""),
           lo:lo,hi:hi,umbrella:wet,boots:wintry,layers:swing>=18&&lo<=62};
 }

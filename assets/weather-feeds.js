@@ -258,7 +258,7 @@ function loadCurrent(){
       +'</div>';
     renderHeroToday();    // today's range + sun times, once the 7-day has landed
     renderUvNow();        // UV, once Open-Meteo has answered
-    renderTheCall();   // Rebuild the takeaway with the same fresh reading as the hero.
+    renderTheCall(true);   // Rebuild the takeaway with the same fresh reading as the hero.
     renderCurrentCtx();   // normals + today's records, once climate context has landed
     if(typeof renderAqiMini==="function") renderAqiMini();   // re-fill the AQI line after the re-render
   }).catch(function(){
@@ -1273,7 +1273,7 @@ function loadClimate(){
       renderVsNormal();
       renderCurrentCtx();
       renderContext();
-      renderTheCall();
+      renderTheCall(true);
     }
     return ask(st.sid).then(function(local){
       if(!fresh()) return;   // user moved while this was in flight
@@ -1291,7 +1291,7 @@ function loadClimate(){
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
     feedUpdate("climate","unavailable");
-    climate.normHi=null; climate.normLo=null; renderVsNormal(); renderTheCall();
+    climate.normHi=null; climate.normLo=null; renderVsNormal(); renderTheCall(true);
     grid.innerHTML='<div class="empty">Climate normals unavailable. <a href="https://xmacis.rcc-acis.org/" target="_blank" rel="noopener">xmACIS ↗</a></div>';
   });
 }

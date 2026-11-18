@@ -694,7 +694,7 @@ function renderCurrentUnavailable(message){
   document.getElementById("current").innerHTML='<div class="empty" role="status"><b>Current observation unavailable.</b> '+message+'</div>'
     +'<div class="cc-take" id="ccTake"></div>'
     +currentExposure()+'<div class="stn">UV &amp; modeled air quality: Open-Meteo (CAMS) · measured AQI: <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a></div>';
-  renderUvNow(); renderAqiMini(); renderTheCall();
+  renderUvNow(); renderAqiMini(); renderTheCall(true);
 }
 
 
@@ -1609,10 +1609,12 @@ function renderBriefingStatus(){
   var el=document.getElementById("briefStatus"); if(!el) return;
   var notes=[];
   if(feedState(feedChecks.alerts,Date.now(),FEEDS.alerts.age)!=="ready") notes.push("Alert status is unverified. Check official NWS warnings.");
-  el.textContent=notes.join(" "); el.hidden=!notes.length;
+  var text=notes.join(" ");
+  if(el.textContent!==text) el.textContent=text;
+  if(el.hidden!==!notes.length) el.hidden=!notes.length;
 }
-function renderTheCall(){
-  if(typeof syncActiveMode==="function") syncActiveMode();   // every alert repaint ends here
+function renderTheCall(briefingOnly){
+  if(!briefingOnly&&typeof syncActiveMode==="function") syncActiveMode();   // every alert repaint ends here
   var card=document.getElementById("callCard"), row=document.getElementById("callRow");
   if(!card||!row) return;
   var now=new Date(), H=bottomLineHours(forecastWindowHours(smart.hourlyAll,24,Date.now()));
@@ -1663,7 +1665,7 @@ function renderTheCall(){
   var model=buildBottomLine(candidates,callLocalAlert);
   renderTheCall._nbmContext={model:model,candidates:candidates};
   renderNwsMessages();
-  renderGlance(H,hourlyReady,candidates,{now:now,obs:obs,sunset:sunTimes(current.lat,current.lon,now).set});
+  renderGlance(H,hourlyReady,candidates,{now:now,obs:obs,climateFor:climateFor,sunset:sunTimes(current.lat,current.lon,now).set});
 }
 
 /* ============ YOUR DAY ============
@@ -1691,7 +1693,11 @@ function paintNowTakeaway(){
     el=document.createElement("div"); el.className="cc-take"; el.id="ccTake";
     cur.insertBefore(el,cur.firstChild);
   }
-  if(el&&el.innerHTML!==html) el.innerHTML=html;
+  // Compare the markup we wrote, since the DOM serializes SVG and entities differently.
+  if(el&&(paintNowTakeaway._slot!==el||paintNowTakeaway._html!==html)){
+    el.innerHTML=html;
+    paintNowTakeaway._slot=el; paintNowTakeaway._html=html;
+  }
 }
 function renderGlance(H,hourlyReady,candidates,opts){
   var box=document.getElementById("glance"), card=document.getElementById("glanceCard");
@@ -1700,7 +1706,7 @@ function renderGlance(H,hourlyReady,candidates,opts){
   var hourlyState=feedState(feedChecks.hourly,now,FEEDS.hourly.age);
   if(feedState(feedChecks.alerts,now,FEEDS.alerts.age)!=="ready")
     notes.push("Alert status is unverified. Check official NWS warnings.");
-  var html, leadHtml="", scopeText="Next 24 hours";
+  var html, leadHtml="";
   var usable=hourlyState==="ready"||hourlyState==="partial";
   if(!usable||!hourlyReady){
     // "saved" (snapshot paint) and "loading" wait for the live check; only a real failure,
@@ -1736,7 +1742,6 @@ function renderGlance(H,hourlyReady,candidates,opts){
       // Rain answers a standing question even if it leads or falls outside the support limit.
       if(rain&&rows.indexOf(rain)<0) rows.unshift(rain);
       var hasLater=rows.length>0&&rows[rows.length-1].horizon==="week";
-      if(hasLater) scopeText+=" + later outlook";
       if(wear&&!mergeWear&&!L.alertAware) rows.splice(Math.min(rows.length-(hasLater?1:0),2),0,wear);
       /* On phones the rain answer stays visible. Hiding a single row would cost a button of
          the same height, so collapse only starts at two hidden rows. Wider screens show all. */
@@ -1753,14 +1758,13 @@ function renderGlance(H,hourlyReady,candidates,opts){
     }
   }
   renderGlance._leadHtml=leadHtml; paintNowTakeaway();
-  var scope=document.getElementById("glanceScope");
-  if(scope&&scope.textContent!==scopeText) scope.textContent=scopeText;
   var noteText=notes.join(" ");
   if(statusEl&&statusEl.textContent!==noteText){statusEl.textContent=noteText;statusEl.hidden=!noteText;}
   box.classList.toggle("glance-open",!!renderGlance._open);
-  if(box.innerHTML!==html){
+  if(renderGlance._slot!==box||renderGlance._html!==html){
     var moreFocused=document.activeElement&&document.activeElement.classList.contains("glance-more");
     box.innerHTML=html;
+    renderGlance._slot=box; renderGlance._html=html;
     var more=box.querySelector(".glance-more");
     if(moreFocused&&more) more.focus({preventScroll:true});
   }

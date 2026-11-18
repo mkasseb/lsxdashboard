@@ -95,12 +95,14 @@ async function card(p){
       const lead=await p.locator('#ccTake').textContent();
       assert.match(lead,/Chilly start, mild afternoon.*34° now → 66° by 2pm/);
       assert.doesNotMatch(lead,/Cold morning|8am/);
-      assert.match(await p.locator('#ccTake .glance-action').textContent(),/until ~9am.*short sleeves/);
+      const advice=await p.locator('#ccTake .glance-action').textContent();
+      assert.match(advice,/Warm jacket until ~12pm, then light jacket or sweater/);
+      assert.doesNotMatch(advice,/9am|short sleeves/i);
       const rows=await p.locator('#glance .glance-list li').allTextContents();
       assert.equal(rows.filter(r=>r.startsWith('Rain')).length,1);
       assert.match(rows.find(r=>r.startsWith('Rain')),/Dry today/);
       assert.match(rows.at(-1),/^Later.*Rain possible Saturday night.*46%/);
-      assert.equal(await p.locator('#glanceScope').textContent(),'Next 24 hours + later outlook');
+      assert.equal(await p.locator('#glanceScope').textContent(),'Next 24 hours');
       assert(!rows.some(r=>r.startsWith('Wear')),'temperature lead includes Wear advice');
       await p.evaluate(()=>{heroNow.observation.raw.properties.timestamp='2026-11-18T05:00:00-06:00';renderTheCall();});
       assert.doesNotMatch(await p.locator('#ccTake').textContent(),/34° now/,'stale observations cannot drive the lead');
@@ -108,7 +110,7 @@ async function card(p){
       console.log('PASS glance uses the fresh station reading and shows Rain and Later');
     }finally{await s.context.close();}
 
-    for(const [temp,tone,word] of [[30,'tone-warning','Below freezing by'],[20,'tone-danger','Hard freeze by']]){
+    for(const [temp,tone,word] of [[30,'tone-warning','Below freezing now'],[20,'tone-danger','Hard freeze now']]){
       s=await open(config('Glance freeze '+temp,{temp,condition:'Clear'}),390);p=s.page;
       try{
         const c=await card(p);

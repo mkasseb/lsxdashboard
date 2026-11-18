@@ -893,14 +893,22 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
     ]);
   check('the Later item comes last',nov.supports.at(-1).label,'Later');
   const wear = SUBJECT.glanceWear(novHours,{...novOpts,sunset:new Date(2026,10,18,16,47)});
-  check('Nov 18 Wear starts from observed feels-like and follows afternoon warming and evening cooling',
+  check('Nov 18 Wear keeps the observed low and gives one seasonal outfit change',
     [wear.lo,wear.hi,wear.headline],
-    [34,66,'Winter coat until ~9am, then warm jacket · short sleeves by ~1pm']);
-  check('Nov 18 Wear times the evening return to a warm jacket',
-    wear.detail.includes('warm jacket again around 6pm after sunset'),true);
-  check('a tier change within an hour of sunset includes the sunset clock',
-    SUBJECT.glanceWear(novHours.map((h,i)=>i===9?{...h,fl:50}:h),
-      {...novOpts,sunset:new Date(2026,10,18,16,47)}).detail.includes('warm jacket again after sunset (4:47 PM)'),true);
+    [34,66,'Warm jacket until ~12pm, then light jacket or sweater']);
+  for(const [observed,future,headline,tone] of [
+    [31,20,'Hard freeze by 7am tomorrow','danger'],
+    [31,28,'Below freezing by 7am tomorrow','warning'],
+    [30,31,'Below freezing now','warning']
+  ]){
+    const freezeHours=hours(early,24,i=>({t:i===23?future:35,fl:i===23?future:35}));
+    const model=B(weather(freezeHours,{now:novNow,obs:{t:observed,fl:observed}}));
+    check('freeze guidance preserves the colder reading '+future,
+      [model.lead.headline,model.lead.tone,model.lead.detail.includes(observed+'°')],
+      [headline,tone,true]);
+    check('one cold cue after dedup '+future,[model.lead,...model.supports].filter(c=>c.topic==='cold').length,1);
+    if(future===20) check('hard-freeze lead keeps protective advice',model.lead.action.includes('Protect plants, pipes and pets'),true);
+  }
   const wetNov = novHours.map((h,i)=>i===5?{...h,pop:80}:h);
   check('rain timing suppresses the warm-up',topic(weather(wetNov,novOpts),'warming'),null);
   check('any outlook or local alert can suppress the warm-up',topic(weather(novHours,{...novOpts,hasHazard:true}),'warming'),null);
@@ -946,15 +954,15 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
   check('a chilly morning does not rule out good core outdoor hours', topic(C(H, {now: MORNING}), 'outdoors').headline,
     'Excellent outdoor conditions');
   H = hours(MORNING, 8, i => i === 4 ? {pop: 20} : {});
-  check('20 percent rain prevents an core-hours excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
+  check('20 percent rain prevents a core-hours excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
   H = hours(MORNING, 8, i => i === 4 ? {pop: null} : {});
-  check('missing rain data prevents an core-hours excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
+  check('missing rain data prevents a core-hours excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
   H = hours(MORNING, 8, i => i === 4 ? {fl: 95} : {});
-  check('feels-like 95 prevents an core-hours excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
+  check('feels-like 95 prevents a core-hours excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
   H = hours(MORNING, 8, i => i === 4 ? {mph: 16} : {});
-  check('16 mph wind prevents an core-hours excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
+  check('16 mph wind prevents a core-hours excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
   H = hours(MORNING, 8, i => i === 4 ? {dew: 67} : {});
-  check('oppressive humidity prevents an core-hours excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
+  check('oppressive humidity prevents a core-hours excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
   H = hours(MORNING, 8, i => i === 4 ? {t: null, fl: null} : {});
   check('missing temperature cannot become an excellent-day claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
   check('the excellent-day claim stops after 5 PM',
@@ -1153,7 +1161,17 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
   check('wear: chilly day is a warm jacket', G(day([42,46,48],0)).headline, 'Warm jacket');
   check('wear: cool day is a light jacket', G(day([55,58,60],0)).headline, 'Light jacket or sweater');
   check('wear: mild day is short sleeves', G(day([68,74,78],0)).headline, 'Short sleeves');
-  check('wear: a crossing at 88° changes to breathable clothes', G(day([80,88,94],0),{now}).headline, 'Short sleeves until ~8am, then light, breathable clothes');
+  check('wear skips a change within the next hour', G(day([80,88,94],0),{now}).headline, 'Light, breathable clothes');
+  check('a one-hour boundary wiggle does not change Wear',
+    G(day([35,35,36,35,35],0),{now}).headline,'Winter coat');
+  check('a two-hour change just over the boundary counts',
+    G(day([35,35,36,36],0),{now}).headline,'Winter coat until ~9am, then warm jacket');
+  check('multi-tier cooling calls for the heaviest layer in one change',
+    G([60,60,49,40,30,19,19].map((f,i)=>hr(11+i,f,0)),{now:new Date(2026,10,18,11)}).headline,
+    'Light jacket or sweater until ~4pm, then heavy coat, hat and gloves');
+  check('a cooler evening includes the sunset clock when a crossing is near sunset',
+    G([65,65,60,47,46].map((f,i)=>hr(14+i,f,0)),{now:new Date(2026,10,18,14),
+      sunset:new Date(2026,10,18,16,47)}).headline,'Short sleeves, then warm jacket after sunset (4:47 PM)');
   const swing = G(day([40,50,60,62],0),{now});
   check('wear: a big swing keeps the layers flag and times the change', [swing.layers, /until ~9am/.test(swing.headline)], [true, true]);
   check('wear: a big swing on a hot day does not', G(day([64,75,90],0)).layers, false);
