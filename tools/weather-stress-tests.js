@@ -1787,7 +1787,7 @@ async function main() {
       await page.waitForFunction(()=>radarFrames.length>1&&!radarFallback);
     });
     const seasons=[
-      ['winter fair','2026-01-15T18:00:00Z',{temp:40,rh:40},/Cold morning/],
+      ['winter fair','2026-01-15T18:00:00Z',{temp:40,rh:40},/Dry today/],
       ['spring fair','2026-04-15T18:00:00Z',{temp:65,rh:40},/Excellent outdoor/],
       ['summer fair','2026-07-15T18:00:00Z',{temp:82,rh:40},/Excellent outdoor/],
       ['autumn fair','2026-10-15T18:00:00Z',{temp:60,rh:40},/Excellent outdoor/],

@@ -115,7 +115,7 @@ function resetLocationState(){
   uv={now:null, peak:null, daily:{}};
   smart.hourly=[]; smart.hourlyAll=[]; smart.days=[]; smart.weekDays=[];
   forecastGrid={status:"loading",properties:null,gusts:[]};
-  heroNow.temp=null;   // the old city's reading must not mark the new city's range
+  heroNow.temp=null; heroNow.observation=null;   // discard the previous location's reading
   aqiState={val:null, pm:null, err:false}; callAqi=null; callRisk=null; callLocalAlert=null; callAlertGroups=[];
   lastMcds=[];   // "inside this area" was ray-cast against the OLD point; loadMcd re-answers
   userZones={county:"",forecast:"",fire:""};

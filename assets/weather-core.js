@@ -274,10 +274,11 @@ function eventFamily(ev){
   return "convective"; // default treatment (red)
 }
 
-function coldVerdict(nowT,mMin,cMin){
+function coldVerdict(nowT,mMin,cMin,high,unusual){
   if(mMin!=null&&mMin<=32) return "freezing";
   if(nowT!=null&&nowT>=55&&cMin!=null&&cMin<=LAYERS_MAX&&nowT-cMin>=18) return "falling";
-  if(mMin!=null&&mMin<=45) return "cold";
+  if(nowT!=null&&high!=null&&high-nowT>=18) return "warming";
+  if(mMin!=null&&(unusual==null?mMin<=35:unusual)) return "cold";
   return null;
 }
 
@@ -701,9 +702,23 @@ function bottomLineHours(hrs){
     H.push({t:t,d:d,end:end,endText:p.endTime||"",hr:weatherParts(d).hour,pop:pop,rh:rh,mph:mph,
             dew:dewF(t,rh),fl:feelsLikeF(t,rh,mph),
             thund:/thunder|t-?storm/i.test(sf),wint:/snow|sleet|wintry|freezing|blizzard/i.test(sf),
-            fog:/fog/i.test(sf),day:!!p.isDaytime});
+            fog:/fog/i.test(sf),clear:clearFrostSky(sf),day:!!p.isDaytime});
   });
   return H;
+}
+
+function clearFrostSky(text){
+  return /^(?:mostly )?(?:clear|sunny)$/i.test(String(text||"").trim());
+}
+
+function briefingHour(h,now,obs){
+  if(!obs||!(h.d<=now&&h.end>now)) return h;
+  var out=Object.assign({},h,{t:obs.t,fl:obs.fl!=null?obs.fl:obs.t});
+  ["dew","mph","clear"].forEach(function(key){
+    // A plain temperature reading need not carry the extra fields used by frost and wind.
+    if(Object.prototype.hasOwnProperty.call(obs,key)) out[key]=obs[key];
+  });
+  return out;
 }
 
 /* The NWS /observations/latest endpoint can return an hours-old report with HTTP 200. A
@@ -734,14 +749,24 @@ function aqiInfo(v){
   return {c:"#ff3b3b",t:"Hazardous",s:"Avoid all outdoor physical activity."};
 }
 function bottomLineHourlyCandidates(H,opts){
-  H=H||[]; opts=opts||{};
-  var now=opts.now||new Date(), n=H.length, i, candidates=[];
+  opts=opts||{};
+  var now=opts.now||new Date(), i, candidates=[];
+  H=(H||[]).map(function(h){ return briefingHour(h,now,opts.obs); });
+  var n=H.length;
+  // Keep the overlapping hour for rain coverage. Temperature and dawn timing use a
+  // shorter look-back so an hour that's nearly over can't become a forecast milestone.
+  var timingCutoff=now-30*60000;
+  var timed=H.filter(function(h){ return h.d>=timingCutoff; });
+  var currentHour=H[0]&&H[0].d<=now&&H[0].end>now?H[0]:null;
+  var nowT=opts.obs?opts.obs.t:(currentHour&&currentHour.t);
+  var timedExtremes=opts.obs&&currentHour&&timed[0]!==currentHour?[currentHour].concat(timed):timed;
   var gaps=!!(n&&H[0].d>now)||H.some(function(h,j){return j>0&&h.d-H[j-1].d!==3600000;});
   var comfortOK=opts.allowComfort!==false&&!(opts.aqi>100);
   function push(pri,ico,topic,label,headline,detail,action,tone,context,extra){
     candidates.push(bottomCandidate(pri,ico,topic,label,headline,detail,action,tone,context,extra));
   }
   function when(d){ return whenWord(d,now); }
+  function near(d){ return d<=now?"now":"near "+when(d); }
 
   // Rain/storm window. One wet block owns its weather type; a later storm cannot relabel it.
   var wet0=-1, wetEnd=-1, hasThunder=false, hasWintry=false, maxPop=0, popMissing=gaps, popKnown=false;
@@ -758,15 +783,14 @@ function bottomLineHourlyCandidates(H,opts){
   }
   if(n){
     if(wet0<0){
+      var through=when(H[n-1].end||new Date(+H[n-1].d+3600000));
       if(popMissing) push(40,"rain","precip","Rain","Rain chance incomplete",
         popKnown?"Some hours have no rain-chance data; known peak chance "+maxPop+"%.":"No hourly rain chances were reported.",
         "Check the updated forecast before weather-sensitive plans.","neutral");
       else if(maxPop>=20) push(40,"rain","precip","Rain","Rain possible",
-        "Peak chance "+maxPop+"% through "+when(H[n-1].d)+".",
-        "Keep an eye on the forecast for outdoor plans.","neutral");
-      else push(40,"sun","precip","Rain","Rain unlikely",
-        "Chance stays below 20% through "+when(H[n-1].d)+".",
-        "Keep checking the forecast before outdoor plans.","neutral");
+        "Peak chance "+maxPop+"% through "+through+".","","neutral");
+      else push(40,"sun","precip","Rain","Dry today",
+        "Chance under "+(maxPop<10?10:20)+"% through "+through+".","","neutral");
     }else{
       var span=(wetEnd>wet0)
         ?(wet0===0&&H[wet0].d<=now?"now":"~"+when(H[wet0].d))+"–"+when(H[wetEnd].d)
@@ -801,52 +825,73 @@ function bottomLineHourlyCandidates(H,opts){
       laterStorm?"Be ready to move indoors before storms arrive.":"Watch for slick roads and allow extra travel time.","danger",false,{supportRank:0});
   }
 
-  var maxFl=-999, flAt=null;
-  for(i=0;i<n;i++){ if(H[i].fl!=null&&H[i].fl>maxFl){ maxFl=H[i].fl; flAt=H[i].d; } }
-  if(maxFl>=105) push(100,"heat","heat","Heat","Dangerous heat near "+when(flAt),
+  var hottest=null,coldest=null,windiest=null;
+  timedExtremes.forEach(function(h){
+    if(h.fl!=null&&(!hottest||h.fl>hottest.fl)) hottest=h;
+    if(h.fl!=null&&(!coldest||h.fl<coldest.fl)) coldest=h;
+    if(h.mph!=null&&(!windiest||h.mph>windiest.mph)) windiest=h;
+  });
+  var maxFl=hottest?hottest.fl:null, wMax=windiest?windiest.mph:null;
+  if(maxFl>=105) push(100,"heat","heat","Heat","Dangerous heat "+near(hottest.d),
     "Heat index around "+maxFl+"°.","Limit outdoor exertion near peak heat.","danger");
-  else if(maxFl>=99) push(72,"heat","heat","Heat","High heat near "+when(flAt),
+  else if(maxFl>=99) push(72,"heat","heat","Heat","High heat "+near(hottest.d),
     "Feels like "+maxFl+"°.","Take frequent breaks during outdoor work.","warning");
 
-  var minFl=Infinity,coldAt=null;
-  for(i=0;i<n;i++){ if(H[i].fl!=null&&H[i].fl<minFl){minFl=H[i].fl;coldAt=H[i].d;} }
-  if(minFl<=-20) push(102,"cold","cold","Cold","Dangerous cold near "+when(coldAt),
-    "Feels like "+minFl+"°.","Limit time outside and cover exposed skin.","danger");
+  if(coldest&&coldest.fl<=-20) push(102,"cold","cold","Cold","Dangerous cold "+near(coldest.d),
+    "Feels like "+coldest.fl+"°.","Limit time outside and cover exposed skin.","danger");
 
-  var mMin=999,mAt=null;
-  for(i=0;i<n;i++){ if(H[i].hr>=6&&H[i].hr<=9&&H[i].t!=null&&H[i].t<mMin){ mMin=H[i].t; mAt=H[i].d; } }
-  var cMin=999,cAt=null;
-  for(i=3;i<n;i++){ if(H[i].t!=null&&H[i].t<cMin){ cMin=H[i].t; cAt=H[i].d; } }
-  var firstFreeze=null;
-  for(i=0;i<n;i++){if(H[i].t!=null&&H[i].t<=32){firstFreeze=H[i];break;}}
+  var localNow=weatherParts(now), today=localNow.key;
+  var morning=null,trough=null,firstFreeze=null,frost=null,high=null;
+  timed.forEach(function(h){
+    if(h.t==null) return;
+    if(h.hr>=6&&h.hr<=9&&(!morning||h.t<morning.t)) morning=h;
+    if(H[3]&&h.d>=H[3].d&&(!trough||h.t<trough.t)) trough=h;
+    if(!firstFreeze&&h.t<=32) firstFreeze=h;
+    if(!frost&&h.hr>=3&&h.hr<=9&&h.clear&&h.mph!=null&&h.mph<=5&&h.dew!=null&&h.dew<=32&&h.t<=36) frost=h;
+    if(h.d>now&&h.day&&weatherParts(h.d).key===today&&(!high||h.t>high.t)) high=h;
+  });
+  var mMin=morning?morning.t:null, cMin=trough?trough.t:null;
+  var morningDate=morning&&weatherParts(morning.d).key;
+  var climate=morning&&opts.climateFor?opts.climateFor(morningDate):null;
+  var belowNormal=climate&&climate.lo!=null?climate.lo-mMin:null;
+  var unusual=null, coldDetail="";
+  if(belowNormal!=null||(climate&&climate.lows&&climate.lows.length)){
+    // Require the low to beat the cutoff so a pile of ties never looks unusually cold.
+    var lows=climate.lows||[];
+    unusual=belowNormal>=8||(lows.length>0&&mMin<lows[Math.floor(lows.length*0.15)]);
+    if(unusual) coldDetail=belowNormal>=8?" · "+Math.round(belowNormal)+"° colder than normal":" · Among the coldest 15% for the date";
+  }
+  var cold=coldVerdict(nowT,mMin,cMin,null,unusual);
   /* A 31° November morning is routine here; red is kept for a hard freeze (24° or colder) so
-     the colour still means something on the night it matters. Priority is unchanged: an ordinary
-     freeze can still lead a quiet day, it just leads it in amber. */
+     the colour still means something on the night it matters. */
   function freezeTone(t){ return t!=null&&t<=24?"danger":"warning"; }
-  if(firstFreeze&&(!mAt||mMin>32)) push(86,"cold","cold","Cold",
-    (firstFreeze.t<=24?"Hard freeze by ":"Below freezing by ")+when(firstFreeze.d),
+  function freezeWhen(h){ return h.d<=now?" now":" by "+when(h.d); }
+  // A fresh observed freeze can describe now even after the forecast hour has aged out.
+  var observedFreeze=opts.obs&&opts.obs.t<=32&&currentHour&&currentHour.d<timingCutoff;
+  if(observedFreeze) firstFreeze=currentHour;
+  if(firstFreeze&&(!morning||mMin>32||observedFreeze)) push(86,"cold","cold","Cold",
+    (firstFreeze.t<=24?"Hard freeze":"Below freezing")+freezeWhen(firstFreeze),
     firstFreeze.t+"°.","Watch for freezing temperatures and slick spots where surfaces are wet.",freezeTone(firstFreeze.t));
-  var cold=coldVerdict(H[0]&&H[0].t,mAt?mMin:null,cAt?cMin:null);
   if(cold==="freezing") push(85,"cold","cold","Cold",
-    (mMin<=24?"Hard freeze by ":"Below freezing by ")+when(mAt),
+    (mMin<=24?"Hard freeze":"Below freezing")+freezeWhen(morning),
     "Low "+mMin+"°.",mMin<=24?"Protect plants, pipes and pets; cover exposed skin.":"Expect frost; scrape windshields and watch for slick spots.",freezeTone(mMin));
   else if(cold==="falling") push(66,"trend-down","cold","Temperature trend","Sharp temperature drop",
-    "Falling "+(H[0].t-cMin)+"° to "+cMin+"° by "+when(cAt)+".","Bring a layer if you'll be out late.","warning");
-  else if(cold==="cold") push(70,"cold","cold","Cold","Cold morning",
-    mMin+"° near "+when(mAt)+".","Dress for the cold.","warning");
+    "Falling "+(nowT-cMin)+"° to "+cMin+"° by "+when(trough.d)+".","","warning");
+  else if(cold==="cold"&&!frost&&!firstFreeze) push(unusual?56:48,"cold","cold","Temperature","Cold morning",
+    mMin+"° "+near(morning.d)+coldDetail+".","","neutral");
+  if(frost&&!firstFreeze) push(80,"cold","frost","Frost","Frost possible",
+    "On windshields and roofs "+near(frost.d)+".","","warning");
 
-  for(i=0;i<n;i++){ if(H[i].fog){
-    var morningFog=H[i].hr>=4&&H[i].hr<=9;
-    push(68,"fog","fog","Visibility",morningFog?"Fog early":"Fog near "+when(H[i].d),
+  for(i=0;i<timed.length;i++){ if(timed[i].fog){
+    var fogHour=timed[i], morningFog=fogHour.hr>=4&&fogHour.hr<=9;
+    push(68,"fog","fog","Visibility",morningFog?"Fog early":"Fog "+near(fogHour.d),
       morningFog?"Reduced visibility during the morning drive.":"Reduced visibility is possible.",
       "Slow down and leave extra following distance.","warning"); break;
   } }
 
-  var wMax=0,wAt=null;
-  for(i=0;i<n;i++){ if(H[i].mph!=null&&H[i].mph>wMax){ wMax=H[i].mph; wAt=H[i].d; } }
-  if(wMax>=35) push(78,"wind","wind","Wind","Very windy near "+when(wAt),
+  if(wMax>=35) push(78,"wind","wind","Wind","Very windy "+near(windiest.d),
     "Sustained wind around "+wMax+" mph.","Secure loose outdoor objects.","danger");
-  else if(wMax>=25) push(65,"wind","wind","Wind","Windy near "+when(wAt),
+  else if(wMax>=25) push(65,"wind","wind","Wind","Windy "+near(windiest.d),
     "Sustained wind around "+wMax+" mph.","Use extra care with outdoor plans.","warning");
 
   var peak=opts.uvPeak;
@@ -884,8 +929,19 @@ function bottomLineHourlyCandidates(H,opts){
       "Low near "+lo+"°.","Open windows may offer little relief.","neutral");
   }
 
-  var localNow=weatherParts(now), today=localNow.key;
-  var dayH=H.filter(function(h){ return h.day&&weatherParts(h.d).key===today; });
+  if(high&&(opts.obs||currentHour&&currentHour.d>=timingCutoff)&&!opts.hasHazard&&!candidates.some(function(c){ return c.priority>=60; })
+     &&coldVerdict(nowT,mMin,cMin,high.t,unusual)==="warming"){
+    var highClimate=opts.climateFor?opts.climateFor(today):null;
+    var departure=highClimate&&highClimate.hi!=null?Math.round(high.t-highClimate.hi):null;
+    var normalText=departure?" · "+Math.abs(departure)+"° "+(departure>0?"warmer":"colder")+" than normal":
+      departure===0?" · near normal":"";
+    push(58,"stats","warming","Temperature trend",
+      localNow.hour<12&&nowT<50&&high.t>=58&&high.t<=80&&high.hr>=12?"Chilly start, mild afternoon":"Warming up today",
+      nowT+"° now → "+high.t+"° by "+when(high.d)+normalText+".","","neutral");
+  }
+
+  // A chilly morning needn't rule out a good day outdoors. Judge the core daylight hours.
+  var dayH=timed.filter(function(h){ return h.day&&h.hr>=11&&h.hr<18&&weatherParts(h.d).key===today; });
   if(comfortOK&&!gaps&&dayH.length>=4&&localNow.hour<17){
     var dhi=-999,nice=true;
     dayH.forEach(function(h){
@@ -894,7 +950,7 @@ function bottomLineHourlyCandidates(H,opts){
     });
     if(nice) push(55,"check","outdoors","Outdoor plans","Excellent outdoor conditions",
       dhi+"° and dry through "+when(dayH[dayH.length-1].end||new Date(+dayH[dayH.length-1].d+3600000))+".",
-      "Good day to keep outdoor plans.","good");
+      "","good");
   }
 
   if(comfortOK&&(maxFl>=99||wet0>=0||wMax>=25)){
@@ -983,28 +1039,28 @@ function bottomLineWeekCandidates(days,cutoff,hourly){
     !/freezing|sleet|ice|wintry|snow|flurr|blizzard/i.test(p.forecast);}),
     function(p){return p.pop;});
   var rainy=!wintry&&!stormy?strongest(wet,function(p){return p.pop;}):null;
-  if(wintry) out.push(bottomCandidate(58,"snow","winter","Week ahead · Travel weather",
+  if(wintry) out.push(bottomCandidate(58,"snow","winter","Later",
     "Wintry weather possible "+wintry.name,
     (wintry.partial?"Peak remaining hourly chance ":"NWS precipitation chance ")+wintry.pop+"%.",
     "Allow flexibility for travel and check updates closer to the day.","warning",false,opts));
-  if(stormy) out.push(bottomCandidate(57,"storm","storm","Week ahead · Storms",
+  if(stormy) out.push(bottomCandidate(57,"storm","storm","Later",
     "Storms possible "+stormy.name,
     (stormy.partial?"Peak remaining hourly chance ":"NWS precipitation chance ")+stormy.pop+"%.",
     "Keep plans flexible and check updates closer to the day.","warning",false,opts));
-  if(rainy) out.push(bottomCandidate(51,"rain","precip","Week ahead · Rain",
+  if(rainy) out.push(bottomCandidate(51,"rain","precip","Later",
     "Rain possible "+rainy.name,
     (rainy.partial?"Peak remaining hourly chance ":"NWS precipitation chance ")+rainy.pop+"%.",
     "Keep plans flexible and check updates closer to the day.","warning",false,opts));
   var hot=strongest(P.filter(function(p){return p.day&&p.temp!=null&&p.temp>=95;}),function(p){return p.temp;});
-  if(hot) out.push(bottomCandidate(hot.temp>=100?57:53,"heat","heat","Week ahead · Heat",
+  if(hot) out.push(bottomCandidate(hot.temp>=100?57:53,"heat","heat","Later",
     "Hot weather "+hot.name,"Forecast high near "+Math.round(hot.temp)+"°.",
     "Plan strenuous outdoor work for cooler hours.","warning",false,opts));
   var cold=strongest(P.filter(function(p){return !p.day&&p.temp!=null&&p.temp<=32;}),function(p){return -p.temp;});
-  if(cold) out.push(bottomCandidate(55,"cold","cold","Week ahead · Cold",
+  if(cold) out.push(bottomCandidate(55,"cold","cold","Later",
     "Freezing "+cold.name,"Forecast low near "+Math.round(cold.temp)+"°.",
     "Plan for freezing temperatures.","warning",false,opts));
   var wind=strongest(P.filter(function(p){return p.mph!=null&&p.mph>=25;}),function(p){return p.mph;});
-  if(wind) out.push(bottomCandidate(49,"wind","wind","Week ahead · Wind",
+  if(wind) out.push(bottomCandidate(49,"wind","wind","Later",
     "Windy "+wind.name,"Forecast sustained wind around "+wind.mph+" mph.",
     "Secure loose outdoor objects before it arrives.","warning",false,opts));
   var highs=P.filter(function(p){return p.day&&p.temp!=null;}).sort(function(a,b){return a.start-b.start;});
@@ -1014,20 +1070,16 @@ function bottomLineWeekCandidates(days,cutoff,hourly){
     if(Math.abs(delta)>=15&&(!change||Math.abs(delta)>Math.abs(change.delta)))
       change={from:highs[i-1],to:highs[i],delta:delta};
   }
-  if(change&&!hot&&!cold) out.push(bottomCandidate(46,"stats","trend","Week ahead · Temperature",
+  if(change&&!hot&&!cold) out.push(bottomCandidate(46,"stats","trend","Later",
     (change.delta<0?"Cooler":"Warmer")+" by "+change.to.name,
     "Forecast high "+Math.round(change.from.temp)+"° to "+Math.round(change.to.temp)+"°.",
     "Plan for the temperature change.","neutral",false,opts));
   if(!out.length){
     var known=P.filter(function(p){return p.pop!=null;});
-    if(known.length===P.length){
-      var peak=strongest(known,function(p){return p.pop;});
-      out.push(bottomCandidate(peak.pop>=20?38:35,peak.pop>=20?"rain":"sun","week","Week ahead",
-        peak.pop>=20?"Some rain possible later this week":"Mainly dry later this week",
-        peak.pop>=20?"Highest NWS rain chance "+peak.pop+"% "+peak.name+".":
-          "NWS rain chances stay below 20% in the later forecast periods.",
-        peak.pop>=20?"Check the forecast before outdoor plans.":"","neutral",false,opts));
-    }
+    var peak=strongest(known,function(p){return p.pop;});
+    // A second dry answer adds little to a card that already gives today's rain chance.
+    if(known.length===P.length&&peak.pop>=20) out.push(bottomCandidate(38,"rain","week","Later",
+      "Some rain possible later this week","Highest NWS rain chance "+peak.pop+"% "+peak.name+".","","neutral",false,opts));
   }
   return out;
 }
@@ -1134,11 +1186,14 @@ function buildBottomLine(candidates,localAlert){
   }).slice().sort(bottomLineCmp);
   var seen={}, unique=[];
   sorted.forEach(function(c){
-    if(seen[c.topic]) return;
-    seen[c.topic]=true; unique.push(c);
+    var key=(c.horizon||"hourly")+":"+c.topic;
+    if(seen[key]) return;
+    seen[key]=true; unique.push(c);
   });
-  var actionable=unique.filter(function(c){ return !c.context; });
-  var sourceLead=actionable.length?actionable[0]:null;
+  var later=unique.filter(function(c){ return c.horizon==="week"; })[0];
+  var today=unique.filter(function(c){ return c.horizon!=="week"; });
+  var actionable=today.filter(function(c){ return !c.context; });
+  var sourceLead=actionable[0]||null;
   /* A local warning or emergency is more consequential than the generic priority table. When
      hourly/outlook evidence contains the same hazard, translate THAT candidate as the lead even
      if an unrelated condition has a numerically higher score. Watches and advisories stay in the
@@ -1149,8 +1204,8 @@ function buildBottomLine(candidates,localAlert){
     else if(localAlert.level==="emergency") return {lead:null,supports:[]};
   }
   var lead=sourceLead?Object.assign({},sourceLead):null;
-  if(!lead) return {lead:null,supports:[]};
-  var outdoor=unique.filter(function(c){ return c.topic==="outdoors"&&c.mergeAction; })[0]||null;
+  if(!lead) return {lead:null,supports:later?[later]:[]};
+  var outdoor=today.filter(function(c){ return c.topic==="outdoors"&&c.mergeAction; })[0]||null;
   /* A scored comfort window can be a useful cutoff for heat or wind. It is not storm timing:
      rain may already be in progress or may end hours before that window, so its endpoint must not
      become "finish by" guidance for a storm/rain lead. */
@@ -1173,7 +1228,7 @@ function buildBottomLine(candidates,localAlert){
      Do not reintroduce the unrelated comfort window as a supporting cue after declining to turn it
      into a deadline. Outside an alert it remains useful, explicitly labelled supporting evidence. */
   var suppressOutdoor=!!(outdoor&&alertAware&&(lead.topic==="storm"||lead.topic==="precip"));
-  var rest=unique.filter(function(c){
+  var rest=today.filter(function(c){
     return c.topic!==lead.topic&&!c.context&&((!mergeOutdoor&&!suppressOutdoor)||c.topic!=="outdoors");
   });
   rest.sort(function(a,b){
@@ -1185,10 +1240,11 @@ function buildBottomLine(candidates,localAlert){
   /* Context is garnish for a genuinely quiet briefing, never a fourth fact competing with a
      warning. A neutral dry lead or a good outdoor lead can use it; hazard leads cannot. */
   if(supports.length<3&&(lead.tone==="neutral"||lead.tone==="good")){
-    unique.filter(function(c){ return c.context; }).sort(bottomLineCmp).some(function(c){
+    today.filter(function(c){ return c.context; }).sort(bottomLineCmp).some(function(c){
       supports.push(c); return supports.length>=3;
     });
   }
+  if(later) supports.push(later);
   return {lead:lead,supports:supports};
 }
 
@@ -1198,8 +1254,18 @@ function buildBottomLine(candidates,localAlert){
    dresses for. Fails quiet (null) without at least three usable waking hours rather than
    guessing from one. Rain and winter cues come from the same NWS chances and wording the
    briefing uses, so the two never disagree about whether it is wet. */
-function glanceWear(H){
-  var out=(H||[]).slice(0,15).filter(function(h){
+var glanceTemperatureFamilies={
+  cold:"temperature-cold",freeze:"temperature-cold",frost:"temperature-cold",
+  heat:"temperature-warm",uv:"temperature-warm",warming:"temperature-warm",
+  wear:"both"
+};
+
+function glanceWear(H,opts){
+  opts=opts||{};
+  var now=opts.now||new Date();
+  var out=(H||[]).slice(0,15).map(function(h){
+    return h&&briefingHour(h,now,opts.obs);
+  }).filter(function(h){
     return h&&h.hr>=7&&h.hr<=22&&(h.fl!=null||h.t!=null)&&isFinite(h.fl!=null?h.fl:h.t);
   });
   if(out.length<3) return null;
@@ -1207,20 +1273,35 @@ function glanceWear(H){
   var lo=Math.min.apply(null,fl), hi=Math.max.apply(null,fl), swing=hi-lo;
   var wet=out.some(function(h){ return h.pop!=null&&h.pop>=40&&!h.wint; });
   var wintry=out.some(function(h){ return h.pop!=null&&h.pop>=30&&h.wint; });
-  var wear,icon="walk";
-  if(lo<=20) wear="Heavy coat, hat and gloves";
-  else if(lo<=35) wear="Winter coat";
-  else if(lo<=50) wear="Warm jacket";
-  else if(lo<=62) wear="Light jacket or sweater";
-  else if(hi>=88) wear="Light, breathable clothes";
-  else wear="Short sleeves";
+  function tier(t){ return t<=20?0:t<=35?1:t<=50?2:t<=62?3:t<88?4:5; }
+  var clothes=["Heavy coat, hat and gloves","Winter coat","Warm jacket","Light jacket or sweater","Short sleeves","Light, breathable clothes"];
+  var first=tier(fl[0]), wear=clothes[first], transition=null, warmest=first, warmerAt=null, evening="";
+  var sunset=opts.sunset;
+  for(var i=1;i<out.length;i++){
+    // Break at missing hours or overnight so a crossing isn't timed from a gap.
+    if(out[i].d-out[i-1].d!==3600000) break;
+    var prev=tier(fl[i-1]), next=tier(fl[i]), at=out[i].d;
+    if(next>warmest){ warmest=next; warmerAt=at; }
+    if(!transition&&next!==first){
+      transition=at;
+      wear+=" until ~"+whenWord(at,now)+", then "+clothes[next].toLowerCase();
+    }
+    if(!evening&&warmerAt&&next<prev&&next<=2&&sunset&&at>=sunset&&weatherParts(at).key===weatherParts(sunset).key){
+      var sunClock=weatherTime(sunset,{hour:"numeric",minute:"2-digit"});
+      evening=clothes[next]+" again "+(at-sunset<3600000?"after sunset ("+sunClock+")":"around "+whenWord(at,now)+" after sunset");
+    }
+  }
+  if(warmerAt&&warmerAt>transition) wear+=" · "+clothes[warmest].toLowerCase()+" by ~"+whenWord(warmerAt,now);
   var extras=[];
-  if(swing>=18&&lo<=62) extras.push("dress in layers");
+  if(!transition&&swing>=18&&lo<=62) extras.push("dress in layers");
+  if(evening) extras.push(evening.charAt(0).toLowerCase()+evening.slice(1));
   if(wintry) extras.push("waterproof boots");
   if(wet) extras.push("bring an umbrella");
-  return {icon:icon,topic:"wear",label:"Wear",headline:wear,
+  return {icon:"walk",topic:"wear",label:"Wear",headline:wear,
           detail:"Feels like "+(lo===hi?lo+"°":lo+"–"+hi+"°")+" while you're out"
             +(extras.length?" · "+extras.join(", "):"")+".",
+          advice:wear+"."+(evening?" "+evening+".":"")+
+            (wintry?" Wear waterproof boots.":"")+(wet?" Bring an umbrella.":""),
           lo:lo,hi:hi,umbrella:wet,boots:wintry,layers:swing>=18&&lo<=62};
 }
 

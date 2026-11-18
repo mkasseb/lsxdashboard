@@ -228,6 +228,7 @@ function loadCurrent(){
     stEl.classList.add("has-hint");
     document.body.setAttribute("data-wx", wxGroup(desc,day));
     heroNow.temp=temp;   // where "now" sits inside today's range, once the 7-day has landed
+    heroNow.observation={raw:o,t:temp,fl:feels,dew:dew,mph:windMph,clear:clearFrostSky(desc)};
     el.innerHTML='<div class="cc-main"><div class="cc-icon">'+wxImg(desc,day,64)+'</div><div>'
       +'<div class="cc-temp">'+(temp!=null?temp+"°":"—")+'</div><div class="cc-desc">'+esc(desc)+'</div>'
       +(feels!=null&&temp!=null?'<div class="cc-feels'+(feels-temp>=3?" is-hot":(temp-feels>=3?" is-cold":""))+'">Feels like '+feels+'°</div>':'')
@@ -257,7 +258,7 @@ function loadCurrent(){
       +'</div>';
     renderHeroToday();    // today's range + sun times, once the 7-day has landed
     renderUvNow();        // UV, once Open-Meteo has answered
-    if(typeof paintNowTakeaway==="function") paintNowTakeaway();   // Your day's lead, beside the temperature
+    renderTheCall();   // Rebuild the takeaway with the same fresh reading as the hero.
     renderCurrentCtx();   // normals + today's records, once climate context has landed
     if(typeof renderAqiMini==="function") renderAqiMini();   // re-fill the AQI line after the re-render
   }).catch(function(){
@@ -1272,6 +1273,7 @@ function loadClimate(){
       renderVsNormal();
       renderCurrentCtx();
       renderContext();
+      renderTheCall();
     }
     return ask(st.sid).then(function(local){
       if(!fresh()) return;   // user moved while this was in flight
@@ -1289,7 +1291,7 @@ function loadClimate(){
   }).catch(function(){
     if(!fresh()) return;   // a superseded request must not paint an error over the new place
     feedUpdate("climate","unavailable");
-    climate.normHi=null; climate.normLo=null; renderVsNormal();
+    climate.normHi=null; climate.normLo=null; renderVsNormal(); renderTheCall();
     grid.innerHTML='<div class="empty">Climate normals unavailable. <a href="https://xmacis.rcc-acis.org/" target="_blank" rel="noopener">xmACIS ↗</a></div>';
   });
 }
