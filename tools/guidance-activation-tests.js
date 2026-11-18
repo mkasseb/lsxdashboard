@@ -21,6 +21,13 @@ module.exports=async function(engine){
    if(test.initial){await summary.focus();await summary.press('Enter');}
    await p.evaluate(({mode,input})=>{
     const summary=document.querySelector('.nbm-timing summary');window.activationHeld=summary;window.activationClicks=0;
+    window.activationEvents=[];
+    for(const type of ['pointerdown','pointerup','pointercancel','keydown','keyup','click']){
+     document.addEventListener(type,e=>activationEvents.push({
+      type,target:e.target.tagName,heldTarget:summary.contains(e.target),
+      connected:summary.isConnected,open:summary.parentElement?.open
+     }),true);
+    }
     document.addEventListener('click',e=>{if(e.target.closest('.nbm-timing summary'))activationClicks++;},true);
     summary.addEventListener(['mouse','touch'].includes(input)?'pointerdown':'keydown',()=>{
      if(mode==='model'||mode==='stale'||mode==='lost-release')NbmRange.forecast(smart.days);
@@ -53,7 +60,14 @@ module.exports=async function(engine){
    }else if(test.input==='touch')await summary.tap();else {await summary.focus();await summary.press(test.input);}
    const valid=['model','nws','both'].includes(test.mode);
    if(valid){
-    await p.waitForFunction(expected=>document.querySelector('.nbm-timing')?.open===expected,!test.initial);
+    try{
+     await p.waitForFunction(expected=>document.querySelector('.nbm-timing')?.open===expected,!test.initial);
+    }catch(error){
+     console.error('Disclosure activation failed',test,await p.evaluate(()=>({
+      events:activationEvents,clicks:activationClicks,open:document.querySelector('.nbm-timing')?.open
+     })));
+     throw error;
+    }
     await p.waitForFunction(()=>!activationHeld.isConnected);
     assert.equal(await p.evaluate(()=>activationClicks),1,'One native activation across refresh');
     assert(await summary.evaluate(e=>e===document.activeElement));

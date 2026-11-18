@@ -521,7 +521,7 @@ async function main() {
     await run('official messages remain independent of modeled later storms',config('message horizons',{weekRain:true}),async({page})=>{
       await expectText(page,'#keyMessagesTitle',/NWS Key Messages/);
       await expectText(page,'#callRow',/southeast Missouri and southwest Illinois/);
-      assert(!/Storms possible Saturday|Rain unlikely/.test(await page.locator('#callRow').innerText()));
+      assert(!/Storms possible Saturday|Dry today/.test(await page.locator('#callRow').innerText()));
       await page.locator('#briefWhy summary').click();await page.locator('#briefWhy summary').focus();
       await page.evaluate(()=>loadForecast());
       assert(await page.locator('#briefWhy').evaluate(el=>el.open));
@@ -1423,6 +1423,12 @@ async function main() {
       await page.locator('#rsFull').click();
       assert.equal(await page.locator('#radarCard').getAttribute('aria-modal'),'true');
       assert(await page.locator('header').evaluate(el=>el.inert));
+      assert(await page.evaluate(()=>{
+        const lead=document.querySelector('#ccTake .glance-lead'), row=document.querySelector('#glance li');
+        const focus=document.activeElement, title=document.getElementById('keyMessagesTitle').firstChild;
+        renderTheCall(true);renderTheCall(true);
+        return !!lead&&!!row&&lead.isConnected&&row.isConnected&&title.isConnected&&document.activeElement===focus;
+      }),'unchanged observation/climate guidance preserves DOM nodes and fullscreen focus');
       for(let i=0;i<20;i++){await page.keyboard.press('Tab');assert(await page.evaluate(()=>document.getElementById('radarCard').contains(document.activeElement)));}
       await page.keyboard.press('Escape');assert(!(await page.locator('header').evaluate(el=>el.inert)));
       assert.equal(await page.evaluate(()=>document.activeElement.id),'rsFull');
@@ -1787,7 +1793,7 @@ async function main() {
       await page.waitForFunction(()=>radarFrames.length>1&&!radarFallback);
     });
     const seasons=[
-      ['winter fair','2026-01-15T18:00:00Z',{temp:40,rh:40},/Cold morning/],
+      ['winter fair','2026-01-15T18:00:00Z',{temp:40,rh:40},/Dry today/],
       ['spring fair','2026-04-15T18:00:00Z',{temp:65,rh:40},/Excellent outdoor/],
       ['summer fair','2026-07-15T18:00:00Z',{temp:82,rh:40},/Excellent outdoor/],
       ['autumn fair','2026-10-15T18:00:00Z',{temp:60,rh:40},/Excellent outdoor/],

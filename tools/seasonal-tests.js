@@ -47,6 +47,17 @@ const rainFuture=hours(new Date(+now+4*3600000),65,40,5,'Thunderstorms');
 assert(!core.bottomLineHourlyCandidates(rainFuture,{now,aqi:35}).some(c=>/\bnow\b/.test(c.detail)));
 const flash=hours(now,40,50,10,'Clear');flash[8].t=20;flash[8].fl=10;
 assert(core.bottomLineHourlyCandidates(flash,{now,aqi:35}).some(c=>c.topic==='cold'&&/^(Below freezing|Hard freeze) by /.test(c.headline)));
+const dawn=new Date('2026-11-18T12:00:00Z');
+const frosty=hours(dawn,34,86,0,'Mostly Clear');
+const frost=h=>core.bottomLineHourlyCandidates(h,{now:new Date(+dawn-10*60000)}).find(c=>c.topic==='frost');
+assert.equal(frost(frosty).detail,'On windshields and roofs near 6am.');
+assert.equal(frost(frosty).tone,'warning');
+assert.equal(frost(hours(dawn,34,86,12,'Clear')),undefined,'wind rules out a radiational frost cue');
+assert.equal(frost(hours(dawn,34,86,0,'Cloudy')),undefined,'cloud cover rules out a radiational frost cue');
+const freeze=frosty.map((h,i)=>i===4?{...h,t:32}:h);
+assert.equal(frost(freeze),undefined,'any freeze already covers the frost risk');
+assert(!core.bottomLineHourlyCandidates(frosty.slice(0,1),{now:new Date(+dawn+40*60000)}).some(c=>c.topic==='frost'),
+ 'a mostly elapsed dawn hour cannot trigger a frost cue');
 for(const event of ['High Wind Warning','Dense Smoke Advisory','Dense Fog Advisory','Air Quality Alert']){
  const cs=core.bottomLineHourlyCandidates(hours(now,65,40,5,'Clear'),{now,aqi:35});
  const model=core.buildBottomLine(cs,{event,family:core.eventFamily(event),level:/Warning/.test(event)?'warning':'advisory'});

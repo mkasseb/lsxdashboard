@@ -689,12 +689,12 @@ function exposureColor(color){
   return colors[color]?"var(--ex-"+colors[color]+")":color;
 }
 function renderCurrentUnavailable(message){
-  heroNow.temp=null;
+  heroNow.temp=null; heroNow.observation=null;
   document.body.removeAttribute("data-wx");
   document.getElementById("current").innerHTML='<div class="empty" role="status"><b>Current observation unavailable.</b> '+message+'</div>'
     +'<div class="cc-take" id="ccTake"></div>'
     +currentExposure()+'<div class="stn">UV &amp; modeled air quality: Open-Meteo (CAMS) · measured AQI: <a href="https://gispub.epa.gov/airnow/" target="_blank" rel="noopener">AirNow ↗</a></div>';
-  renderUvNow(); renderAqiMini(); if(typeof paintNowTakeaway==="function") paintNowTakeaway();
+  renderUvNow(); renderAqiMini(); renderTheCall(true);
 }
 
 
@@ -1609,29 +1609,39 @@ function renderBriefingStatus(){
   var el=document.getElementById("briefStatus"); if(!el) return;
   var notes=[];
   if(feedState(feedChecks.alerts,Date.now(),FEEDS.alerts.age)!=="ready") notes.push("Alert status is unverified. Check official NWS warnings.");
-  el.textContent=notes.join(" "); el.hidden=!notes.length;
+  var text=notes.join(" ");
+  if(el.textContent!==text) el.textContent=text;
+  if(el.hidden!==!notes.length) el.hidden=!notes.length;
 }
-function renderTheCall(){
-  if(typeof syncActiveMode==="function") syncActiveMode();   // every alert repaint ends here
+function renderTheCall(briefingOnly){
+  if(!briefingOnly&&typeof syncActiveMode==="function") syncActiveMode();   // every alert repaint ends here
   var card=document.getElementById("callCard"), row=document.getElementById("callRow");
   if(!card||!row) return;
   var now=new Date(), H=bottomLineHours(forecastWindowHours(smart.hourlyAll,24,Date.now()));
   var hourlyReady=H.length>=6;
   var comfort=briefingComfortAllowed(); renderTheCall._comfortAllowed=comfort; renderBriefingStatus();
-  var candidates=bottomLineHourlyCandidates(hourlyReady?H:[],{now:now,uvPeak:uv.peak,aqi:callAqi,allowComfort:comfort});
+  var reading=heroNow.observation;
+  var obs=reading&&currentObservationFresh(reading.raw,+now)?reading:null;
+  function climateFor(date){
+    var record=contextRecord(date), normal=forecastNormalFor(date);
+    return {lo:normal&&normal.lo!=null?normal.lo:climate.normDate===date?climate.normLo:null,
+            hi:normal&&normal.hi!=null?normal.hi:climate.normDate===date?climate.normHi:null,
+            lows:record&&record.doyLo&&record.doyLo.length>=CTX_MIN_YEARS?record.doyLo:null};
+  }
+  /* The outlook desks see hazards beyond the hourly edge. A warm-up is useful on a quiet
+     day, so even lower-priority outlooks take it out of consideration. */
+  var outlooks=callRisk?[
+    outlookVerdict(OUTLOOK_CFG.spc, spcRisk(callRisk.spc[0]).lvl, spcRisk(callRisk.spc[1]).lvl),
+    outlookVerdict(OUTLOOK_CFG.ero, eroRisk(callRisk.ero[0]).lvl, eroRisk(callRisk.ero[1]).lvl),
+    outlookVerdict(OUTLOOK_CFG.fire, fireRisk(callRisk.fire[0]).lvl, fireRisk(callRisk.fire[1]).lvl),
+    outlookVerdict(OUTLOOK_CFG.wssi, callRisk.wssi[0], callRisk.wssi[1])
+  ].filter(function(v){ return !!v; }):[];
+  var candidates=bottomLineHourlyCandidates(hourlyReady?H:[],{now:now,obs:obs,climateFor:climateFor,
+    uvPeak:uv.peak,aqi:callAqi,allowComfort:comfort,hasHazard:!!callLocalAlert||outlooks.length>0}).concat(outlooks);
   function push(pri,ico,topic,label,headline,detail,action,tone,context,opts){
     candidates.push(bottomCandidate(pri,ico,topic,label,headline,detail,action,tone,context,opts));
   }
 
-  /* The outlook desks see hazards beyond the hourly edge. Their pure verdicts join the hourly
-     candidates before one deterministic selector chooses the lead and supports. */
-  if(callRisk){
-    [outlookVerdict(OUTLOOK_CFG.spc, spcRisk(callRisk.spc[0]).lvl, spcRisk(callRisk.spc[1]).lvl),
-     outlookVerdict(OUTLOOK_CFG.ero, eroRisk(callRisk.ero[0]).lvl, eroRisk(callRisk.ero[1]).lvl),
-     outlookVerdict(OUTLOOK_CFG.fire, fireRisk(callRisk.fire[0]).lvl, fireRisk(callRisk.fire[1]).lvl),
-     outlookVerdict(OUTLOOK_CFG.wssi, callRisk.wssi[0], callRisk.wssi[1])
-    ].forEach(function(v){ if(v) candidates.push(v); });
-  }
   // — climate context: only genuinely notable framings earn a candidate (and only from a record
   //    deep enough to mean anything) —
   var forecastRecord=contextRecord(climate.fcHiDate);
@@ -1654,8 +1664,8 @@ function renderTheCall(){
 
   var model=buildBottomLine(candidates,callLocalAlert);
   renderTheCall._nbmContext={model:model,candidates:candidates};
-  renderNwsMessages();
-  renderGlance(H,hourlyReady,candidates);
+  if(!briefingOnly) renderNwsMessages();
+  renderGlance(H,hourlyReady,candidates,{now:now,obs:obs,climateFor:climateFor,sunset:sunTimes(current.lat,current.lon,now).set});
 }
 
 /* ============ YOUR DAY ============
@@ -1683,9 +1693,13 @@ function paintNowTakeaway(){
     el=document.createElement("div"); el.className="cc-take"; el.id="ccTake";
     cur.insertBefore(el,cur.firstChild);
   }
-  if(el&&el.innerHTML!==html) el.innerHTML=html;
+  // Compare the markup we wrote, since the DOM serializes SVG and entities differently.
+  if(el&&(paintNowTakeaway._slot!==el||paintNowTakeaway._html!==html)){
+    el.innerHTML=html;
+    paintNowTakeaway._slot=el; paintNowTakeaway._html=html;
+  }
 }
-function renderGlance(H,hourlyReady,candidates){
+function renderGlance(H,hourlyReady,candidates,opts){
   var box=document.getElementById("glance"), card=document.getElementById("glanceCard");
   if(!box||!card) return;
   var now=Date.now(), statusEl=document.getElementById("glanceStatus"), notes=[];
@@ -1705,29 +1719,33 @@ function renderGlance(H,hourlyReady,candidates){
     var all=candidates.slice(), cutoff=H[H.length-1].end;
     if(smart.weekDays&&smart.weekDays.length)
       all=all.concat(bottomLineWeekCandidates(smart.weekDays,cutoff,smart.hourlyAll));
-    var model=buildBottomLine(all,callLocalAlert), wear=glanceWear(H);
+    var model=buildBottomLine(all,callLocalAlert), wear=glanceWear(H,opts);
     renderGlance._model=model;
     if(!model.lead){
       // buildBottomLine withholds everything during an emergency it cannot match to forecast
       // evidence. The alert card above is the message; this card must not compete with it.
       html='<p class="glance-empty">An emergency alert is active here. Follow the alert above and official instructions.</p>';
     }else{
-      var L=model.lead;
+      var L=model.lead, action=L.action;
+      var mergeWear=wear&&glanceTemperatureFamilies[L.topic]&&!L.alertAware;
+      if(mergeWear) action=(action?action+" ":"")+wear.advice;
       leadHtml='<div class="glance-lead tone-'+esc(L.tone)+'">'
         +'<span class="glance-lead-ico">'+glanceIcon(L.icon)+'</span>'
         +'<div><p class="glance-label">'+esc(L.label)+'</p>'
         +'<p class="glance-headline">'+esc(L.headline)+'</p>'
         +(L.detail?'<p class="glance-detail">'+esc(L.detail)+'</p>':'')
-        +(L.action?'<p class="glance-action">'+esc(L.action)+'</p>':'')
+        +(action?'<p class="glance-action">'+esc(action)+'</p>':'')
         +'</div></div>';
       html='';
       var rows=model.supports.slice();
-      // Clothing is a constant question, so it always gets a row, unless a warning has the lead.
-      if(wear&&!L.alertAware) rows.splice(Math.min(rows.length,2),0,wear);
-      /* Phones show the lead plus ONE row (Wear when there is one) so Now stays near the fold;
-         the rest sits behind a button. Hiding a single row would cost a button of the same
-         height, so the collapse only starts at two hidden rows. Wider screens ignore it (CSS). */
-      var keep=rows.indexOf(wear)>=0?rows.indexOf(wear):0, extra=rows.length-1;
+      var rain=candidates.filter(function(c){ return c.topic==="precip"&&c.horizon==="hourly"; })[0];
+      // Rain answers a standing question even if it leads or falls outside the support limit.
+      if(rain&&rows.indexOf(rain)<0) rows.unshift(rain);
+      var hasLater=rows.length>0&&rows[rows.length-1].horizon==="week";
+      if(wear&&!mergeWear&&!L.alertAware) rows.splice(Math.min(rows.length-(hasLater?1:0),2),0,wear);
+      /* On phones the rain answer stays visible. Hiding a single row would cost a button of
+         the same height, so collapse only starts at two hidden rows. Wider screens show all. */
+      var keep=rain?rows.indexOf(rain):0, extra=rows.length-1;
       if(extra<2){ keep=-1; extra=0; }
       if(rows.length) html+='<ul class="glance-list" id="glanceList">'+rows.map(function(c,i){
         return '<li class="tone-'+esc(c.tone||"neutral")+(i===keep||keep<0?' glance-keep':'')+'">'+glanceIcon(c.icon)
@@ -1736,18 +1754,17 @@ function renderGlance(H,hourlyReady,candidates){
           +(c.detail?' <span>'+esc(c.detail)+'</span>':'')+'</span></li>';
       }).join('')+'</ul>';
       if(extra>0) html+='<button type="button" class="glance-more" aria-controls="glanceList" aria-expanded="'
-        +(renderGlance._open?'true':'false')+'">'+(renderGlance._open?'Show less':'Show '+extra+' more for today')+'</button>';
+        +(renderGlance._open?'true':'false')+'">'+(renderGlance._open?'Show less':'Show '+extra+' more')+'</button>';
     }
   }
   renderGlance._leadHtml=leadHtml; paintNowTakeaway();
-  var scope=document.getElementById("glanceScope"), scopeText="Next 24 hours";
-  if(scope&&scope.textContent!==scopeText) scope.textContent=scopeText;
   var noteText=notes.join(" ");
   if(statusEl&&statusEl.textContent!==noteText){statusEl.textContent=noteText;statusEl.hidden=!noteText;}
   box.classList.toggle("glance-open",!!renderGlance._open);
-  if(box.innerHTML!==html){
+  if(renderGlance._slot!==box||renderGlance._html!==html){
     var moreFocused=document.activeElement&&document.activeElement.classList.contains("glance-more");
     box.innerHTML=html;
+    renderGlance._slot=box; renderGlance._html=html;
     var more=box.querySelector(".glance-more");
     if(moreFocused&&more) more.focus({preventScroll:true});
   }
@@ -1759,7 +1776,7 @@ function renderGlance(H,hourlyReady,candidates){
       box.classList.toggle("glance-open",renderGlance._open);
       btn.setAttribute("aria-expanded",renderGlance._open?"true":"false");
       var n=box.querySelectorAll(".glance-list li").length-1;
-      btn.textContent=renderGlance._open?"Show less":"Show "+n+" more for today";
+      btn.textContent=renderGlance._open?"Show less":"Show "+n+" more";
     });
   }
 }

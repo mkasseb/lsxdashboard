@@ -59,7 +59,7 @@ const SUBJECT = new Function(`
   ${lift(/^function eventFamily\(ev\)\{[\s\S]*?^\}/m, 'eventFamily()')}
   ${lift(/^var FAMILY_CFG=\{[\s\S]*?^\};/m, 'FAMILY_CFG')}
   ${lift(/^var LAYERS_MAX=\d+;/m, 'LAYERS_MAX')}
-  ${lift(/^function coldVerdict\(nowT,mMin,cMin\)\{[\s\S]*?^\}/m, 'coldVerdict()')}
+  ${lift(/^function coldVerdict\(nowT,mMin,cMin,high,unusual\)\{[\s\S]*?^\}/m, 'coldVerdict()')}
   ${lift(/^function parseMph\(s\)\{.*\}$/m, 'parseMph()')}
   ${lift(/^function precipChance\(p\)\{[\s\S]*?^\}/m, 'precipChance()')}
   ${lift(/^function gridInterval\(validTime\)\{[\s\S]*?^\}/m, 'gridInterval()')}
@@ -96,6 +96,8 @@ const SUBJECT = new Function(`
   ${lift(/^var OUTLOOK_CFG=\{[\s\S]*?^\};/m, 'OUTLOOK_CFG')}
   ${lift(/^function outlookVerdict\(cfg,l0,l1\)\{[\s\S]*?^\}/m, 'outlookVerdict()')}
   ${lift(/^function bottomCandidate\(pri,ico,topic,label,headline,detail,action,tone,context,opts\)\{[\s\S]*?^\}/m, 'bottomCandidate()')}
+  ${lift(/^function briefingHour\(h,now,obs\)\{[\s\S]*?^\}/m, 'briefingHour()')}
+  ${lift(/^function clearFrostSky\(text\)\{[\s\S]*?^\}/m, 'clearFrostSky()')}
   ${lift(/^function bottomLineHours\(hrs\)\{[\s\S]*?^\}/m, 'bottomLineHours()')}
   var STN_STALE_MS=2*60*60000;
   ${lift(/^function currentObservationFresh\(o,nowMs\)\{[\s\S]*?^\}/m, 'currentObservationFresh()')}
@@ -110,7 +112,7 @@ const SUBJECT = new Function(`
   ${lift(/^function bottomLineAlertHeadline\(candidate,outdoor,alert\)\{[\s\S]*?^\}/m, 'bottomLineAlertHeadline()')}
   ${lift(/^function bottomLineWindowAction\(candidate,outdoor\)\{[\s\S]*?^\}/m, 'bottomLineWindowAction()')}
   ${lift(/^function buildBottomLine\(candidates,localAlert\)\{[\s\S]*?^\}/m, 'buildBottomLine()')}
-  ${lift(/^function glanceWear\(H\)\{[\s\S]*?^\}/m, 'glanceWear()')}
+  ${lift(/^function glanceWear\(H,opts\)\{[\s\S]*?^\}/m, 'glanceWear()')}
   ${lift(/^var T_RAMP=.*$/m, 'T_RAMP')}
   ${lift(/^function tRamp\(t\)\{[\s\S]*?^\}/m, 'tRamp()')}
   ${lift(/^function extractAFD\(text\)\{[\s\S]*?^\}/m, 'extractAFD()')}
@@ -682,7 +684,10 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
   // advice for 28°), and the swing outranks the plain cold morning (it says strictly more).
   check('freezing wins over a big fall', V(60, 28, 28), 'freezing');
   check('a big fall wins over the cold-morning tier', V(72, 44, 44), 'falling');
-  check('cold morning speaks when nothing else does', V(48, 40, 40), 'cold');
+  check('40° is too mild for the no-climate fallback', V(48, 40, 40), null);
+  check('35° is the edge for the fallback', V(48, 35, 40), 'cold');
+  check('an 18° rise qualifies as a warm-up', V(34, null, null, 52), 'warming');
+  check('a 17° rise stays quiet', V(34, null, null, 51), null);
   check('a mild morning says nothing', V(60, 52, 52), null);
 
   // Missing inputs must not throw or invent a verdict.
@@ -761,7 +766,7 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
   function hours(start, count, edit) {
     return Array.from({length: count}, (_, i) => {
       const d = new Date(start.getTime() + i * 3600000), hr = d.getHours();
-      return Object.assign({t: 70, d, hr, pop: 0, rh: 50, mph: 5, dew: 50, fl: 70,
+      return Object.assign({t: 70, d, end:new Date(+d+3600000), hr, pop: 0, rh: 50, mph: 5, dew: 50, fl: 70,
         thund: false, wint: false, fog: false, day: hr >= 7 && hr <= 19}, edit ? edit(i, d) : {});
     });
   }
@@ -841,9 +846,73 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
   check('25 degrees stays amber', topic(weather(H, {now: EVE}), 'cold').tone, 'warning');
   H = hours(NOW, 12, i => ({t: i === 0 ? 72 : (i === 6 ? 45 : 65), fl: i === 0 ? 72 : (i === 6 ? 45 : 65)}));
   check('a real temperature crash becomes one trend candidate', topic(weather(H), 'cold').headline, 'Sharp temperature drop');
-  H = hours(new Date(2026, 7, 14, 0), 12, i => ({t: i === 6 ? 40 : 48, fl: i === 6 ? 40 : 48}));
-  check('a cold morning without a sharp fall stays a cold-morning candidate',
-    topic(C(H, {now: new Date(2026, 7, 14, 0)}), 'cold').headline, 'Cold morning');
+  const MIDNIGHT = new Date(2026, 7, 14, 0);
+  const B = SUBJECT.buildBottomLine;
+  const coolDay = hours(MIDNIGHT, 14, i => ({t:i===6?40:48,fl:i===6?40:48}));
+  const climateCold = B(weather(coolDay, {now:MIDNIGHT,climateFor:()=>({lo:55})})).lead;
+  check('40° leads when it is 15° below the date normal', [climateCold.headline,climateCold.detail,climateCold.action],
+    ['Cold morning','40° near 6am · 15° colder than normal.','']);
+  check('40° stays quiet with a normal of 36°',
+    topic(weather(coolDay,{now:MIDNIGHT,climateFor:()=>({lo:36})}),'cold'),null);
+  check('a low in the bottom 15% can qualify without a normal',
+    topic(weather(coolDay,{now:MIDNIGHT,climateFor:()=>({lows:[32,38,...Array(28).fill(44)]})}),'cold').headline,'Cold morning');
+  const fallback = hours(MIDNIGHT, 16, i => ({t:i===6?35:i<11?48:62,fl:i===6?35:i<11?48:62}));
+  const fallbackCandidates = weather(fallback,{now:MIDNIGHT});
+  check('fallback cold is 48 and stays below core outdoor comfort',
+    [topic(fallbackCandidates,'cold').priority,B(fallbackCandidates).lead.topic],[48,'outdoors']);
+  check('ready climate data suppresses seasonally normal 35° mornings',
+    topic(weather(fallback,{now:MIDNIGHT,climateFor:()=>({lo:36})}),'cold'),null);
+
+  const early = new Date(2026, 10, 18, 8);
+  const coldHour = hours(early, 24, i=>({t:i===0?25:i===23?34:44,fl:i===0?25:44}));
+  const remaining = weather(coldHour,{now:new Date(+early+40*60000)});
+  check('a past half-hour cannot produce a forecast freeze or set the morning minimum',
+    [topic(remaining,'cold').headline,topic(remaining,'cold').detail],['Cold morning','34° near 7am tomorrow.']);
+  const obsWins = hours(early, 12, i=>({t:i===0?25:42,fl:i===0?21:42}));
+  check('a fresh current reading replaces the overlapping freeze forecast',
+    topic(weather(obsWins,{now:new Date(+early+20*60000),obs:{t:40,fl:37}}),'cold'),null);
+  check('candidate decisions leave the original hourly records available', [obsWins[0].t,obsWins[0].fl],[25,21]);
+
+  const temps=[42,46,48,50,55,63,66,64,61,54,49,47,46,45,43,42,41,40,39,39,38,38,39,40];
+  const novHours = hours(early, 24, i => ({
+    t:temps[i],fl:i===0?38:temps[i],dew:30,mph:0,clear:true,pop:5
+  }));
+  const novNow = new Date(+early+40*60000);
+  const novOpts = {now:novNow,obs:{t:34,fl:34,dew:30,mph:0,clear:true},climateFor:()=>({lo:35,hi:55})};
+  const novCandidates = weather(novHours,novOpts);
+  const week = SUBJECT.bottomLineWeekCandidates([{night:{name:'Saturday Night',
+    startTime:'2026-11-21T18:00:00-06:00',endTime:'2026-11-22T06:00:00-06:00',temperature:44,
+    probabilityOfPrecipitation:{value:46},shortForecast:'Chance Rain',windSpeed:'5 mph'}}],novHours.at(-1).end);
+  const nov = B([...novCandidates,...week]);
+  check('Nov 18 leads with the warm-up from the observed value', [nov.lead.headline,nov.lead.detail],
+    ['Chilly start, mild afternoon','34° now → 66° by 2pm · 11° warmer than normal.']);
+  check('Nov 18 rain and Saturday night coexist under distinct horizons',
+    nov.supports.filter(c=>c.topic==='precip').map(c=>[c.label,c.headline,c.detail]),[
+      ['Rain','Dry today','Chance under 10% through 8am tomorrow.'],
+      ['Later','Rain possible Saturday night','NWS precipitation chance 46%.']
+    ]);
+  check('the Later item comes last',nov.supports.at(-1).label,'Later');
+  const wear = SUBJECT.glanceWear(novHours,{...novOpts,sunset:new Date(2026,10,18,16,47)});
+  check('Nov 18 Wear keeps the observed low and gives one seasonal outfit change',
+    [wear.lo,wear.hi,wear.headline],
+    [34,66,'Warm jacket until ~12pm, then light jacket or sweater']);
+  for(const [observed,future,headline,tone] of [
+    [31,20,'Hard freeze by 7am tomorrow','danger'],
+    [31,28,'Below freezing by 7am tomorrow','warning'],
+    [30,31,'Below freezing now','warning']
+  ]){
+    const freezeHours=hours(early,24,i=>({t:i===23?future:35,fl:i===23?future:35}));
+    const model=B(weather(freezeHours,{now:novNow,obs:{t:observed,fl:observed}}));
+    check('freeze guidance preserves the colder reading '+future,
+      [model.lead.headline,model.lead.tone,model.lead.detail.includes(observed+'°')],
+      [headline,tone,true]);
+    check('one cold cue after dedup '+future,[model.lead,...model.supports].filter(c=>c.topic==='cold').length,1);
+    if(future===20) check('hard-freeze lead keeps protective advice',model.lead.action.includes('Protect plants, pipes and pets'),true);
+  }
+  const wetNov = novHours.map((h,i)=>i===5?{...h,pop:80}:h);
+  check('rain timing suppresses the warm-up',topic(weather(wetNov,novOpts),'warming'),null);
+  check('any outlook or local alert can suppress the warm-up',topic(weather(novHours,{...novOpts,hasHazard:true}),'warming'),null);
+  check('a 60-priority hazard outranks a warm-up', B([...novCandidates,{priority:60,topic:'wind',headline:'Windy'}]).lead.topic,'wind');
 
   for (const [hour, expected] of [[3, true], [4, true], [9, true], [10, true]]) {
     H = hours(new Date(2026, 7, 14, 0), 12, i => ({fog: i === hour}));
@@ -881,20 +950,20 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
   check('a gap in hourly coverage cannot certify the overnight window', !!topic(C(H, {now: NIGHT}), 'overnight'), false);
 
   const MORNING = new Date(2026, 7, 13, 8);
-  H = hours(MORNING, 6);
-  check('four or more genuinely good daylight hours earn the excellent call', topic(C(H, {now: MORNING}), 'outdoors').headline,
+  H = hours(MORNING, 8, i => i<3 ? {t:40,fl:40} : {});
+  check('a chilly morning does not rule out good core outdoor hours', topic(C(H, {now: MORNING}), 'outdoors').headline,
     'Excellent outdoor conditions');
-  H = hours(MORNING, 6, i => i === 2 ? {pop: 20} : {});
-  check('20 percent rain prevents an all-day excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
-  H = hours(MORNING, 6, i => i === 2 ? {pop: null} : {});
-  check('missing rain data prevents an all-day excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
-  H = hours(MORNING, 6, i => i === 2 ? {fl: 95} : {});
-  check('feels-like 95 prevents an all-day excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
-  H = hours(MORNING, 6, i => i === 2 ? {mph: 16} : {});
-  check('16 mph wind prevents an all-day excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
-  H = hours(MORNING, 6, i => i === 2 ? {dew: 67} : {});
-  check('oppressive humidity prevents an all-day excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
-  H = hours(MORNING, 6, i => i === 2 ? {t: null, fl: null} : {});
+  H = hours(MORNING, 8, i => i === 4 ? {pop: 20} : {});
+  check('20 percent rain prevents a core-hours excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
+  H = hours(MORNING, 8, i => i === 4 ? {pop: null} : {});
+  check('missing rain data prevents a core-hours excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
+  H = hours(MORNING, 8, i => i === 4 ? {fl: 95} : {});
+  check('feels-like 95 prevents a core-hours excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
+  H = hours(MORNING, 8, i => i === 4 ? {mph: 16} : {});
+  check('16 mph wind prevents a core-hours excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
+  H = hours(MORNING, 8, i => i === 4 ? {dew: 67} : {});
+  check('oppressive humidity prevents a core-hours excellent claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
+  H = hours(MORNING, 8, i => i === 4 ? {t: null, fl: null} : {});
   check('missing temperature cannot become an excellent-day claim', !!topic(C(H, {now: MORNING}), 'outdoors'), false);
   check('the excellent-day claim stops after 5 PM',
     !!topic(C(hours(new Date(2026, 7, 13, 17), 4, () => ({day: true})), {now: new Date(2026, 7, 13, 17)}), 'outdoors'), false);
@@ -908,7 +977,7 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
   H[2].d = new Date(H[2].d.getTime() + 3600000);
   check('non-contiguous forecast hours cannot form a two-hour outdoor window',
     !!topic(C(H, {now: new Date(2026, 7, 13, 7)}), 'outdoors'), false);
-  H = hours(MORNING, 6);
+  H = hours(MORNING, 8);
   check('quiet weather does not invent a narrow best-window cutoff',
     topic(C(H, {now: MORNING}), 'outdoors').headline, 'Excellent outdoor conditions');
   check('empty hourly data produces no weather claims', C([], {now: NOW}), []);
@@ -957,9 +1026,9 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
     {name:'Saturday',night:period(5,'Saturday Night',false,30,50,'Snow')}], cutoff);
   check('distinct later storm and winter events both survive',
     splitHazards.map(x => x.topic), ['winter', 'storm', 'cold']);
-  check('later hazards can lead over a quiet hourly rain fallback',
-    SUBJECT.buildBottomLine([{topic:'precip', priority:40, headline:'Rain unlikely'}, ...week]).lead.topic,
-    'winter');
+  const withLater = SUBJECT.buildBottomLine([{topic:'precip',priority:40,headline:'Dry today'},...week]);
+  check('hourly rain leads over the week and only the top Later item gets a row',
+    [withLater.lead.topic,withLater.supports.map(c=>c.topic)],['precip',['winter']]);
   check('near-term dangerous heat still leads over later hazards',
     SUBJECT.buildBottomLine([{topic:'heat', priority:100, headline:'Dangerous heat'}, ...week]).lead.topic,
     'heat');
@@ -980,7 +1049,7 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
       end:new Date(2026, 7, 14, 15+i)})), false, true), 'Through Fri 8 PM');
 
   const dry = W([{name:'Friday',day:period(2,'Friday',true,75,10,'Sunny')}], cutoff);
-  check('later dry periods provide a quiet-week fallback', dry[0].headline, 'Mainly dry later this week');
+  check('later dry periods need no second dry row', dry.length, 0);
   check('sub-threshold week rain still gets a qualified outlook',
     W([{name:'Friday',day:period(2,'Friday',true,75,30,'Chance Rain')}], cutoff)[0].headline,
     'Some rain possible later this week');
@@ -1082,7 +1151,8 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
 /* ============ glanceWear ============ */
 {
   const G = SUBJECT.glanceWear;
-  const hr = (h, fl, pop, extra) => Object.assign({hr: h, t: fl, fl, pop, wint: false}, extra || {});
+  const now = new Date(2026, 10, 18, 7);
+  const hr = (h, fl, pop, extra) => Object.assign({hr:h,d:new Date(2026,10,18,h),t:fl,fl,pop,wint:false},extra||{});
   const day = (fls, pop, extra) => fls.map((f, i) => hr(7 + i, f, pop, extra));
   check('wear withholds with fewer than three waking hours', G([hr(3,40,0),hr(4,40,0),hr(8,40,0)]), null);
   check('wear ignores overnight hours entirely', G([0,1,2,3,4,5].map(h => hr(h,10,0))), null);
@@ -1091,9 +1161,19 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
   check('wear: chilly day is a warm jacket', G(day([42,46,48],0)).headline, 'Warm jacket');
   check('wear: cool day is a light jacket', G(day([55,58,60],0)).headline, 'Light jacket or sweater');
   check('wear: mild day is short sleeves', G(day([68,74,78],0)).headline, 'Short sleeves');
-  check('wear: hot day goes breathable', G(day([80,88,94],0)).headline, 'Light, breathable clothes');
-  const swing = G(day([40,50,60,62],0));
-  check('wear: a big swing on a cool day says layers', [swing.layers, /dress in layers/.test(swing.detail)], [true, true]);
+  check('wear skips a change within the next hour', G(day([80,88,94],0),{now}).headline, 'Light, breathable clothes');
+  check('a one-hour boundary wiggle does not change Wear',
+    G(day([35,35,36,35,35],0),{now}).headline,'Winter coat');
+  check('a two-hour change just over the boundary counts',
+    G(day([35,35,36,36],0),{now}).headline,'Winter coat until ~9am, then warm jacket');
+  check('multi-tier cooling calls for the heaviest layer in one change',
+    G([60,60,49,40,30,19,19].map((f,i)=>hr(11+i,f,0)),{now:new Date(2026,10,18,11)}).headline,
+    'Light jacket or sweater until ~4pm, then heavy coat, hat and gloves');
+  check('a cooler evening includes the sunset clock when a crossing is near sunset',
+    G([65,65,60,47,46].map((f,i)=>hr(14+i,f,0)),{now:new Date(2026,10,18,14),
+      sunset:new Date(2026,10,18,16,47)}).headline,'Short sleeves, then warm jacket after sunset (4:47 PM)');
+  const swing = G(day([40,50,60,62],0),{now});
+  check('wear: a big swing keeps the layers flag and times the change', [swing.layers, /until ~9am/.test(swing.headline)], [true, true]);
   check('wear: a big swing on a hot day does not', G(day([64,75,90],0)).layers, false);
   const wet = G(day([50,52,54],60));
   check('wear: rain likely adds an umbrella', [wet.umbrella, /bring an umbrella/.test(wet.detail)], [true, true]);
@@ -1639,6 +1719,7 @@ function currentCardHarness(result) {
     function timeAgo(){return '3 hr ago';}
     function renderUvNow(){}
     function renderAqiMini(){}
+    function renderTheCall(){}
     ${lift(/^function currentExposure\(\)\{[\s\S]*?^\}/m, 'currentExposure()')}
     ${lift(/^function renderCurrentUnavailable\(message\)\{[\s\S]*?^\}/m, 'renderCurrentUnavailable()')}
     ${lift(/^function loadCurrent\(\)\{[\s\S]*?^\}/m, 'loadCurrent()')}

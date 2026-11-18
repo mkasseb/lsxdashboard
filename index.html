@@ -277,8 +277,8 @@
     <div id="glance" aria-live="polite"><div class="loading">Reading the forecast…</div></div>
     <details class="disclosure" id="glanceWhy">
       <summary>How this is worked out</summary>
-      <p>This summary is computed by this dashboard, not written by a forecaster. It reads the NWS hourly forecast for the selected location (rain chances, temperature, feels-like, wind and wording) plus the NWS seven-day periods, active local alerts, UV, air quality and SPC/WPC outlooks, then picks the most consequential item to lead.</p>
-      <p>Clothing advice uses the feels-like range between 7 AM and 10 PM over the next 15 hours. It is withheld when the hourly forecast is missing, stale or has fewer than six usable hours. Official warnings above and NWS Key Messages always take precedence.</p>
+      <p>The dashboard uses the NWS hourly forecast, active local alerts, UV, air quality and SPC/WPC outlooks to pick the Now takeaway. A fresh station reading supplies the current hour's temperature and feels-like. Timing estimates look ahead, skipping hours that started more than 30 minutes ago. Cold mornings are judged against local normals and the date's historical lows when available. Without those, the cold-morning cue starts at 35°F.</p>
+      <p>Your day includes a rain answer for the available hours in the next 24 hours. A single Later row can summarize the seven-day forecast beyond that window. Clothing advice follows changes in feels-like between 7 AM and 10 PM over the next 15 hours. The summary needs at least six usable hourly periods, and clothing advice needs at least three in its window. Official warnings above and NWS Key Messages take precedence.</p>
     </details>
   </section>
 </div>
@@ -603,8 +603,8 @@
 <script type="application/json" data-map-src="https://cdn.jsdelivr.net/npm/@maplibre/maplibre-gl-leaflet@0.1.4/leaflet-maplibre-gl.js"
   integrity="sha384-tXYNKOHx4T02jMP7YYCtBxPIv1B5gaA5mcVPBzqMp6d7VzWzxJgI2aWF/nJLrQdS" crossorigin="anonymous"></script>
 <script src="/assets/weather-contracts.js?v=ad8b9553dc77bd53"></script>
-<script src="/assets/weather-core.js?v=565144c53a5e92d2"></script>
-<script src="/assets/weather-feeds.js?v=8e18548efbbafb1b"></script>
+<script src="/assets/weather-core.js?v=8025b2f1e4d4cbb2"></script>
+<script src="/assets/weather-feeds.js?v=6923833a586b96ee"></script>
 <script src="/assets/forecast-view.js?v=b6dd1f0e63226306"></script>
 <script src="/assets/dashboard-context.js?v=e7b385d0147c780f"></script>
 <script src="/assets/model-data.js?v=aa9f38687b71f14d" data-worker-src="/assets/model-worker.js?v=3df9c3b9bd2c3bc4"></script>
@@ -613,9 +613,9 @@
 <script src="/assets/radar-map.js?v=93a124062dad0c6e"></script>
 <script src="/assets/station-map.js?v=28a078d94c91ec8b"></script>
 <script src="/assets/map-runtime.js?v=37d7081bb6443f11"></script>
-<script src="/assets/location-controls.js?v=dd696d4a07f15984"></script>
+<script src="/assets/location-controls.js?v=a2659a3e36a76b68"></script>
 <script src="/assets/saved-view.js?v=6eab124901607437"></script>
 <script src="/assets/climate-view.js?v=d7b1e797b55b32ce"></script>
-<script src="/assets/dashboard.js?v=dfd6f53bacb83095"></script>
+<script src="/assets/dashboard.js?v=153908cc83a4deaa"></script>
 </body>
 </html>
