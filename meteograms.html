@@ -296,30 +296,42 @@ function pick(h) { hideHits(); q.value = ''; q.blur(); setLoc(h); }
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 // ---------- data ----------
+// Each load captures a generation and aborts the one before it, so a slow response for a
+// previous model or location can never paint under the current selection (the same rule the
+// dashboard's locGuard()/fresh() enforce).
+let gen = 0, ctrl = null;
 async function load() {
   syncURL(); markPreset();
-  const m = MODELS[state.model];
+  const my = ++gen;
+  if (ctrl) ctrl.abort();
+  ctrl = new AbortController();
+  const signal = ctrl.signal;
+  const sel = {lat: state.lat, lon: state.lon, name: state.name, model: state.model};
+  const m = MODELS[sel.model];
   $('#meta').textContent = `Loading ${m.name}…`;
-  const url = `https://api.open-meteo.com/v1/forecast?latitude=${state.lat}&longitude=${state.lon}` +
-    `&hourly=${HOURLY}&daily=${DAILY}&models=${state.model}&forecast_days=${m.days}` +
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${sel.lat}&longitude=${sel.lon}` +
+    `&hourly=${HOURLY}&daily=${DAILY}&models=${sel.model}&forecast_days=${m.days}` +
     `&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto`;
-  INIT = null;
-  const metaP = m.meta ? fetch(`https://api.open-meteo.com/data/${m.meta}/static/meta.json`).then(r => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null);
+  const metaP = m.meta ? fetch(`https://api.open-meteo.com/data/${m.meta}/static/meta.json`, {signal}).then(r => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null);
   try {
-    const r = await fetch(url);
+    const r = await fetch(url, {signal});
     const j = await r.json();
+    if (my !== gen) return;
     if (j.error) throw new Error(j.reason || 'API error');
-    DATA = clean(j);
-    if (!DATA.h.time.length) throw new Error(state.model === 'ncep_nbm_conus'
+    const data = clean(j);
+    if (!data.h.time.length) throw new Error(sel.model === 'ncep_nbm_conus'
       ? 'NBM returned no data here. It only covers the lower 48; try GFS or ECMWF.'
       : 'This model returned no data for this location.');
     const meta = await metaP;
-    if (meta && meta.last_run_initialisation_time) INIT = new Date(meta.last_run_initialisation_time * 1000);
+    if (my !== gen) return;
+    DATA = data;
+    INIT = meta && meta.last_run_initialisation_time ? new Date(meta.last_run_initialisation_time * 1000) : null;
     render();
   } catch (e) {
-    DATA = null;
-    $('#meta').innerHTML = `<b>${esc(state.name)}</b> · ${esc(m.name)}`;
-    ['daily','temp','precip','snow','sky','wind','pres'].forEach(id => $('#' + id).innerHTML = `<div class="err">⚠️ ${esc(e.message)}</div>`);
+    if (my !== gen || e.name === 'AbortError') return;
+    DATA = null; INIT = null;
+    $('#meta').innerHTML = `<b>${esc(sel.name)}</b> · ${esc(m.name)}`;
+    ['daily','temp','precip','snow','sky','wind','pres'].forEach(id => $('#' + id).innerHTML = `<div class="err">Could not load: ${esc(e.message)}</div>`);
   }
 }
 
