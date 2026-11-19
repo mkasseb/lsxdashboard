@@ -96,6 +96,10 @@ svg text{fill:var(--text);font-size:11px;font-family:var(--fm)}
 .err{padding:30px 10px;text-align:center;color:var(--muted)}
 footer{color:var(--muted);font-size:12px;line-height:1.6;border-top:1px solid var(--border);padding-top:12px}
 .hidden{display:none}
+.card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.save-btn{font-family:var(--fm);font-size:12px;letter-spacing:.02em;padding:6px 10px;display:inline-flex;align-items:center;gap:6px;flex:none;white-space:nowrap}
+.save-btn svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.save-btn:disabled{opacity:.6;cursor:default}
 </style>
 </head>
 <body>
@@ -194,12 +198,12 @@ footer{color:var(--muted);font-size:12px;line-height:1.6;border-top:1px solid va
 <script>
 (() => {
 const MODELS = {
-  ncep_nbm_conus: {name:'NBM CONUS 2.5 km', short:'NBM 2.5 km', days:11, meta:'ncep_nbm_conus'},
-  gfs_seamless:   {name:'GFS', short:'GFS', days:16, meta:'ncep_gfs025'},
-  ecmwf_ifs025:   {name:'ECMWF IFS 0.25°', short:'ECMWF IFS', days:15, meta:'ecmwf_ifs025'},
-  gem_seamless:   {name:'Canadian GEM', short:'GEM', days:10, meta:'cmc_gem_gdps'},
-  icon_seamless:  {name:'DWD ICON', short:'ICON', days:7, meta:'dwd_icon'},
-  best_match:     {name:'Open-Meteo Best Match', short:'Best Match', days:16, meta:null}
+  ncep_nbm_conus: {name:'NBM CONUS 2.5 km', short:'NBM 2.5 km', file:'NBM', days:11, meta:'ncep_nbm_conus'},
+  gfs_seamless:   {name:'GFS', short:'GFS', file:'GFS', days:16, meta:'ncep_gfs025'},
+  ecmwf_ifs025:   {name:'ECMWF IFS 0.25°', short:'ECMWF IFS', file:'ECMWF', days:15, meta:'ecmwf_ifs025'},
+  gem_seamless:   {name:'Canadian GEM', short:'GEM', file:'GEM', days:10, meta:'cmc_gem_gdps'},
+  icon_seamless:  {name:'DWD ICON', short:'ICON', file:'ICON', days:7, meta:'dwd_icon'},
+  best_match:     {name:'Open-Meteo Best Match', short:'Best Match', file:'BestMatch', days:16, meta:null}
 };
 const PRESETS = [
   {id:'KSUS', lat:38.6621, lon:-90.652,  name:'Spirit of St. Louis Airport (KSUS)'},
@@ -815,6 +819,141 @@ function cardinal(d) { if (d == null) return ''; return ['N','NNE','NE','ENE','E
 
 let rz, lastW = innerWidth;
 addEventListener('resize', () => { if (innerWidth === lastW) return; lastW = innerWidth; clearTimeout(rz); rz = setTimeout(() => { if (!DATA) return; const busy = $('#meta').textContent.startsWith('Loading'); const t = $('#meta').innerHTML; render(); if (busy) $('#meta').innerHTML = t; }, 150); });
+
+// ---------- export ----------
+// Each card can be saved as a PNG: the chart's SVG is cloned with computed styles inlined (so
+// theme colours and CSS variables survive outside the page), fonts are embedded as data URLs,
+// and it is drawn onto a canvas under the card's title, the location/model/init line and the
+// legend, with attribution underneath. The SVG goes in as a data: URL because _headers img-src
+// allows data: but not blob:. Phones get the share sheet (Save Image); desktops a download.
+const FONT_FILES = [['400', '/assets/fonts/ibm-plex-mono-latin-400-normal.woff2'], ['500 800', '/assets/fonts/ibm-plex-mono-latin-500-normal.woff2']];
+let fontCSS = null;
+async function embeddedFonts() {
+  if (fontCSS !== null) return fontCSS;
+  try {
+    const parts = await Promise.all(FONT_FILES.map(async ([w, u]) => {
+      const blob = await (await fetch(u)).blob();
+      const url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
+      return `@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:${w};src:url(${url}) format("woff2")}`;
+    }));
+    fontCSS = parts.join('');
+  } catch (e) { fontCSS = ''; }
+  return fontCSS;
+}
+const STYLE_PROPS = ['fill', 'fill-opacity', 'stroke', 'stroke-width', 'stroke-opacity', 'stroke-dasharray', 'stroke-linejoin', 'stroke-linecap',
+  'paint-order', 'opacity', 'visibility', 'font-family', 'font-size', 'font-weight', 'text-anchor'];
+function inlineStyles(src, dst) {
+  const cs = getComputedStyle(src);
+  dst.setAttribute('style', STYLE_PROPS.map(p => `${p}:${cs.getPropertyValue(p)}`).join(';'));
+  for (let i = 0; i < src.children.length; i++) inlineStyles(src.children[i], dst.children[i]);
+}
+function loadImage(url) {
+  return new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = () => rej(new Error('chart image failed to load')); im.src = url; });
+}
+function wrapText(ctx, text, maxW) {
+  const words = text.split(' '), lines = []; let line = '';
+  words.forEach(w => { const t = line ? line + ' ' + w : w; if (ctx.measureText(t).width > maxW && line) { lines.push(line); line = w; } else line = t; });
+  if (line) lines.push(line);
+  return lines;
+}
+async function chartPNG(card, svg) {
+  const vb = svg.viewBox.baseVal, W = vb.width, Hs = vb.height;
+  const clone = svg.cloneNode(true);
+  inlineStyles(svg, clone);
+  clone.querySelectorAll('.cross').forEach(e => e.remove());
+  clone.setAttribute('xmlns', NS); clone.setAttribute('width', W); clone.setAttribute('height', Hs);
+  const st = document.createElementNS(NS, 'style'); st.textContent = await embeddedFonts(); clone.insertBefore(st, clone.firstChild);
+  const img = await loadImage('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(clone)));
+  try { await Promise.all([document.fonts.load('600 22px "Barlow Condensed"'), document.fonts.load('400 12px "IBM Plex Mono"')]); } catch (e) {}
+
+  const css = getComputedStyle(document.documentElement), col = v => css.getPropertyValue(v).trim();
+  const bg = col('--panel'), ink = col('--text'), muted = col('--muted');
+  const FD = '"Barlow Condensed","Arial Narrow",Arial,sans-serif', FM = '"IBM Plex Mono",ui-monospace,Menlo,monospace';
+  const pad = 16, inner = W - pad * 2;
+  const m = document.createElement('canvas').getContext('2d');
+  // header text, legend items and footer, wrapped to the chart width
+  m.font = `600 22px ${FD}`; const title = wrapText(m, card.querySelector('h2').textContent.trim(), inner);
+  m.font = `11px ${FM}`; const sub = wrapText(m, $('#meta').textContent.replace(/\s+/g, ' ').trim(), inner);
+  const items = [...card.querySelectorAll('.legend > span')].map(sp => {
+    const i = sp.querySelector('i'), text = sp.textContent.replace(/\s+/g, ' ').trim();
+    if (!text) return null;
+    const cls = i ? i.className : '', c = getComputedStyle(sp).color;
+    const sw = !i ? null : /\bsq\b/.test(cls) ? 'sq' : /\bdot\b/.test(cls) ? 'dot' : /\b(dash|nmlkey)\b/.test(cls) ? 'dash' : 'line';
+    // squares and solid keys carry their colour as a background; dashed keys draw in the text colour
+    return {text, color: c, sw, swColor: sw === 'sq' || sw === 'line' ? getComputedStyle(i).backgroundColor : c};
+  }).filter(Boolean);
+  const rows = []; let row = [], rowW = 0;
+  items.forEach(it => {
+    const w = (it.sw ? 20 : 0) + m.measureText(it.text).width;
+    if (row.length && rowW + 14 + w > inner) { rows.push(row); row = []; rowW = 0; }
+    row.push({...it, w}); rowW += (row.length > 1 ? 14 : 0) + w;
+  });
+  if (row.length) rows.push(row);
+  const when = new Date().toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
+  const n = DATA.normals && DATA.normals.byDate && /daily|temp/.test(card.querySelector('div[id] > svg').parentNode.id);
+  m.font = `10px ${FM}`;
+  const foot = wrapText(m, `lsxdashboard.com/meteograms · Saved ${when} · Data: Open-Meteo (CC BY 4.0)` + (n ? ' · Normals: NOAA NCEI 1991–2020 via ACIS' : '') + ' · Model guidance, not an official forecast', inner);
+
+  const H = pad + title.length * 26 + 4 + sub.length * 15 + 6 + rows.length * 17 + 6 + Hs + 8 + foot.length * 13 + pad;
+  const scale = Math.min(5, Math.max(2, 1600 / W));
+  const cv = document.createElement('canvas'); cv.width = Math.round(W * scale); cv.height = Math.round(H * scale);
+  const ctx = cv.getContext('2d'); ctx.scale(scale, scale);
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = ink; ctx.fillRect(0, 0, W, 2);               // the page's 2px rule
+  let y = pad; ctx.textBaseline = 'top';
+  ctx.font = `600 22px ${FD}`; ctx.fillStyle = ink; title.forEach(t => { ctx.fillText(t, pad, y); y += 26; }); y += 4;
+  ctx.font = `11px ${FM}`; ctx.fillStyle = muted; sub.forEach(t => { ctx.fillText(t, pad, y); y += 15; }); y += 6;
+  rows.forEach(r => {
+    let x = pad;
+    r.forEach(it => {
+      if (it.sw) {
+        ctx.save(); ctx.strokeStyle = ctx.fillStyle = it.swColor;
+        if (it.sw === 'sq') ctx.fillRect(x, y + 2, 10, 10);
+        else { ctx.lineWidth = 3; ctx.setLineDash(it.sw === 'dot' ? [2, 3] : it.sw === 'dash' ? [6, 3] : []); ctx.beginPath(); ctx.moveTo(x, y + 7); ctx.lineTo(x + 14, y + 7); ctx.stroke(); }
+        ctx.restore(); x += 20;
+      }
+      ctx.fillStyle = it.color; ctx.fillText(it.text, x, y + 1); x += it.w - (it.sw ? 20 : 0) + 14;
+    });
+    y += 17;
+  });
+  y += 6;
+  ctx.drawImage(img, 0, y, W, Hs); y += Hs + 8;
+  ctx.font = `10px ${FM}`; ctx.fillStyle = muted; foot.forEach(t => { ctx.fillText(t, pad, y); y += 13; });
+  return new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('PNG encode failed')), 'image/png'));
+}
+function exportName(card) {
+  const sel = DATA.sel, preset = PRESETS.find(p => Math.abs(p.lat - sel.lat) < 1e-3 && Math.abs(p.lon - sel.lon) < 1e-3 && p.id !== 'Dashboard');
+  const place = (preset ? preset.id : sel.name.split(',')[0]).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const chart = card.querySelector('div[id] > svg').parentNode.id;
+  const run = INIT ? `${INIT.toISOString().slice(0, 10)}-${String(INIT.getUTCHours()).padStart(2, '0')}Z` : new Date().toISOString().slice(0, 10);
+  return `${place}-${MODELS[sel.model].file}-${chart}-${run}.png`;
+}
+async function deliver(blob, name) {
+  const file = new File([blob], name, {type: 'image/png'});
+  if (matchMedia('(pointer: coarse)').matches && navigator.canShare && navigator.canShare({files: [file]})) {
+    try { await navigator.share({files: [file], title: name}); return; }
+    catch (e) { if (e.name === 'AbortError') return; }   // anything else falls through to a download
+  }
+  const a = document.createElement('a'), url = URL.createObjectURL(blob);
+  a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+const SAVE_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2v8M4.5 6.5 8 10l3.5-3.5M2.5 13.5h11"/></svg>';
+document.querySelectorAll('main .card').forEach(card => {
+  const h2 = card.querySelector('h2'), head = document.createElement('div'), b = document.createElement('button');
+  head.className = 'card-head'; h2.before(head); head.append(h2);
+  b.type = 'button'; b.className = 'save-btn'; b.innerHTML = SAVE_ICON + '<span>Save image</span>';
+  b.setAttribute('aria-label', 'Save this chart as an image');
+  b.onclick = async () => {
+    const svg = card.querySelector('div[id] > svg'), label = b.querySelector('span');
+    if (!svg || !DATA) { label.textContent = 'Nothing to save'; setTimeout(() => label.textContent = 'Save image', 1500); return; }
+    hoverOff(); b.disabled = true; label.textContent = 'Saving…';
+    try { await deliver(await chartPNG(card, svg), exportName(card)); label.textContent = 'Save image'; }
+    catch (e) { console.error(e); label.textContent = 'Could not save'; setTimeout(() => label.textContent = 'Save image', 2000); }
+    finally { b.disabled = false; }
+  };
+  head.append(b);
+});
 
 window.__meteo = {load, render, get data() { return DATA; }, set data(v) { DATA = v; }, clean};
 load();
