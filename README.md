@@ -32,7 +32,8 @@ The scripts retain explicit load order in `index.html` and share the existing gl
 
 [`meteograms.html`](meteograms.html) is a separate, self-contained page (served at `/meteograms`) that draws
 WeatherBELL-style daily high/low bars and hourly meteograms from Open-Meteo model output (NBM by
-default; GFS, ECMWF, GEM and ICON selectable). It shares the dashboard's theme preference and starts
+default; GFS, ECMWF, GEM and ICON selectable), with dashed NCEI 1991–2020 normal high/low lines from the same ACIS
+normals feed and nearest-climate-station rule the dashboard uses. It shares the dashboard's theme preference and starts
 at the dashboard's last-chosen location, but loads none of its scripts.
 
 - **No build step.** No bundler, no transpiler, no runtime `package.json`. Edit a plain file and reload.
