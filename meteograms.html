@@ -265,7 +265,11 @@ q.addEventListener('keydown', e => {
   else if (e.key === 'Escape') hideHits();
 });
 document.addEventListener('click', e => { if (!e.target.closest('.search')) hideHits(); });
+// Same generation rule as load(): an older query's results never replace a newer one's, and
+// clearing or picking invalidates anything still in flight.
+let sgen = 0;
 async function search() {
+  const my = ++sgen;
   const s = q.value.trim();
   if (!s) return hideHits();
   const ll = s.match(/^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/);
@@ -273,11 +277,12 @@ async function search() {
   try {
     const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(s)}&count=7&language=en&format=json`);
     const j = await r.json();
+    if (my !== sgen) return;
     hits = (j.results || []).map(x => ({lat:x.latitude, lon:x.longitude,
       name: [x.name, x.admin1].filter(Boolean).join(', '),
       sub: [x.admin2, x.country_code, x.elevation != null ? Math.round(x.elevation * 3.28084) + ' ft' : ''].filter(Boolean).join(' · ')}));
     act = hits.length ? 0 : -1; drawHits();
-  } catch (e) { hits = []; drawHits(); }
+  } catch (e) { if (my === sgen) { hits = []; drawHits(); } }
 }
 function drawHits() {
   res.innerHTML = '';
@@ -291,7 +296,7 @@ function drawHits() {
   });
   res.style.display = 'block';
 }
-function hideHits() { res.style.display = 'none'; }
+function hideHits() { sgen++; res.style.display = 'none'; }
 function pick(h) { hideHits(); q.value = ''; q.blur(); setLoc(h); }
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
@@ -322,11 +327,17 @@ async function load() {
     if (!data.h.time.length) throw new Error(sel.model === 'ncep_nbm_conus'
       ? 'NBM returned no data here. It only covers the lower 48; try GFS or ECMWF.'
       : 'This model returned no data for this location.');
-    const meta = await metaP;
-    if (my !== gen) return;
-    DATA = data;
-    INIT = meta && meta.last_run_initialisation_time ? new Date(meta.last_run_initialisation_time * 1000) : null;
+    // The dataset carries the selection it was fetched for, so any later render() (a resize while
+    // the next selection loads, say) labels it by what it is, never by the current controls.
+    data.sel = sel;
+    DATA = data; INIT = null;
     render();
+    // The init time is optional: draw the forecast first, add the label if metadata arrives.
+    metaP.then(meta => {
+      if (my !== gen || !meta || !meta.last_run_initialisation_time) return;
+      INIT = new Date(meta.last_run_initialisation_time * 1000);
+      renderMeta();
+    });
   } catch (e) {
     if (my !== gen || e.name === 'AbortError') return;
     DATA = null; INIT = null;
@@ -376,13 +387,17 @@ function todayIn(tz) { try { return new Intl.DateTimeFormat('en-CA', {timeZone: 
 function qpf(v) { return v == null ? '–' : v < 0.005 ? '0"' : v.toFixed(2).replace(/^0/, '') + '"'; }
 
 // ---------- render ----------
-function render() {
-  const D = DATA, m = MODELS[state.model];
+function renderMeta() {
+  const D = DATA, m = MODELS[D.sel.model];
   const ns = D.lat >= 0 ? 'N' : 'S', ew = D.lon >= 0 ? 'E' : 'W';
   const init = INIT ? ` · Init <b>${String(INIT.getUTCHours()).padStart(2, '0')}Z ${INIT.getUTCDate()} ${MON[INIT.getUTCMonth()]}</b>` : '';
-  $('#meta').innerHTML = `<b>${esc(state.name)}</b> · ${esc(m.name)}${init} · Grid ${Math.abs(D.lat).toFixed(4)}°${ns}, ${Math.abs(D.lon).toFixed(4)}°${ew}, ${Math.round(D.elev * 3.28084)} ft · ${esc(D.tzAbbr || D.tz)}`;
+  $('#meta').innerHTML = `<b>${esc(D.sel.name)}</b> · ${esc(m.name)}${init} · Grid ${Math.abs(D.lat).toFixed(4)}°${ns}, ${Math.abs(D.lon).toFixed(4)}°${ew}, ${Math.round(D.elev * 3.28084)} ft · ${esc(D.tzAbbr || D.tz)}`;
+}
+function render() {
+  const D = DATA, m = MODELS[D.sel.model];
+  renderMeta();
   $('#dailyTitle').textContent = `${m.short} · Daily High / Low Temperature (°F)`;
-  document.title = `${state.name.split('(')[0].trim()} · ${m.short} Meteograms`;
+  document.title = `${D.sel.name.split('(')[0].trim()} · ${m.short} Meteograms`;
   renderDaily();
   panels = [];
   renderHourly();
@@ -658,7 +673,7 @@ document.addEventListener('touchstart', e => { if (!e.target.closest('svg')) hov
 function cardinal(d) { if (d == null) return ''; return ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'][Math.round(d / 22.5) % 16]; }
 
 let rz, lastW = innerWidth;
-addEventListener('resize', () => { if (innerWidth === lastW) return; lastW = innerWidth; clearTimeout(rz); rz = setTimeout(() => DATA && render(), 150); });
+addEventListener('resize', () => { if (innerWidth === lastW) return; lastW = innerWidth; clearTimeout(rz); rz = setTimeout(() => { if (!DATA) return; const busy = $('#meta').textContent.startsWith('Loading'); const t = $('#meta').innerHTML; render(); if (busy) $('#meta').innerHTML = t; }, 150); });
 
 window.__meteo = {load, render, get data() { return DATA; }, set data(v) { DATA = v; }, clean};
 load();
