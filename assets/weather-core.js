@@ -1312,7 +1312,8 @@ function glanceWear(H,opts){
   }
   if(change){
     var label=clothes[change.tier].toLowerCase();
-    if(change.tier<first&&sunset&&change.at>=sunset&&weatherParts(change.at).key===weatherParts(sunset).key){
+    // Only once sunset is still ahead: after dark, "after sunset" is noise and reads as a sunset time.
+    if(change.tier<first&&sunset&&+now<+sunset&&change.at>=sunset&&weatherParts(change.at).key===weatherParts(sunset).key){
       var sunsetText=change.at-sunset<3600000?"after sunset ("+weatherTime(sunset,{hour:"numeric",minute:"2-digit"})+")":
         "around "+whenWord(change.at,now)+" after sunset";
       wear+=", then "+label+" "+sunsetText;

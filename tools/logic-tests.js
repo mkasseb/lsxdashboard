@@ -1172,6 +1172,9 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
   check('a cooler evening includes the sunset clock when a crossing is near sunset',
     G([65,65,60,47,46].map((f,i)=>hr(14+i,f,0)),{now:new Date(2026,10,18,14),
       sunset:new Date(2026,10,18,16,47)}).headline,'Short sleeves, then warm jacket after sunset (4:47 PM)');
+  check('an evening check after sunset drops the sunset wording',
+    G([61,55,49,47].map((f,i)=>hr(19+i,f,0)),{now:new Date(2026,10,18,18,43),
+      sunset:new Date(2026,10,18,16,47)}).headline,'Light jacket or sweater until ~9pm, then warm jacket');
   const swing = G(day([40,50,60,62],0),{now});
   check('wear: a big swing keeps the layers flag and times the change', [swing.layers, /until ~9am/.test(swing.headline)], [true, true]);
   check('wear: a big swing on a hot day does not', G(day([64,75,90],0)).layers, false);
