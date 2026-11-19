@@ -28,10 +28,10 @@
   --fd:"Barlow Condensed","Arial Narrow","Helvetica Neue",Arial,sans-serif;
   --fm:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   --bg:#0e0f11;--panel:#17191c;--panel-2:#1f2226;--border:#33373d;--text:#eeede9;--muted:#a8aba6;--rain:#7cc7e8;
-  --plot:#1b1d21;--shade:#202328;--grid:#2e3238;--hi:#e9cf6a;--lo:#5b80d6;--barstroke:#0e0f11;--logo-bolt:#0e0f11;--logo-bg:#eeede9}
+  --plot:#1b1d21;--shade:#202328;--grid:#2e3238;--hi:#e9cf6a;--lo:#5b80d6;--barstroke:#0e0f11;--nhi:#ff6b7a;--nlo:#7fb2ff;--frz:#8fb6e8;--logo-bolt:#0e0f11;--logo-bg:#eeede9}
 :root[data-theme="light"]{color-scheme:light;
   --bg:#f1f2f3;--panel:#fff;--panel-2:#e7e9ec;--border:#c6cad0;--text:#121315;--muted:#50555c;--rain:#0b6a8f;
-  --plot:#f7f8f9;--shade:#eceef1;--grid:#d4d8dd;--hi:#f7e08a;--lo:#6f93e3;--barstroke:#121315;--logo-bolt:#ffcf3d;--logo-bg:#121315}
+  --plot:#f7f8f9;--shade:#eceef1;--grid:#d4d8dd;--hi:#f7e08a;--lo:#6f93e3;--barstroke:#121315;--nhi:#c4223a;--nlo:#1a55b8;--frz:#4a7bd1;--logo-bolt:#ffcf3d;--logo-bg:#121315}
 *{box-sizing:border-box}
 html,body{margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
@@ -74,7 +74,9 @@ main{padding:14px 0 24px}
 .legend i{display:inline-block;width:14px;height:3px;vertical-align:middle;margin-right:6px}
 .legend i.sq{height:10px;width:10px}
 .nml-src{color:var(--muted)}
-.legend i.nmlkey{opacity:.8;background:repeating-linear-gradient(90deg,currentColor 0 7px,transparent 7px 10px)!important}
+.legend i.nmlkey{width:18px;background:repeating-linear-gradient(90deg,currentColor 0 8px,transparent 8px 11px)!important}
+.legend i.dot{background:repeating-linear-gradient(90deg,currentColor 0 2px,transparent 2px 5px)!important}
+.nlab{font-size:10px;font-weight:500}
 .legend i.dash{background:repeating-linear-gradient(90deg,currentColor 0 4px,transparent 4px 7px)!important}
 svg{display:block;width:100%;height:auto}
 svg text{fill:var(--text);font-size:11px;font-family:var(--fm)}
@@ -124,7 +126,7 @@ footer{color:var(--muted);font-size:12px;line-height:1.6;border-top:1px solid va
       <span><i class="sq" style="background:var(--lo)"></i>Low</span>
       <span style="color:#4f9fe0">PoP = max daily precip chance</span>
       <span style="color:#2fa866">QPF = daily liquid total</span>
-      <span class="nml" style="color:var(--text)"><i class="dash nmlkey"></i>Normal high/low <span class="nml-src ax-t"></span></span>
+      <span style="color:var(--nhi)"><i class="nmlkey"></i>Normal high</span> <span style="color:var(--nlo)"><i class="nmlkey"></i>Normal low</span> <span class="nml-src"></span>
     </div>
     <div id="daily"></div>
   </section>
@@ -135,8 +137,8 @@ footer{color:var(--muted);font-size:12px;line-height:1.6;border-top:1px solid va
       <span><i style="background:#e4572e"></i>Temp</span>
       <span><i style="background:#22a39f"></i>Dew point</span>
       <span style="color:#f08c3c"><i class="dash"></i>Feels-like</span>
-      <span style="color:#4a7bd1"><i class="dash"></i>32°F</span>
-      <span class="nml" style="color:var(--text)"><i class="dash nmlkey"></i>Normal high/low <span class="nml-src ax-t"></span></span>
+      <span style="color:var(--frz)"><i class="dot"></i>32°F</span>
+      <span style="color:var(--nhi)"><i class="nmlkey"></i>Normal high</span> <span style="color:var(--nlo)"><i class="nmlkey"></i>Normal low</span> <span class="nml-src"></span>
     </div>
     <div id="temp"></div>
   </section>
@@ -372,8 +374,25 @@ async function loadNormals(my, data, signal) {
 function titleCase(s) { return String(s).toLowerCase().replace(/\b([a-z])/g, c => c.toUpperCase()).replace(/\bIntl\b/g, 'Intl'); }
 function setNormalsLegend() {
   const n = DATA && DATA.normals;
-  const txt = !n ? '(loading)' : n.error ? '(unavailable here)' : `(1991–2020, ${n.label})`;
+  const txt = !n ? '(normals loading)' : n.error ? '(normals unavailable here)' : `(1991–2020, ${n.label})`;
   document.querySelectorAll('.nml-src').forEach(el => { el.textContent = txt; el.title = n && n.station ? `NCEI 1991–2020 daily normals at ${n.station}` : ''; });
+}
+// A normals line is a dashed stroke over a halo in the card colour, so the blue line stays legible
+// where it crosses the blue low bars. Labels sit in the right gutter at the line's last value,
+// nudged apart when the two would touch.
+const NCOL = {hi: 'var(--nhi)', lo: 'var(--nlo)'};
+function normalPath(parent, d, side) {
+  svgEl('path', {d, fill: 'none', stroke: 'var(--panel)', 'stroke-width': 4.5, 'stroke-linejoin': 'round', 'stroke-opacity': .9}, parent);
+  svgEl('path', {d, fill: 'none', stroke: NCOL[side], 'stroke-width': 2, 'stroke-dasharray': '8 3', 'stroke-linejoin': 'round'}, parent);
+}
+function normalLabels(parent, xr, yHi, yLo, narrow) {
+  const ys = {hi: yHi, lo: yLo};
+  if (yHi != null && yLo != null && yLo - yHi < 24) { const mid = (yHi + yLo) / 2; ys.hi = mid - 12; ys.lo = mid + 12; }
+  ['hi', 'lo'].forEach(side => {
+    if (ys[side] == null) return;
+    const lines = narrow ? ['Nml', side] : ['Normal', side === 'hi' ? 'high' : 'low'];
+    lines.forEach((t, k) => txt(parent, xr, ys[side] + (k ? 9 : -2), t, {class: 'nlab', style: `fill:${NCOL[side]}`}));
+  });
 }
 const nml = (key, side) => { const n = DATA && DATA.normals; const v = n && n.byDate && n.byDate[key]; return v ? v[side] : null; };
 
@@ -486,7 +505,7 @@ function renderDaily() {
   box.innerHTML = '';
   const W = Math.max(box.clientWidth, 320), narrow = W < 640;
   const H = narrow ? 330 : 420;
-  const M = {l: 40, r: 8, t: 26, b: 74};
+  const M = {l: 40, r: narrow ? 30 : 52, t: 26, b: 74};
   const n = d.time.length, pw = W - M.l - M.r, ph = H - M.t - M.b;
   const vals = nn([...d.temperature_2m_max, ...d.temperature_2m_min, ...d.time.map(t => nml(t, 'hi')), ...d.time.map(t => nml(t, 'lo'))]);
   const lo = Math.min(0, Math.floor((Math.min(...vals) - 5) / 10) * 10);
@@ -499,7 +518,7 @@ function renderDaily() {
     svgEl('line', {x1: M.l, x2: M.l + pw, y1: y(t), y2: y(t), class: 'gridl'}, s);
     txt(s, M.l - 6, y(t) + 4, t, {'text-anchor': 'end', class: 'ax'});
   }
-  if (lo < 32 && hi > 32) svgEl('line', {x1: M.l, x2: M.l + pw, y1: y(32), y2: y(32), stroke: '#4a7bd1', 'stroke-dasharray': '6 4', 'stroke-opacity': .7}, s);
+  if (lo < 32 && hi > 32) svgEl('line', {x1: M.l, x2: M.l + pw, y1: y(32), y2: y(32), stroke: 'var(--frz)', 'stroke-dasharray': '2 4', 'stroke-width': 1.5}, s);
   const slot = pw / n, fs = slot < 34 ? 10 : slot < 50 ? 12 : 14;
   const bwH = Math.min(slot * .72, 76), bwL = bwH * .74;
   const today = todayIn(DATA.tz);
@@ -526,15 +545,24 @@ function renderDaily() {
     const qs = tight ? (d.precipitation_sum[i] >= 0.01 ? d.precipitation_sum[i].toFixed(2).replace(/^0/, '') : '0') : qpf(d.precipitation_sum[i]) + (snowS >= 0.1 ? ` · ${snowS.toFixed(1)}" sn` : '');
     txt(s, cx, H - M.b + 63, qs, {'text-anchor': 'middle', 'font-size': fs - 2, style: 'fill:#2fa866'});
   });
+  const lastY = {};
   ['hi', 'lo'].forEach(side => {
-    let dd = '', pen = 'M';
-    d.time.forEach((t, i) => {
-      const v = nml(t, side);
-      if (v == null) { pen = 'M'; return; }
-      dd += `${pen}${(M.l + slot * (i + .5)).toFixed(1)},${y(v).toFixed(1)}`; pen = 'L';
-    });
-    if (dd) svgEl('path', {d: dd, fill: 'none', stroke: 'var(--text)', 'stroke-opacity': .8, 'stroke-width': 1.6, 'stroke-dasharray': '7 3', 'stroke-linejoin': 'round'}, s);
+    const pts = d.time.map((t, i) => [M.l + slot * (i + .5), nml(t, side)]);
+    let dd = '', pen = 'M', run = [];
+    const flush = () => {
+      if (!run.length) return;
+      // flat to the plot edge before the first and after the last point of each run
+      const x0 = run[0][0] - slot / 2, x1 = run[run.length - 1][0] + slot / 2;
+      dd += `M${x0.toFixed(1)},${y(run[0][1]).toFixed(1)}` + run.map(p => `L${p[0].toFixed(1)},${y(p[1]).toFixed(1)}`).join('') + `L${x1.toFixed(1)},${y(run[run.length - 1][1]).toFixed(1)}`;
+      run = [];
+    };
+    pts.forEach(p => { if (p[1] == null) flush(); else run.push(p); });
+    flush();
+    if (dd) normalPath(s, dd, side);
+    const last = pts.filter(p => p[1] != null).pop();
+    lastY[side] = last ? y(last[1]) : null;
   });
+  normalLabels(s, M.l + pw + 4, lastY.hi, lastY.lo, narrow);
   txt(s, M.l - 6, H - M.b + 48, 'PoP', {'text-anchor': 'end', 'font-size': 10, class: 'ax'});
   txt(s, M.l - 6, H - M.b + 63, 'QPF', {'text-anchor': 'end', 'font-size': 10, class: 'ax'});
 }
@@ -554,7 +582,7 @@ function renderHourly() {
       any('dew_point_2m') && {type: 'line', key: 'dew_point_2m', color: '#22a39f', width: 2},
       {type: 'line', key: 'temperature_2m', color: '#e4572e', width: 2.5}
     ],
-    ref: ts.lo < 32 && ts.hi > 32 ? [{v: 32, color: '#4a7bd1'}] : [],
+    ref: ts.lo < 32 && ts.hi > 32 ? [{v: 32, color: 'var(--frz)'}] : [],
     normals: true
   });
 
@@ -665,7 +693,7 @@ function hourlyPanel(id, cfg) {
     const vv = +v.toFixed(6);
     txt(s, M.l + pw + 5, y2(vv) + 4, cfg.fmt2(vv), {class: 'ax', 'font-size': 10.5});
   }
-  (cfg.ref || []).forEach(r => svgEl('line', {x1: M.l, x2: M.l + pw, y1: y(r.v), y2: y(r.v), stroke: r.color, 'stroke-dasharray': '6 4', 'stroke-width': 1.2}, s));
+  (cfg.ref || []).forEach(r => svgEl('line', {x1: M.l, x2: M.l + pw, y1: y(r.v), y2: y(r.v), stroke: r.color, 'stroke-dasharray': '2 4', 'stroke-width': 1.5}, s));
 
   // layers
   const clip = 'c' + id + Math.random().toString(36).slice(2, 7);
@@ -694,13 +722,18 @@ function hourlyPanel(id, cfg) {
 
   // normal high/low: one flat dashed segment per calendar day
   if (cfg.normals) {
-    starts.forEach((st, k) => {
-      const en = k + 1 < starts.length ? starts[k + 1] : n - 1, key = h.time[st].slice(0, 10);
-      ['hi', 'lo'].forEach(side => {
-        const v = nml(key, side);
-        if (v != null) svgEl('line', {x1: x(st), x2: x(en), y1: y(v), y2: y(v), stroke: 'var(--text)', 'stroke-opacity': .7, 'stroke-width': 1.4, 'stroke-dasharray': '7 3'}, g);
+    const lastY = {};
+    ['hi', 'lo'].forEach(side => {
+      let dd = '';
+      starts.forEach((st, k) => {
+        const en = k + 1 < starts.length ? starts[k + 1] : n - 1, v = nml(h.time[st].slice(0, 10), side);
+        if (v == null) return;
+        dd += `M${x(st).toFixed(1)},${y(v).toFixed(1)}L${x(en).toFixed(1)},${y(v).toFixed(1)}`;
+        lastY[side] = y(v);
       });
+      if (dd) normalPath(g, dd, side);
     });
+    normalLabels(s, M.l + pw + 5, lastY.hi ?? null, lastY.lo ?? null, narrow);
   }
 
   // wind arrows
