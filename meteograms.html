@@ -850,7 +850,7 @@ addEventListener('resize', () => { if (innerWidth === lastW) return; lastW = inn
 // Each card can be saved as a PNG: the chart's SVG is cloned with computed styles inlined (so
 // theme colours and CSS variables survive outside the page), fonts are embedded as data URLs,
 // and it is drawn onto a canvas under the card's title, the location/model/init line and the
-// legend, with attribution underneath. The SVG goes in as a data: URL because _headers img-src
+// legend, with the save time and data attribution underneath (no site URL). The SVG goes in as a data: URL because _headers img-src
 // allows data: but not blob:. Phones get the share sheet (Save Image); desktops a download.
 const FONT_FILES = [['400', '/assets/fonts/ibm-plex-mono-latin-400-normal.woff2'], ['500 800', '/assets/fonts/ibm-plex-mono-latin-500-normal.woff2']];
 let fontCSS = null;
@@ -906,7 +906,7 @@ function snapshotChart(card, svg) {
   return {clone, W, Hs, items, name: exportName(card),
     title: card.querySelector('h2').textContent.trim(),
     sub: $('#meta').textContent.replace(/\s+/g, ' ').trim(),
-    foot: `lsxdashboard.com/meteograms · Saved ${when} · Data: Open-Meteo (CC BY 4.0)` + (n ? ' · Normals: NOAA NCEI 1991–2020 via ACIS' : '') + ' · Model guidance, not an official forecast',
+    foot: `Saved ${when} · Data: Open-Meteo (CC BY 4.0)` + (n ? ' · Normals: NOAA NCEI 1991–2020 via ACIS' : '') + ' · Model guidance, not an official forecast',
     bg: col('--panel'), ink: col('--text'), muted: col('--muted')};
 }
 async function renderSnapshot(snap) {
