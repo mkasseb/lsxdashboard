@@ -30,6 +30,12 @@ The scripts retain explicit load order in `index.html` and share the existing gl
 | Daily/hourly forecast UI and context | `assets/forecast-view.js`, `assets/dashboard-context.js` |
 | Model ingestion and selected-point presentation | `assets/model-data.js`, `assets/model-worker.js`, `assets/forecast-range.js`, `assets/hourly-range.js` |
 
+[`meteograms.html`](meteograms.html) is a separate, self-contained page (served at `/meteograms`) that draws
+WeatherBELL-style daily high/low bars and hourly meteograms from Open-Meteo model output (NBM by
+default; GFS, ECMWF, GEM and ICON selectable), with dashed NCEI 1991–2020 normal high/low lines from the same ACIS
+normals feed and nearest-climate-station rule the dashboard uses. It shares the dashboard's theme preference and starts
+at the dashboard's last-chosen location, but loads none of its scripts.
+
 - **No build step.** No bundler, no transpiler, no runtime `package.json`. Edit a plain file and reload.
 - **No API keys.** Every feed was chosen because it is keyless and CORS-open, so the whole thing
   runs as a static page with no server and no secrets.
