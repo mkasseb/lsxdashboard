@@ -268,11 +268,21 @@ function syncURL() {
 // search
 const q = $('#q'), res = $('#results');
 let tmr, hits = [], act = -1;
-q.addEventListener('input', () => { clearTimeout(tmr); tmr = setTimeout(search, 280); });
+// Any edit invalidates searches already in flight and clears what Enter could select, so a
+// response for an earlier query can't land during the debounce and be picked.
+q.addEventListener('input', () => { clearTimeout(tmr); sgen++; hits = []; act = -1; res.style.display = 'none'; tmr = setTimeout(search, 280); });
 q.addEventListener('keydown', e => {
   if (e.key === 'ArrowDown') { act = Math.min(act + 1, hits.length - 1); drawHits(); e.preventDefault(); }
   else if (e.key === 'ArrowUp') { act = Math.max(act - 1, 0); drawHits(); e.preventDefault(); }
-  else if (e.key === 'Enter') { const h = hits[act < 0 ? 0 : act]; if (h) pick(h); }
+  else if (e.key === 'Enter') {
+    const h = hits[act < 0 ? 0 : act];
+    if (h) pick(h);
+    else if (q.value.trim()) {
+      // Enter before results arrive: search now, and pick only if the query is still what was entered
+      const typed = q.value; clearTimeout(tmr);
+      search().then(ok => { if (ok && q.value === typed && hits[0]) pick(hits[0]); });
+    }
+  }
   else if (e.key === 'Escape') hideHits();
 });
 document.addEventListener('click', e => { if (!e.target.closest('.search')) hideHits(); });
@@ -284,16 +294,17 @@ async function search() {
   const s = q.value.trim();
   if (!s) return hideHits();
   const ll = s.match(/^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/);
-  if (ll) { hits = [{lat:+ll[1], lon:+ll[2], name:`${(+ll[1]).toFixed(4)}, ${(+ll[2]).toFixed(4)}`, sub:'Coordinates'}]; act = 0; return drawHits(); }
+  if (ll) { hits = [{lat:+ll[1], lon:+ll[2], name:`${(+ll[1]).toFixed(4)}, ${(+ll[2]).toFixed(4)}`, sub:'Coordinates'}]; act = 0; drawHits(); return true; }
   try {
     const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(s)}&count=7&language=en&format=json`);
     const j = await r.json();
-    if (my !== sgen) return;
+    if (my !== sgen) return false;
     hits = (j.results || []).map(x => ({lat:x.latitude, lon:x.longitude,
       name: [x.name, x.admin1].filter(Boolean).join(', '),
       sub: [x.admin2, x.country_code, x.elevation != null ? Math.round(x.elevation * 3.28084) + ' ft' : ''].filter(Boolean).join(' · ')}));
     act = hits.length ? 0 : -1; drawHits();
-  } catch (e) { if (my === sgen) { hits = []; drawHits(); } }
+    return true;
+  } catch (e) { if (my === sgen) { hits = []; drawHits(); } return false; }
 }
 function drawHits() {
   res.innerHTML = '';
@@ -401,6 +412,20 @@ function normalLabels(parent, xr, yHi, yLo, narrow) {
 }
 const nml = (key, side) => { const n = DATA && DATA.normals; const v = n && n.byDate && n.byDate[key]; return v ? v[side] : null; };
 
+// Open-Meteo's per-model meta.json can lag the forecast it serves (GEM's was still describing a
+// May run in November). The label is shown only when the metadata plausibly describes the run on
+// screen: an initialisation no older than three update cycles (36 h at least), not in the future,
+// and coverage that has not already ended. Otherwise the label is left off rather than wrong.
+function metaInit(meta) {
+  if (!meta) return null;
+  const init = Number(meta.last_run_initialisation_time), end = Number(meta.data_end_time), step = Number(meta.update_interval_seconds);
+  if (!isFinite(init) || init <= 0) return null;
+  const now = Date.now() / 1000, maxAge = Math.max(36 * 3600, isFinite(step) && step > 0 ? 3 * step : 0);
+  if (init > now + 3600 || now - init > maxAge) return null;
+  if (isFinite(end) && end > 0 && end < now) return null;
+  return new Date(init * 1000);
+}
+
 // Each load captures a generation and aborts the one before it, so a slow response for a
 // previous model or location can never paint under the current selection (the same rule the
 // dashboard's locGuard()/fresh() enforce).
@@ -435,8 +460,9 @@ async function load() {
     loadNormals(my, data, signal);
     // The init time is optional: draw the forecast first, add the label if metadata arrives.
     metaP.then(meta => {
-      if (my !== gen || !meta || !meta.last_run_initialisation_time) return;
-      INIT = new Date(meta.last_run_initialisation_time * 1000);
+      const init = metaInit(meta);
+      if (my !== gen || !init) return;
+      INIT = init;
       renderMeta();
     });
   } catch (e) {
@@ -856,24 +882,17 @@ function wrapText(ctx, text, maxW) {
   if (line) lines.push(line);
   return lines;
 }
-async function chartPNG(card, svg) {
+// Everything that describes the chart — the SVG, title, location/model/init line, legend, footer,
+// colours and filename — is captured synchronously in snapshotChart(), before the first await, so
+// switching location or model while an export waits on fonts can't pair one forecast with
+// another's labels. renderSnapshot() only draws what was captured.
+function snapshotChart(card, svg) {
   const vb = svg.viewBox.baseVal, W = vb.width, Hs = vb.height;
   const clone = svg.cloneNode(true);
   inlineStyles(svg, clone);
   clone.querySelectorAll('.cross').forEach(e => e.remove());
   clone.setAttribute('xmlns', NS); clone.setAttribute('width', W); clone.setAttribute('height', Hs);
-  const st = document.createElementNS(NS, 'style'); st.textContent = await embeddedFonts(); clone.insertBefore(st, clone.firstChild);
-  const img = await loadImage('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(clone)));
-  try { await Promise.all([document.fonts.load('600 22px "Barlow Condensed"'), document.fonts.load('400 12px "IBM Plex Mono"')]); } catch (e) {}
-
   const css = getComputedStyle(document.documentElement), col = v => css.getPropertyValue(v).trim();
-  const bg = col('--panel'), ink = col('--text'), muted = col('--muted');
-  const FD = '"Barlow Condensed","Arial Narrow",Arial,sans-serif', FM = '"IBM Plex Mono",ui-monospace,Menlo,monospace';
-  const pad = 16, inner = W - pad * 2;
-  const m = document.createElement('canvas').getContext('2d');
-  // header text, legend items and footer, wrapped to the chart width
-  m.font = `600 22px ${FD}`; const title = wrapText(m, card.querySelector('h2').textContent.trim(), inner);
-  m.font = `11px ${FM}`; const sub = wrapText(m, $('#meta').textContent.replace(/\s+/g, ' ').trim(), inner);
   const items = [...card.querySelectorAll('.legend > span')].map(sp => {
     const i = sp.querySelector('i'), text = sp.textContent.replace(/\s+/g, ' ').trim();
     if (!text) return null;
@@ -882,6 +901,25 @@ async function chartPNG(card, svg) {
     // squares and solid keys carry their colour as a background; dashed keys draw in the text colour
     return {text, color: c, sw, swColor: sw === 'sq' || sw === 'line' ? getComputedStyle(i).backgroundColor : c};
   }).filter(Boolean);
+  const when = new Date().toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
+  const n = DATA.normals && DATA.normals.byDate && /daily|temp/.test(svg.parentNode.id);
+  return {clone, W, Hs, items, name: exportName(card),
+    title: card.querySelector('h2').textContent.trim(),
+    sub: $('#meta').textContent.replace(/\s+/g, ' ').trim(),
+    foot: `lsxdashboard.com/meteograms · Saved ${when} · Data: Open-Meteo (CC BY 4.0)` + (n ? ' · Normals: NOAA NCEI 1991–2020 via ACIS' : '') + ' · Model guidance, not an official forecast',
+    bg: col('--panel'), ink: col('--text'), muted: col('--muted')};
+}
+async function renderSnapshot(snap) {
+  const {clone, W, Hs, items, bg, ink, muted} = snap;
+  const st = document.createElementNS(NS, 'style'); st.textContent = await embeddedFonts(); clone.insertBefore(st, clone.firstChild);
+  const img = await loadImage('data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(clone)));
+  try { await Promise.all([document.fonts.load('600 22px "Barlow Condensed"'), document.fonts.load('400 12px "IBM Plex Mono"')]); } catch (e) {}
+  const FD = '"Barlow Condensed","Arial Narrow",Arial,sans-serif', FM = '"IBM Plex Mono",ui-monospace,Menlo,monospace';
+  const pad = 16, inner = W - pad * 2;
+  const m = document.createElement('canvas').getContext('2d');
+  // header text, legend items and footer, wrapped to the chart width once fonts are ready
+  m.font = `600 22px ${FD}`; const title = wrapText(m, snap.title, inner);
+  m.font = `11px ${FM}`; const sub = wrapText(m, snap.sub, inner);
   const rows = []; let row = [], rowW = 0;
   items.forEach(it => {
     const w = (it.sw ? 20 : 0) + m.measureText(it.text).width;
@@ -889,10 +927,8 @@ async function chartPNG(card, svg) {
     row.push({...it, w}); rowW += (row.length > 1 ? 14 : 0) + w;
   });
   if (row.length) rows.push(row);
-  const when = new Date().toLocaleString([], {month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
-  const n = DATA.normals && DATA.normals.byDate && /daily|temp/.test(card.querySelector('div[id] > svg').parentNode.id);
   m.font = `10px ${FM}`;
-  const foot = wrapText(m, `lsxdashboard.com/meteograms · Saved ${when} · Data: Open-Meteo (CC BY 4.0)` + (n ? ' · Normals: NOAA NCEI 1991–2020 via ACIS' : '') + ' · Model guidance, not an official forecast', inner);
+  const foot = wrapText(m, snap.foot, inner);
 
   const H = pad + title.length * 26 + 4 + sub.length * 15 + 6 + rows.length * 17 + 6 + Hs + 8 + foot.length * 13 + pad;
   const scale = Math.min(5, Math.max(2, 1600 / W));
@@ -948,7 +984,7 @@ document.querySelectorAll('main .card').forEach(card => {
     const svg = card.querySelector('div[id] > svg'), label = b.querySelector('span');
     if (!svg || !DATA) { label.textContent = 'Nothing to save'; setTimeout(() => label.textContent = 'Save image', 1500); return; }
     hoverOff(); b.disabled = true; label.textContent = 'Saving…';
-    try { await deliver(await chartPNG(card, svg), exportName(card)); label.textContent = 'Save image'; }
+    try { const snap = snapshotChart(card, svg); await deliver(await renderSnapshot(snap), snap.name); label.textContent = 'Save image'; }
     catch (e) { console.error(e); label.textContent = 'Could not save'; setTimeout(() => label.textContent = 'Save image', 2000); }
     finally { b.disabled = false; }
   };
