@@ -126,9 +126,16 @@ function renderMeteogramPreview(){
 }
 function initMeteogramPreview(){
   var card=document.getElementById("meteogramCard"); if(!card) return;
-  var box=document.getElementById("mgpChart"), lastW=0;
+  var box=document.getElementById("mgpChart"), lastW=0, queued=false;
+  // Repaint on the next frame, never inside the observer callback: swapping the SVG there changes
+  // layout mid-delivery, which WebKit reports as "ResizeObserver loop completed with undelivered
+  // notifications" (a page error the browser suites fail on).
   if(window.ResizeObserver) new ResizeObserver(function(){
-    var w=box.clientWidth; if(Math.abs(w-lastW)<8) return; lastW=w; if(mgpData) renderMeteogramPreview();
+    if(queued) return; queued=true;
+    requestAnimationFrame(function(){
+      queued=false;
+      var w=box.clientWidth; if(Math.abs(w-lastW)<8) return; lastW=w; if(mgpData) renderMeteogramPreview();
+    });
   }).observe(box);
   if(!('IntersectionObserver' in window)){ requestContext("meteogram"); return; }
   var io=new IntersectionObserver(function(entries){
