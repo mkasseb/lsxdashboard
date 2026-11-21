@@ -1837,6 +1837,21 @@ a.cpc-item:hover{border-color:var(--accent)}
 
 /* Put weather first; all original check and source clocks remain inspectable. */
 .hourly-forecast-source{font-size:var(--fs-sm);color:var(--muted);line-height:1.5;margin:0 0 12px}
+/* Meteogram entry points. The model graphs live on /meteograms; these sit where someone reading
+   the NWS hourly or 7-day forecast would want a second opinion, and carry the selected location. */
+.mg-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;column-gap:12px;margin:-12px 0 4px}
+.mg-row .hourly-forecast-source{margin:0}
+.mg-row-end{justify-content:flex-end;margin:-8px 0 4px}
+.mg-link{font-size:var(--fs-sm);gap:6px}
+.jump a.jump-out{color:var(--accent);gap:6px;font-weight:600}
+.jump a.jump-out:hover,.jump a.jump-out:focus-visible{color:var(--accent)}
+/* Phones keep every section link on one bar with nothing scrolled out of sight (the 390px contract
+   in weather-stress-tests). The word would push the bar past that, so it goes icon-only there and
+   keeps its name for screen readers; the Hourly and 7-Day cards still spell the link out. */
+@media(max-width:680px){
+  .jump a.jump-out{position:relative;justify-content:center;padding:0 5px;gap:0}   /* 44px tall, ~24px wide: the bar has ~31px left */
+  .jump-out-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+}
 .h24-range-key{font-size:var(--fs-xs);color:var(--muted);margin:0 0 6px;line-height:1.5}
 #h24Card .precip-details{margin:12px 0 0;padding:12px 0 0;border-bottom:0;border-top:1px solid var(--border)}
 #hourly24 .h24-sum{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:6px}

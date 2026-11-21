@@ -59,10 +59,10 @@ async function main(){
    for(const id of ['obsCard','droughtCard','cpcCard','storyCard','rainCard','winterCard'])if(await p.locator('#'+id).isVisible())await p.locator('#'+id+' .context-toggle[aria-expanded="true"]').click();
    await p.evaluate(()=>layoutMasonry());await p.clock.runFor(300);
    // The clamp scenario needs the section that ends the page, which follows the packed layout.
-   const tail=await p.evaluate(()=>[...document.querySelectorAll('#jumpNav a')].map(a=>a.hash.slice(1)).sort((a,b)=>document.getElementById(b).getBoundingClientRect().bottom-document.getElementById(a).getBoundingClientRect().bottom)[0]);
+   const tail=await p.evaluate(()=>[...document.querySelectorAll('#jumpNav a[href^="#"]')].map(a=>a.hash.slice(1)).sort((a,b)=>document.getElementById(b).getBoundingClientRect().bottom-document.getElementById(a).getBoundingClientRect().bottom)[0]);
    for(const id of [...new Set(['currentCard','h24Card','radarCard','forecastCard','riversCard','climateCard'].filter(id=>id!==tail).concat(tail))]){
     await p.evaluate(id=>{document.querySelector('#jumpNav a[href="#'+id+'"]').click();document.getElementById(id).scrollIntoView();},id);
-    await p.waitForFunction(id=>document.querySelector('#jumpNav a[aria-current="location"]')?.getAttribute('href')==='#'+id,id).catch(async e=>{console.error(JSON.stringify({width,theme,id,geometry:await p.evaluate(()=>({scroll:scrollY,bar:document.querySelector('.jump-wrap').getBoundingClientRect().bottom,links:[...document.querySelectorAll('#jumpNav a')].map(l=>({href:l.hash,active:l.getAttribute('aria-current'),top:document.querySelector(l.hash).getBoundingClientRect().top}))}))}));throw e;});
+    await p.waitForFunction(id=>document.querySelector('#jumpNav a[aria-current="location"]')?.getAttribute('href')==='#'+id,id).catch(async e=>{console.error(JSON.stringify({width,theme,id,geometry:await p.evaluate(()=>({scroll:scrollY,bar:document.querySelector('.jump-wrap').getBoundingClientRect().bottom,links:[...document.querySelectorAll('#jumpNav a[href^="#"]')].map(l=>({href:l.hash,active:l.getAttribute('aria-current'),top:document.querySelector(l.hash).getBoundingClientRect().top}))}))}));throw e;});
    }
    // Context arriving after a clamped final-section scroll must not select an earlier section.
    const navBeforeGrowth=await p.evaluate(tail=>{
