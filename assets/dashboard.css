@@ -1860,9 +1860,10 @@ a.cpc-item:hover{border-color:var(--accent)}
 .mgp-chart svg{display:block}
 .mgp-hi{fill:var(--mgp-hi);stroke:color-mix(in srgb,var(--mgp-hi) 60%,#000);stroke-width:.75}
 .mgp-lo{fill:var(--mgp-lo)}
-.mgp-v,.mgp-vl,.mgp-d{font-family:var(--fm);text-anchor:middle}
+.mgp-v,.mgp-vl,.mgp-vo,.mgp-d{font-family:var(--fm);text-anchor:middle}
 .mgp-v{fill:var(--text);font-weight:600}
 .mgp-vl{fill:#fff;font-weight:600}
+.mgp-vo{fill:#1b1d21;font-weight:600}
 .mgp-d{fill:var(--muted)}.mgp-today{fill:var(--text);font-weight:700}
 .mgp-cta{display:inline-flex;align-items:center;gap:6px;min-height:44px;color:var(--accent);font-size:var(--fs-sm);
   text-decoration:underline;text-underline-offset:3px}

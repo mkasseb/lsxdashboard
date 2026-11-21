@@ -192,9 +192,10 @@ async function open(c, width=390) {
     if(u.hostname==='mesonet.agron.iastate.edu')return c.reportsDown?reply({error:'storm reports outage'},503):reply({type:'FeatureCollection',features:(c.reports||[]).map(([typetext,minutes,lat,lon,magnitude,city,wfo='LSX'],i)=>({id:String(i),type:'Feature',properties:{wfo,typetext,magnitude:magnitude??'',unit:typetext==='HAIL'?'INCH':null,city,county:'St. Charles',st:'MO',source:'Trained Spotter',remark:'',valid:new Date(c.now-minutes*60000).toISOString(),lat,lon},geometry:{type:'Point',coordinates:[lon,lat]}}))});
     if(u.hostname==='air-quality-api.open-meteo.com'&&c.aqi!=null) return reply({current:{us_aqi:c.aqi,time:c.aqiMissingTime?undefined:(c.now-(c.aqiAgeHours||0)*H)/1000,pm2_5:75,pm10:90}});
     if(u.hostname==='api.open-meteo.com'&&u.searchParams.get('models')==='ncep_nbm_conus'){
-      // Synthetic NBM daily guidance for the meteogram preview card.
+      // Synthetic NBM daily guidance for the meteogram preview card: a cold snap, so the coldest
+      // night's blue bar is too short to hold its own label.
       if(c.meteogramDown)return reply({error:true,reason:'simulated NBM outage'},503);
-      return reply({daily:{time:Array.from({length:10},(_,i)=>stamp(c.now+i*24*H).slice(0,10)),temperature_2m_max:Array.from({length:10},(_,i)=>70-i),temperature_2m_min:Array.from({length:10},(_,i)=>50-i)}});
+      return reply({daily:{time:Array.from({length:10},(_,i)=>stamp(c.now+i*24*H).slice(0,10)),temperature_2m_max:[74,60,47,42,44,46,48,52,53,55],temperature_2m_min:[47,38,30,23,24,22,23,29,29,32]}});
     }
     if(u.hostname==='api.open-meteo.com'&&c.uv!=null) return reply({hourly:{time:[c.now/1000,(c.now+H)/1000],uv_index:[c.uv,c.uv+1]},daily:{time:Array.from({length:7},(_,i)=>stamp(c.now+i*24*H).slice(0,10)),uv_index_max:Array(7).fill(c.uv+1)}});
     if(u.hostname==='api.water.noaa.gov'&&c.river){
@@ -595,9 +596,10 @@ async function main() {
       await page.waitForFunction(()=>document.querySelectorAll('#mgpChart .mgp-hi').length===10);
       assert.equal(nbm.length,1,'One small daily request');
       assert.equal(nbm[0].searchParams.get('latitude'),'38.8000');
-      await expectText(page,'#mgpSummary',/^NBM model guidance for the next 10 days: highs 61° to 70°, lows 41° to 50°\.$/);
+      await expectText(page,'#mgpSummary',/^NBM model guidance for the next 10 days: highs 42° to 74°, lows 22° to 47°\.$/);
       assert.match(await page.locator('#meteogramCard a').getAttribute('href'),/^\/meteograms\?lat=38\.8000&lon=-90\.7900&name=Lake\+St\.\+Louis/);
       assert.equal(await page.locator('#mgpChart').getAttribute('aria-hidden'),'true','The chart is decoration; the summary carries the numbers');
+      assert.equal(await page.locator('#mgpChart .mgp-vl, #mgpChart .mgp-vo').count(),10,'Every low keeps its number, the shortest bar included');
       assert((await page.locator('#meteogramCard .mgp-cta').boundingBox()).height>=44-0.001,'44px link target');
       // A new place re-runs the feed and re-points the link without another scroll.
       await page.evaluate(()=>setLocation({name:'Wentzville, MO',lat:38.81,lon:-90.86,station:null,precision:'representative'},{save:false}));

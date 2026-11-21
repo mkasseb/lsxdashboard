@@ -111,7 +111,10 @@ function renderMeteogramPreview(){
     svg.push('<rect class="mgp-hi" x="'+(cx-bwH/2).toFixed(1)+'" y="'+yh.toFixed(1)+'" width="'+bwH.toFixed(1)+'" height="'+(yb-yh).toFixed(1)+'" rx="2"/>');
     svg.push('<rect class="mgp-lo" x="'+(cx-bwL/2).toFixed(1)+'" y="'+yl.toFixed(1)+'" width="'+bwL.toFixed(1)+'" height="'+(yb-yl).toFixed(1)+'" rx="2"/>');
     svg.push('<text class="mgp-v" x="'+cx.toFixed(1)+'" y="'+(yh-5).toFixed(1)+'" font-size="'+fs+'">'+d.hi+'</text>');
-    if(yb-yl>fs+6) svg.push('<text class="mgp-vl" x="'+cx.toFixed(1)+'" y="'+(yl+fs+3).toFixed(1)+'" font-size="'+fs+'">'+d.lo+'</text>');
+    // The coldest night has the shortest blue bar, and its number matters most: when it can't fit
+    // inside, it sits just above the bar on the yellow, in dark text that reads in both themes.
+    var inside=yb-yl>fs+6;
+    svg.push('<text class="'+(inside?'mgp-vl':'mgp-vo')+'" x="'+cx.toFixed(1)+'" y="'+(inside?yl+fs+3:yl-4).toFixed(1)+'" font-size="'+fs+'">'+d.lo+'</text>');
     svg.push('<text class="mgp-d'+(d.date===today?' mgp-today':'')+'" x="'+cx.toFixed(1)+'" y="'+(H-6)+'" font-size="'+fs+'">'+label+'</text>');
   });
   svg.push('</svg>');
