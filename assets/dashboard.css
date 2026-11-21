@@ -1845,6 +1845,13 @@ a.cpc-item:hover{border-color:var(--accent)}
 .mg-link{font-size:var(--fs-sm);gap:6px}
 .jump a.jump-out{color:var(--accent);gap:6px;font-weight:600}
 .jump a.jump-out:hover,.jump a.jump-out:focus-visible{color:var(--accent)}
+/* Phones keep every section link on one bar with nothing scrolled out of sight (the 390px contract
+   in weather-stress-tests). The word would push the bar past that, so it goes icon-only there and
+   keeps its name for screen readers; the Hourly and 7-Day cards still spell the link out. */
+@media(max-width:680px){
+  .jump a.jump-out{position:relative;justify-content:center;padding:0 5px;gap:0}   /* 44px tall, ~24px wide: the bar has ~31px left */
+  .jump-out-label{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+}
 .h24-range-key{font-size:var(--fs-xs);color:var(--muted);margin:0 0 6px;line-height:1.5}
 #h24Card .precip-details{margin:12px 0 0;padding:12px 0 0;border-bottom:0;border-top:1px solid var(--border)}
 #hourly24 .h24-sum{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:6px}
