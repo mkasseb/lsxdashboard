@@ -61,6 +61,14 @@ function updateLocNow(){
   if(sticky) sticky.setAttribute("aria-label","Change forecast location: "+current.name);
   var kind=document.getElementById("stickyKind");if(kind) kind.textContent=current.precision==="representative"?"Town point":current.precision==="device"?"Geolocated point":"Selected point";
   syncLocationTools();
+  var mg=meteogramURL(current);
+  [].forEach.call(document.querySelectorAll("[data-meteogram-link]"),function(a){ a.href=mg; });
+}
+/* The meteogram page reads lat/lon/name from its query string, so every link to it opens on the
+   place already chosen here instead of making the visitor search a second time. */
+function meteogramURL(loc){
+  if(!loc||!isFinite(+loc.lat)||!isFinite(+loc.lon)) return "/meteograms";
+  return "/meteograms?"+new URLSearchParams({lat:(+loc.lat).toFixed(4),lon:(+loc.lon).toFixed(4),name:(loc.name||"").replace(" (home)","")});
 }
 
 

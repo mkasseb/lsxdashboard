@@ -38,7 +38,7 @@ function initContextView(){
     if(CONTEXT_START_COLLAPSED.indexOf(id)>=0){body.hidden=true;button.setAttribute('aria-expanded','false');button.textContent='Show details';}
   });
   document.getElementById('jumpNav').addEventListener('click',function(e){
-    var link=e.target.closest('a');if(!link)return;
+    var link=e.target.closest('a[href^="#"]');if(!link)return;
     var card=document.querySelector(link.getAttribute('href'));
     if(card&&card.querySelector('.context-body')) expand(card,true);
     if(card&&card.id==='forecastCard') requestContext('context');
@@ -399,7 +399,7 @@ function showFolded(key,scroll){
   // A jump link into a folded section puts that section back before the browser scrolls to it.
   var nav=document.getElementById("jumpNav");
   if(nav) nav.addEventListener("click",function(e){
-    var link=e.target.closest("a"); if(!link) return;
+    var link=e.target.closest('a[href^="#"]'); if(!link) return;
     var t=document.querySelector(link.getAttribute("href")); if(!t) return;
     if(t.id==="forecastCard") showFolded("forecast",false);
     else if(t.closest("#contextPack")) showFolded("context",false);

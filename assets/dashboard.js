@@ -2298,7 +2298,7 @@ scheduleMasonry();
 /* Active navigation follows rendered geometry, including independent disclosures and repacking. */
 (function(){
   var nav=document.getElementById("jumpNav"), bar=nav.parentElement, queued=false, clicked=null, clickedView=null;
-  var links=[].slice.call(nav.querySelectorAll('a'));
+  var links=[].slice.call(nav.querySelectorAll('a[href^="#"]'));  // the Meteograms link leaves the page
   function update(){
     queued=false;
     var edge=Math.max(bar.getBoundingClientRect().bottom+16,parseFloat(getComputedStyle(document.getElementById("currentCard")).scrollMarginTop)+2);
@@ -2343,6 +2343,6 @@ scheduleMasonry();
   if(window.ResizeObserver)new ResizeObserver(schedule).observe(document.getElementById('main'));
   document.addEventListener('lsxlayout',schedule);
   document.addEventListener('toggle',schedule,true);
-  nav.addEventListener('click',function(e){clicked=e.target.closest('a');clickedView=null;schedule();});
+  nav.addEventListener('click',function(e){var a=e.target.closest('a[href^="#"]');if(!a)return;clicked=a;clickedView=null;schedule();});
   schedule();
 })();

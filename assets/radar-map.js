@@ -1225,8 +1225,8 @@ function refreshSatLayer(){
   if(satPinned) return;
   swapSatLayer(satUrl(null));
 }
-/* The jump nav needs no script: every link points at a section that is always on the page, and the
-   browser does the scrolling. */
+/* The jump nav needs no script: every in-page link points at a section that is always on the page,
+   and the browser does the scrolling. The one outside link (Meteograms) is a plain navigation. */
 
 /* ---- Sky fullscreen ----
    The inline map is a peek; this is the "where exactly, and when" view. The card itself goes
