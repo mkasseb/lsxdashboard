@@ -191,6 +191,11 @@ async function open(c, width=390) {
     }
     if(u.hostname==='mesonet.agron.iastate.edu')return c.reportsDown?reply({error:'storm reports outage'},503):reply({type:'FeatureCollection',features:(c.reports||[]).map(([typetext,minutes,lat,lon,magnitude,city,wfo='LSX'],i)=>({id:String(i),type:'Feature',properties:{wfo,typetext,magnitude:magnitude??'',unit:typetext==='HAIL'?'INCH':null,city,county:'St. Charles',st:'MO',source:'Trained Spotter',remark:'',valid:new Date(c.now-minutes*60000).toISOString(),lat,lon},geometry:{type:'Point',coordinates:[lon,lat]}}))});
     if(u.hostname==='air-quality-api.open-meteo.com'&&c.aqi!=null) return reply({current:{us_aqi:c.aqi,time:c.aqiMissingTime?undefined:(c.now-(c.aqiAgeHours||0)*H)/1000,pm2_5:75,pm10:90}});
+    if(u.hostname==='api.open-meteo.com'&&u.searchParams.get('models')==='ncep_nbm_conus'){
+      // Synthetic NBM daily guidance for the meteogram preview card.
+      if(c.meteogramDown)return reply({error:true,reason:'simulated NBM outage'},503);
+      return reply({daily:{time:Array.from({length:10},(_,i)=>stamp(c.now+i*24*H).slice(0,10)),temperature_2m_max:Array.from({length:10},(_,i)=>70-i),temperature_2m_min:Array.from({length:10},(_,i)=>50-i)}});
+    }
     if(u.hostname==='api.open-meteo.com'&&c.uv!=null) return reply({hourly:{time:[c.now/1000,(c.now+H)/1000],uv_index:[c.uv,c.uv+1]},daily:{time:Array.from({length:7},(_,i)=>stamp(c.now+i*24*H).slice(0,10)),uv_index_max:Array(7).fill(c.uv+1)}});
     if(u.hostname==='api.water.noaa.gov'&&c.river){
       if(u.pathname.endsWith('/stageflow/forecast')) return reply({issuedTime:c.riverForecastMissingTime?undefined:new Date(c.now-(c.riverForecastAgeHours||1)*H).toISOString(),data:c.river.map((primary,i)=>({primary,validTime:new Date(c.now+i*24*H).toISOString()}))});
@@ -581,6 +586,38 @@ async function main() {
       await page.evaluate(()=>Promise.all([loadForecast(),loadAlerts()]));
       assert.equal(await page.evaluate(()=>document.documentElement.classList.contains('radar-calm')),false,'An alert outage keeps the full radar');
     },390);
+    await run('meteogram preview waits for its card, then links the chart to this place',config('meteogram preview'),async({page})=>{
+      const nbm=[];page.on('request',r=>{const u=new URL(r.url());if(u.hostname==='api.open-meteo.com'&&u.searchParams.get('models')==='ncep_nbm_conus')nbm.push(u);});
+      await page.waitForTimeout(300);
+      assert.equal(await page.evaluate(()=>deferredFeeds.meteogram),false,'No model request before the card nears the screen');
+      assert.equal(nbm.length,0);
+      await page.locator('#meteogramCard').scrollIntoViewIfNeeded();
+      await page.waitForFunction(()=>document.querySelectorAll('#mgpChart .mgp-hi').length===10);
+      assert.equal(nbm.length,1,'One small daily request');
+      assert.equal(nbm[0].searchParams.get('latitude'),'38.8000');
+      await expectText(page,'#mgpSummary',/^NBM model guidance for the next 10 days: highs 61° to 70°, lows 41° to 50°\.$/);
+      assert.match(await page.locator('#meteogramCard a').getAttribute('href'),/^\/meteograms\?lat=38\.8000&lon=-90\.7900&name=Lake\+St\.\+Louis/);
+      assert.equal(await page.locator('#mgpChart').getAttribute('aria-hidden'),'true','The chart is decoration; the summary carries the numbers');
+      assert((await page.locator('#meteogramCard .mgp-cta').boundingBox()).height>=44-0.001,'44px link target');
+      // A new place re-runs the feed and re-points the link without another scroll.
+      await page.evaluate(()=>setLocation({name:'Wentzville, MO',lat:38.81,lon:-90.86,station:null,precision:'representative'},{save:false}));
+      await page.waitForFunction(()=>document.querySelector('#meteogramCard a').getAttribute('href').includes('lat=38.8100'));
+      await page.waitForFunction(()=>document.querySelectorAll('#mgpChart .mgp-hi').length===10);
+      assert.equal(nbm.at(-1).searchParams.get('latitude'),'38.8100');
+    });
+    await run('meteogram preview outage says so instead of drawing',config('meteogram outage',{meteogramDown:true}),async({page})=>{
+      await page.locator('#meteogramCard').scrollIntoViewIfNeeded();
+      await page.waitForFunction(()=>mgpState==='unavailable');
+      await expectText(page,'#mgpChart',/Model preview unavailable right now/);
+      assert.equal(await page.locator('#mgpChart svg').count(),0,'An outage never draws stale or empty bars');
+      assert.equal(await page.locator('#mgpSummary').textContent(),'');
+      assert.match(await page.locator('#meteogramCard a').getAttribute('href'),/^\/meteograms\?/,'The link still works');
+    });
+    await run('storm layout folds the meteogram preview with the 7-day',config('storm meteogram',{alerts:[alert('Tornado Warning',base)]}),async({page})=>{
+      await page.waitForFunction(()=>document.documentElement.classList.contains('lsx-active'));
+      assert(!await page.locator('#meteogramCard').isVisible(),'A model teaser takes no room during a warning');
+      assert(!await page.locator('#forecastCard').isVisible());
+    },1280);
     for(const width of [390,1280])await run('storm layout zooms the radar to county scale without playing the loop '+width,config('storm camera',{maps:true,alerts:[alert('Tornado Warning',base)],reports:[['FUNNEL CLOUD',9,38.80,-90.88,'','2 W Lake St. Louis']]}),async session=>{
       const {page}=session;
       await page.waitForFunction(()=>document.documentElement.classList.contains('lsx-active')&&typeof rvMap!=='undefined'&&rvMap&&lsrLayer);

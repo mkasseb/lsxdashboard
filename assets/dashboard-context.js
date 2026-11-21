@@ -57,6 +57,80 @@ function initContextView(){
   Object.keys(cards).forEach(function(id){observer.observe(document.getElementById(id));});
 }
 
+/* ---- Meteogram preview ----
+   A thumbnail of the NBM daily highs and lows that /meteograms draws in full, so the link is a
+   picture rather than a word half the audience can't define. It is the same Open-Meteo model the
+   page opens on, never the NWS numbers the 7-day beside it already shows. Deferred like the
+   context feeds: nothing is requested until the card nears the screen, and the location registry
+   then re-runs it for each new place. The deferredFeeds literal itself is left alone because the
+   stress harness rewrites that exact line. */
+deferredFeeds.meteogram=false;
+var mgpData=null, mgpState="waiting";
+var MGP_URL="https://api.open-meteo.com/v1/forecast?daily=temperature_2m_max,temperature_2m_min"
+  +"&models=ncep_nbm_conus&forecast_days=10&temperature_unit=fahrenheit&timezone=America%2FChicago";
+function meteogramDays(d){
+  var dl=d&&d.daily, out=[];
+  if(!dl||!Array.isArray(dl.time)||!Array.isArray(dl.temperature_2m_max)||!Array.isArray(dl.temperature_2m_min)) return out;
+  dl.time.forEach(function(t,i){
+    var hi=dl.temperature_2m_max[i], lo=dl.temperature_2m_min[i];
+    if(typeof t==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(t)&&isFinite(hi)&&isFinite(lo)&&hi!==null&&lo!==null&&hi>=lo&&hi<140&&lo>-60)
+      out.push({date:t,hi:Math.round(hi),lo:Math.round(lo)});
+  });
+  return out;
+}
+function loadMeteogramPreview(){
+  var fresh=locGuard("meteogram");
+  return getJSON(MGP_URL+"&latitude="+(+current.lat).toFixed(4)+"&longitude="+(+current.lon).toFixed(4),null,locSignal()).then(function(d){
+    if(!fresh()) return;
+    var days=meteogramDays(d);
+    if(days.length<3) throw new Error("NBM daily guidance unavailable");
+    mgpData=days; mgpState="ready"; renderMeteogramPreview();
+  }).catch(function(e){
+    if(isAbort(e)||!fresh()) return;
+    mgpData=null; mgpState="unavailable"; renderMeteogramPreview();
+  });
+}
+function renderMeteogramPreview(){
+  var box=document.getElementById("mgpChart"), sum=document.getElementById("mgpSummary");
+  if(!box) return;
+  if(!mgpData){
+    if(mgpState==="unavailable"){ box.innerHTML='<div class="loading">Model preview unavailable right now. The meteograms page may still load.</div>'; if(sum) sum.textContent=""; }
+    return;
+  }
+  var days=mgpData, n=days.length, W=Math.max(box.clientWidth||0,280), H=W<480?128:140;
+  var M={l:2,r:2,t:18,b:22}, pw=W-M.l-M.r, ph=H-M.t-M.b;
+  var his=days.map(function(d){return d.hi;}), los=days.map(function(d){return d.lo;});
+  var top=Math.max.apply(null,his)+3, base=Math.floor((Math.min.apply(null,los)-10)/5)*5;
+  function y(v){ return M.t+ph*(1-(v-base)/(top-base)); }
+  var slot=pw/n, bwH=Math.min(slot*.66,44), bwL=bwH*.72, fs=slot<34?10:11, tight=slot<38;
+  var today=ctxTodayKey(), DOW=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"], svg=[];
+  svg.push('<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="'+H+'" focusable="false">');
+  days.forEach(function(d,i){
+    var cx=M.l+slot*(i+.5), yb=y(base), yh=y(d.hi), yl=y(d.lo);
+    var dow=DOW[new Date(d.date+"T12:00:00Z").getUTCDay()], label=d.date===today?"Today":(tight?dow.slice(0,2):dow);
+    svg.push('<rect class="mgp-hi" x="'+(cx-bwH/2).toFixed(1)+'" y="'+yh.toFixed(1)+'" width="'+bwH.toFixed(1)+'" height="'+(yb-yh).toFixed(1)+'" rx="2"/>');
+    svg.push('<rect class="mgp-lo" x="'+(cx-bwL/2).toFixed(1)+'" y="'+yl.toFixed(1)+'" width="'+bwL.toFixed(1)+'" height="'+(yb-yl).toFixed(1)+'" rx="2"/>');
+    svg.push('<text class="mgp-v" x="'+cx.toFixed(1)+'" y="'+(yh-5).toFixed(1)+'" font-size="'+fs+'">'+d.hi+'</text>');
+    if(yb-yl>fs+6) svg.push('<text class="mgp-vl" x="'+cx.toFixed(1)+'" y="'+(yl+fs+3).toFixed(1)+'" font-size="'+fs+'">'+d.lo+'</text>');
+    svg.push('<text class="mgp-d'+(d.date===today?' mgp-today':'')+'" x="'+cx.toFixed(1)+'" y="'+(H-6)+'" font-size="'+fs+'">'+label+'</text>');
+  });
+  svg.push('</svg>');
+  box.innerHTML=svg.join("");
+  if(sum) sum.textContent="NBM model guidance for the next "+n+" days: highs "+Math.min.apply(null,his)+"° to "+Math.max.apply(null,his)+"°, lows "+Math.min.apply(null,los)+"° to "+Math.max.apply(null,los)+"°.";
+}
+function initMeteogramPreview(){
+  var card=document.getElementById("meteogramCard"); if(!card) return;
+  var box=document.getElementById("mgpChart"), lastW=0;
+  if(window.ResizeObserver) new ResizeObserver(function(){
+    var w=box.clientWidth; if(Math.abs(w-lastW)<8) return; lastW=w; if(mgpData) renderMeteogramPreview();
+  }).observe(box);
+  if(!('IntersectionObserver' in window)){ requestContext("meteogram"); return; }
+  var io=new IntersectionObserver(function(entries){
+    if(entries.some(function(e){return e.isIntersecting;})){ io.disconnect(); requestContext("meteogram"); }
+  },{rootMargin:"300px"});
+  io.observe(card);
+}
+
 /* ---- The outlook row ----
    One row answers "is anything coming, from today out to next season" by reading the same results
    the Risk, Hazards, Week Ahead and Drought cards paint. Each loader reports a summary through

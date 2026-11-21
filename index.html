@@ -57,7 +57,7 @@
 <link rel="preload" href="/assets/fonts/barlow-condensed-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/ibm-plex-mono-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/ibm-plex-mono-latin-500-normal.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/assets/dashboard.css?v=3e94b5677f64b474">
+<link rel="stylesheet" href="/assets/dashboard.css?v=84e7f12273c8920a">
 </head>
 <body>
 <!-- First focusable thing on the page, and deliberately ahead of the sprite so it stays that way.
@@ -402,7 +402,6 @@
   </section>
 <section class="card" id="forecastCard">
       <h2>7-Day Forecast <span class="forecast-primary-source">Official NWS forecast</span></h2>
-      <div class="mg-row mg-row-end"><a class="source-link mg-link" href="/meteograms" data-meteogram-link><svg class="ic" aria-hidden="true"><use href="#i-stats"/></svg>Compare model highs &amp; lows</a></div>
       <div class="daily" id="daily"><div class="loading">Loading forecast…</div></div>
       <p class="record-calendar-note">Open a day for normals, records and source details.</p>
       <details class="record-source" id="forecastRecordSource">
@@ -411,6 +410,17 @@
         <p class="record-station" id="forecastRecordStation">Daily records: station data unavailable</p>
         <div id="forecastRecordSourceBody">Station records load when this section approaches.</div>
       </details>
+    </section>
+<!-- A picture of the model guidance sells /meteograms better than its name does. The NBM daily
+     request waits until the card nears the screen (FEEDS.meteogram, deferred). The whole chart is
+     the link and opens the meteograms on the selected place. -->
+<section class="card mgp-card" id="meteogramCard" aria-labelledby="mgpTitle">
+      <div class="mgp-head"><h2 id="mgpTitle">Model guidance</h2><span class="mgp-scope">NBM · next 10 days</span></div>
+      <p class="sr" id="mgpSummary"></p>
+      <a class="mgp-link" href="/meteograms" data-meteogram-link>
+        <div class="mgp-chart" id="mgpChart" aria-hidden="true"><div class="loading">Model guidance loads as you scroll here…</div></div>
+        <span class="mgp-cta"><svg class="ic" aria-hidden="true"><use href="#i-stats"/></svg>Hourly meteograms · NBM, GFS, ECMWF &amp; more <span aria-hidden="true">→</span></span>
+      </a>
     </section>
 </div>
 <!-- One row from today to next season, filled by setOutlook() in dashboard-context.js from the
@@ -610,15 +620,15 @@
   integrity="sha384-tXYNKOHx4T02jMP7YYCtBxPIv1B5gaA5mcVPBzqMp6d7VzWzxJgI2aWF/nJLrQdS" crossorigin="anonymous"></script>
 <script src="/assets/weather-contracts.js?v=ad8b9553dc77bd53"></script>
 <script src="/assets/weather-core.js?v=98377ab63dc599e9"></script>
-<script src="/assets/weather-feeds.js?v=6923833a586b96ee"></script>
+<script src="/assets/weather-feeds.js?v=7b4bf4e803163059"></script>
 <script src="/assets/forecast-view.js?v=b6dd1f0e63226306"></script>
-<script src="/assets/dashboard-context.js?v=d8de4a6eb507a8a8"></script>
+<script src="/assets/dashboard-context.js?v=da4fd7733e135b95"></script>
 <script src="/assets/model-data.js?v=aa9f38687b71f14d" data-worker-src="/assets/model-worker.js?v=3df9c3b9bd2c3bc4"></script>
 <script src="/assets/forecast-range.js?v=805a652762f3d938"></script>
 <script src="/assets/hourly-range.js?v=ee1dec6e184d1f77"></script>
 <script src="/assets/radar-map.js?v=e4fd1e6f037120fd"></script>
 <script src="/assets/station-map.js?v=28a078d94c91ec8b"></script>
-<script src="/assets/map-runtime.js?v=37d7081bb6443f11"></script>
+<script src="/assets/map-runtime.js?v=8d7e24a8fb07a11b"></script>
 <script src="/assets/location-controls.js?v=81011e26324b271b"></script>
 <script src="/assets/saved-view.js?v=6eab124901607437"></script>
 <script src="/assets/climate-view.js?v=d7b1e797b55b32ce"></script>
