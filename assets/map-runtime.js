@@ -174,7 +174,7 @@ function requestMaps(){
 function startMapRuntime(){
   mapsCanStart=true;
   queueMicrotask(function(){
-    initMapDiagnostics();initContextView();
+    initMapDiagnostics();initContextView();initMeteogramPreview();
     var card=document.getElementById('radarCard');
     document.getElementById('radar').innerHTML='<div class="imgfail">Radar loads when this section approaches. <button type="button" data-load-maps>Load radar</button></div>';
     syncRadarBadge();

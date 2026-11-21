@@ -182,7 +182,7 @@ async function main(){
    assert(await p.locator('#riskHelp').evaluate(e=>e.open));assert(await p.locator('#afdCardBody').isHidden());
    assert(await p.locator('#riskHelp summary').evaluate(e=>e===document.activeElement),'Moved disclosure retains keyboard focus');
    // CSS alone places the bands: no breakpoint moves a card to a different parent.
-   assert.deepEqual(await p.locator('.planning-grid>.card').evaluateAll(rows=>rows.map(r=>r.id)),['h24Card','forecastCard']);
+   assert.deepEqual(await p.locator('.planning-grid>.card').evaluateAll(rows=>rows.map(r=>r.id)),['h24Card','forecastCard','meteogramCard']);
    assert.deepEqual(await p.locator('.top-band>.card').evaluateAll(rows=>rows.map(r=>r.id)),['radarCard']);
    assert(await p.locator('#riversCard').evaluate(e=>e.parentElement.id==='attentionCards'));assert(await p.locator('#riskCard').evaluate(e=>e.parentElement.classList.contains('masonry')));
    assert(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));

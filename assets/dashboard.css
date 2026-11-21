@@ -1841,10 +1841,34 @@ a.cpc-item:hover{border-color:var(--accent)}
    the NWS hourly or 7-day forecast would want a second opinion, and carry the selected location. */
 .mg-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;column-gap:12px;margin:-12px 0 4px}
 .mg-row .hourly-forecast-source{margin:0}
-.mg-row-end{justify-content:flex-end;margin:-8px 0 4px}
 .mg-link{font-size:var(--fs-sm);gap:6px}
 .jump a.jump-out{color:var(--accent);gap:6px;font-weight:600}
 .jump a.jump-out:hover,.jump a.jump-out:focus-visible{color:var(--accent)}
+/* Meteogram preview card. Bar colours follow /meteograms (warm highs, blue lows) so the thumbnail
+   looks like the page it opens. The chart is decoration inside one link; #mgpSummary carries the
+   numbers for screen readers. Under 1001px the planning grid is one column and the card simply
+   follows the 7-day; above it, Hourly spans both rows and the card fills the space under 7-day. */
+:root{--mgp-hi:#e9cf6a;--mgp-lo:#4a6fc7}
+:root[data-theme="light"]{--mgp-hi:#f0d36a;--mgp-lo:#3d63c4}
+@media(min-width:1001px){.planning-grid>#h24Card{grid-row:span 2}.planning-grid>#meteogramCard{grid-column:2}}
+.mgp-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:8px}
+.mgp-head h2{margin:0}
+.mgp-scope{font-family:var(--fm);font-size:var(--fs-xs);color:var(--muted)}
+.mgp-link{display:block;color:inherit;text-decoration:none;border-radius:var(--r-md)}
+.mgp-link:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.mgp-chart{min-height:128px;display:flex;align-items:center}
+.mgp-chart svg{display:block}
+.mgp-hi{fill:var(--mgp-hi);stroke:color-mix(in srgb,var(--mgp-hi) 60%,#000);stroke-width:.75}
+.mgp-lo{fill:var(--mgp-lo)}
+.mgp-v,.mgp-vl,.mgp-vo,.mgp-d{font-family:var(--fm);text-anchor:middle}
+.mgp-v{fill:var(--text);font-weight:600}
+.mgp-vl{fill:#fff;font-weight:600}
+.mgp-vo{fill:#1b1d21;font-weight:600}
+.mgp-d{fill:var(--muted)}.mgp-today{fill:var(--text);font-weight:700}
+.mgp-cta{display:inline-flex;align-items:center;gap:6px;min-height:44px;color:var(--accent);font-size:var(--fs-sm);
+  text-decoration:underline;text-underline-offset:3px}
+.mgp-link:hover .mgp-hi,.mgp-link:focus-visible .mgp-hi{filter:brightness(1.08)}
+.lsx-active:not(.show-forecast) #meteogramCard{display:none}
 /* Phones keep every section link on one bar with nothing scrolled out of sight (the 390px contract
    in weather-stress-tests). The word would push the bar past that, so it goes icon-only there and
    keeps its name for screen readers; the Hourly and 7-Day cards still spell the link out. */

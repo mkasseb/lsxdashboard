@@ -49,6 +49,7 @@ var FEEDS={
   story:{label:"Weather Story",card:"storyCard",load:"loadStory",every:30*60000,age:90*60000},
   rainfall:{label:"Observed rainfall",card:"rainCard",load:"loadRainfall",every:60*60000,age:3*3600000,local:true,reset:{rain:"Checking observed rainfall…"}},
   winter:{label:"Winter guidance",card:"winterCard",load:"loadWinter",every:60*60000,age:3*3600000,local:true,reset:{winter:"Checking WPC winter guidance…"}},
+  meteogram:{load:"loadMeteogramPreview",every:60*60000,local:true,tracked:false,failure:"loader-owned",reset:{mgpChart:"Loading model guidance…",mgpSummary:""}},
   qpf:{load:"loadQpf",every:60*60000,local:true,tracked:false,failure:"loader-owned",reset:{qpf7:""}},
   radar:{load:"refreshRadarLayer",every:4*60000,tracked:false,failure:"loader-owned"},
   satellite:{load:"refreshSatLayer",every:10*60000,tracked:false,failure:"loader-owned"},
