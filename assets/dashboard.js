@@ -1738,13 +1738,13 @@ function renderGlance(H,hourlyReady,candidates,opts){
         +'</div></div>';
       html='';
       var rows=model.supports.slice();
-      var rain=candidates.filter(function(c){ return c.topic==="precip"&&c.horizon==="hourly"; })[0];
-      // Rain answers a standing question even if it leads or falls outside the support limit.
+      // Keep the hourly rain answer visible wherever it lands. Now already shows it when it leads.
+      var rain=L.topic==="precip"?null:candidates.find(function(c){ return c.topic==="precip"&&c.horizon==="hourly"; });
       if(rain&&rows.indexOf(rain)<0) rows.unshift(rain);
       var hasLater=rows.length>0&&rows[rows.length-1].horizon==="week";
       if(wear&&!mergeWear&&!L.alertAware) rows.splice(Math.min(rows.length-(hasLater?1:0),2),0,wear);
-      /* On phones the rain answer stays visible. Hiding a single row would cost a button of
-         the same height, so collapse only starts at two hidden rows. Wider screens show all. */
+      /* On phones keep the rain row or the first support visible. Collapse only starts at
+         two hidden rows. Wider screens show all. */
       var keep=rain?rows.indexOf(rain):0, extra=rows.length-1;
       if(extra<2){ keep=-1; extra=0; }
       if(rows.length) html+='<ul class="glance-list" id="glanceList">'+rows.map(function(c,i){

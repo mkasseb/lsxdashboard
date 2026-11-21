@@ -22,17 +22,20 @@ async function card(p){
   const browser=await playwright[engine].launch({headless:engine!=='firefox',...(engine==='chromium'?{executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']}:{})});
   setBrowser(browser);
   try{
-    // A quiet day yields two rows, which stay visible. Then a busy day (extreme UV, storms later
-    // in the week) that has enough rows to collapse.
-    let s=await open(config('Glance phone quiet'),390),p=s.page;
+    // A dry day with storms later in the week leaves two support rows after the Now takeaway.
+    let s=await open(config('Glance phone quiet',{weekRain:true}),390),p=s.page;
     try{
       const c=await card(p);
       const first=await p.evaluate(()=>{const a=document.querySelector('#ccTake .glance-lead').getBoundingClientRect(),t=document.querySelector('#current .cc-temp').getBoundingClientRect();return {underReading:a.top>=t.bottom-1,onFirstScreen:a.bottom<=innerHeight};});
       assert(first.underReading&&first.onFirstScreen,'phone puts the takeaway under the reading on the first screen: '+JSON.stringify(first));
-      assert(c.rows<=2,'quiet scenario has at most two rows');
+      assert.equal(c.lead,'Dry today');
+      assert.match(await p.locator('#ccTake .glance-detail').textContent(),/Chance under 10% through/);
+      assert.doesNotMatch(await p.locator('#glance').textContent(),/Dry today|Chance under 10%/,'the rain takeaway appears once');
+      assert.equal(c.rows,2,'clothing advice and the later outlook both remain');
+      assert.match(await p.locator('#glanceList').textContent(),/Later.*Storms possible/);
       assert.equal(await p.locator('#ccTake .glance-action').count(),0,'an empty action produces no paragraph');
       assert.deepEqual([c.shown,c.button],[c.rows,null],'two rows show without a toggle');
-      console.log('PASS glance phone shows two rows without a toggle');
+      console.log('PASS glance phone shows the dry takeaway once and two supporting rows');
     }finally{await s.context.close();}
     s=await open(config('Glance phone',{uv:11,weekRain:true,rh:40,aqi:35}),390);p=s.page;
     try{
