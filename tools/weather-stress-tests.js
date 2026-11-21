@@ -601,8 +601,11 @@ async function main() {
       assert.equal(await page.locator('#mgpChart').getAttribute('aria-hidden'),'true','The chart is decoration; the summary carries the numbers');
       assert.equal(await page.locator('#mgpChart .mgp-vl, #mgpChart .mgp-vo').count(),10,'Every low keeps its number, the shortest bar included');
       assert((await page.locator('#meteogramCard .mgp-cta').boundingBox()).height>=44-0.001,'44px link target');
-      // A new place re-runs the feed and re-points the link without another scroll.
-      await page.evaluate(()=>setLocation({name:'Wentzville, MO',lat:38.81,lon:-90.86,station:null,precision:'representative'},{save:false}));
+      // A new place re-runs the feed and re-points the link without another scroll. A resize while
+      // its request is in flight must not repaint the previous place's bars under the new link.
+      const stale=await page.evaluate(()=>{setLocation({name:'Wentzville, MO',lat:38.81,lon:-90.86,station:null,precision:'representative'},{save:false});
+        renderMeteogramPreview();return {svg:!!document.querySelector('#mgpChart svg'),summary:document.getElementById('mgpSummary').textContent};});
+      assert.deepEqual(stale,{svg:false,summary:''},'No stale bars or summary while the new place loads');
       await page.waitForFunction(()=>document.querySelector('#meteogramCard a').getAttribute('href').includes('lat=38.8100'));
       await page.waitForFunction(()=>document.querySelectorAll('#mgpChart .mgp-hi').length===10);
       assert.equal(nbm.at(-1).searchParams.get('latitude'),'38.8100');

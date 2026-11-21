@@ -65,7 +65,7 @@ function initContextView(){
    then re-runs it for each new place. The deferredFeeds literal itself is left alone because the
    stress harness rewrites that exact line. */
 deferredFeeds.meteogram=false;
-var mgpData=null, mgpState="waiting";
+var mgpData=null, mgpSeq=-1, mgpState="waiting";   // mgpSeq: the location generation mgpData belongs to
 var MGP_URL="https://api.open-meteo.com/v1/forecast?daily=temperature_2m_max,temperature_2m_min"
   +"&models=ncep_nbm_conus&forecast_days=10&temperature_unit=fahrenheit&timezone=America%2FChicago";
 function meteogramDays(d){
@@ -84,7 +84,7 @@ function loadMeteogramPreview(){
     if(!fresh()) return;
     var days=meteogramDays(d);
     if(days.length<3) throw new Error("NBM daily guidance unavailable");
-    mgpData=days; mgpState="ready"; renderMeteogramPreview();
+    mgpData=days; mgpSeq=locSeq; mgpState="ready"; renderMeteogramPreview();
   }).catch(function(e){
     if(isAbort(e)||!fresh()) return;
     mgpData=null; mgpState="unavailable"; renderMeteogramPreview();
@@ -93,6 +93,9 @@ function loadMeteogramPreview(){
 function renderMeteogramPreview(){
   var box=document.getElementById("mgpChart"), sum=document.getElementById("mgpSummary");
   if(!box) return;
+  // A resize or rotation can call this while a new place is loading. Data cached for an earlier
+  // place is never repainted under the new place's link; the registry reset already cleared the box.
+  if(mgpData&&mgpSeq!==locSeq){ mgpData=null; mgpState="waiting"; return; }
   if(!mgpData){
     if(mgpState==="unavailable"){ box.innerHTML='<div class="loading">Model preview unavailable right now. The meteograms page may still load.</div>'; if(sum) sum.textContent=""; }
     return;
