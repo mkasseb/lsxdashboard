@@ -103,8 +103,10 @@ const SUBJECT = new Function(`
   ${lift(/^function currentObservationFresh\(o,nowMs\)\{[\s\S]*?^\}/m, 'currentObservationFresh()')}
   ${lift(/^function stationMiles\(lat1,lon1,lat2,lon2\)\{[\s\S]*?^\}/m, 'stationMiles()')}
   ${lift(/^function aqiInfo\(v\)\{[\s\S]*?^\}/m, 'aqiInfo()')}
+  ${lift(/^function freezeSeason\(hist,todayKey\)\{[\s\S]*?^\}/m, 'freezeSeason()')}
+  ${lift(/^function freezeIsNews\(t,season\)\{[\s\S]*?^\}/m, 'freezeIsNews()')}
   ${lift(/^function bottomLineHourlyCandidates\(H,opts\)\{[\s\S]*?^\}/m, 'bottomLineHourlyCandidates()')}
-  ${lift(/^function bottomLineWeekCandidates\(days,cutoff,hourly\)\{[\s\S]*?^\}/m, 'bottomLineWeekCandidates()')}
+  ${lift(/^function bottomLineWeekCandidates\(days,cutoff,hourly,season\)\{[\s\S]*?^\}/m, 'bottomLineWeekCandidates()')}
   ${lift(/^function bottomLineLocalAlert\(groups,nowMs\)\{[\s\S]*?^\}/m, 'bottomLineLocalAlert()')}
   ${lift(/^function bottomLineCmp\(a,b\)\{[\s\S]*?^\}/m, 'bottomLineCmp()')}
   ${lift(/^function bottomLineAlertMatch\(alert,candidate\)\{[\s\S]*?^\}/m, 'bottomLineAlertMatch()')}
@@ -132,7 +134,7 @@ const SUBJECT = new Function(`
            compactDayName, compactCondition, precipChanceLabel, summaryPop, forecastImpact,
            summaryPopText, pairForecastPeriods, nwsWallTime, hourlyByDate, hrWord,
            whenWord, windowSpan, bottomLineHorizon, bottomLineWeekHorizon, bottomLineBriefingHorizon, dewF,
-           OUTLOOK_CFG, outlookVerdict, precipChance, bottomLineHours, bottomLineHourlyCandidates, bottomLineWeekCandidates,
+           OUTLOOK_CFG, outlookVerdict, precipChance, bottomLineHours, bottomLineHourlyCandidates, bottomLineWeekCandidates, freezeSeason, freezeIsNews,
            currentObservationFresh, stationMiles, gridInterval, gridSeries, gridAmount, gridGustAt,
            precipEventSummary, forecastWindowHours, spcUtcTime, spcOutlookPeriod, spcThreatProbability, spcThreatText,
            bottomLineLocalAlert, bottomLineAlertMatch, buildBottomLine, glanceWear, tRamp,
@@ -844,6 +846,34 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
   check('24 degrees is the hard-freeze edge', topic(weather(H, {now: EVE}), 'cold').tone, 'danger');
   H = hours(EVE, 18, i => ({t: i === 0 ? 60 : (i === 12 ? 25 : 40), fl: i === 0 ? 60 : (i === 12 ? 25 : 40)}));
   check('25 degrees stays amber', topic(weather(H, {now: EVE}), 'cold').tone, 'warning');
+  // Season memory: a freeze is news once, the first hard freeze once more, then it goes quiet.
+  const FS = SUBJECT.freezeSeason, FN = SUBJECT.freezeIsNews;
+  const histFrom = (start, lows) => ({start, mint: lows});
+  const julyToNov23 = 146; // Jul 1 .. Nov 23 inclusive
+  check('season low runs from July 1 through yesterday',
+    FS(histFrom('2026-07-01', [...Array(julyToNov23 - 1).fill(50), 30, 10]), '2026-11-24'),
+    {low: 30, from: '2026-07-01', spring: false});
+  check('patchy history fails open', FS(histFrom('2026-07-01', Array(julyToNov23).fill(null)), '2026-11-24'), null);
+  check('January belongs to the season that began last July',
+    FS(histFrom('2025-07-01', Array(200).fill(40)), '2026-01-10').from, '2025-07-01');
+  check('first freeze is news', FN(30, {low: 35}), true);
+  check('a later ordinary freeze is not', FN(28, {low: 30}), false);
+  check('first hard freeze is news after ordinary freezes', FN(22, {low: 27}), true);
+  check('a repeat hard freeze is not', FN(22, {low: 20}), false);
+  check('15 degrees is always news', FN(15, {low: 5}), true);
+  check('spring freezes stay news', FN(30, {low: 10, spring: true}), true);
+  check('unknown season history keeps the freeze', FN(28, null), true);
+  H = hours(EVE, 18, i => ({t: i === 0 ? 60 : (i === 12 ? 22 : 40), fl: i === 0 ? 60 : (i === 12 ? 22 : 40)}));
+  check('a repeat hard freeze drops the cold card',
+    topic(weather(H, {now: EVE, freezeSeason: {low: 18}}), 'cold'), null);
+  check('the season\'s first hard freeze keeps it',
+    topic(weather(H, {now: EVE, freezeSeason: {low: 28}}), 'cold').headline, 'Hard freeze by 6am tomorrow');
+  const freezeNight = [{night:{name:'Tuesday Night',startTime:'2026-11-24T18:00:00-06:00',endTime:'2026-11-25T06:00:00-06:00',
+    temperature:26,probabilityOfPrecipitation:{value:0},shortForecast:'Clear',windSpeed:'5 mph'}}];
+  check('a routine freeze later in the week stays out of Later',
+    SUBJECT.bottomLineWeekCandidates(freezeNight, new Date('2026-11-24T12:00:00-06:00'), null, {low: 20}).some(c => c.topic === 'cold'), false);
+  check('the first freeze later in the week is still flagged',
+    SUBJECT.bottomLineWeekCandidates(freezeNight, new Date('2026-11-24T12:00:00-06:00'), null, {low: 34}).some(c => c.topic === 'cold'), true);
   H = hours(NOW, 12, i => ({t: i === 0 ? 72 : (i === 6 ? 45 : 65), fl: i === 0 ? 72 : (i === 6 ? 45 : 65)}));
   check('a real temperature crash becomes one trend candidate', topic(weather(H), 'cold').headline, 'Sharp temperature drop');
   const MIDNIGHT = new Date(2026, 7, 14, 0);
