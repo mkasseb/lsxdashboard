@@ -1636,7 +1636,8 @@ function renderTheCall(briefingOnly){
     outlookVerdict(OUTLOOK_CFG.fire, fireRisk(callRisk.fire[0]).lvl, fireRisk(callRisk.fire[1]).lvl),
     outlookVerdict(OUTLOOK_CFG.wssi, callRisk.wssi[0], callRisk.wssi[1])
   ].filter(function(v){ return !!v; }):[];
-  var candidates=bottomLineHourlyCandidates(hourlyReady?H:[],{now:now,obs:obs,climateFor:climateFor,
+  var season=ctx.ready?freezeSeason(ctx.hist,weatherParts(now).key):null;
+  var candidates=bottomLineHourlyCandidates(hourlyReady?H:[],{now:now,obs:obs,climateFor:climateFor,freezeSeason:season,
     uvPeak:uv.peak,aqi:callAqi,allowComfort:comfort,hasHazard:!!callLocalAlert||outlooks.length>0}).concat(outlooks);
   function push(pri,ico,topic,label,headline,detail,action,tone,context,opts){
     candidates.push(bottomCandidate(pri,ico,topic,label,headline,detail,action,tone,context,opts));
@@ -1665,7 +1666,7 @@ function renderTheCall(briefingOnly){
   var model=buildBottomLine(candidates,callLocalAlert);
   renderTheCall._nbmContext={model:model,candidates:candidates};
   if(!briefingOnly) renderNwsMessages();
-  renderGlance(H,hourlyReady,candidates,{now:now,obs:obs,climateFor:climateFor,sunset:sunTimes(current.lat,current.lon,now).set});
+  renderGlance(H,hourlyReady,candidates,{now:now,obs:obs,climateFor:climateFor,freezeSeason:season,sunset:sunTimes(current.lat,current.lon,now).set});
 }
 
 /* ============ YOUR DAY ============
@@ -1718,7 +1719,7 @@ function renderGlance(H,hourlyReady,candidates,opts){
   }else{
     var all=candidates.slice(), cutoff=H[H.length-1].end;
     if(smart.weekDays&&smart.weekDays.length)
-      all=all.concat(bottomLineWeekCandidates(smart.weekDays,cutoff,smart.hourlyAll));
+      all=all.concat(bottomLineWeekCandidates(smart.weekDays,cutoff,smart.hourlyAll,opts.freezeSeason));
     var model=buildBottomLine(all,callLocalAlert), wear=glanceWear(H,opts);
     renderGlance._model=model;
     if(!model.lead){

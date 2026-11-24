@@ -282,6 +282,34 @@ function coldVerdict(nowT,mMin,cMin,high,unusual){
   return null;
 }
 
+/* Season-to-date low from observed daily minimums (ACIS), July 1 through yesterday. Today is
+   left out so this morning's first freeze can't count itself as already old news. Patchy
+   history returns null, and null keeps every freeze visible. */
+function freezeSeason(hist,todayKey){
+  if(!hist||!/^\d{4}-\d{2}-\d{2}$/.test(String(hist.start))||!Array.isArray(hist.mint)
+     ||!/^\d{4}-\d{2}-\d{2}$/.test(String(todayKey))) return null;
+  function day(k){ return Date.UTC(+k.slice(0,4),+k.slice(5,7)-1,+k.slice(8,10))/864e5; }
+  var y=+todayKey.slice(0,4), m=+todayKey.slice(5,7), from=(m>=7?y:y-1)+"-07-01";
+  var s=Math.round(day(from)-day(hist.start)), e=Math.round(day(todayKey)-day(hist.start));
+  if(s<0||e<s) return null;
+  var low=null, seen=0;
+  for(var i=s;i<e&&i<hist.mint.length;i++){
+    var v=hist.mint[i];
+    if(v==null||!isFinite(v)) continue;
+    seen++; if(low==null||v<low) low=v;
+  }
+  if(e>s&&seen<(e-s)*0.8) return null;
+  return {low:low, from:from, spring:m>=3&&m<=5};
+}
+/* A freeze is news the first time the season produces one, and again at the first hard
+   freeze (24° or colder). After that a 27° December morning is just December. Spring freezes
+   stay news because they hit budding plants, and 15° or colder is pipe weather every time. */
+function freezeIsNews(t,season){
+  if(t==null||t>32||!season||season.spring||t<=15) return true;
+  if(season.low==null) return true;
+  return t<=24?season.low>24:season.low>32;
+}
+
 /* Feels-like: NOAA's own formulas. Heat index (Rothfusz) when >=80°F; wind chill when <=50°F & wind >3 mph. */
 function parseMph(s){ var m=String(s||"").match(/\d+/g); return m?Math.max.apply(null,m.map(Number)):null; }
 
@@ -865,6 +893,10 @@ function bottomLineHourlyCandidates(H,opts){
     if(unusual) coldDetail=belowNormal>=8?" · "+Math.round(belowNormal)+"° colder than normal":" · Among the coldest 15% for the date";
   }
   var cold=coldVerdict(nowT,mMin,cMin,null,unusual);
+  function news(t){ return freezeIsNews(t,opts.freezeSeason); }
+  // A routine 30° hour must not hide a newsworthy 22° one later in the same window.
+  var firstNews=null;
+  timed.forEach(function(h){ if(!firstNews&&h.t!=null&&h.t<=32&&news(h.t)) firstNews=h; });
   /* A 31° November morning is routine here; red is kept for a hard freeze (24° or colder) so
      the colour still means something on the night it matters. */
   function freezeTone(t){ return t!=null&&t<=24?"danger":"warning"; }
@@ -875,24 +907,24 @@ function bottomLineHourlyCandidates(H,opts){
   var slickAction="Watch for freezing temperatures and slick spots where surfaces are wet.";
   // The observed freeze describes now. Keep the colder forecast and its precautions if
   // temperatures are still falling, and carry the observed reading in that same cue.
-  if(observedFreeze){
-    var upcoming=!!(coldestFreeze&&coldestFreeze.t<currentHour.t);
-    var freeze=upcoming?coldestFreeze:currentHour;
+  var upcoming=!!(observedFreeze&&coldestFreeze&&coldestFreeze.t<currentHour.t);
+  var freeze=observedFreeze?(upcoming?coldestFreeze:currentHour):null;
+  if(freeze&&news(freeze.t)){
     push(upcoming&&freeze===morning?85:86,"cold","cold","Cold",
       (freeze.t<=24?"Hard freeze":"Below freezing")+freezeWhen(freeze),
       upcoming?currentHour.t+"° now · low "+freeze.t+"°.":currentHour.t+"°.",
       freeze.t<=24?hardFreezeAction:upcoming?freezeAction:slickAction,freezeTone(freeze.t));
-  }else if(firstFreeze&&(!morning||mMin>32)) push(86,"cold","cold","Cold",
-    (firstFreeze.t<=24?"Hard freeze":"Below freezing")+freezeWhen(firstFreeze),
-    firstFreeze.t+"°.",slickAction,freezeTone(firstFreeze.t));
-  else if(cold==="freezing") push(85,"cold","cold","Cold",
+  }else if(firstNews&&(!morning||mMin>32||!news(mMin))) push(86,"cold","cold","Cold",
+    (firstNews.t<=24?"Hard freeze":"Below freezing")+freezeWhen(firstNews),
+    firstNews.t+"°.",slickAction,freezeTone(firstNews.t));
+  else if(cold==="freezing"&&news(mMin)) push(85,"cold","cold","Cold",
     (mMin<=24?"Hard freeze":"Below freezing")+freezeWhen(morning),
     "Low "+mMin+"°.",mMin<=24?hardFreezeAction:freezeAction,freezeTone(mMin));
   else if(cold==="falling") push(66,"trend-down","cold","Temperature trend","Sharp temperature drop",
     "Falling "+(nowT-cMin)+"° to "+cMin+"° by "+when(trough.d)+".","","warning");
   else if(cold==="cold"&&!frost&&!firstFreeze) push(unusual?56:48,"cold","cold","Temperature","Cold morning",
     mMin+"° "+near(morning.d)+coldDetail+".","","neutral");
-  if(frost&&!firstFreeze&&!observedFreeze) push(80,"cold","frost","Frost","Frost possible",
+  if(frost&&!firstFreeze&&!observedFreeze&&news(32)) push(80,"cold","frost","Frost","Frost possible",
     "On windshields and roofs "+near(frost.d)+".","","warning");
 
   for(i=0;i<timed.length;i++){ if(timed[i].fog){
@@ -943,7 +975,7 @@ function bottomLineHourlyCandidates(H,opts){
   }
 
   if(high&&(opts.obs||currentHour&&currentHour.d>=timingCutoff)&&!opts.hasHazard&&!candidates.some(function(c){ return c.priority>=60; })
-     &&coldVerdict(nowT,mMin,cMin,high.t,unusual)==="warming"){
+     &&coldVerdict(nowT,news(mMin)?mMin:null,cMin,high.t,unusual)==="warming"){
     var highClimate=opts.climateFor?opts.climateFor(today):null;
     var departure=highClimate&&highClimate.hi!=null?Math.round(high.t-highClimate.hi):null;
     var normalText=departure?" · "+Math.abs(departure)+"° "+(departure>0?"warmer":"colder")+" than normal":
@@ -1003,7 +1035,7 @@ function bottomLineHourlyCandidates(H,opts){
    that edge, only its uncovered tail is evaluated, using the additional hourly records already
    supplied by NWS. A gap in those records leaves the crossing period out: whole-period daily
    values cannot honestly be attributed to its tail. Later periods keep day-level wording. */
-function bottomLineWeekCandidates(days,cutoff,hourly){
+function bottomLineWeekCandidates(days,cutoff,hourly,season){
   var cut=cutoff instanceof Date?cutoff.getTime():Number(cutoff);
   if(!isFinite(cut)) cut=Date.now();
   var P=[];
@@ -1068,7 +1100,7 @@ function bottomLineWeekCandidates(days,cutoff,hourly){
   if(hot) out.push(bottomCandidate(hot.temp>=100?57:53,"heat","heat","Later",
     "Hot weather "+hot.name,"Forecast high near "+Math.round(hot.temp)+"°.",
     "Plan strenuous outdoor work for cooler hours.","warning",false,opts));
-  var cold=strongest(P.filter(function(p){return !p.day&&p.temp!=null&&p.temp<=32;}),function(p){return -p.temp;});
+  var cold=strongest(P.filter(function(p){return !p.day&&p.temp!=null&&p.temp<=32&&freezeIsNews(p.temp,season);}),function(p){return -p.temp;});
   if(cold) out.push(bottomCandidate(55,"cold","cold","Later",
     "Freezing "+cold.name,"Forecast low near "+Math.round(cold.temp)+"°.",
     "Plan for freezing temperatures.","warning",false,opts));
