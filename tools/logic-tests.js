@@ -868,6 +868,10 @@ check('saved HTML cannot restore stale current readings, risk or briefing',
     topic(weather(H, {now: EVE, freezeSeason: {low: 18}}), 'cold'), null);
   check('the season\'s first hard freeze keeps it',
     topic(weather(H, {now: EVE, freezeSeason: {low: 28}}), 'cold').headline, 'Hard freeze by 6am tomorrow');
+  const NOON = new Date(2026, 10, 24, 12);
+  H = hours(NOON, 12, i => ({t: i === 6 ? 30 : (i === 9 ? 22 : 40), fl: 40}));
+  check('a routine freeze does not hide the first hard freeze later the same evening',
+    topic(weather(H, {now: NOON, freezeSeason: {low: 27}}), 'cold').headline, 'Hard freeze by 9pm');
   const freezeNight = [{night:{name:'Tuesday Night',startTime:'2026-11-24T18:00:00-06:00',endTime:'2026-11-25T06:00:00-06:00',
     temperature:26,probabilityOfPrecipitation:{value:0},shortForecast:'Clear',windSpeed:'5 mph'}}];
   check('a routine freeze later in the week stays out of Later',

@@ -894,6 +894,9 @@ function bottomLineHourlyCandidates(H,opts){
   }
   var cold=coldVerdict(nowT,mMin,cMin,null,unusual);
   function news(t){ return freezeIsNews(t,opts.freezeSeason); }
+  // A routine 30° hour must not hide a newsworthy 22° one later in the same window.
+  var firstNews=null;
+  timed.forEach(function(h){ if(!firstNews&&h.t!=null&&h.t<=32&&news(h.t)) firstNews=h; });
   /* A 31° November morning is routine here; red is kept for a hard freeze (24° or colder) so
      the colour still means something on the night it matters. */
   function freezeTone(t){ return t!=null&&t<=24?"danger":"warning"; }
@@ -911,9 +914,9 @@ function bottomLineHourlyCandidates(H,opts){
       (freeze.t<=24?"Hard freeze":"Below freezing")+freezeWhen(freeze),
       upcoming?currentHour.t+"° now · low "+freeze.t+"°.":currentHour.t+"°.",
       freeze.t<=24?hardFreezeAction:upcoming?freezeAction:slickAction,freezeTone(freeze.t));
-  }else if(firstFreeze&&(!morning||mMin>32)&&news(firstFreeze.t)) push(86,"cold","cold","Cold",
-    (firstFreeze.t<=24?"Hard freeze":"Below freezing")+freezeWhen(firstFreeze),
-    firstFreeze.t+"°.",slickAction,freezeTone(firstFreeze.t));
+  }else if(firstNews&&(!morning||mMin>32||!news(mMin))) push(86,"cold","cold","Cold",
+    (firstNews.t<=24?"Hard freeze":"Below freezing")+freezeWhen(firstNews),
+    firstNews.t+"°.",slickAction,freezeTone(firstNews.t));
   else if(cold==="freezing"&&news(mMin)) push(85,"cold","cold","Cold",
     (mMin<=24?"Hard freeze":"Below freezing")+freezeWhen(morning),
     "Low "+mMin+"°.",mMin<=24?hardFreezeAction:freezeAction,freezeTone(mMin));
