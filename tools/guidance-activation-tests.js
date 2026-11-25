@@ -87,6 +87,44 @@ module.exports=async function(engine){
    assert.deepEqual(session.errors,[]);audit.push({...test,result:'passed'});
   }finally{await session.context.close();}
  }
+ // A press that starts while the previous release's finish timeout is still queued must take
+ // over the hold. A paused Playwright clock still runs zero-delay timers at will, so the test
+ // queues them itself and releases them between Space keydown and keyup: the order that made CI
+ // flake. Before the fix that stale timeout repainted the summary away and no click landed.
+ {
+  const session=await open(config('Guidance activation back-to-back press',{now:Date.parse(capture.retrievedAt)}),1440),p=session.page;
+  try{
+   await p.locator('#nbmDailyToggle').check();
+   await p.route('**/data/nbm-range.json',r=>r.fulfill({json:model}));
+   await p.evaluate(async f=>{stopSchedule();deferredFeeds.context=false;window.activationNws=f;renderDailyForecast(f,null);feedUpdate('daily','ready',f.properties.updateTime);await loadNbmRange();},capture.forecast);
+   await p.locator('#daily .day').first().click();
+   const summary=p.locator('.nbm-timing summary').first();await summary.waitFor({state:'visible'});
+   await p.clock.pauseAt(Date.parse(capture.retrievedAt)+60000);
+   await p.evaluate(()=>{
+    const schedule=window.setTimeout;window.heldZero=[];window.holdZero=true;
+    window.setTimeout=function(callback,delay,...args){
+     if(holdZero&&!delay&&typeof callback==='function'){heldZero.push(()=>callback(...args));return 0;}
+     return schedule.call(this,callback,delay,...args);
+    };
+    window.releaseZero=()=>{holdZero=false;heldZero.splice(0).forEach(run=>run());};
+   });
+   await summary.focus();await summary.press('Enter');
+   assert.equal(await p.evaluate(()=>document.querySelector('.nbm-timing').open),true);
+   assert(await p.evaluate(()=>heldZero.length>0),'The first release left its finish timeout queued');
+   await p.evaluate(()=>{
+    window.activationClicks=0;window.activationHeld=document.querySelector('.nbm-timing summary');
+    document.addEventListener('click',e=>{if(e.target.closest('.nbm-timing summary'))activationClicks++;},true);
+    activationHeld.addEventListener('keydown',()=>renderDailyForecast(activationNws,null),{once:true});
+   });
+   await p.keyboard.down(' ');await p.evaluate(()=>releaseZero());
+   assert(await p.evaluate(()=>activationHeld.isConnected),'Second press holds the control through the earlier release timeout');
+   await p.keyboard.up(' ');await p.clock.runFor(10);
+   assert.equal(await p.evaluate(()=>activationClicks),1,'Second press activates natively');
+   assert.equal(await p.evaluate(()=>document.querySelector('.nbm-timing').open),false);
+   assert.equal(await p.evaluate(()=>activationHeld.isConnected),false,'Deferred refresh paints after the second release');
+   assert.deepEqual(session.errors,[]);audit.push({width:1440,input:'Enter then Space',mode:'back-to-back',result:'passed'});
+  }finally{await session.context.close();}
+ }
  if(process.env.NBM_ARTIFACTS){fs.mkdirSync(process.env.NBM_ARTIFACTS,{recursive:true});fs.writeFileSync(path.join(process.env.NBM_ARTIFACTS,'activation-'+engine+'.json'),JSON.stringify(audit,null,2));}
  console.log('PASS guidance native activation '+engine+' '+audit.length+' mouse/touch/keyboard, coalesced updates, source retirement and lost-release recovery cases');
 };
