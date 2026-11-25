@@ -153,7 +153,9 @@ var NbmRange=(function(){
   function forecastPending(){return !!pendingPaint&&pendingPaint.forecastUpdate&&pendingPaint.scope===scope();}
   function beginActivation(event){
     var summary=event.target.closest&&event.target.closest('.nbm-timing > summary');
-    if(!summary||activation||event.type==='pointerdown'&&(event.button!==0||event.isPrimary===false)||
+    // A press that only awaits its finish timeout no longer holds anything: a new press
+    // supersedes it (that timeout then no-ops) and inherits any deferred repaint.
+    if(!summary||activation&&!activation.finishing||event.type==='pointerdown'&&(event.button!==0||event.isPrimary===false)||
        event.type==='keydown'&&!['Enter',' '].includes(event.key))return;
     activation={node:summary,scope:scope(),row:summary.parentElement.dataset.nbmKey,type:event.type,
       pointer:event.pointerId,key:event.key};
